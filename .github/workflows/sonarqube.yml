@@ -33,8 +33,8 @@ jobs:
       - name: Run SonarCloud Scan
         run: |
           npx sonar-scanner \
-            -Dsonar.organization=your_org_key \
-            -Dsonar.projectKey=your_project_key \
+            -Dsonar.organization=overide-phoenix \
+            -Dsonar.projectKey=OveRide-Phoenix_kk_v1 \
             -Dsonar.sources=. \
             -Dsonar.host.url=https://sonarcloud.io \
             -Dsonar.login=${{ secrets.SONAR_TOKEN }}
