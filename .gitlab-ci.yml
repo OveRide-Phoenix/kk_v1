@@ -6,5 +6,5 @@ sonarqube:
   stage: sonarqube
   image: sonarsource/sonar-scanner-cli
   script:
-    - sonar-scanner -Dsonar.token=$SONAR_TOKEN
+    - sonar-scanner -Dsonar.token="ed9e846a1947052b39fde8b0d9a535ee976de71e"
   allow_failure: false  # Block the merge request if issues exist
