@@ -19,7 +19,7 @@ x = 42
 
 # Undefined variable usage
 print(y)  # NameError: y is not defined
-
+print(username)
 # Function with inconsistent return types
 def inconsistent_return(val):
     if val > 0:
