@@ -1,10 +1,9 @@
-stages:
-  - test
-  - sonarqube
-
-sonarqube:
-  stage: sonarqube
-  image: sonarsource/sonar-scanner-cli
+code_quality:
+  stage: test
+  image: registry.gitlab.com/gitlab-org/ci-cd/codequality:latest
   script:
-    - sonar-scanner -Dsonar.token="ed9e846a1947052b39fde8b0d9a535ee976de71e"
-  allow_failure: false  # Block the merge request if issues exist
+    - /codequality
+  allow_failure: false  # Make pipeline fail if issues are found
+  artifacts:
+    reports:
+      codequality: gl-code-quality-report.json
