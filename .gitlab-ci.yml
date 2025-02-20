@@ -1,0 +1,10 @@
+stages:
+  - test
+  - sonarqube
+
+sonarqube:
+  stage: sonarqube
+  image: sonarsource/sonar-scanner-cli
+  script:
+    - sonar-scanner -Dsonar.token=$SONAR_TOKEN
+  allow_failure: false  # Block the merge request if issues exist
