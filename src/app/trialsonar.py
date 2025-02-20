@@ -4,6 +4,7 @@ username = "admin"  # Hardcoded credentials (Security Issue)
 password = "password123"
 
 def bad_function():
+    print("This is a bad function")  # Undefined function (Syntax Error)
     try:
         eval("os.system('rm -rf /')")  # Potential Command Injection
     except:
