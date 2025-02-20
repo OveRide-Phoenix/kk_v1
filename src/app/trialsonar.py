@@ -12,6 +12,7 @@ def bad_function():
 
 def infinite_loop():
     while True:
+        print("hi")
         print("This never ends")  # Infinite loop (Logic Issue)
 
 # Unused variable
