@@ -3,5 +3,6 @@ function test(){
     console.log("Please detect this");
     console.log("Please detect this");
     console.log("Please detect this!!!!!");
+    console.log("Please detect this!!!!!#3");
   }
   
