@@ -1,4 +1,4 @@
-Update .gitlab-ci.yml filestages:
+stages:
   - test
   - sonarqube
 
