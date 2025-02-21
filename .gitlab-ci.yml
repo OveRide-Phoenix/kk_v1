@@ -1,5 +1,7 @@
 stages:
   - test
+  - security
+  - lint
   - sonarqube
 
 code_quality:
@@ -11,6 +13,74 @@ code_quality:
   artifacts:
     reports:
       codequality: gl-code-quality-report.json
+
+sast:
+  stage: security
+  image: registry.gitlab.com/gitlab-org/security-products/sast:latest
+  variables:
+    SAST_EXPERIMENTAL_FEATURES: "true"
+  script:
+    - /analyze
+  artifacts:
+    reports:
+      sast: gl-sast-report.json
+  allow_failure: false
+
+dependency_scanning:
+  stage: security
+  image: registry.gitlab.com/gitlab-org/security-products/dependency-scanning:latest
+  script:
+    - /analyze || touch dep-scan-issues.txt
+  artifacts:
+    reports:
+      dependency_scanning: gl-dependency-scanning-report.json
+  allow_failure: true
+  after_script:
+    - if [ -s dep-scan-issues.txt ]; then
+        curl --request POST --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+        --header "Content-Type: application/json" \
+        --data "{
+          \"title\": \"Dependency Scanning Issues Detected\",
+          \"description\": \"Dependency scanning found vulnerabilities. Check the pipeline report for details.\"
+        }" \
+        \"https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/issues\";
+      fi
+
+eslint:
+  stage: lint
+  image: node:latest
+  script:
+    - npm install --no-save eslint
+    - npx eslint . --ext .js,.ts || touch eslint-issues.txt
+  allow_failure: true
+  after_script:
+    - if [ -s eslint-issues.txt ]; then
+        curl --request POST --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+        --header "Content-Type: application/json" \
+        --data "{
+          \"title\": \"ESLint Issues Found\",
+          \"description\": \"Linting errors detected. Please check and fix them.\"
+        }" \
+        \"https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/issues\";
+      fi
+
+prettier:
+  stage: lint
+  image: node:latest
+  script:
+    - npm install --no-save prettier
+    - npx prettier --check . || touch prettier-issues.txt
+  allow_failure: true
+  after_script:
+    - if [ -s prettier-issues.txt ]; then
+        curl --request POST --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+        --header "Content-Type: application/json" \
+        --data "{
+          \"title\": \"Prettier Formatting Issues Found\",
+          \"description\": \"Code formatting issues detected. Run Prettier to fix them.\"
+        }" \
+        \"https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/issues\";
+      fi
 
 sonarqube:
   stage: sonarqube
@@ -36,7 +106,6 @@ sonarqube:
 
         echo "Merge Request Response: $MR_RESPONSE"
 
-        # Determine if the response is an array or object
         if echo "$MR_RESPONSE" | jq -e 'if type == "array" then .[0].author.username else .author.username end' > /dev/null 2>&1; then
           MR_AUTHOR=$(echo "$MR_RESPONSE" | jq -r 'if type == "array" then .[0].author.username else .author.username end')
         else
@@ -45,17 +114,19 @@ sonarqube:
 
         echo "MR Author: $MR_AUTHOR"
 
-        # Loop through all issues and create separate GitLab issues
         echo "$RESPONSE" | jq -c '.issues[]' | while read issue; do
           ISSUE_TITLE=$(echo "$issue" | jq -r '.message')
           ISSUE_COMPONENT=$(echo "$issue" | jq -r '.component')
           ISSUE_LINE=$(echo "$issue" | jq -r '.line // "unknown"')
+          ISSUE_SEVERITY=$(echo "$issue" | jq -r '.severity')
+          ISSUE_TYPE=$(echo "$issue" | jq -r '.type')
+          ISSUE_RULE=$(echo "$issue" | jq -r '.rule')
 
           curl --request POST --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
             --header "Content-Type: application/json" \
             --data "{
               \"title\": \"SonarQube Issue: $ISSUE_TITLE\",
-              \"description\": \"Issue in $ISSUE_COMPONENT at line $ISSUE_LINE.\",
+              \"description\": \"**Component**: $ISSUE_COMPONENT\n**Line**: $ISSUE_LINE\n**Severity**: $ISSUE_SEVERITY\n**Type**: $ISSUE_TYPE\n**Rule**: $ISSUE_RULE\n\n$ISSUE_TITLE\",
               \"assignee_ids\": [\"$MR_AUTHOR\"]
             }" \
             "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/issues"
