@@ -7,41 +7,29 @@ code_quality:
   image: registry.gitlab.com/gitlab-org/ci-cd/codequality:latest
   script:
     - /codequality
-  allow_failure: false  # Fail if code quality issues are found
+  allow_failure: false  # Pipeline fails if code quality issues are found
   artifacts:
     reports:
       codequality: gl-code-quality-report.json
 
 sonarqube:
   stage: sonarqube
-  image: debian:latest
+  image: sonarsource/sonar-scanner-cli
   before_script:
-    - apt-get update && apt-get install -y wget unzip openjdk-17-jre jq curl
-    # Download and extract SonarScanner CLI (adjust version as needed)
-    - wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
-    - unzip sonar-scanner-cli-5.0.1.3006-linux.zip
-    - export PATH=$PATH:$(pwd)/sonar-scanner-cli-5.0.1.3006-linux/bin
+    - apk add --no-cache jq  # Use apk instead of apt-get
   script:
-    # Run the SonarScanner with your token
     - sonar-scanner -Dsonar.token="ed9e846a1947052b39fde8b0d9a535ee976de71e"
-    # Fetch SonarCloud issues report and save as sonar-report.json
-    - curl -s "https://sonarcloud.io/api/issues/search?componentKeys=OveRide-Phoenix_kk_v1" > sonar-report.json
-    # Use jq to parse the total number of issues
     - |
-      SONAR_ISSUES=$(cat sonar-report.json | jq '.total')
-      echo "SonarQube found $SONAR_ISSUES issues."
+      SONAR_ISSUES=$(curl -s "https://sonarcloud.io/api/issues/search?componentKeys=OveRide-Phoenix_kk_v1" | jq '.total')
       if [ "$SONAR_ISSUES" -gt 0 ]; then
-        # Optionally raise a GitLab issue (requires GITLAB_TOKEN variable set)
+        MR_AUTHOR=$(curl --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_ID" | jq -r '.author.username')
         curl --request POST --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
           --header "Content-Type: application/json" \
           --data "{
             \"title\": \"Fix SonarQube Issues\",
-            \"description\": \"SonarQube found $SONAR_ISSUES issues in your code. Please review the attached report.\",
-            \"assignee_ids\": [] 
+            \"description\": \"SonarQube found $SONAR_ISSUES issues in your code.\",
+            \"assignee_ids\": [\"$MR_AUTHOR\"]
           }" \
           "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/issues"
       fi
-  artifacts:
-    paths:
-      - sonar-report.json
-  allow_failure: true  # SonarQube issues won't fail the pipeline
+  allow_failure: true  # SonarQube does not fail the pipeline
