@@ -19,13 +19,17 @@ sonarqube:
     - curl -Lo jq https://github.com/stedolan/jq/releases/latest/download/jq-linux64
     - chmod +x jq
     - export PATH=$PWD:$PATH
+
   script:
     - |
-      if [ -z "$SONAR_TOKEN" ]; then
-        echo "Error: SONAR_TOKEN is not set"
+      if [ -z "$CI_MERGE_REQUEST_ID" ]; then
+        echo "No merge request found. Skipping SonarQube analysis."
+        exit 0
       fi
-      sonar-scanner -Dsonar.token="ed9e846a1947052b39fde8b0d9a535ee976de71e"
 
+    - sonar-scanner -Dsonar.token="$SONAR_TOKEN"
+
+    # Fetch SonarQube issues
     - |
       RESPONSE=$(curl -s "https://sonarcloud.io/api/issues/search?componentKeys=OveRide-Phoenix_kk_v1")
       echo "SonarQube Response: $RESPONSE"
@@ -33,57 +37,38 @@ sonarqube:
       echo "Total SonarQube Issues: $SONAR_ISSUES"
 
       if [ "$SONAR_ISSUES" -gt 0 ]; then
-        if [ -z "$GITLAB_TOKEN" ]; then
-          echo "Error: GITLAB_TOKEN is not set"
-          exit 1
-        fi
-
+        # Fetch MR details
         MR_RESPONSE=$(curl -s --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-          "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/merge_requests")
+          "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_ID")
 
         echo "Merge Request Response: $MR_RESPONSE"
 
-        if echo "$MR_RESPONSE" | jq -e 'if type == "array" then .[0].author.username else .author.username end' > /dev/null 2>&1; then
-          MR_AUTHOR=$(echo "$MR_RESPONSE" | jq -r 'if type == "array" then .[0].author.username else .author.username end')
-        else
-          MR_AUTHOR="unknown"
+        MR_AUTHOR=$(echo "$MR_RESPONSE" | jq -r '.author.username // empty')
+        SOURCE_BRANCH=$(echo "$MR_RESPONSE" | jq -r '.source_branch // empty')
+
+        if [ -z "$MR_AUTHOR" ] || [ -z "$SOURCE_BRANCH" ]; then
+          echo "Error: Could not fetch MR details"
+          exit 1
         fi
 
         echo "MR Author: $MR_AUTHOR"
+        echo "Source Branch: $SOURCE_BRANCH"
 
+        # Loop through all issues and create separate GitLab issues
         echo "$RESPONSE" | jq -c '.issues[]' | while read issue; do
           ISSUE_TITLE=$(echo "$issue" | jq -r '.message')
           ISSUE_COMPONENT=$(echo "$issue" | jq -r '.component')
-          ISSUE_SEVERITY=$(echo "$issue" | jq -r '.severity')
-          ISSUE_TYPE=$(echo "$issue" | jq -r '.type')
           ISSUE_LINE=$(echo "$issue" | jq -r '.line // "unknown"')
-          ISSUE_RULE=$(echo "$issue" | jq -r '.rule')
 
-          # Check if issue already exists in GitLab
-          EXISTING_ISSUE=$(curl -s --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-            "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/issues" | jq -r \
-            --arg TITLE "$ISSUE_TITLE" '.[] | select(.title == $TITLE)')
+          curl --request POST --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+            --header "Content-Type: application/json" \
+            --data "{
+              \"title\": \"SonarQube Issue: $ISSUE_TITLE\",
+              \"description\": \"Issue in $ISSUE_COMPONENT at line $ISSUE_LINE.\n\nFix required by @$MR_AUTHOR in branch '$SOURCE_BRANCH'\",
+              \"assignee_ids\": [\"$MR_AUTHOR\"]
+            }" \
+            "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/issues"
 
-          if [ -z "$EXISTING_ISSUE" ]; then
-            echo "Creating new GitLab issue for: $ISSUE_TITLE"
-
-            curl --request POST --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-              --header "Content-Type: application/json" \
-              --data "{
-                \"title\": \"SonarQube Issue: $ISSUE_TITLE\",
-                \"description\": \"### SonarQube Issue Found\n
-                **🔹 Severity:** $ISSUE_SEVERITY  \n
-                **🔹 Type:** $ISSUE_TYPE  \n
-                **🔹 Rule:** $ISSUE_RULE  \n
-                **🔹 Component:** $ISSUE_COMPONENT  \n
-                **🔹 Line:** $ISSUE_LINE  \n
-                _This issue was detected automatically by SonarQube._\",
-                \"assignee_ids\": [\"$MR_AUTHOR\"]
-              }" \
-              "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/issues"
-          else
-            echo "Issue already exists in GitLab: $ISSUE_TITLE"
-          fi
         done
       fi
   allow_failure: true
