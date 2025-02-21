@@ -1,3 +1,17 @@
+stages:
+  - test
+  - sonarqube
+
+code_quality:
+  stage: test
+  image: registry.gitlab.com/gitlab-org/ci-cd/codequality:latest
+  script:
+    - /codequality
+  allow_failure: false  # Pipeline fails if code quality issues are found
+  artifacts:
+    reports:
+      codequality: gl-code-quality-report.json
+
 sonarqube:
   stage: sonarqube
   image: sonarsource/sonar-scanner-cli
@@ -18,4 +32,4 @@ sonarqube:
           }" \
           "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/issues"
       fi
-  allow_failure: true
+  allow_failure: true  # SonarQube does not fail the pipeline
