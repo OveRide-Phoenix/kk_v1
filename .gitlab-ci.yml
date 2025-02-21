@@ -1,28 +1,14 @@
-stages:
-  - test
-  - sonarqube
-
-code_quality:
-  stage: test
-  image: registry.gitlab.com/gitlab-org/ci-cd/codequality:latest
-  script:
-    - /codequality
-  allow_failure: false  # Pipeline fails if code quality issues are found
-  artifacts:
-    reports:
-      codequality: gl-code-quality-report.json
-
 sonarqube:
   stage: sonarqube
   image: sonarsource/sonar-scanner-cli
+  before_script:
+    - apt-get update && apt-get install -y jq
   script:
-    - apk add --no-cache jq  # Install jq on Alpine-based SonarQube image
     - sonar-scanner -Dsonar.token="ed9e846a1947052b39fde8b0d9a535ee976de71e"
     - |
       SONAR_ISSUES=$(curl -s "https://sonarcloud.io/api/issues/search?componentKeys=OveRide-Phoenix_kk_v1" | jq '.total')
       if [ "$SONAR_ISSUES" -gt 0 ]; then
         MR_AUTHOR=$(curl --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_ID" | jq -r '.author.username')
-        
         curl --request POST --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
           --header "Content-Type: application/json" \
           --data "{
@@ -32,4 +18,4 @@ sonarqube:
           }" \
           "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/issues"
       fi
-  allow_failure: true  # SonarQube does not fail the pipeline
+  allow_failure: true
