@@ -7,7 +7,7 @@ code_quality:
   image: registry.gitlab.com/gitlab-org/ci-cd/codequality:latest
   script:
     - /codequality
-  allow_failure: false  # Pipeline fails if code quality issues are found
+  allow_failure: false
   artifacts:
     reports:
       codequality: gl-code-quality-report.json
@@ -16,39 +16,59 @@ sonarqube:
   stage: sonarqube
   image: sonarsource/sonar-scanner-cli
   before_script:
-  - curl -Lo jq https://github.com/stedolan/jq/releases/latest/download/jq-linux64
-  - chmod +x jq
-  - export PATH=$PWD:$PATH  # Add current directory to PATH
+    - curl -Lo jq https://github.com/stedolan/jq/releases/latest/download/jq-linux64
+    - chmod +x jq
+    - export PATH=$PWD:$PATH
 
   script:
-    - sonar-scanner -Dsonar.token="ed9e846a1947052b39fde8b0d9a535ee976de71e"
+    - |
+      if [ -z "$CI_MERGE_REQUEST_ID" ]; then
+        echo "No merge request found. Skipping SonarQube analysis."
+        exit 0
+      fi
 
-    # Fetch SonarQube issues count
+    - sonar-scanner -Dsonar.token="$SONAR_TOKEN"
+
+    # Fetch SonarQube issues
     - |
       RESPONSE=$(curl -s "https://sonarcloud.io/api/issues/search?componentKeys=OveRide-Phoenix_kk_v1")
-      echo "SonarQube Response: $RESPONSE"  # Debugging line
+      echo "SonarQube Response: $RESPONSE"
       SONAR_ISSUES=$(echo "$RESPONSE" | jq '.total')
       echo "Total SonarQube Issues: $SONAR_ISSUES"
 
       if [ "$SONAR_ISSUES" -gt 0 ]; then
-        # Fetch MR author from GitLab API
-        MR_RESPONSE=$(curl --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_ID")
-        echo "Merge Request Response: $MR_RESPONSE"  # Debugging line
-        MR_AUTHOR=$(echo "$MR_RESPONSE" | jq -r '.author.username')
-        
-        # Ensure MR_AUTHOR is valid before creating an issue
-        if [ -n "$MR_AUTHOR" ] && [ "$MR_AUTHOR" != "null" ]; then
+        # Fetch MR details
+        MR_RESPONSE=$(curl -s --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+          "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_ID")
+
+        echo "Merge Request Response: $MR_RESPONSE"
+
+        MR_AUTHOR=$(echo "$MR_RESPONSE" | jq -r '.author.username // empty')
+        SOURCE_BRANCH=$(echo "$MR_RESPONSE" | jq -r '.source_branch // empty')
+
+        if [ -z "$MR_AUTHOR" ] || [ -z "$SOURCE_BRANCH" ]; then
+          echo "Error: Could not fetch MR details"
+          exit 1
+        fi
+
+        echo "MR Author: $MR_AUTHOR"
+        echo "Source Branch: $SOURCE_BRANCH"
+
+        # Loop through all issues and create separate GitLab issues
+        echo "$RESPONSE" | jq -c '.issues[]' | while read issue; do
+          ISSUE_TITLE=$(echo "$issue" | jq -r '.message')
+          ISSUE_COMPONENT=$(echo "$issue" | jq -r '.component')
+          ISSUE_LINE=$(echo "$issue" | jq -r '.line // "unknown"')
+
           curl --request POST --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
             --header "Content-Type: application/json" \
             --data "{
-              \"title\": \"Fix SonarQube Issues\",
-              \"description\": \"SonarQube found $SONAR_ISSUES issues in your code.\",
+              \"title\": \"SonarQube Issue: $ISSUE_TITLE\",
+              \"description\": \"Issue in $ISSUE_COMPONENT at line $ISSUE_LINE.\n\nFix required by @$MR_AUTHOR in branch '$SOURCE_BRANCH'\",
               \"assignee_ids\": [\"$MR_AUTHOR\"]
             }" \
             "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/issues"
-        else
-          echo "Error: Could not fetch MR author"
-          exit 1
-        fi
+
+        done
       fi
   allow_failure: true
