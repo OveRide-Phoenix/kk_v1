@@ -16,7 +16,7 @@ sonarqube:
   stage: sonarqube
   image: sonarsource/sonar-scanner-cli
   script:
-    - apt-get update && apt-get install -y jq  # Install jq
+    - apk add --no-cache jq  # Install jq on Alpine-based SonarQube image
     - sonar-scanner -Dsonar.token="ed9e846a1947052b39fde8b0d9a535ee976de71e"
     - |
       SONAR_ISSUES=$(curl -s "https://sonarcloud.io/api/issues/search?componentKeys=OveRide-Phoenix_kk_v1" | jq '.total')
