@@ -20,6 +20,7 @@ sonarqube:
     - chmod +x jq
     - export PATH=$PWD:$PATH
   script:
+    - sonar-scanner -Dsonar.projectKey="OveRide-Phoenix_kk_v1" -Dsonar.organization="your_org" -Dsonar.token="ed9e846a1947052b39fde8b0d9a535ee976de71e"
     - |
       if [ -z "$SONAR_TOKEN" ]; then
         echo "Error: SONAR_TOKEN is not set"
