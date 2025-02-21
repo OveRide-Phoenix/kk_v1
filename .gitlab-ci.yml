@@ -1,4 +1,4 @@
-stages:
+Update .gitlab-ci.yml filestages:
   - test
   - sonarqube
 
@@ -16,6 +16,7 @@ sonarqube:
   stage: sonarqube
   image: sonarsource/sonar-scanner-cli
   before_script:
+    - "/bin/bash"
     - curl -Lo jq https://github.com/stedolan/jq/releases/latest/download/jq-linux64
     - chmod +x jq
     - export PATH=$PWD:$PATH
