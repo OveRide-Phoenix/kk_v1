@@ -22,12 +22,6 @@ sonarqube:
   script:
     - sonar-scanner -Dsonar.projectKey="OveRide-Phoenix_kk_v1" -Dsonar.organization="overide-phoenix" -Dsonar.token="ed9e846a1947052b39fde8b0d9a535ee976de71e"
     - |
-      if [ -z "$SONAR_TOKEN" ]; then
-        echo "Error: SONAR_TOKEN is not set"
-      fi
-      sonar-scanner -Dsonar.token="ed9e846a1947052b39fde8b0d9a535ee976de71e"
-
-    - |
       RESPONSE=$(curl -s "https://sonarcloud.io/api/issues/search?componentKeys=OveRide-Phoenix_kk_v1")
       echo "SonarQube Response: $RESPONSE"
       SONAR_ISSUES=$(echo "$RESPONSE" | jq '.total')
