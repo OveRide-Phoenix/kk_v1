@@ -14,22 +14,20 @@ code_quality:
 
 sonarqube:
   stage: sonarqube
-  image: sonarsource/sonar-scanner-cli
+  image: debian:latest
   before_script:
-    - apt-get update && apt-get install -y jq
+    # Update and install required packages
+    - apt-get update && apt-get install -y wget unzip openjdk-17-jre jq curl
+    # Download SonarScanner CLI (adjust version if needed)
+    - wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
+    - unzip sonar-scanner-cli-5.0.1.3006-linux.zip
+    # Add SonarScanner to PATH
+    - export PATH=$PATH:$(pwd)/sonar-scanner-cli-5.0.1.3006-linux/bin
   script:
     - sonar-scanner -Dsonar.token="ed9e846a1947052b39fde8b0d9a535ee976de71e"
-    - |
-      SONAR_ISSUES=$(curl -s "https://sonarcloud.io/api/issues/search?componentKeys=OveRide-Phoenix_kk_v1" | jq '.total')
-      if [ "$SONAR_ISSUES" -gt 0 ]; then
-        MR_AUTHOR=$(curl --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_ID" | jq -r '.author.username')
-        curl --request POST --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-          --header "Content-Type: application/json" \
-          --data "{
-            \"title\": \"Fix SonarQube Issues\",
-            \"description\": \"SonarQube found $SONAR_ISSUES issues in your code.\",
-            \"assignee_ids\": [\"$MR_AUTHOR\"]
-          }" \
-          "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/issues"
-      fi
-  allow_failure: true  # SonarQube does not fail the pipeline
+    # Fetch SonarQube issues report and store it as an artifact
+    - curl -s "https://sonarcloud.io/api/issues/search?componentKeys=OveRide-Phoenix_kk_v1" > sonar-report.json
+  artifacts:
+    paths:
+      - sonar-report.json
+  allow_failure: true  # SonarQube issues won't fail the pipeline
