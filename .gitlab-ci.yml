@@ -16,9 +16,9 @@ sonarqube:
   stage: sonarqube
   image: sonarsource/sonar-scanner-cli
   before_script:
-    - curl -Lo jq https://github.com/stedolan/jq/releases/latest/download/jq-linux64
-    - chmod +x jq
-    - mv jq /usr/local/bin/
+  - curl -Lo jq https://github.com/stedolan/jq/releases/latest/download/jq-linux64
+  - chmod +x jq
+  - mv jq /usr/bin/jq  # Move to /usr/bin instead
   script:
     - sonar-scanner -Dsonar.token="ed9e846a1947052b39fde8b0d9a535ee976de71e"
     - |
