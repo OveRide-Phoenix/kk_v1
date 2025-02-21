@@ -15,20 +15,18 @@ code_quality:
 sonarqube:
   stage: sonarqube
   image: sonarsource/sonar-scanner-cli
-  variables:
-    SONAR_USER_HOME: "${CI_PROJECT_DIR}/.sonar"
-    GIT_DEPTH: 0  # Important for proper Git context
-    SONAR_GITLAB_PROJECT_ID: ${CI_PROJECT_ID}
-    SONAR_GITLAB_REF_NAME: ${CI_COMMIT_REF_NAME}
-    SONAR_GITLAB_REF_TYPE: ${CI_MERGE_REQUEST_REF_TYPE}
-    SONAR_GITLAB_MERGE_REQUEST_IID: ${CI_MERGE_REQUEST_IID}
-    SONAR_GITLAB_MERGE_REQUEST_TARGET_BRANCH: ${CI_MERGE_REQUEST_TARGET_BRANCH}
   before_script:
     - curl -Lo jq https://github.com/stedolan/jq/releases/latest/download/jq-linux64
     - chmod +x jq
     - export PATH=$PWD:$PATH
   script:
-    - sonar-scanner -Dsonar.projectKey="OveRide-Phoenix_kk_v1" -Dsonar.organization="overide-phoenix" -Dsonar.token="ed9e846a1947052b39fde8b0d9a535ee976de71e"
+    - |
+      if [ -z "$SONAR_TOKEN" ]; then
+        echo "Error: SONAR_TOKEN is not set"
+        exit 1
+      fi
+      sonar-scanner -Dsonar.token="ed9e846a1947052b39fde8b0d9a535ee976de71e"
+
     - |
       RESPONSE=$(curl -s "https://sonarcloud.io/api/issues/search?componentKeys=OveRide-Phoenix_kk_v1")
       echo "SonarQube Response: $RESPONSE"
@@ -90,8 +88,3 @@ sonarqube:
         done
       fi
   allow_failure: true
-  rules:
-    - if: $CI_MERGE_REQUEST_IID
-      when: always
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      when: never
