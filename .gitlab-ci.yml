@@ -92,3 +92,8 @@ sonarqube:
   allow_failure: true
   only:
     - merge_requests
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+      when: always
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: never
