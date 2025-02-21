@@ -21,12 +21,6 @@ sonarqube:
     - export PATH=$PWD:$PATH
 
   script:
-    - |
-      if [ -z "$CI_MERGE_REQUEST_ID" ]; then
-        echo "No merge request found. Skipping SonarQube analysis."
-        exit 0
-      fi
-
     - sonar-scanner -Dsonar.token="$SONAR_TOKEN"
 
     # Fetch SonarQube issues
@@ -37,22 +31,19 @@ sonarqube:
       echo "Total SonarQube Issues: $SONAR_ISSUES"
 
       if [ "$SONAR_ISSUES" -gt 0 ]; then
-        # Fetch MR details
         MR_RESPONSE=$(curl -s --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-          "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_ID")
+          "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/merge_requests")
 
         echo "Merge Request Response: $MR_RESPONSE"
 
-        MR_AUTHOR=$(echo "$MR_RESPONSE" | jq -r '.author.username // empty')
-        SOURCE_BRANCH=$(echo "$MR_RESPONSE" | jq -r '.source_branch // empty')
-
-        if [ -z "$MR_AUTHOR" ] || [ -z "$SOURCE_BRANCH" ]; then
-          echo "Error: Could not fetch MR details"
-          exit 1
+        # Determine if the response is an array or object
+        if echo "$MR_RESPONSE" | jq -e 'if type == "array" then .[0].author.username else .author.username end' > /dev/null 2>&1; then
+          MR_AUTHOR=$(echo "$MR_RESPONSE" | jq -r 'if type == "array" then .[0].author.username else .author.username end')
+        else
+          MR_AUTHOR="unknown"
         fi
 
         echo "MR Author: $MR_AUTHOR"
-        echo "Source Branch: $SOURCE_BRANCH"
 
         # Loop through all issues and create separate GitLab issues
         echo "$RESPONSE" | jq -c '.issues[]' | while read issue; do
@@ -64,7 +55,7 @@ sonarqube:
             --header "Content-Type: application/json" \
             --data "{
               \"title\": \"SonarQube Issue: $ISSUE_TITLE\",
-              \"description\": \"Issue in $ISSUE_COMPONENT at line $ISSUE_LINE.\n\nFix required by @$MR_AUTHOR in branch '$SOURCE_BRANCH'\",
+              \"description\": \"Issue in $ISSUE_COMPONENT at line $ISSUE_LINE.\",
               \"assignee_ids\": [\"$MR_AUTHOR\"]
             }" \
             "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/issues"
