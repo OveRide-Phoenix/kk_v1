@@ -18,8 +18,8 @@ sonarqube:
   before_script:
   - curl -Lo jq https://github.com/stedolan/jq/releases/latest/download/jq-linux64
   - chmod +x jq
-  - mv jq ./jq  # Keep it in the working directory
   - export PATH=$PWD:$PATH  # Add current directory to PATH
+
   script:
     - sonar-scanner -Dsonar.token="ed9e846a1947052b39fde8b0d9a535ee976de71e"
     - |
