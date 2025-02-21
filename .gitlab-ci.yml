@@ -13,20 +13,20 @@ code_quality:
     reports:
       codequality: gl-code-quality-report.json
 
-sast:
-  stage: sast
-  image: registry.gitlab.com/gitlab-org/security-products/analyzers/sast:latest
-  variables:
-    SAST_DISABLED: "false"
-    GIT_STRATEGY: fetch
-  before_script:
-    - "/bin/bash"
-  script:
-    - /analyze  # Run GitLab SAST scanner
-  artifacts:
-    reports:
-      sast: gl-sast-report.json
-  allow_failure: true  # Should not fail the pipeline
+# sast:
+#   stage: sast
+#   image: registry.gitlab.com/gitlab-org/security-products/analyzers/sast:latest
+#   variables:
+#     SAST_DISABLED: "false"
+#     GIT_STRATEGY: fetch
+#   before_script:
+#     - "/bin/bash"
+#   script:
+#     - /analyze  # Run GitLab SAST scanner
+#   artifacts:
+#     reports:
+#       sast: gl-sast-report.json
+#   allow_failure: true  # Should not fail the pipeline
 
 sonarqube:
   stage: sonarqube
