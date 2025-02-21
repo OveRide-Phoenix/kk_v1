@@ -16,13 +16,15 @@ sonarqube:
   stage: sonarqube
   image: sonarsource/sonar-scanner-cli
   before_script:
-    - apk add --no-cache jq  # Use apk instead of apt-get
+    - curl -Lo jq https://github.com/stedolan/jq/releases/latest/download/jq-linux64
+    - chmod +x jq
+    - mv jq /usr/local/bin/
   script:
     - sonar-scanner -Dsonar.token="ed9e846a1947052b39fde8b0d9a535ee976de71e"
     - |
-      SONAR_ISSUES=$(curl -s "https://sonarcloud.io/api/issues/search?componentKeys=OveRide-Phoenix_kk_v1" | jq '.total')
+      SONAR_ISSUES=$(./jq '.total' <<< "$(curl -s "https://sonarcloud.io/api/issues/search?componentKeys=OveRide-Phoenix_kk_v1")")
       if [ "$SONAR_ISSUES" -gt 0 ]; then
-        MR_AUTHOR=$(curl --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_ID" | jq -r '.author.username')
+        MR_AUTHOR=$(./jq -r '.author.username' <<< "$(curl --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_ID")")
         curl --request POST --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
           --header "Content-Type: application/json" \
           --data "{
@@ -32,4 +34,4 @@ sonarqube:
           }" \
           "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/issues"
       fi
-  allow_failure: true  # SonarQube does not fail the pipeline
+  allow_failure: true
