@@ -1,6 +1,5 @@
 stages:
   - test
-  - sast
   - sonarqube
 
 code_quality:
@@ -12,21 +11,6 @@ code_quality:
   artifacts:
     reports:
       codequality: gl-code-quality-report.json
-
-# sast:
-#   stage: sast
-#   image: registry.gitlab.com/gitlab-org/security-products/analyzers/sast:latest
-#   variables:
-#     SAST_DISABLED: "false"
-#     GIT_STRATEGY: fetch
-#   before_script:
-#     - "/bin/bash"
-#   script:
-#     - /analyze  # Run GitLab SAST scanner
-#   artifacts:
-#     reports:
-#       sast: gl-sast-report.json
-#   allow_failure: true  # Should not fail the pipeline
 
 sonarqube:
   stage: sonarqube
@@ -77,14 +61,31 @@ sonarqube:
           ISSUE_LINE=$(echo "$issue" | jq -r '.line // "unknown"')
           ISSUE_RULE=$(echo "$issue" | jq -r '.rule')
 
-          curl --request POST --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-            --header "Content-Type: application/json" \
-            --data "{
-              \"title\": \"SonarQube Issue: $ISSUE_TITLE\",
-              \"description\": \"**Severity:** $ISSUE_SEVERITY\n**Type:** $ISSUE_TYPE\n**Rule:** $ISSUE_RULE\n**Component:** $ISSUE_COMPONENT\n**Line:** $ISSUE_LINE\",
-              \"assignee_ids\": [\"$MR_AUTHOR\"]
-            }" \
-            "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/issues"
+          # Check if issue already exists in GitLab
+          EXISTING_ISSUE=$(curl -s --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+            "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/issues" | jq -r \
+            --arg TITLE "$ISSUE_TITLE" '.[] | select(.title == $TITLE)')
+
+          if [ -z "$EXISTING_ISSUE" ]; then
+            echo "Creating new GitLab issue for: $ISSUE_TITLE"
+
+            curl --request POST --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+              --header "Content-Type: application/json" \
+              --data "{
+                \"title\": \"SonarQube Issue: $ISSUE_TITLE\",
+                \"description\": \"### SonarQube Issue Found\n
+                **🔹 Severity:** $ISSUE_SEVERITY  \n
+                **🔹 Type:** $ISSUE_TYPE  \n
+                **🔹 Rule:** $ISSUE_RULE  \n
+                **🔹 Component:** $ISSUE_COMPONENT  \n
+                **🔹 Line:** $ISSUE_LINE  \n
+                _This issue was detected automatically by SonarQube._\",
+                \"assignee_ids\": [\"$MR_AUTHOR\"]
+              }" \
+              "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/issues"
+          else
+            echo "Issue already exists in GitLab: $ISSUE_TITLE"
+          fi
         done
       fi
   allow_failure: true
