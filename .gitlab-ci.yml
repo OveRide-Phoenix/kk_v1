@@ -15,12 +15,12 @@ code_quality:
 
 sast:
   stage: sast
-  image: registry.gitlab.com/gitlab-org/security-products/sast:latest
+  image: registry.gitlab.com/gitlab-org/security-products/analyzers/sast:latest
   variables:
     SAST_DISABLED: "false"
     GIT_STRATEGY: fetch
   before_script:
-    - "/bin/bash"  # Ensure bash is used
+    - "/bin/bash"
   script:
     - /analyze  # Run GitLab SAST scanner
   artifacts:
@@ -37,7 +37,13 @@ sonarqube:
     - chmod +x jq
     - export PATH=$PWD:$PATH
   script:
-    - sonar-scanner -Dsonar.token="$SONAR_TOKEN"
+    - |
+      if [ -z "$SONAR_TOKEN" ]; then
+        echo "Error: SONAR_TOKEN is not set"
+        exit 1
+      fi
+      sonar-scanner -Dsonar.token="$SONAR_TOKEN"
+
     - |
       RESPONSE=$(curl -s "https://sonarcloud.io/api/issues/search?componentKeys=OveRide-Phoenix_kk_v1")
       echo "SonarQube Response: $RESPONSE"
@@ -45,6 +51,11 @@ sonarqube:
       echo "Total SonarQube Issues: $SONAR_ISSUES"
 
       if [ "$SONAR_ISSUES" -gt 0 ]; then
+        if [ -z "$GITLAB_TOKEN" ]; then
+          echo "Error: GITLAB_TOKEN is not set"
+          exit 1
+        fi
+
         MR_RESPONSE=$(curl -s --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
           "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/merge_requests")
 
