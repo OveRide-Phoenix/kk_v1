@@ -21,20 +21,34 @@ sonarqube:
   - export PATH=$PWD:$PATH  # Add current directory to PATH
 
   script:
-    - RESPONSE=$(curl -s "https://sonarcloud.io/api/issues/search?componentKeys=OveRide-Phoenix_kk_v1")
-    - SONAR_ISSUES=$(echo "$RESPONSE" | ./jq '.total')
     - sonar-scanner -Dsonar.token="ed9e846a1947052b39fde8b0d9a535ee976de71e"
+
+    # Fetch SonarQube issues count
     - |
-      SONAR_ISSUES=$(curl -s "https://sonarcloud.io/api/issues/search?componentKeys=OveRide-Phoenix_kk_v1" | ./jq '.total')
+      RESPONSE=$(curl -s "https://sonarcloud.io/api/issues/search?componentKeys=OveRide-Phoenix_kk_v1")
+      echo "SonarQube Response: $RESPONSE"  # Debugging line
+      SONAR_ISSUES=$(echo "$RESPONSE" | jq '.total')
+      echo "Total SonarQube Issues: $SONAR_ISSUES"
+
       if [ "$SONAR_ISSUES" -gt 0 ]; then
-        MR_AUTHOR=$(./jq -r '.author.username' <<< "$(curl --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_ID")")
-        curl --request POST --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-          --header "Content-Type: application/json" \
-          --data "{
-            \"title\": \"Fix SonarQube Issues\",
-            \"description\": \"SonarQube found $SONAR_ISSUES issues in your code.\",
-            \"assignee_ids\": [\"$MR_AUTHOR\"]
-          }" \
-          "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/issues"
+        # Fetch MR author from GitLab API
+        MR_RESPONSE=$(curl --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_ID")
+        echo "Merge Request Response: $MR_RESPONSE"  # Debugging line
+        MR_AUTHOR=$(echo "$MR_RESPONSE" | jq -r '.author.username')
+        
+        # Ensure MR_AUTHOR is valid before creating an issue
+        if [ -n "$MR_AUTHOR" ] && [ "$MR_AUTHOR" != "null" ]; then
+          curl --request POST --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+            --header "Content-Type: application/json" \
+            --data "{
+              \"title\": \"Fix SonarQube Issues\",
+              \"description\": \"SonarQube found $SONAR_ISSUES issues in your code.\",
+              \"assignee_ids\": [\"$MR_AUTHOR\"]
+            }" \
+            "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/issues"
+        else
+          echo "Error: Could not fetch MR author"
+          exit 1
+        fi
       fi
   allow_failure: true
