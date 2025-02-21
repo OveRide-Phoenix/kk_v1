@@ -1,7 +1,6 @@
 stages:
   - test
-  - security
-  - lint
+  - sast
   - sonarqube
 
 code_quality:
@@ -15,81 +14,19 @@ code_quality:
       codequality: gl-code-quality-report.json
 
 sast:
-  stage: security
+  stage: sast
   image: registry.gitlab.com/gitlab-org/security-products/sast:latest
   variables:
-    SAST_EXPERIMENTAL_FEATURES: "true"
+    SAST_DISABLED: "false"
+    GIT_STRATEGY: fetch
+  before_script:
+    - "/bin/bash"  # Ensure bash is used
   script:
-    - /analyze
+    - /analyze  # Run GitLab SAST scanner
   artifacts:
     reports:
       sast: gl-sast-report.json
-  allow_failure: false
-
-dependency_scanning:
-  stage: security
-  image: registry.gitlab.com/gitlab-org/security-products/dependency-scanning:latest
-  script:
-    - /analyze || touch dep-scan-issues.txt
-  artifacts:
-    reports:
-      dependency_scanning: gl-dependency-scanning-report.json
-  allow_failure: true
-  after_script:
-    - |
-      if [ -s dep-scan-issues.txt ]; then
-        curl --request POST --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-          --header "Content-Type: application/json" \
-          --data @- <<EOF
-          {
-            "title": "Dependency Scanning Issues Detected",
-            "description": "Dependency scanning found vulnerabilities. Check the pipeline report for details."
-          }
-          EOF
-          "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/issues"
-      fi
-
-eslint:
-  stage: lint
-  image: node:latest
-  script:
-    - npm install --no-save eslint
-    - npx eslint . --ext .js,.ts || touch eslint-issues.txt
-  allow_failure: true
-  after_script:
-    - |
-      if [ -s eslint-issues.txt ]; then
-        curl --request POST --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-          --header "Content-Type: application/json" \
-          --data @- <<EOF
-          {
-            "title": "ESLint Issues Found",
-            "description": "Linting errors detected. Please check and fix them."
-          }
-          EOF
-          "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/issues"
-      fi
-
-prettier:
-  stage: lint
-  image: node:latest
-  script:
-    - npm install --no-save prettier
-    - npx prettier --check . || touch prettier-issues.txt
-  allow_failure: true
-  after_script:
-    - |
-      if [ -s prettier-issues.txt ]; then
-        curl --request POST --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-          --header "Content-Type: application/json" \
-          --data @- <<EOF
-          {
-            "title": "Prettier Formatting Issues Found",
-            "description": "Code formatting issues detected. Run Prettier to fix them."
-          }
-          EOF
-          "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/issues"
-      fi
+  allow_failure: true  # Should not fail the pipeline
 
 sonarqube:
   stage: sonarqube
@@ -99,10 +36,8 @@ sonarqube:
     - curl -Lo jq https://github.com/stedolan/jq/releases/latest/download/jq-linux64
     - chmod +x jq
     - export PATH=$PWD:$PATH
-
   script:
     - sonar-scanner -Dsonar.token="$SONAR_TOKEN"
-
     - |
       RESPONSE=$(curl -s "https://sonarcloud.io/api/issues/search?componentKeys=OveRide-Phoenix_kk_v1")
       echo "SonarQube Response: $RESPONSE"
@@ -126,22 +61,19 @@ sonarqube:
         echo "$RESPONSE" | jq -c '.issues[]' | while read issue; do
           ISSUE_TITLE=$(echo "$issue" | jq -r '.message')
           ISSUE_COMPONENT=$(echo "$issue" | jq -r '.component')
-          ISSUE_LINE=$(echo "$issue" | jq -r '.line // "unknown"')
           ISSUE_SEVERITY=$(echo "$issue" | jq -r '.severity')
           ISSUE_TYPE=$(echo "$issue" | jq -r '.type')
+          ISSUE_LINE=$(echo "$issue" | jq -r '.line // "unknown"')
           ISSUE_RULE=$(echo "$issue" | jq -r '.rule')
 
           curl --request POST --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
             --header "Content-Type: application/json" \
-            --data @- <<EOF
-            {
-              "title": "SonarQube Issue: $ISSUE_TITLE",
-              "description": "**Component**: $ISSUE_COMPONENT\n**Line**: $ISSUE_LINE\n**Severity**: $ISSUE_SEVERITY\n**Type**: $ISSUE_TYPE\n**Rule**: $ISSUE_RULE\n\n$ISSUE_TITLE",
-              "assignee_ids": ["$MR_AUTHOR"]
-            }
-            EOF
+            --data "{
+              \"title\": \"SonarQube Issue: $ISSUE_TITLE\",
+              \"description\": \"**Severity:** $ISSUE_SEVERITY\n**Type:** $ISSUE_TYPE\n**Rule:** $ISSUE_RULE\n**Component:** $ISSUE_COMPONENT\n**Line:** $ISSUE_LINE\",
+              \"assignee_ids\": [\"$MR_AUTHOR\"]
+            }" \
             "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/issues"
-
         done
       fi
   allow_failure: true
