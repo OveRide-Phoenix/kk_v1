@@ -1,3 +1,5 @@
+-- Create indexes if needed..
+
 CREATE TABLE customers (
     customer_id INT AUTO_INCREMENT PRIMARY KEY,
     referred_by VARCHAR(100),
@@ -92,5 +94,3 @@ CREATE TABLE order_items (
     FOREIGN KEY (order_id) REFERENCES orders(order_id),
     FOREIGN KEY (item_id) REFERENCES items(item_id)
 );
-
--- testing KK27
