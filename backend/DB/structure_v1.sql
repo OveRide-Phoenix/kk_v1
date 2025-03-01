@@ -1,3 +1,9 @@
+-- Categories Table
+CREATE TABLE categories (
+    category_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    category_name VARCHAR(100) NOT NULL UNIQUE
+);
+
 -- Customers Table
 CREATE TABLE customers (
     customer_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -9,6 +15,43 @@ CREATE TABLE customers (
     payment_frequency VARCHAR(50) NULL DEFAULT 'Daily',
     email VARCHAR(100) NULL UNIQUE,
     created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP()
+);
+
+-- Menu Table
+CREATE TABLE menu (
+    menu_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    menu_type ENUM('Breakfast', 'Lunch', 'Dinner', 'Condiments') NOT NULL,
+    date DATE NOT NULL,
+    is_festival BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+-- Items Table
+CREATE TABLE items (
+    item_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT NULL,
+    alias VARCHAR(100) NULL,
+    category_id INT NULL,
+    uom VARCHAR(50) NOT NULL,
+    weight_factor DECIMAL(5,3) NULL,
+    weight_uom VARCHAR(50) NULL,
+    item_type VARCHAR(50) NULL,
+    hsn_code VARCHAR(50) NULL,
+    factor DECIMAL(5,3) NULL DEFAULT 1,
+    quantity_portion INT NULL,
+    buffer_percentage DECIMAL(5,2) NULL,
+    picture_url VARCHAR(255) NULL,
+    breakfast_price DECIMAL(10,2) NULL,
+    lunch_price DECIMAL(10,2) NULL,
+    dinner_price DECIMAL(10,2) NULL,
+    condiments_price DECIMAL(10,2) NULL,
+    festival_price DECIMAL(10,2) NULL,
+    cgst DECIMAL(5,2) NULL,
+    sgst DECIMAL(5,2) NULL,
+    igst DECIMAL(5,2) NULL,
+    net_price DECIMAL(10,2) NULL,
+    is_combo BOOLEAN NOT NULL DEFAULT FALSE,
+    FOREIGN KEY (category_id) REFERENCES categories(category_id)
 );
 
 -- Addresses Table
@@ -47,52 +90,9 @@ CREATE TABLE order_items (
     order_id INT NOT NULL,
     item_id INT NOT NULL,
     quantity INT NOT NULL,
-    price DECIMAL(10,2) NOT NULL,  
+    price DECIMAL(10,2) NOT NULL,
     FOREIGN KEY (order_id) REFERENCES orders(order_id),
     FOREIGN KEY (item_id) REFERENCES items(item_id)
-);
-
--- Menu Table
-CREATE TABLE menu (
-    menu_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    menu_type ENUM('Breakfast', 'Lunch', 'Dinner', 'Condiments') NOT NULL,
-    date DATE NOT NULL,
-    is_festival BOOLEAN NOT NULL DEFAULT FALSE
-);
-
--- Groups Table
-CREATE TABLE groups (
-    group_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    group_name VARCHAR(100) NOT NULL UNIQUE
-);
-
--- Items Table
-CREATE TABLE items (
-    item_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    description TEXT NULL,
-    alias VARCHAR(100) NULL,
-    group_id INT NULL,
-    uom VARCHAR(50) NOT NULL,
-    weight_factor DECIMAL(5,3) NULL,
-    weight_uom VARCHAR(50) NULL,
-    item_type VARCHAR(50) NULL,
-    hsn_code VARCHAR(50) NULL,
-    factor DECIMAL(5,3) NULL DEFAULT 1,
-    quantity_portion INT NULL,
-    buffer_percentage DECIMAL(5,2) NULL,
-    picture_url VARCHAR(255) NULL,
-    breakfast_price DECIMAL(10,2) NULL,
-    lunch_price DECIMAL(10,2) NULL,
-    dinner_price DECIMAL(10,2) NULL,
-    condiments_price DECIMAL(10,2) NULL,
-    festival_price DECIMAL(10,2) NULL,
-    cgst DECIMAL(5,2) NULL,
-    sgst DECIMAL(5,2) NULL,
-    igst DECIMAL(5,2) NULL,
-    net_price DECIMAL(10,2) NULL,  
-    is_combo BOOLEAN NOT NULL DEFAULT FALSE,
-    FOREIGN KEY (group_id) REFERENCES groups(group_id)
 );
 
 -- Menu Items Table
@@ -100,14 +100,14 @@ CREATE TABLE menu_items (
     menu_item_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     menu_id INT NOT NULL,
     item_id INT NOT NULL,
-    group_id INT NULL,
+    category_id INT NULL,
     planned_qty INT NULL,
-    rate DECIMAL(10,2) NOT NULL, 
-    is_default BOOLEAN NOT NULL DEFAULT FALSE,  
+    rate DECIMAL(10,2) NOT NULL,
+    is_default BOOLEAN NOT NULL DEFAULT FALSE,
     sort_order INT NULL,
     FOREIGN KEY (menu_id) REFERENCES menu(menu_id),
     FOREIGN KEY (item_id) REFERENCES items(item_id),
-    FOREIGN KEY (group_id) REFERENCES groups(group_id)
+    FOREIGN KEY (category_id) REFERENCES categories(category_id)
 );
 
 -- Item Combo Table
@@ -115,13 +115,12 @@ CREATE TABLE item_combos (
     combo_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     combo_item_id INT NOT NULL,  -- The combo (e.g., South Indian Thali)
     included_item_id INT NULL,  -- Individual item (e.g., Rice)
-    included_group_id INT NULL,  -- General category (e.g., Sambar)
+    included_category_id INT NULL,  -- General category (e.g., Sambar)
     quantity INT NOT NULL DEFAULT 1,
     FOREIGN KEY (combo_item_id) REFERENCES items(item_id),
     FOREIGN KEY (included_item_id) REFERENCES items(item_id),
-    FOREIGN KEY (included_group_id) REFERENCES groups(group_id)
+    FOREIGN KEY (included_category_id) REFERENCES categories(category_id)
 );
-
 
 -- Add-On Table
 CREATE TABLE item_add_ons (
@@ -133,7 +132,6 @@ CREATE TABLE item_add_ons (
     FOREIGN KEY (main_item_id) REFERENCES items(item_id),
     FOREIGN KEY (add_on_item_id) REFERENCES items(item_id)
 );
-
 
 -- Item Price History Table
 CREATE TABLE item_price_history (
