@@ -2,6 +2,7 @@
 
 import type React from "react"
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -13,6 +14,7 @@ export default function LoginPage() {
   const [phoneNumber, setPhoneNumber] = useState("")
   const [city, setCity] = useState("")
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const router = useRouter() // ✅ Placed correctly inside the function
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     // Only allow numbers and basic phone formatting
@@ -68,28 +70,16 @@ export default function LoginPage() {
           {/* Mobile Navigation */}
           {mobileMenuOpen && (
             <div className="md:hidden py-4 space-y-2">
-              <a
-                href="#"
-                className="block px-3 py-2 rounded-md text-base font-medium text-foreground/80 hover:bg-accent hover:text-primary"
-              >
+              <a href="#" className="block px-3 py-2 rounded-md text-base font-medium text-foreground/80 hover:bg-accent hover:text-primary">
                 Home
               </a>
-              <a
-                href="#"
-                className="block px-3 py-2 rounded-md text-base font-medium text-foreground/80 hover:bg-accent hover:text-primary"
-              >
+              <a href="#" className="block px-3 py-2 rounded-md text-base font-medium text-foreground/80 hover:bg-accent hover:text-primary">
                 About
               </a>
-              <a
-                href="#"
-                className="block px-3 py-2 rounded-md text-base font-medium text-foreground/80 hover:bg-accent hover:text-primary"
-              >
+              <a href="#" className="block px-3 py-2 rounded-md text-base font-medium text-foreground/80 hover:bg-accent hover:text-primary">
                 Services
               </a>
-              <a
-                href="#"
-                className="block px-3 py-2 rounded-md text-base font-medium text-foreground/80 hover:bg-accent hover:text-primary"
-              >
+              <a href="#" className="block px-3 py-2 rounded-md text-base font-medium text-foreground/80 hover:bg-accent hover:text-primary">
                 Contact
               </a>
             </div>
@@ -139,15 +129,18 @@ export default function LoginPage() {
               </Select>
             </div>
           </CardContent>
+
           <CardFooter className="flex flex-col space-y-2">
-            <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">Login</Button>
-            <Button className="w-full" variant="outline">
-              Register
+            <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+              Login
             </Button>
+            <Button className="w-full" variant="outline" onClick={() => router.push("/register")}>
+  Register
+</Button>
+
           </CardFooter>
         </Card>
       </div>
     </div>
   )
 }
-
