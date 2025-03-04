@@ -1,7 +1,7 @@
 "use client"
 
-import type React from "react"
-import { useState } from "react"
+import React, { useState } from "react"
+import axios from "axios"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -13,90 +13,33 @@ export default function LoginPage() {
   const [phoneNumber, setPhoneNumber] = useState("")
   const [city, setCity] = useState("")
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState("")
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Only allow numbers and basic phone formatting
     const value = e.target.value.replace(/[^\d+()-\s]/g, "")
     setPhoneNumber(value)
+  }
+
+  const handleLogin = async () => {
+    setLoading(true)
+    setMessage("")
+    try {
+      const response = await axios.post("http://localhost:5000/login", {
+        phone_number: phoneNumber,
+        city: city
+      })
+      setMessage(response.data.message)
+    } catch (error: any) {
+      setMessage(error.response?.data?.detail || "Login failed")
+    }
+    setLoading(false)
   }
 
   const cities = ["Mysore", "Bangalore"]
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* Navigation Bar */}
-      <header className="border-b border-muted">
-        <div className="container mx-auto px-4">
-          <div className="flex h-16 items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Coffee className="h-6 w-6 text-primary" />
-              <a href="#" className="text-xl font-bold text-cream">
-                Kuteera Kitchen
-              </a>
-            </div>
-
-            {/* Desktop Navigation */}
-            <nav className="hidden md:flex space-x-8">
-              <a href="#" className="text-sm font-medium text-foreground/80 hover:text-primary transition-colors">
-                Home
-              </a>
-              <a href="#" className="text-sm font-medium text-foreground/80 hover:text-primary transition-colors">
-                About
-              </a>
-              <a href="#" className="text-sm font-medium text-foreground/80 hover:text-primary transition-colors">
-                Services
-              </a>
-              <a href="#" className="text-sm font-medium text-foreground/80 hover:text-primary transition-colors">
-                Contact
-              </a>
-            </nav>
-
-            {/* Mobile Menu Button */}
-            <div className="md:hidden">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                aria-label="Toggle menu"
-                className="text-foreground hover:text-primary"
-              >
-                {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-              </Button>
-            </div>
-          </div>
-
-          {/* Mobile Navigation */}
-          {mobileMenuOpen && (
-            <div className="md:hidden py-4 space-y-2">
-              <a
-                href="#"
-                className="block px-3 py-2 rounded-md text-base font-medium text-foreground/80 hover:bg-accent hover:text-primary"
-              >
-                Home
-              </a>
-              <a
-                href="#"
-                className="block px-3 py-2 rounded-md text-base font-medium text-foreground/80 hover:bg-accent hover:text-primary"
-              >
-                About
-              </a>
-              <a
-                href="#"
-                className="block px-3 py-2 rounded-md text-base font-medium text-foreground/80 hover:bg-accent hover:text-primary"
-              >
-                Services
-              </a>
-              <a
-                href="#"
-                className="block px-3 py-2 rounded-md text-base font-medium text-foreground/80 hover:bg-accent hover:text-primary"
-              >
-                Contact
-              </a>
-            </div>
-          )}
-        </div>
-      </header>
-
       {/* Login Form */}
       <div className="flex items-center justify-center p-4 py-12">
         <Card className="w-full max-w-md border-primary/20">
@@ -140,14 +83,13 @@ export default function LoginPage() {
             </div>
           </CardContent>
           <CardFooter className="flex flex-col space-y-2">
-            <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">Login</Button>
-            <Button className="w-full" variant="outline">
-              Register
+            <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" onClick={handleLogin} disabled={loading}>
+              {loading ? "Logging in..." : "Login"}
             </Button>
+            {message && <p className="text-sm text-center text-red-500">{message}</p>}
           </CardFooter>
         </Card>
       </div>
     </div>
   )
 }
-
