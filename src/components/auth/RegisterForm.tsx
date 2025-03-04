@@ -1,13 +1,15 @@
 "use client";
-import { useState } from "react";
+
+import { useState, useEffect } from "react";
 import { TextInput, Button, Select, Stack } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { registerUser, getAvailableCities } from "@/lib/api";
 
 export function RegisterForm() {
   const [cities, setCities] = useState<string[]>([]);
-  
-  useState(() => {
+
+  // ✅ Fetch available cities on mount
+  useEffect(() => {
     getAvailableCities().then(setCities);
   }, []);
 
@@ -26,7 +28,8 @@ export function RegisterForm() {
       email: "",
     },
     validate: {
-      phone: (value) => (value.length === 10 ? null : "Invalid phone number"),
+      phone: (value) =>
+        /^\d{10}$/.test(value) ? null : "Phone number must be exactly 10 digits",
       name: (value) => (value ? null : "Name is required"),
       fullAddress: (value) => (value ? null : "Address is required"),
       city: (value) => (value ? null : "City is required"),
@@ -34,16 +37,18 @@ export function RegisterForm() {
   });
 
   const handleRegister = async () => {
-    const response = await registerUser(form.values);
-    if (response.success) {
-      alert("Registration successful!");
-    } else {
-      alert("Error registering user.");
+    if (!form.validate().hasErrors) {
+      const response = await registerUser(form.values);
+      if (response.success) {
+        alert("Registration successful!");
+      } else {
+        alert("Error registering user.");
+      }
     }
   };
 
   return (
-    <Stack spacing="md">
+    <Stack gap="md"> {/* ✅ Correct spacing prop */}
       <TextInput label="Referred By" {...form.getInputProps("referredBy")} />
       <TextInput label="Primary Mobile" required {...form.getInputProps("phone")} />
       <TextInput label="Alternative Mobile" {...form.getInputProps("altPhone")} />
@@ -52,7 +57,16 @@ export function RegisterForm() {
       <Select label="Address Type" data={["HOME", "WORK"]} {...form.getInputProps("addressType")} />
       <TextInput label="House/Apartment" {...form.getInputProps("house")} />
       <TextInput label="Full Address" required {...form.getInputProps("fullAddress")} />
-      <Select label="City" data={cities} required {...form.getInputProps("city")} />
+
+      {/* ✅ Fixing Select binding */}
+      <Select
+        label="City"
+        data={cities}
+        required
+        value={form.values.city}
+        onChange={(value) => form.setFieldValue("city", value || "")}
+      />
+
       <TextInput label="Pin Code" required {...form.getInputProps("pinCode")} />
       <TextInput label="Email" {...form.getInputProps("email")} />
       <Button onClick={handleRegister}>Register</Button>

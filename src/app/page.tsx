@@ -40,6 +40,7 @@ export default function HomePage() {
                   Login
                 </Button>
               </Link>
+            
             </nav>
 
             {/* Mobile Menu Button */}
@@ -74,6 +75,9 @@ export default function HomePage() {
               <Link href="/login" className="block px-3 py-2 rounded-md text-base font-medium bg-primary text-primary-foreground hover:bg-primary/90">
                 Login
               </Link>
+              <Link href="/register" className="block px-3 py-2 rounded-md text-base font-medium bg-primary text-primary-foreground hover:bg-primary/90">
+                Register
+              </Link>
             </div>
           )}
         </div>
@@ -90,6 +94,11 @@ export default function HomePage() {
             Get Started
           </Button>
         </Link>
+              <Link href="/register">
+                <Button variant="outline" className="text-sm">
+                  Register
+                </Button>
+              </Link>
       </main>
 
       {/* Footer */}
