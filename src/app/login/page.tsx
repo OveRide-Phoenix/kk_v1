@@ -14,7 +14,7 @@ export default function LoginPage() {
   const [phoneNumber, setPhoneNumber] = useState("")
   const [city, setCity] = useState("")
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const router = useRouter() // ✅ Placed correctly inside the function
+  const router = useRouter() 
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     // Only allow numbers and basic phone formatting
