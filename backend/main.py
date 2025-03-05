@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import List, Dict, Optional
 from fastapi.middleware.cors import CORSMiddleware
 
+
 app = FastAPI()
 
 app.add_middleware(
@@ -25,15 +26,46 @@ def get_db():
 
 # Get city by phone number
 @app.get("/api/get-city")
-def get_city_by_phone(phone: str):
+def get_city(phone: str):
     db = get_db()
-    cursor = db.cursor(dictionary=True)
-    cursor.execute("SELECT city FROM addresses JOIN customers ON addresses.customer_id = customers.customer_id WHERE customers.primary_mobile = %s", (phone,))
-    result = cursor.fetchone()
-    db.close()
-    if not result:
-        raise HTTPException(status_code=404, detail="City not found")
-    return {"city": result["city"]}
+    cursor = db.cursor(dictionary=True, buffered=True)
+
+    try:
+        query = """
+        SELECT 
+            a.city, 
+            CASE 
+                WHEN u.customer_id IS NOT NULL THEN 1 
+                ELSE 0 
+            END AS is_admin 
+        FROM customers c
+        INNER JOIN addresses a ON c.customer_id = a.customer_id
+        LEFT JOIN admin_users u ON c.customer_id = u.customer_id
+        WHERE c.primary_mobile = %s;
+        """
+
+        cursor.execute(query, (phone,))
+        result = cursor.fetchone()
+
+        print("Raw DB Result:", result)  # Debugging Output
+
+        if not result:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # ✅ Ensure conversion to int before bool conversion
+        is_admin = int(result["is_admin"]) if result["is_admin"] is not None else 0
+
+        print("Final Processed Result:", {"city": result["city"], "is_admin": bool(is_admin)})
+
+        return {
+            "city": result["city"],
+            "is_admin": bool(is_admin)  # Ensure True/False conversion
+        }
+
+    finally:
+        cursor.close()
+        db.close()
+
 
 # Get all available cities
 @app.get("/api/get-cities")
@@ -118,6 +150,13 @@ def register_customer(data: CustomerCreate):
     cursor = db.cursor()
 
     try:
+        # Check if the mobile number already exists
+        cursor.execute("SELECT id FROM customers WHERE primary_mobile = %s", (data.primary_mobile,))
+        existing_customer = cursor.fetchone()
+        
+        if existing_customer:
+            raise HTTPException(status_code=400, detail="Mobile number already exists! Please login instead.")
+
         # Insert customer details
         cursor.execute("""
             INSERT INTO customers (referred_by, primary_mobile, alternative_mobile, name, recipient_name, payment_frequency, email)
@@ -126,18 +165,74 @@ def register_customer(data: CustomerCreate):
         
         customer_id = cursor.lastrowid  # Get inserted customer ID
 
-        # Insert address details
+        # Insert address details with address_type from dropdown and is_default set to True
         cursor.execute("""
             INSERT INTO addresses (customer_id, house_apartment_no, written_address, city, pin_code, latitude, longitude, address_type, route_assignment, is_default)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (customer_id, data.house_apartment_no, data.written_address, data.city, data.pin_code, data.latitude, data.longitude, data.address_type, data.route_assignment, data.is_default))
+        """, (customer_id, data.house_apartment_no, data.written_address, data.city, data.pin_code, data.latitude, data.longitude, data.address_type, data.route_assignment, True))
 
         db.commit()
         return {"success": True, "customer_id": customer_id}
     
+    except mysql.connector.IntegrityError as err:
+        db.rollback()
+        if err.errno == 1062:
+            raise HTTPException(status_code=400, detail="Duplicate entry: Mobile number already registered")
+        raise HTTPException(status_code=400, detail=str(err))
+    
     except mysql.connector.Error as err:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(err))
+        raise HTTPException(status_code=500, detail=str(err))
     
     finally:
         db.close()
+
+class LoginRequest(BaseModel):
+    phone: str
+    admin_password: Optional[str]
+
+#Login
+@app.post("/api/login")
+def login(data: LoginRequest):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+
+    query = """
+    SELECT c.customer_id, a.city, u.admin_password
+    FROM customers c
+    JOIN addresses a ON c.customer_id = a.customer_id
+    LEFT JOIN admin_users u ON c.customer_id = u.customer_id
+    WHERE c.primary_mobile = %s;
+    """
+    cursor.execute(query, (data.phone,))
+    result = cursor.fetchone()
+
+    # Debugging output
+    print("Query result:", result)  # Check full result
+    if result:
+        print("Result keys:", result.keys())  # See what keys are present
+        print("Stored password in DB:", result.get("admin_password"))  # Check admin password
+
+    if not result:
+        cursor.close()
+        db.close()
+        raise HTTPException(status_code=404, detail="User not found")
+
+    is_admin = bool(result["admin_password"])
+
+    if is_admin:
+        if not data.admin_password:
+            cursor.close()
+            db.close()
+            raise HTTPException(status_code=400, detail="Admin password is required")
+
+        if data.admin_password != result["admin_password"]:
+            cursor.close()
+            db.close()
+            raise HTTPException(status_code=401, detail="Invalid admin password")
+
+    cursor.close()
+    db.close()
+
+    # Return the is_admin flag in the response
+    return {"message": "Login successful", "is_admin": is_admin}

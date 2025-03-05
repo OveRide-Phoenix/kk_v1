@@ -9,7 +9,7 @@ export default function HomePage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
       {/* Navigation Bar */}
       <header className="border-b border-muted">
         <div className="container mx-auto px-4">
@@ -22,7 +22,7 @@ export default function HomePage() {
             </div>
 
             {/* Desktop Navigation */}
-            <nav className="hidden md:flex space-x-8">
+            <nav className="hidden md:flex space-x-4 items-center">
               <Link href="/" className="text-sm font-medium text-foreground/80 hover:text-primary transition-colors">
                 Home
               </Link>
@@ -38,6 +38,11 @@ export default function HomePage() {
               <Link href="/login">
                 <Button variant="outline" className="text-sm">
                   Login
+                </Button>
+              </Link>
+              <Link href="/register">
+                <Button variant="outline" className="text-sm bg-primary hover:bg-primary/90 text-primary-foreground">
+                  Register
                 </Button>
               </Link>
             
@@ -83,25 +88,25 @@ export default function HomePage() {
       </header>
 
       {/* Hero Section */}
-      <main className="flex flex-col items-center text-center p-6 mt-12">
+      <main className="flex-grow flex flex-col items-center text-center p-6 mt-12 ">
         <h1 className="text-4xl font-bold text-primary">Welcome to Kuteera Kitchen</h1>
         <p className="text-lg text-muted-foreground mt-4 max-w-lg">
           Experience fresh, homemade meals delivered right to your doorstep in Mysore and Bangalore.
         </p>
-        <Link href="/login">
+        <Link href="/register">
           <Button className="mt-6 px-6 py-3 bg-primary hover:bg-primary/90 text-primary-foreground">
-            Get Started
+            Get Started / Register
           </Button>
         </Link>
-              <Link href="/register">
-                <Button variant="outline" className="text-sm">
-                  Register
+              <Link href="/login">
+                <Button variant="outline" className="text-sm mt-4">
+                  Login
                 </Button>
               </Link>
       </main>
 
       {/* Footer */}
-      <footer className="mt-12 py-6 border-t border-muted w-full text-center text-sm">
+      <footer className="py-6 border-t border-muted w-full text-center text-sm">
         © {new Date().getFullYear()} Kuteera Kitchen. All rights reserved.
       </footer>
     </div>
