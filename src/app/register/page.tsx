@@ -1,51 +1,145 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useCallback, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Coffee, MapPin, Menu, X} from "lucide-react"
+import { Coffee } from "lucide-react"
+import GoogleMapPicker from "@/components/gmap/GoogleMapPicker"
+
 
 export default function RegistrationPage() {
   // Form state
   const [formData, setFormData] = useState({
-    referredBy: "",
-    primaryMobile: "",
-    alternativeMobile: "",
-    customerName: "",
-    receiverName: "",
-    addressType: "",
-    houseApartment: "",
-    address: "",
-    city: "",
-    pincode: "",
-    email: "",
-  })
-      const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-      const router = useRouter()
+    referredBy: "",  // Matches referred_by
+    primaryMobile: "",  // Matches primary_mobile
+    alternativeMobile: "",  // Matches alternative_mobile
+    name: "",  // Matches name (customer's name)
+    recipientName: "",  // Matches recipient_name
+    paymentFrequency: "Daily",  // Matches payment_frequency (default "Daily")
+    email: "",  // Matches email
+  
+    houseApartmentNo: "",  // Matches house_apartment_no
+    writtenAddress: "",  // Matches written_address
+    city: "",  // Matches city
+    pinCode: "",  // Matches pin_code
+    latitude: null as number | null,  // Matches latitude
+    longitude: null as number | null,  // Matches longitude
+    addressType: "",  // Matches address_type
+    routeAssignment: "",  // Matches route_assignment
+    isDefault: false,  // Matches is_default
+  });
+  
 
   // Handle input changes
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
-  }
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+  
+    setFormData((prev) => {
+
+      if (name === "latitude" || name === "longitude") {
+        return { ...prev, [name]: value }; // Store as string
+    }
+      // Apply special handling for mobile fields
+      if (name === "primaryMobile" || name === "alternativeMobile") {
+        let newValue = value.startsWith("+91 ") ? value.slice(4) : value;
+  
+        // Prevent user from manually typing "+91"
+        if (newValue.startsWith("+91")) {
+          newValue = newValue.slice(3);
+        }
+  
+        return { ...prev, [name]: newValue };
+      }
+  
+      // Default case for other fields
+      return { ...prev, [name]: value };
+    });
+  }, []);
+  
+
+
+  const [addressType, setAddressType] = useState("");
+  const [otherAddressName, setOtherAddressName] = useState("");
+  
+  const handleAddressTypeChange = (value: string) => {
+    setAddressType(value);
+    if (value !== "OTHER") {
+      setOtherAddressName(""); // Reset if switching away from "OTHER"
+    }
+  };
+
 
   // Handle select changes
   const handleSelectChange = (name: string, value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
-  // Handle form submission
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    console.log("Form submitted:", formData)
-    // Add your form submission logic here
+const handleLocationSelect = (lat: number, lng: number) => {
+  setFormData((prev) => ({ ...prev, latitude: lat, longitude: lng }))
+}
+
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+  
+    const formattedData = {
+      referred_by: formData.referredBy || null,
+      primary_mobile: formData.primaryMobile,
+      alternative_mobile: formData.alternativeMobile || null,
+      name: formData.name,
+      recipient_name: formData.recipientName,
+      payment_frequency: formData.paymentFrequency || "Daily",
+      email: formData.email || null,
+      house_apartment_no: formData.houseApartmentNo || null,
+      written_address: formData.writtenAddress,
+      city: formData.city,
+      pin_code: formData.pinCode,
+      latitude: formData.latitude !== null ? parseFloat(String(formData.latitude)) : 0,
+      longitude: formData.longitude !== null ? parseFloat(String(formData.longitude)) : 0,
+      address_type: formData.addressType || null,
+      route_assignment: formData.routeAssignment || null,
+      is_default: formData.isDefault ?? false
+    };
+    
+    console.log("Formatted Payload:", JSON.stringify(formattedData));
+    const response = await fetch("http://localhost:8000/api/register", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(formattedData)
+    });
   }
+  
+  //   try {
+  //     console.log("Request Payload:", JSON.stringify(formData));
+  //     const response = await fetch("http://localhost:8000/api/register", {
+  //       method: "POST",
+  //       headers: {
+  //         "Content-Type": "application/json",
+  //       },
+  //       body: JSON.stringify(payload),
+  //     });
+  
+  //     const data = await response.json();
+  //     if (response.ok) {
+  //       console.log("Address saved successfully", data);
+  //     } else {
+  //       console.error("Error saving address", data);
+  //     }
+  //   } catch (error) {
+  //     console.error("Failed to send request", error);
+  //   }
+  // };
+  
+  
+  const MemoizedGoogleMap = useMemo(() => <GoogleMapPicker onLocationSelect={handleLocationSelect} />, []);
+
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -59,7 +153,8 @@ export default function RegistrationPage() {
                 Kuteera Kitchen
               </a>
             </div>
- {/* Desktop Navigation */}
+
+            {/* Desktop Navigation */}
             <nav className="hidden md:flex space-x-8">
               <a href="#" className="text-sm font-medium text-foreground/80 hover:text-primary transition-colors">
                 Home
@@ -73,44 +168,11 @@ export default function RegistrationPage() {
               <a href="#" className="text-sm font-medium text-foreground/80 hover:text-primary transition-colors">
                 Contact
               </a>
-              <a href="/login">
-                <Button variant="outline" className="text-sm">
-                  Login
-                </Button>
+              <a href="/login" className="block px-3 py-2 rounded-md text-base font-medium bg-primary text-primary-foreground hover:bg-primary/90">
+                Login
               </a>
             </nav>
-
-            {/* Mobile Menu Button */}
-            <div className="md:hidden">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                aria-label="Toggle menu"
-                className="text-foreground hover:text-primary"
-              >
-                {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-              </Button>
-            </div>
           </div>
-
-          {/* Mobile Navigation */}
-          {mobileMenuOpen && (
-            <div className="md:hidden py-4 space-y-2">
-              <a href="#" className="block px-3 py-2 rounded-md text-base font-medium text-foreground/80 hover:bg-accent hover:text-primary">
-                Home
-              </a>
-              <a href="#" className="block px-3 py-2 rounded-md text-base font-medium text-foreground/80 hover:bg-accent hover:text-primary">
-                About
-              </a>
-              <a href="#" className="block px-3 py-2 rounded-md text-base font-medium text-foreground/80 hover:bg-accent hover:text-primary">
-                Services
-              </a>
-              <a href="#" className="block px-3 py-2 rounded-md text-base font-medium text-foreground/80 hover:bg-accent hover:text-primary">
-                Contact
-              </a>
-            </div>
-          )}
         </div>
       </header>
 
@@ -123,12 +185,28 @@ export default function RegistrationPage() {
               Please fill in your details to create an account
             </CardDescription>
           </CardHeader>
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} className="space-y-4">
             <CardContent className="space-y-6">
-            {/* Personal Information */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium border-b border-muted pb-2">Personal Information</h3>
+              {/* Personal Information */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium border-b border-muted pb-2">Personal Information</h3>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name" className="text-foreground/90">
+                      Customer Name <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="name"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleChange}
+                      required
+                      className="border-input/50 bg-gray-100 text-foreground placeholder:text-foreground/50"
+
+                    />
+                  </div>
+
                   <div className="space-y-2">
                     <Label htmlFor="referredBy" className="text-foreground/90">
                       Referred By (Optional)
@@ -138,23 +216,12 @@ export default function RegistrationPage() {
                       name="referredBy"
                       value={formData.referredBy}
                       onChange={handleChange}
-                      className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
+                      className="border-input/50 bg-gray-100 text-foreground placeholder:text-foreground/50"
+
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="customerName" className="text-foreground/90">
-                      Customer Name <span className="text-destructive">*</span>
-                    </Label>
-                    <Input
-                      id="customerName"
-                      name="customerName"
-                      value={formData.customerName}
-                      onChange={handleChange}
-                      required
-                      className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
-                    />
-                  </div>
+                  
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -166,12 +233,13 @@ export default function RegistrationPage() {
                       id="primaryMobile"
                       name="primaryMobile"
                       type="tel"
-                      placeholder="+91"
-                      value={formData.primaryMobile}
+                      value={formData.primaryMobile ? `+91 ${formData.primaryMobile}` : ""}
                       onChange={handleChange}
+                      placeholder="+91"
                       required
-                      className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
+                      className="border-input/50 bg-gray-100 text-foreground placeholder:text-foreground/50"
                     />
+
                   </div>
 
                   <div className="space-y-2">
@@ -182,10 +250,11 @@ export default function RegistrationPage() {
                       id="alternativeMobile"
                       name="alternativeMobile"
                       type="tel"
-                      placeholder="+91"
-                      value={formData.alternativeMobile}
+                      value={formData.alternativeMobile ? `+91 ${formData.alternativeMobile}` : ""}
                       onChange={handleChange}
-                      className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
+                      placeholder="+91"
+                      className="border-input/50 bg-gray-100 text-foreground placeholder:text-foreground/50"
+
                     />
                   </div>
                 </div>
@@ -196,74 +265,90 @@ export default function RegistrationPage() {
                 <h3 className="text-lg font-medium border-b border-muted pb-2">Delivery Information</h3>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="receiverName" className="text-foreground/90">
-                      Deliver To / Food Receiver Name <span className="text-destructive">*</span>
-                    </Label>
-                    <Input
-                      id="receiverName"
-                      name="receiverName"
-                      value={formData.receiverName}
-                      onChange={handleChange}
-                      required
-                      className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
-                    />
-                  </div>
+  <div className="space-y-2">
+    <Label htmlFor="recipientName" className="text-foreground/90">
+      Deliver To / Food Receiver Name <span className="text-destructive">*</span>
+    </Label>
+    <Input
+      id="recipientName"
+      name="recipientName"
+      value={formData.recipientName}
+      onChange={handleChange}
+      required
+      className="border-input/50 bg-gray-100 text-foreground placeholder:text-foreground/50"
+    />
+  </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="addressType" className="text-foreground/90">
-                      Address Type <span className="text-destructive">*</span>
-                    </Label>
-                    <Select
-                      value={formData.addressType}
-                      onValueChange={(value) => handleSelectChange("addressType", value)}>
-                      <SelectTrigger id="addressType" className="border-input/50 bg-secondary text-foreground">
-                        <SelectValue placeholder="Select address type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="HOME">HOME</SelectItem>
-                        <SelectItem value="WORK">WORK</SelectItem>
-                        <SelectItem value="OTHER">OTHER</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </div>
+  <div className="space-y-2">
+    <Label htmlFor="addressType" className="text-foreground/90">Address Type</Label>
+    <Select value={addressType} onValueChange={handleAddressTypeChange}>
+      <SelectTrigger className="border-input/50 bg-gray-100 text-foreground">
+        <SelectValue placeholder="Select address type" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="HOME">Home</SelectItem>
+        <SelectItem value="WORK">Work</SelectItem>
+        <SelectItem value="OTHER">Other</SelectItem>
+      </SelectContent>
+    </Select>
+
+    {addressType === "OTHER" && (
+      <div className="space-y-2">
+        <Label htmlFor="otherAddressName" className="text-foreground/90">Other Address Name</Label>
+        <Input
+          id="otherAddressName"
+          name="otherAddressName"
+          type="text"
+          value={otherAddressName}
+          onChange={(e) => setOtherAddressName(e.target.value)}
+          placeholder="Enter address name"
+          className="border-input/50 bg-gray-100 text-foreground"
+        />
+      </div>
+    )}
+  </div>
+</div>
+</div>
 
               {/* Address Details */}
               <div className="space-y-4">
                 <h3 className="text-lg font-medium border-b border-muted pb-2">Address Details</h3>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="houseApartment" className="text-foreground/90">
+                    <Label htmlFor="houseApartmentNo" className="text-foreground/90">
                       House/Apartment <span className="text-destructive">*</span>
                     </Label>
                     <Input
-                      id="houseApartment"
-                      name="houseApartment"
-                      value={formData.houseApartment}
+                      id="houseApartmentNo"
+                      name="houseApartmentNo"
+                      value={formData.houseApartmentNo}
                       onChange={handleChange}
                       required
-                      className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"/>
+                      className="border-input/50 bg-gray-100 text-foreground placeholder:text-foreground/50"
+
+                    />
                   </div>
 
                   <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="address" className="text-foreground/90">
+                    <Label htmlFor="writtenAddress" className="text-foreground/90">
                       Address <span className="text-destructive">*</span>
                     </Label>
+                    <div className="space-y-2">
                     <Textarea
-                      id="address"
-                      name="address"
-                      value={formData.address}
+                      id="writtenAddress"
+                      name="writtenAddress"
+                      value={formData.writtenAddress}
                       onChange={handleChange}
                       required
-                      className="min-h-[100px] border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
+                      className="min-h-[100px] w-full border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
                     />
+                    </div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
+                <div className="space-y-2">
                     <Label htmlFor="city" className="text-foreground/90">
                       City <span className="text-destructive">*</span>
                     </Label>
@@ -277,36 +362,35 @@ export default function RegistrationPage() {
                       </SelectContent>
                     </Select>
                   </div>
+                
 
                   <div className="space-y-2">
-                    <Label htmlFor="pincode" className="text-foreground/90">
+                    <Label htmlFor="pinCode" className="text-foreground/90">
                       Pin code <span className="text-destructive">*</span>
                     </Label>
                     <Input
-                      id="pincode"
-                      name="pincode"
+                      id="pinCode"
+                      name="pinCode"
                       type="text"
-                      value={formData.pincode}
+                      value={formData.pinCode}
                       onChange={handleChange}
                       required
-                      className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
+                      className="border-input/50 bg-gray-100 text-foreground placeholder:text-foreground/50"
+
                     />
                   </div>
                 </div>
 
                 {/* Google Maps Placeholder */}
-                <div className="space-y-2">
-                  <Label className="text-foreground/90">
-                    Google Maps Pin <span className="text-destructive">*</span>
-                  </Label>
-                  <div className="border border-input/50 rounded-md h-[200px] bg-secondary/50 flex items-center justify-center">
-                    <div className="text-center">
-                      <MapPin className="h-8 w-8 text-primary mx-auto mb-2" />
-                      <p className="text-foreground/70">Google Maps integration would appear here</p>
-                      <p className="text-xs text-foreground/50">Click to set your exact location</p>
-                    </div>
-                  </div>
-                </div>
+                <div className="space-y-4">
+                <Label>Google Maps Location</Label>
+                {MemoizedGoogleMap}
+                {formData.latitude && formData.longitude && (
+                  <p className="text-sm text-muted-foreground">
+                    Selected Location: {formData.latitude}, {formData.longitude}
+                  </p>
+                )}
+              </div>
               </div>
 
               {/* Email Information */}
@@ -323,11 +407,14 @@ export default function RegistrationPage() {
                     type="email"
                     value={formData.email}
                     onChange={handleChange}
-                    className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"/>
+                    className="border-input/50 bg-gray-100 text-foreground placeholder:text-foreground/50"
+
+                  />
                   <p className="text-xs text-foreground/70 mt-1">Payment details will be sent to this email address</p>
                 </div>
               </div>
             </CardContent>
+
             <CardFooter className="flex flex-col sm:flex-row gap-3">
               <Button type="submit" className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground">
                 Register
