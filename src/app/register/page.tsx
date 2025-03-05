@@ -1,15 +1,15 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Coffee, MapPin } from "lucide-react"
+import { Coffee, MapPin, Menu, X} from "lucide-react"
 
 export default function RegistrationPage() {
   // Form state
@@ -26,6 +26,8 @@ export default function RegistrationPage() {
     pincode: "",
     email: "",
   })
+      const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+      const router = useRouter()
 
   // Handle input changes
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -57,8 +59,7 @@ export default function RegistrationPage() {
                 Kuteera Kitchen
               </a>
             </div>
-
-            {/* Desktop Navigation */}
+ {/* Desktop Navigation */}
             <nav className="hidden md:flex space-x-8">
               <a href="#" className="text-sm font-medium text-foreground/80 hover:text-primary transition-colors">
                 Home
@@ -72,11 +73,44 @@ export default function RegistrationPage() {
               <a href="#" className="text-sm font-medium text-foreground/80 hover:text-primary transition-colors">
                 Contact
               </a>
-              <a href="/login" className="block px-3 py-2 rounded-md text-base font-medium bg-primary text-primary-foreground hover:bg-primary/90">
-                Login
+              <a href="/login">
+                <Button variant="outline" className="text-sm">
+                  Login
+                </Button>
               </a>
             </nav>
+
+            {/* Mobile Menu Button */}
+            <div className="md:hidden">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                aria-label="Toggle menu"
+                className="text-foreground hover:text-primary"
+              >
+                {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+              </Button>
+            </div>
           </div>
+
+          {/* Mobile Navigation */}
+          {mobileMenuOpen && (
+            <div className="md:hidden py-4 space-y-2">
+              <a href="#" className="block px-3 py-2 rounded-md text-base font-medium text-foreground/80 hover:bg-accent hover:text-primary">
+                Home
+              </a>
+              <a href="#" className="block px-3 py-2 rounded-md text-base font-medium text-foreground/80 hover:bg-accent hover:text-primary">
+                About
+              </a>
+              <a href="#" className="block px-3 py-2 rounded-md text-base font-medium text-foreground/80 hover:bg-accent hover:text-primary">
+                Services
+              </a>
+              <a href="#" className="block px-3 py-2 rounded-md text-base font-medium text-foreground/80 hover:bg-accent hover:text-primary">
+                Contact
+              </a>
+            </div>
+          )}
         </div>
       </header>
 
@@ -91,10 +125,9 @@ export default function RegistrationPage() {
           </CardHeader>
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-6">
-              {/* Personal Information */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium border-b border-muted pb-2">Personal Information</h3>
-
+            {/* Personal Information */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium border-b border-muted pb-2">Personal Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="referredBy" className="text-foreground/90">
@@ -183,8 +216,7 @@ export default function RegistrationPage() {
                     </Label>
                     <Select
                       value={formData.addressType}
-                      onValueChange={(value) => handleSelectChange("addressType", value)}
-                    >
+                      onValueChange={(value) => handleSelectChange("addressType", value)}>
                       <SelectTrigger id="addressType" className="border-input/50 bg-secondary text-foreground">
                         <SelectValue placeholder="Select address type" />
                       </SelectTrigger>
@@ -201,7 +233,6 @@ export default function RegistrationPage() {
               {/* Address Details */}
               <div className="space-y-4">
                 <h3 className="text-lg font-medium border-b border-muted pb-2">Address Details</h3>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="houseApartment" className="text-foreground/90">
@@ -213,8 +244,7 @@ export default function RegistrationPage() {
                       value={formData.houseApartment}
                       onChange={handleChange}
                       required
-                      className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
-                    />
+                      className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"/>
                   </div>
 
                   <div className="space-y-2 md:col-span-2">
@@ -293,13 +323,11 @@ export default function RegistrationPage() {
                     type="email"
                     value={formData.email}
                     onChange={handleChange}
-                    className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
-                  />
+                    className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"/>
                   <p className="text-xs text-foreground/70 mt-1">Payment details will be sent to this email address</p>
                 </div>
               </div>
             </CardContent>
-
             <CardFooter className="flex flex-col sm:flex-row gap-3">
               <Button type="submit" className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground">
                 Register
