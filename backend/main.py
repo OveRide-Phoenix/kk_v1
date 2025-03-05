@@ -1,9 +1,18 @@
 import mysql.connector
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 from typing import List, Dict, Optional
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Change this to specific domains if needed
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Database connection function
 def get_db():
@@ -81,5 +90,54 @@ def register_user(user: CustomerCreate):
     except mysql.connector.Error as err:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(err))
+    finally:
+        db.close()
+class CustomerCreate(BaseModel):
+    referred_by: Optional[str] = None
+    primary_mobile: str
+    alternative_mobile: Optional[str] = None
+    name: str
+    recipient_name: str
+    payment_frequency: Optional[str] = "Daily"
+    email: Optional[str] = None
+
+    house_apartment_no: Optional[str] = None
+    written_address: str
+    city: str
+    pin_code: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    address_type: Optional[str] = None
+    route_assignment: Optional[str] = None
+    is_default: bool = False
+
+# Register a new customer and store their address
+@app.post("/api/register")
+def register_customer(data: CustomerCreate):
+    db = get_db()
+    cursor = db.cursor()
+
+    try:
+        # Insert customer details
+        cursor.execute("""
+            INSERT INTO customers (referred_by, primary_mobile, alternative_mobile, name, recipient_name, payment_frequency, email)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (data.referred_by, data.primary_mobile, data.alternative_mobile, data.name, data.recipient_name, data.payment_frequency, data.email))
+        
+        customer_id = cursor.lastrowid  # Get inserted customer ID
+
+        # Insert address details
+        cursor.execute("""
+            INSERT INTO addresses (customer_id, house_apartment_no, written_address, city, pin_code, latitude, longitude, address_type, route_assignment, is_default)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (customer_id, data.house_apartment_no, data.written_address, data.city, data.pin_code, data.latitude, data.longitude, data.address_type, data.route_assignment, data.is_default))
+
+        db.commit()
+        return {"success": True, "customer_id": customer_id}
+    
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(err))
+    
     finally:
         db.close()
