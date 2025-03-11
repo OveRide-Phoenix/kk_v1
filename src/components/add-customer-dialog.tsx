@@ -80,7 +80,7 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
                   <FormMessage />
                 </FormItem>
               )}
-            />
+        />
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -214,6 +214,6 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
           </form>
         </Form>
       </DialogContent>
-    </Dialog>
-  )
+        </Dialog>
+    )
 }
