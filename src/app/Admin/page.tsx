@@ -1,45 +1,15 @@
+//dashboard for admins
 "use client";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardFooter,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-    Coffee,
-    ChevronDown,
-    Menu,
-    X,
-    Home,
-    Package,
-    Users,
-    Calendar,
-    Utensils,
-    ShoppingCart,
-    FileText,
-    BarChart3,
-    LogOut,
-    Bell,
-    Settings,
-    User,
-} from "lucide-react";
+import Sidebar from "@/components/sidebar"; // Import Sidebar component
+import {DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,DropdownMenuSeparator, DropdownMenuTrigger} from "@/components/ui/dropdown-menu";
+import {Card,CardContent,CardDescription,CardFooter,CardHeader,CardTitle,} from "@/components/ui/card";
+import {Coffee,ChevronDown,Menu,X,Home,Package,Users,Calendar,Utensils,ShoppingCart,FileText,BarChart3,LogOut,Bell,Settings,User,} from "lucide-react";
 
-
-// Sample data for dashboard metrics
+// Sample data for dashboard metrics (idk how but need to fetch real data analysis from the db)
 const dashboardMetrics = {
     totalOrders: 128,
     pendingOrders: 24,
@@ -87,37 +57,22 @@ const dashboardMetrics = {
 
 import { useAuthStore } from "@/store/store";
 
-
-// Navigation items
-const navigationItems = [                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
-    { name: "Dashboard", icon: Home, href: "/admin/dashboard" },
-    { name: "Product Management", icon: Package, href: "/admin/products" },
-    { name: "Customer Management", icon: Users, href: "/admin/customers" },
-    { name: "Daily Menu Setup", icon: Calendar, href: "/admin/menu" },
-    { name: "Kitchen Production", icon: Utensils, href: "/admin/production" },
-    { name: "Order History", icon: ShoppingCart, href: "/admin/orders" },
-    { name: "Logs & Audit", icon: FileText, href: "/admin/logs" },
-    { name: "Reports & Analytics", icon: BarChart3, href: "/admin/reports" },
-];
-
-
 export default function AdminDashboard() {
-    // These two lines:
-    const { isAdmin, setAdmin, setUser, logout } = useAuthStore(); // Destructure the store to get methods
+    const { isAdmin, setAdmin, setUser, logout } = useAuthStore();
     console.log("In admin dashboard page, global isAdmin is: ",isAdmin);
-    const router = useRouter();
+    const router = useRouter(); 
     const [sidebarOpen, setSidebarOpen] = useState(true);
-    const [activePage, setActivePage] = useState("Dashboard");
+    const [activePage, setActivePage] = useState("Dashboard"); 
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-     // Redirect if not an admin
-     useEffect(() => {
+
+    useEffect(() => {
         if (!isAdmin) {
             console.log("Sign in as an admin");
-            router.push("/login"); // Redirect to login page
+            router.push("/login");
         }
     }, [isAdmin, router]);
 
-
+   
     // and this use effect?
     useEffect(() => {
         const storedIsAdmin = localStorage.getItem("isAdmin");
@@ -126,7 +81,7 @@ export default function AdminDashboard() {
         // Check if storedIsAdmin exists and is not null before parsing
         if (storedIsAdmin && storedIsAdmin !== "null" && storedIsAdmin !== "undefined") {
             try {
-                const isAdmin = JSON.parse(storedIsAdmin);
+                const isAdmin = JSON.parse(storedIsAdmin);  
                 setAdmin(isAdmin); // Use Zustand's setAdmin method
             } catch (error) {
                 console.error("Error parsing isAdmin from localStorage", error);
@@ -156,8 +111,7 @@ export default function AdminDashboard() {
     // Handle navigation
     const handleNavigation = (name: string, href: string) => {
         setActivePage(name);
-        // In a real app, you would use router.push(href)
-        // For this demo, we'll just update the active page
+        router.push(href)
         setMobileMenuOpen(false);
     };
 
@@ -170,117 +124,36 @@ export default function AdminDashboard() {
     // Render nothing until isAdmin is true
     if (!isAdmin) return null;
 
+
     return (
         <div className="min-h-screen bg-background text-foreground flex">
-            {/* Sidebar - Desktop */}
-            <aside
-                className={`fixed inset-y-0 left-0 z-50 w-64 bg-card border-r border-border transform transition-transform duration-200 ease-in-out ${
-                    sidebarOpen ? "translate-x-0" : "-translate-x-full"
-                } md:relative md:translate-x-0`}
-            >
-                <div className="h-full flex flex-col">
-                    {/* Sidebar Header */}
-                    <div className="h-16 flex items-center justify-between px-4 border-b border-border">
-                        <div className="flex items-center space-x-2">
-                            <Coffee className="h-6 w-6 text-primary" />
-                            <span className="text-lg font-bold">
-                                Kuteera Kitchen
-                            </span>
-                        </div>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="md:hidden"
-                            onClick={() => setSidebarOpen(false)}
-                        >
-                            <X className="h-5 w-5" />
-                        </Button>
-                    </div>
-
-                    {/* Navigation Links */}
-                    <nav className="flex-1 overflow-y-auto py-4 px-2">
-                        <ul className="space-y-1">
-                            {navigationItems.map((item) => (
-                                <li key={item.name}>
-                                    <Button
-                                        variant={
-                                            activePage === item.name
-                                                ? "secondary"
-                                                : "ghost"
-                                        }
-                                        className={`w-full justify-start ${
-                                            activePage === item.name
-                                                ? "bg-secondary text-secondary-foreground"
-                                                : ""
-                                        }`}
-                                        onClick={() =>
-                                            handleNavigation(
-                                                item.name,
-                                                item.href
-                                            )
-                                        }
-                                    >
-                                        <item.icon className="mr-2 h-5 w-5" />
-                                        {item.name}
-                                    </Button>
-                                </li>
-                            ))}
-                        </ul>
-                    </nav>
-
-                    {/* Sidebar Footer */}
-                    <div className="p-4 border-t border-border">
-                        <Button
-                            variant="outline"
-                            className="w-full justify-start"
-                            onClick={handleLogout}
-                        >
-                            <LogOut className="mr-2 h-5 w-5" />
-                            Logout
-                        </Button>
-                    </div>
-                </div>
-            </aside>
+            {/* Sidebar Component */}
+            <Sidebar activePage={activePage} 
+            setActivePage={setActivePage} 
+            sidebarOpen={sidebarOpen}  
+            setSidebarOpen={setSidebarOpen} />
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col min-w-0">
                 {/* Header */}
                 <header className="h-16 border-b border-border bg-card flex items-center justify-between px-4">
-                    <div className="flex items-center">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="md:hidden mr-2"
-                            onClick={() => setSidebarOpen(true)}
-                        >
-                            <Menu className="h-5 w-5" />
-                        </Button>
-                        <h1 className="text-xl font-bold">{activePage}</h1>
-                    </div>
-
+                    <h1 className="text-xl font-bold">{activePage}</h1>
                     <div className="flex items-center space-x-2">
                         <Button variant="ghost" size="icon">
                             <Bell className="h-5 w-5" />
                         </Button>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    className="flex items-center space-x-2"
-                                >
+                                <Button variant="ghost" className="flex items-center space-x-2">
                                     <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground">
                                         <User className="h-5 w-5" />
                                     </div>
-                                    <span className="hidden md:inline-block">
-                                        Admin User
-                                    </span>
+                                    <span className="hidden md:inline-block">Admin User</span>
                                     <ChevronDown className="h-4 w-4" />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>
-                                    My Account
-                                </DropdownMenuLabel>
+                                <DropdownMenuLabel>My Account</DropdownMenuLabel>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem>
                                     <User className="mr-2 h-4 w-4" />
@@ -291,9 +164,7 @@ export default function AdminDashboard() {
                                     Settings
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                    onClick={handleLogout}
-                                >
+                                <DropdownMenuItem onClick={handleLogout}>
                                     <LogOut className="mr-2 h-4 w-4" />
                                     Logout
                                 </DropdownMenuItem>
@@ -302,63 +173,12 @@ export default function AdminDashboard() {
                     </div>
                 </header>
 
-                {/* Mobile Navigation Menu */}
-                {mobileMenuOpen && (
-                    <div className="md:hidden fixed inset-0 z-40 bg-background/80 backdrop-blur-sm">
-                        <div className="fixed inset-y-0 left-0 w-3/4 max-w-xs bg-card border-r border-border p-4">
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center space-x-2">
-                                    <Coffee className="h-6 w-6 text-primary" />
-                                    <span className="text-lg font-bold">
-                                        Kuteera Kitchen
-                                    </span>
-                                </div>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => setMobileMenuOpen(false)}
-                                >
-                                    <X className="h-5 w-5" />
-                                </Button>
-                            </div>
-                            <nav>
-                                <ul className="space-y-2">
-                                    {navigationItems.map((item) => (
-                                        <li key={item.name}>
-                                            <Button
-                                                variant={
-                                                    activePage === item.name
-                                                        ? "secondary"
-                                                        : "ghost"
-                                                }
-                                                className={`w-full justify-start ${
-                                                    activePage === item.name
-                                                        ? "bg-secondary text-secondary-foreground"
-                                                        : ""
-                                                }`}
-                                                onClick={() =>
-                                                    handleNavigation(
-                                                        item.name,
-                                                        item.href
-                                                    )
-                                                }
-                                            >
-                                                <item.icon className="mr-2 h-5 w-5" />
-                                                {item.name}
-                                            </Button>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </nav>
-                        </div>
-                    </div>
-                )}
-
                 {/* Page Content */}
                 <main className="flex-1 overflow-y-auto p-4 md:p-6">
                     {/* Dashboard Content */}
                     {activePage === "Dashboard" && (
                         <div className="space-y-6">
+
                             {/* Overview Cards */}
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                 <Card>
@@ -373,7 +193,7 @@ export default function AdminDashboard() {
                                         </div>
                                         <p className="text-xs text-muted-foreground mt-1">
                                             <span className="text-green-500">
-                                                +12%
+                                                +12%{/* need to change to actual value (some kinda analysis) */}
                                             </span>{" "}
                                             from last month
                                         </p>
@@ -392,7 +212,7 @@ export default function AdminDashboard() {
                                         </div>
                                         <p className="text-xs text-muted-foreground mt-1">
                                             <span className="text-amber-500">
-                                                Needs attention
+                                                Needs attention{/* need to change to actual value (some kinda analysis) */}
                                             </span>
                                         </p>
                                     </CardContent>
@@ -412,7 +232,7 @@ export default function AdminDashboard() {
                                         </div>
                                         <p className="text-xs text-muted-foreground mt-1">
                                             <span className="text-green-500">
-                                                +8%
+                                                +8%  {/* need to change to actual value (some kinda analysis) */}
                                             </span>{" "}
                                             from yesterday
                                         </p>
@@ -433,9 +253,9 @@ export default function AdminDashboard() {
                                         </div>
                                         <p className="text-xs text-muted-foreground mt-1">
                                             <span className="text-green-500">
-                                                +5
+                                                +5 {/* need to change to actual value (some kinda analysis) */}
                                             </span>{" "}
-                                            new this week
+                                            new this week 
                                         </p>
                                     </CardContent>
                                 </Card>
@@ -458,7 +278,7 @@ export default function AdminDashboard() {
                                                     <li
                                                         key={index}
                                                         className="flex items-center justify-between"
-                                                    >
+                                                    >{/* need to change to actual value from db */}
                                                         <span className="font-medium">
                                                             {item.name}
                                                         </span>
@@ -486,7 +306,7 @@ export default function AdminDashboard() {
                                         <CardTitle>Recent Orders</CardTitle>
                                         <CardDescription>
                                             Latest customer orders
-                                        </CardDescription>
+                                        </CardDescription>{/* need to change to actual value from db*/}
                                     </CardHeader>
                                     <CardContent>
                                         <ul className="space-y-4">
@@ -553,7 +373,7 @@ export default function AdminDashboard() {
                                             onClick={() =>
                                                 handleNavigation(
                                                     "Product Management",
-                                                    "/admin/products"
+                                                    "/admin/productmgmt"
                                                 )
                                             }
                                         >
@@ -567,7 +387,7 @@ export default function AdminDashboard() {
                                             onClick={() =>
                                                 handleNavigation(
                                                     "Customer Management",
-                                                    "/admin/customers"
+                                                    "/admin/customermgmt"
                                                 )
                                             }
                                         >
@@ -608,7 +428,7 @@ export default function AdminDashboard() {
                         </div>
                     )}
 
-                    {/* Placeholder for other pages */}
+               {/*  //   {/* Placeholder for other pages *
                     {activePage !== "Dashboard" && (
                         <div className="flex items-center justify-center h-full">
                             <div className="text-center">
@@ -621,6 +441,7 @@ export default function AdminDashboard() {
                             </div>
                         </div>
                     )}
+                */}
                 </main>
             </div>
         </div>
