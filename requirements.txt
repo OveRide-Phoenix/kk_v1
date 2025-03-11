@@ -4,4 +4,3 @@ pymysql
 SQLAlchemy
 alembic
 python-dotenv
-npx shadcn@latest add dropdown-menu
