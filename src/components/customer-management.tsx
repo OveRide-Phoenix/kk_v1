@@ -14,7 +14,7 @@ export function CustomerManagement() {
   const [filterValue, setFilterValue] = useState("all")
   const [addCustomerOpen, setAddCustomerOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false) 
-  const [activePage, setActivePage] = useState("customers") 
+  const [activePage, setActivePage] = useState("customermgmt") 
 
   return (
     <div className="flex min-h-screen bg-gray-50">

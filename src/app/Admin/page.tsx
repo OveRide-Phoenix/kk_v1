@@ -22,6 +22,8 @@ const dashboardMetrics = {
         { name: "Masala Dosa", orders: 38 },
         { name: "South Indian Thali", orders: 31 },
         { name: "Mysore Pak", orders: 27 },
+        { name: "South Indian Thali", orders: 31 },
+        { name: "Mysore Pak", orders: 27 },
     ],
     recentOrders: [
         {
@@ -291,7 +293,12 @@ export default function AdminDashboard() {
                                         </ul>
                                     </CardContent>
                                     <CardFooter>
-                                        <Button
+                                        <Button onClick={() =>
+                                                handleNavigation(
+                                                    "Product Management",
+                                                    "/admin/productmgmt"
+                                                )
+                                            }
                                             variant="outline"
                                             className="w-full"
                                         >
