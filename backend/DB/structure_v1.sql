@@ -25,6 +25,16 @@ CREATE TABLE customers (
     created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP()
 );
 
+-- Admin Users Table
+CREATE TABLE admin_users (
+    admin_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    customer_id INT NOT NULL,
+    admin_password VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP(),
+    FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
+);
+
+
 -- Menu Table
 CREATE TABLE menu (
     menu_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
