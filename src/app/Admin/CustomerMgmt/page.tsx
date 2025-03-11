@@ -1,3 +1,6 @@
-//keep like a dashboard for the admin
-//can view all main details here and navigate to other pages
-//add visualization like charts and others
+import { CustomerManagement } from "@/components/customer-management"
+
+export default function CustomersPage() {
+  return <CustomerManagement />
+}
+
