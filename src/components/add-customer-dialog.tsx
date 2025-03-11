@@ -1,12 +1,5 @@
 "use client"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,} from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -75,6 +68,20 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
           <DialogDescription>Enter the customer details to add them to your database.</DialogDescription>
         </DialogHeader>
 
+        <FormField
+              control={form.control}
+              name="customerName"
+              render={({ field }: { field: ControllerRenderProps<CustomerFormValues, "customerName"> }) => (
+                <FormItem>
+                  <FormLabel>Customer Name *</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Enter customer name" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             {/* Referral Information */}
@@ -115,20 +122,6 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
                   <FormLabel>Alternative Mobile (Optional)</FormLabel>
                   <FormControl>
                     <Input placeholder="Enter alternative number" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="customerName"
-              render={({ field }: { field: ControllerRenderProps<CustomerFormValues, "customerName"> }) => (
-                <FormItem>
-                  <FormLabel>Customer Name *</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Enter customer name" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
