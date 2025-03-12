@@ -3,14 +3,6 @@ CREATE TABLE categories (
     category_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     category_name VARCHAR(100) NOT NULL UNIQUE
 );
--- Admin Users Table
-    CREATE TABLE admin_users (
-        admin_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-        customer_id INT NOT NULL,
-        admin_password VARCHAR(255) NOT NULL,
-        created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP(),
-        FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
-    );
 
 -- Customers Table
 CREATE TABLE customers (
@@ -23,6 +15,7 @@ CREATE TABLE customers (
     payment_frequency VARCHAR(50) NULL DEFAULT 'Daily',
     email VARCHAR(100) NULL UNIQUE,
     created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP()
+    -- ALTER TABLE customers ADD COLUMN is_admin TINYINT(1) NOT NULL DEFAULT 0;
 );
 
 -- Admin Users Table

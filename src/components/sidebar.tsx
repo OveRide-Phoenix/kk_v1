@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import {  useRouter } from "next/navigation";
 import { Home, Package, Users, Calendar, Utensils, ShoppingCart, FileText, BarChart3, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -15,7 +15,7 @@ const navigationItems = [
     { name: "Dashboard", icon: Home, href: "/admin" },
     { name: "Product Management", icon: Package, href: "/admin/productmgmt" },
     { name: "Customer Management", icon: Users, href: "/admin/customermgmt" },
-    { name: "Daily Menu Setup", icon: Calendar, href: "/admin/menu" },
+    { name: "Daily Menu Setup", icon: Calendar, href: "/admin/dailymenusetup" },
     { name: "Kitchen Production", icon: Utensils, href: "/admin/production" },
     { name: "Order History", icon: ShoppingCart, href: "/admin/orders" },
     { name: "Logs & Audit", icon: FileText, href: "/admin/logs" },
@@ -23,7 +23,7 @@ const navigationItems = [
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, activePage, setActivePage }) => {
-    const pathname = usePathname();
+    
     const router = useRouter();
 
     return (
