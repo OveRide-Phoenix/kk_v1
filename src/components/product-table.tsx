@@ -41,12 +41,12 @@ export default function ProductTable({ products, onEdit, onDelete }: ProductTabl
   }
 
   return (
-    <div>
-      <div className="rounded-md border">
-        <Table>
+    <div className="w-full">
+      <div className="rounded-md border overflow-x-auto">
+        <Table className="min-w-max w-full">
           <TableHeader>
             <TableRow>
-              <TableHead className="w-12">Sl No.</TableHead>
+              <TableHead className="w-12">Sl-No.</TableHead>
               <TableHead className="cursor-pointer" onClick={() => handleSort("name")}>
                 <div className="flex items-center">
                   Item
@@ -58,7 +58,7 @@ export default function ProductTable({ products, onEdit, onDelete }: ProductTabl
                     ))}
                 </div>
               </TableHead>
-              <TableHead className="cursor-pointer" onClick={() => handleSort("itemType")}>
+              <TableHead className="cursor-pointer hidden md:table-cell" onClick={() => handleSort("itemType")}>
                 <div className="flex items-center">
                   Type
                   {sortField === "itemType" &&
@@ -69,7 +69,7 @@ export default function ProductTable({ products, onEdit, onDelete }: ProductTabl
                     ))}
                 </div>
               </TableHead>
-              <TableHead className="cursor-pointer" onClick={() => handleSort("group")}>
+              <TableHead className="cursor-pointer hidden md:table-cell" onClick={() => handleSort("group")}>
                 <div className="flex items-center">
                   Group
                   {sortField === "group" &&
@@ -80,27 +80,25 @@ export default function ProductTable({ products, onEdit, onDelete }: ProductTabl
                     ))}
                 </div>
               </TableHead>
-              <TableHead>Attributes</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead className="hidden md:table-cell">Attributes</TableHead>
+              <TableHead className="text-left">Price</TableHead>
+              <TableHead className="text-center">Actions</TableHead>
             </TableRow>
           </TableHeader>
+         
           <TableBody>
             {sortedProducts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                   No products found
                 </TableCell>
               </TableRow>
             ) : (
               sortedProducts.map((product, index) => (
-                <TableRow
-                  key={product.id}
-                  className="cursor-pointer hover:bg-gray-50"
-                  onClick={() => handleViewDetails(product)}
-                >
+                <TableRow key={product.id} className="cursor-pointer hover:bg-gray-50">
                   <TableCell className="font-medium">{index + 1}</TableCell>
                   <TableCell>{product.name}</TableCell>
-                  <TableCell>
+                  <TableCell className="hidden md:table-cell">
                     <Badge
                       variant={
                         product.itemType === "Breakfast"
@@ -113,15 +111,16 @@ export default function ProductTable({ products, onEdit, onDelete }: ProductTabl
                       {product.itemType}
                     </Badge>
                   </TableCell>
-                  <TableCell>{product.group}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-2">
+                  <TableCell className="hidden md:table-cell">{product.group}</TableCell>
+                  <TableCell className="hidden md:table-cell">
+                    <div className="flex flex-wrap gap-2">
                       {product.isCombo && <Badge variant="outline">Combo</Badge>}
                       {product.isSubItem && <Badge variant="outline">Sub-item</Badge>}
                     </div>
                   </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
+                  <TableCell className="text-centre">{product.price}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap justify-center gap-2">
                       <Button
                         variant="ghost"
                         size="icon"
@@ -177,4 +176,3 @@ export default function ProductTable({ products, onEdit, onDelete }: ProductTabl
     </div>
   )
 }
-
