@@ -25,6 +25,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     id: "",
     name: "",
     description: "",
+    price: 0,
     alias: "",
     isSubItem: false,
     isCombo: false,
