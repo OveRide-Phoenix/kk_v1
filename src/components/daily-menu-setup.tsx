@@ -7,19 +7,29 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Plus, Filter } from "lucide-react";
+import { Search, Plus, Calendar as CalendarIcon } from "lucide-react";
+import { Popover , PopoverTrigger, PopoverContent} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
+
 
 export function DailyMenuSetup() {
-  const [filterValue, setFilterValue] = useState<string>("all");
+  //const [filterValue, setFilterValue] = useState<string>("all");
   const [menuType, setMenuType] = useState<string>("");
   const [mealType, setMealType] = useState<string>("");
-  const [items, setItems] = useState<{ name: string; qty: number; rate: number; sort: number }[]>([]);
+  const [items, setItems] = useState<{ name: string; qty: number; rate: number; sort: number; date?: Date }[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
   const [activePage, setActivePage] = useState<string>("dailymenu");
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [confirmedDate, setConfirmedDate] = useState<Date | null>(null);
+  const [open, setOpen] = useState(false); // Control popover open state
+
+
+
 
   // Function to add a new menu item
   const addMenuItem = () => {
-    setItems([...items, { name: "", qty: 1, rate: 0, sort: items.length + 1 }]);
+    setItems([...items, { name: "", qty: 1, rate: 0, sort: items.length + 1, date: undefined }]);
   };
 
   return (
@@ -44,31 +54,48 @@ export function DailyMenuSetup() {
               </div>
             </CardHeader>
             <CardContent>
-              {/* Filters */}
-              <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                  <Input placeholder="Search menu..." className="pl-10" />
-                </div>
-                <div className="flex items-center gap-2">
-                  <Filter size={18} className="text-gray-500" />
-                  <Select value={filterValue} onValueChange={setFilterValue}>
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue placeholder="Filter by" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All</SelectItem>
-                      <SelectItem value="breakfast">Breakfast</SelectItem>
-                      <SelectItem value="lunch">Lunch</SelectItem>
-                      <SelectItem value="dinner">Dinner</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
 
-              {/* Menu Type and Meal Type */}
+            {/* Date Picker */}
+            <div className="mb-4">
+              <Popover open={open} onOpenChange={setOpen}>
+                <PopoverTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    className="w-[200px] justify-start text-left"
+                    onClick={() => setOpen(true)}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {selectedDate ? format(selectedDate, "PPP") : "Select Date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-4">
+                  <Calendar
+                    mode="single"
+                    selected={selectedDate || undefined}
+                    onSelect={(day) => setSelectedDate(day || null)}
+                    initialFocus
+                  />
+                  <div className="mt-2 flex justify-end">
+                    <Button 
+                      onClick={() => {
+                        if (selectedDate)
+                          setConfirmedDate(selectedDate); // Save the selected date
+                          setOpen(false); // Close popover if date is selected
+                      }} 
+                      size="sm" 
+                      disabled={!selectedDate}
+                    >
+                      OK
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+
+             {/* Menu Type and Meal Type */}
               <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                <Select value={menuType} onValueChange={setMenuType}>
+                <Select value={menuType} onValueChange={setMenuType} disabled={!confirmedDate}>
                   <SelectTrigger className="w-[200px]">
                     <SelectValue placeholder="Select Menu Type" />
                   </SelectTrigger>
@@ -80,7 +107,7 @@ export function DailyMenuSetup() {
                   </SelectContent>
                 </Select>
 
-                <Select value={mealType} onValueChange={setMealType}>
+                <Select value={mealType} onValueChange={setMealType} disabled={!confirmedDate}>
                   <SelectTrigger className="w-[200px]">
                     <SelectValue placeholder="Select Meal Type" />
                   </SelectTrigger>
@@ -91,6 +118,19 @@ export function DailyMenuSetup() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Filters */}
+              <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                  <Input placeholder="Search menu..." className="pl-10" />
+                </div>
+                <div className="flex items-center gap-2">
+                  {/*<Filter size={18} className="text-gray-500" />*/}
+                  
+                </div>
+              </div>
+
 
               {/* Menu Items Table */}
               <div className="rounded-md border">
@@ -107,6 +147,8 @@ export function DailyMenuSetup() {
                   <TableBody>
                     {items.map((item, index) => (
                       <TableRow key={index}>
+
+                         {/*Item Name*/}
                         <TableCell>
                           <Input
                             value={item.name}
@@ -118,6 +160,7 @@ export function DailyMenuSetup() {
                             placeholder="Item Name"
                           />
                         </TableCell>
+                        { /* Increment Qty */}
                         <TableCell>
                           <Input
                             type="number"
@@ -129,6 +172,7 @@ export function DailyMenuSetup() {
                             }}
                           />
                         </TableCell>
+                        { /* Planned Qty */}
                         <TableCell>
                           <Input
                             type="number"
@@ -140,6 +184,7 @@ export function DailyMenuSetup() {
                             }}
                           />
                         </TableCell>
+                        { /* Rate */}
                         <TableCell>
                           <Input
                             type="number"
@@ -151,6 +196,7 @@ export function DailyMenuSetup() {
                             }}
                           />
                         </TableCell>
+                        {/* Sort Order */}
                         <TableCell>
                           <Input
                             type="number"
