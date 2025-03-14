@@ -1,8 +1,9 @@
 "use client";
 
-import {  useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Home, Package, Users, Calendar, Utensils, ShoppingCart, FileText, BarChart3, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useEffect, useState } from "react";
 
 interface SidebarProps {
     sidebarOpen: boolean;
@@ -12,19 +13,40 @@ interface SidebarProps {
 }
 
 const navigationItems = [
-    { name: "Dashboard", icon: Home, href: "/admin" },
-    { name: "Product Management", icon: Package, href: "/admin/productmgmt" },
-    { name: "Customer Management", icon: Users, href: "/admin/customermgmt" },
-    { name: "Daily Menu Setup", icon: Calendar, href: "/admin/dailymenusetup" },
-    { name: "Kitchen Production", icon: Utensils, href: "/admin/production" },
-    { name: "Order History", icon: ShoppingCart, href: "/admin/orders" },
-    { name: "Logs & Audit", icon: FileText, href: "/admin/logs" },
-    { name: "Reports & Analytics", icon: BarChart3, href: "/admin/reports" },
+    { name: "Dashboard", icon: Home, href: "/admin", id: "dashboard" },
+    { name: "Product Management", icon: Package, href: "/admin/productmgmt", id: "productmgmt" },
+    { name: "Customer Management", icon: Users, href: "/admin/customermgmt", id: "customermgmt" },
+    { name: "Daily Menu Setup", icon: Calendar, href: "/admin/dailymenusetup", id: "dailymenusetup" },
+    { name: "Kitchen Production", icon: Utensils, href: "/admin/production", id: "production" },
+    { name: "Order History", icon: ShoppingCart, href: "/admin/orders", id: "orders" },
+    { name: "Logs & Audit", icon: FileText, href: "/admin/logs", id: "logs" },
+    { name: "Reports & Analytics", icon: BarChart3, href: "/admin/reports", id: "reports" },
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, activePage, setActivePage }) => {
-    
     const router = useRouter();
+    const [mounted, setMounted] = useState(false);
+    
+    // Only render the component after it's mounted on the client
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+    
+    // If not mounted yet, render a placeholder with the same dimensions
+    if (!mounted) {
+        return (
+            <aside className="fixed inset-y-0 left-0 z-50 w-64 bg-card border-r border-border transform transition-transform duration-200 ease-in-out md:relative">
+                <div className="h-full flex flex-col">
+                    <div className="h-16 flex items-center justify-between px-4 border-b border-border">
+                        <span className="text-lg font-bold">Kuteera Kitchen</span>
+                    </div>
+                    <nav className="flex-1 overflow-y-auto py-4 px-2">
+                        {/* Placeholder for navigation items */}
+                    </nav>
+                </div>
+            </aside>
+        );
+    }
 
     return (
         <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-card border-r border-border transform transition-transform duration-200 ease-in-out 
@@ -42,10 +64,10 @@ const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, activePa
                         {navigationItems.map((item) => (
                             <li key={item.name}>
                                 <Button
-                                    variant={activePage === item.name ? "default" : "ghost"}
+                                    variant={activePage === item.id ? "default" : "ghost"}
                                     className="w-full justify-start"
                                     onClick={() => {
-                                        setActivePage(item.name);
+                                        setActivePage(item.id);
                                         router.push(item.href);
                                         setSidebarOpen(false);
                                     }}
