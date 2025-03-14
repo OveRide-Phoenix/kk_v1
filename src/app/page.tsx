@@ -10,9 +10,9 @@ export default function HomePage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-[#F5F5DC] text-foreground flex flex-col relative">
-      {/* Navigation Bar with Updated Background Color */}
-      <header className="bg-[#6F4D38] text-white border-b border-muted">
+    <div className="min-h-screen bg-background flex flex-col">
+      {/* Navigation Bar */}
+      <header className="sticky top-0 z-50 w-full border-b bg-background">
         <div className="container mx-auto px-4">
           <div className="flex h-16 items-center justify-between">
             <div className="flex items-center space-x-2">
@@ -78,10 +78,10 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* Hero Section with Background Image */}
-      <main className="relative flex-grow flex items-center justify-center text-center p-6 mt-12 bg-[url('/hero-bg.jpg')] bg-cover bg-center">
-        <div className="relative z-10 bg-white/80 p-8 rounded-lg shadow-lg">
-          <h1 className="text-4xl font-bold text-primary">Welcome to Kuteera Kitchen</h1>
+      {/* Hero Section */}
+      <main className="relative flex-grow flex items-center justify-center text-center p-6">
+        <div className="relative z-10 bg-card p-8 rounded-lg shadow-lg">
+          <h1 className="text-4xl font-bold">Welcome to Kuteera Kitchen</h1>
           <p className="text-lg text-muted-foreground mt-4 max-w-lg">
             Experience fresh, homemade meals delivered right to your doorstep in Mysore and Bangalore.
           </p>
@@ -100,8 +100,8 @@ export default function HomePage() {
         </div>
       </main>
 
-      {/* Footer with Social Links */}
-      <footer className="py-6 border-t border-muted w-full text-center text-sm bg-[#6F4D38] text-white">
+      {/* Footer */}
+      <footer className="py-6 border-t w-full text-center text-sm bg-background">
         <p>© {new Date().getFullYear()} Kuteera Kitchen. All rights reserved.</p>
         <div className="flex justify-center space-x-4 mt-2">
           <a href="#" className="hover:underline">Privacy Policy</a>
@@ -109,5 +109,5 @@ export default function HomePage() {
         </div>
       </footer>
     </div>
-  );
+  )
 }

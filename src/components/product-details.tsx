@@ -4,22 +4,25 @@ import { X, Edit } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import type { Product } from "@/types/product"
 
 interface ProductDetailsProps {
-  product: Product
-  onClose: () => void
-  onEdit: () => void
+  product: Product | null
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }
 
-export default function ProductDetails({ product, onClose, onEdit }: ProductDetailsProps) {
+export default function ProductDetails({ product, open, onOpenChange }: ProductDetailsProps) {
+  if (!product) return null
+  
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-auto">
       <Card className="w-full max-w-3xl max-h-[90vh] overflow-auto">
         <CardHeader className="sticky top-0 bg-white z-10 border-b">
           <div className="flex justify-between items-center">
             <CardTitle>Product Details</CardTitle>
-            <Button variant="ghost" size="icon" onClick={onClose}>
+            <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)}>
               <X className="h-4 w-4" />
               <span className="sr-only">Close</span>
             </Button>
@@ -108,10 +111,10 @@ export default function ProductDetails({ product, onClose, onEdit }: ProductDeta
           </div>
         </CardContent>
         <CardFooter className="flex justify-end gap-2 border-t p-6">
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             Close
           </Button>
-          <Button onClick={onEdit}>
+          <Button>
             <Edit className="h-4 w-4 mr-2" />
             Edit
           </Button>
