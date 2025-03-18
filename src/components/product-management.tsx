@@ -1,17 +1,17 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Plus, Bell, User, ChevronDown } from "lucide-react"
+import { Search, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import ProductTable from "@/components/product-table"
 import ProductForm from "@/components/product-form"
 import DeleteConfirmationDialog from "@/components/delete-confirmation-dialog"
 import { type Product, ProductType } from "@/types/product"
-import { AdminLayout } from "@/components/admin-layout"
+import { AdminLayout } from "./admin-layout"
 
 export default function ProductManagement() {
   const [products, setProducts] = useState<Product[]>([])
@@ -21,81 +21,295 @@ export default function ProductManagement() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [productToDelete, setProductToDelete] = useState<Product | null>(null)
-  const [sidebarOpen, setSidebarOpen] = useState(true) 
-  const [activePage, setActivePage] = useState("productmgmt") // Change this to match the product management page ID
+  const [filterType, setFilterType] = useState<string>("All Types")
+  const [filterGroup, setFilterGroup] = useState<string>("All Groups")
+  const [activeTab, setActiveTab] = useState("items")
 
-  const toggleSidebar = () => {
-    setSidebarOpen(!sidebarOpen)
-  }
+  // Get unique groups for filter dropdown
+  const uniqueGroups = Array.from(new Set(products.map((product) => product.group)))
 
-  // Load sample data (replace with real db shit)
+  // Get unique product types for filter dropdown
+  const uniqueTypes = Array.from(new Set(products.map((product) => product.itemType)))
+
+  // Load sample data (replace with real db data)
   useEffect(() => {
-    const sampleProducts: Product[] = [
-      {
-        id: "1",
-        name: "Rice 350 gms",
-        description: "Traditional South Indian breakfast item",
-        price: 213,
-        alias: "Rice-350",
-        isSubItem: false,
-        maxQuantity: 0,
-        isMandatory: false,
-        mainItemName: "",
-        isCombo: false,
-        itemType: ProductType.BREAKFAST,
-        group: "South Indian",
-        uom: "Plate",
-        weightFactor: 0.35,
-        weightUom: "kg",
-        hsnCode: "1234",
-        factor: 1,
-        quantityPortion: "1 plate",
-        bufferPercentage: 10,
-        image: "/placeholder.svg?height=200&width=200",
-        addonItemName: undefined
-      },
-      {
-        id: "2",
-        name: "Lunch Thali",
-        description: "Complete lunch meal with rice, dal, and vegetables",
-        price: 213,
-        maxQuantity: 0,
-        isMandatory: false,
-        mainItemName: "",
-        alias: "lunch-thali",
-        isSubItem: false,
-        isCombo: true,
-        itemType: ProductType.LUNCH,
-        group: "Main Course",
-        uom: "Plate",
-        weightFactor: 0.5,
-        weightUom: "kg",
-        hsnCode: "5678",
-        factor: 1,
-        quantityPortion: "1 plate",
-        bufferPercentage: 15,
-        image: "/placeholder.svg?height=200&width=200",
-        addonItemName: undefined
-      },
-    ]
+    // Define type for sample data structure
+    const sampleData: Record<string, Array<Product>> = {
+      items: [
+        {
+          id: "1",
+          name: "Rice 350 gms",
+          description: "Traditional South Indian breakfast item",
+          price: 213,
+          rate: 250, // Added rate field
+          itemType: ProductType.BREAKFAST,
+          alias: "rice-350-breakfast",
+          group: "South Indian",
+          isCombo: false,
+          isSubItem: false,
+          uom: "Plate",
+          weightFactor: 0.35,
+          maxQuantity: 0,
+          isMandatory: false,
+          mainItemName: "",
+          weightUom: "kg",
+          hsnCode: "1234",
+          factor: 1,
+          quantityPortion: "1 plate",
+          bufferPercentage: 10,
+          image: "/placeholder.svg?height=200&width=200",
+          addonItemName: undefined,
+        },
+        {
+          id: "2",
+          name: "Idli Sambar",
+          description: "Steamed rice cakes with lentil soup",
+          price: 180,
+          rate: 200, // Added rate field
+          itemType: ProductType.BREAKFAST,
+          alias: "idli-sambar",
+          group: "South Indian",
+          isCombo: false,
+          isSubItem: false,
+          uom: "Plate",
+          weightFactor: 0.3,
+          maxQuantity: 0,
+          isMandatory: false,
+          mainItemName: "",
+          weightUom: "kg",
+          hsnCode: "1234",
+          factor: 1,
+          quantityPortion: "2 pieces",
+          bufferPercentage: 10,
+          image: "/placeholder.svg?height=200&width=200",
+          addonItemName: undefined,
+        },
+        {
+          id: "3",
+          name: "Chapati",
+          description: "Whole wheat flatbread",
+          price: 25,
+          rate: 30, // Added rate field
+          itemType: ProductType.DINNER,
+          alias: "chapati",
+          group: "North Indian",
+          isCombo: false,
+          isSubItem: false,
+          uom: "Piece",
+          weightFactor: 0.05,
+          maxQuantity: 0,
+          isMandatory: false,
+          mainItemName: "",
+          weightUom: "kg",
+          hsnCode: "1905",
+          factor: 1,
+          quantityPortion: "1 piece",
+          bufferPercentage: 5,
+          image: "/placeholder.svg?height=200&width=200",
+          addonItemName: undefined,
+        },
+      ],
+      combos: [
+        {
+          id: "c1",
+          name: "South Indian Thali",
+          description: "Complete meal with rice, sambar, and sides",
+          price: 299,
+          rate: 350, // Added rate field
+          itemType: ProductType.LUNCH,
+          alias: "south-indian-thali",
+          maxQuantity: 1,
+          isMandatory: false,
+          mainItemName: "",
+          group: "Combos",
+          isCombo: true,
+          isSubItem: false,
+          uom: "Plate",
+          weightFactor: 0.8,
+          weightUom: "kg",
+          hsnCode: "1234",
+          factor: 1,
+          quantityPortion: "1 plate",
+          bufferPercentage: 10,
+          image: "/placeholder.svg?height=200&width=200",
+          items: [
+            { name: "Rice", quantity: 1 },
+            { name: "Sambar", quantity: 1 },
+            { name: "Rasam", quantity: 1 },
+            { name: "Papad", quantity: 2 },
+          ],
+          addonItemName: undefined,
+        },
+        {
+          id: "c2",
+          name: "North Indian Thali",
+          description: "Complete meal with roti, dal, and sides",
+          price: 329,
+          rate: 380, // Added rate field
+          itemType: ProductType.LUNCH,
+          alias: "north-indian-thali",
+          maxQuantity: 1,
+          isMandatory: false,
+          mainItemName: "",
+          group: "Combos",
+          isCombo: true,
+          isSubItem: false,
+          uom: "Plate",
+          weightFactor: 0.75,
+          weightUom: "kg",
+          hsnCode: "1234",
+          factor: 1,
+          quantityPortion: "1 plate",
+          bufferPercentage: 10,
+          image: "/placeholder.svg?height=200&width=200",
+          items: [
+            { name: "Roti", quantity: 3 },
+            { name: "Dal", quantity: 1 },
+            { name: "Paneer Curry", quantity: 1 },
+            { name: "Raita", quantity: 1 },
+          ],
+          addonItemName: undefined,
+        },
+      ],
+      addons: [
+        {
+          id: "a1",
+          name: "Extra Papad",
+          description: "Crispy papad",
+          price: 15,
+          rate: 20, // Added rate field
+          itemType: "ADDON" as ProductType,
+          alias: "extra-papad",
+          uom: "Piece",
+          weightFactor: 0.02,
+          weightUom: "kg",
+          hsnCode: "2106",
+          factor: 1,
+          quantityPortion: "1 piece",
+          bufferPercentage: 5,
+          maxQuantity: 10,
+          isMandatory: false,
+          mainItemName: "Lunch Thali",
+          image: "/placeholder.svg?height=200&width=200",
+          group: "Sides",
+          isCombo: false,
+          isSubItem: true,
+          addonItemName: undefined,
+        },
+        {
+          id: "a2",
+          name: "Extra Rice",
+          description: "Additional serving of rice",
+          price: 40,
+          rate: 50, // Added rate field
+          itemType: "ADDON" as ProductType,
+          alias: "extra-rice",
+          uom: "Bowl",
+          weightFactor: 0.15,
+          weightUom: "kg",
+          hsnCode: "1006",
+          factor: 1,
+          quantityPortion: "1 bowl",
+          bufferPercentage: 5,
+          maxQuantity: 5,
+          isMandatory: false,
+          mainItemName: "South Indian Thali",
+          image: "/placeholder.svg?height=200&width=200",
+          group: "Sides",
+          isCombo: false,
+          isSubItem: true,
+          addonItemName: undefined,
+        },
+      ],
+      categories: [
+        {
+          id: "cat1",
+          maxQuantity: 0,
+          isMandatory: false,
+          mainItemName: "",
+          name: "South Indian",
+          description: "Traditional South Indian items",
+          itemType: "CATEGORY" as ProductType,
+          group: "Cuisine",
+          price: 0,
+          rate: 0, // Added rate field
+          alias: "south-indian-cuisine",
+          uom: "Category",
+          weightFactor: 0,
+          weightUom: "N/A",
+          hsnCode: "N/A",
+          factor: 1,
+          quantityPortion: "N/A",
+          bufferPercentage: 0,
+          image: "/placeholder.svg?height=200&width=200",
+          isCombo: false,
+          isSubItem: false,
+          addonItemName: undefined,
+        },
+        {
+          id: "cat2",
+          name: "North Indian",
+          description: "Traditional North Indian cuisine",
+          itemType: "CATEGORY" as ProductType,
+          group: "Cuisine",
+          price: 0,
+          rate: 0, // Added rate field
+          alias: "north-indian-cuisine",
+          uom: "Category",
+          weightFactor: 0,
+          maxQuantity: 0,
+          isMandatory: false,
+          mainItemName: "",
+          weightUom: "N/A",
+          hsnCode: "N/A",
+          factor: 1,
+          quantityPortion: "N/A",
+          bufferPercentage: 0,
+          image: "/placeholder.svg?height=200&width=200",
+          isCombo: false,
+          isSubItem: false,
+          addonItemName: undefined,
+        },
+      ],
+    }
 
-    setProducts(sampleProducts)
-    setFilteredProducts(sampleProducts)
-  }, [])
-  
-  useEffect(() => {
-    if (searchQuery.trim() === "") {
-      setFilteredProducts(products)
+    // Ensure activeTab exists as a key in sampleData before setting state
+    if (activeTab in sampleData) {
+      setProducts(sampleData[activeTab as keyof typeof sampleData] || [])
+      setFilteredProducts(sampleData[activeTab as keyof typeof sampleData] || [])
     } else {
-      const filtered = products.filter(
+      setProducts([])
+      setFilteredProducts([])
+    }
+  }, [activeTab])
+
+  // Filter products based on search query and filters
+  useEffect(() => {
+    let filtered = [...products]
+
+    // Apply search filter
+    if (searchQuery.trim() !== "") {
+      filtered = filtered.filter(
         (product) =>
           product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
           product.group.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          product.itemType.toLowerCase().includes(searchQuery.toLowerCase()),
+          product.itemType.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (product.description && product.description.toLowerCase().includes(searchQuery.toLowerCase())),
       )
-      setFilteredProducts(filtered)
     }
-  }, [searchQuery, products])
+
+    // Apply type filter
+    if (filterType !== "All Types") {
+      filtered = filtered.filter((product) => product.itemType === filterType)
+    }
+
+    // Apply group filter
+    if (filterGroup !== "All Groups") {
+      filtered = filtered.filter((product) => product.group === filterGroup)
+    }
+
+    setFilteredProducts(filtered)
+  }, [searchQuery, products, filterType, filterGroup])
 
   const handleAddProduct = () => {
     setSelectedProduct(null)
@@ -137,176 +351,32 @@ export default function ProductManagement() {
     setIsFormOpen(false)
   }
 
-  const handleFilterByType = (type: string) => {
-    if (type === "all") {
-      setFilteredProducts(products)
-    } else {
-      const filtered = products.filter((product) => product.itemType.toLowerCase() === type.toLowerCase())
-      setFilteredProducts(filtered)
-    }
+  const singularFormMap = {
+    items: "Item",
+    combos: "Combo",
+    addons: "Add-on",
+    categories: "Category",
   }
 
-  const [activeTab, setActiveTab] = useState("items")
-
-  // Sample data for different tables
+  // Reset filters when tab changes
   useEffect(() => {
-    // Define type for sample data structure
-    const sampleData: Record<string, Array<Product>> = {
-      items: [
-        {
-          id: "1",
-          name: "Rice 350 gms",
-          description: "Traditional South Indian breakfast item",
-          price: 213,
-          itemType: ProductType.BREAKFAST,
-          alias: "rice-350-breakfast",
-          group: "South Indian",
-          isCombo: false,
-          isSubItem: false,
-          uom: "Plate",
-          weightFactor: 0.35,
-          maxQuantity: 0,
-          isMandatory: false,
-          mainItemName: "",
-          weightUom: "kg",
-          hsnCode: "1234",
-          factor: 1,
-          quantityPortion: "1 plate",
-          bufferPercentage: 10,
-          image: "/placeholder.svg?height=200&width=200",
-          addonItemName: undefined
-        },
-      ],
-      combos: [
-        {
-          id: "c1",
-          name: "South Indian Thali",
-          description: "Complete meal with rice, sambar, and sides",
-          price: 299,
-          itemType: ProductType.LUNCH,
-          alias: "south-indian-thali",
-          maxQuantity: 1,
-          isMandatory: false,
-          mainItemName: "",
-          group: "Combos",
-          isCombo: true,
-          isSubItem: false,
-          uom: "Plate",
-          weightFactor: 0.8,
-          weightUom: "kg",
-          hsnCode: "1234",
-          factor: 1,
-          quantityPortion: "1 plate",
-          bufferPercentage: 10,
-          image: "/placeholder.svg?height=200&width=200",
-          items: [
-            { name: "Rice", quantity: 1 },
-            { name: "Sambar", quantity: 1 },
-            { name: "Rasam", quantity: 1 },
-            { name: "Papad", quantity: 2 }
-          ],
-          addonItemName: undefined
-        }
-      ],
-      addons: [
-        {
-          id: "a1",
-          name: "Extra Papad",
-          description: "Crispy papad",
-          price: 15,
-          itemType: "ADDON" as ProductType,
-          alias: "extra-papad",
-          uom: "Piece",
-          weightFactor: 0.02,
-          weightUom: "kg",
-          hsnCode: "2106",
-          factor: 1,
-          quantityPortion: "1 piece",
-          bufferPercentage: 5,
-          maxQuantity: 10,
-          isMandatory: false,
-          mainItemName: "Lunch Thali",
-          image: "/placeholder.svg?height=200&width=200",
-          group: "Sides",
-          isCombo: false,
-          isSubItem: true,
-          addonItemName: undefined
-        },
-      ],
-      categories: [
-        {
-          id: "cat1",
-          maxQuantity: 0, // Categories don't have quantity limits
-          isMandatory: false, // Categories are not mandatory
-          mainItemName: "", // Categories don't have a main item
-          name: "South Indian",
-          description: "Traditional South Indian items",
-          itemType: "CATEGORY" as ProductType,
-          group: "Cuisine",
-          price: 0,
-          alias: "south-indian-cuisine",
-          uom: "Category",
-          weightFactor: 0,
-          weightUom: "N/A",
-          hsnCode: "N/A",
-          factor: 1,
-          quantityPortion: "N/A",
-          bufferPercentage: 0,
-          image: "/placeholder.svg?height=200&width=200",
-          isCombo: false,
-          isSubItem: false,
-          addonItemName: undefined
-        },
-        {
-          id: "cat2",
-          name: "North Indian",
-          description: "Traditional North Indian cuisine",
-          itemType: "CATEGORY" as ProductType,
-          group: "Cuisine",
-          price: 0,
-          alias: "north-indian-cuisine",
-          uom: "Category",
-          weightFactor: 0,
-          maxQuantity: 0,
-          isMandatory: false,
-          mainItemName: "",
-          weightUom: "N/A",
-          hsnCode: "N/A",
-          factor: 1,
-          quantityPortion: "N/A",
-          bufferPercentage: 0,
-          image: "/placeholder.svg?height=200&width=200",
-          isCombo: false,
-          isSubItem: false,
-          addonItemName: undefined
-        }
-      ],
-    }
-
-    // Ensure activeTab exists as a key in sampleData before setting state
-    if (activeTab in sampleData) {
-      setProducts(sampleData[activeTab as keyof typeof sampleData] || [])
-      setFilteredProducts(sampleData[activeTab as keyof typeof sampleData] || [])
-    } else {
-      setProducts([])
-      setFilteredProducts([])
-    }
+    setSearchQuery("")
+    setFilterType("All Types")
+    setFilterGroup("All Groups")
   }, [activeTab])
 
-const singularFormMap = {
-  items: "Item",
-  combos: "Combo",
-  addons: "Add-on",
-  categories: "Category"
-}
-
-  // Update the return JSX
   return (
-    <AdminLayout activePage="productmgmt">
+  <AdminLayout activePage="productmgmt">
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold">Product Management</h1>
+        <p className="text-muted-foreground">Manage your products, combos, add-ons, and categories</p>
+      </div>
+
       <Card>
         <CardHeader className="pb-2">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <CardTitle>Product Management</CardTitle>
+            <CardTitle>{singularFormMap[activeTab as keyof typeof singularFormMap]}s</CardTitle>
             <Button onClick={handleAddProduct} className="flex items-center gap-2">
               <Plus className="h-4 w-4" />
               Add New {singularFormMap[activeTab as keyof typeof singularFormMap]}
@@ -323,34 +393,78 @@ const singularFormMap = {
             </TabsList>
           </Tabs>
 
-          <div className="flex gap-4 mb-4">
+          {/* Enhanced search and filter section */}
+          <div className="flex flex-col sm:flex-row gap-4 mb-6">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder={`Search ${singularFormMap[activeTab as keyof typeof singularFormMap]}s...`}
-                className="pl-10"
+                className="pl-10 h-10 bg-background"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
+
+            <div className="flex flex-col sm:flex-row gap-4">
+              <Select value={filterType} onValueChange={setFilterType}>
+                <SelectTrigger className="w-full sm:w-[180px]">
+                  <SelectValue placeholder="All Types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="All Types">All Types</SelectItem>
+                  {uniqueTypes.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={filterGroup} onValueChange={setFilterGroup}>
+                <SelectTrigger className="w-full sm:w-[180px]">
+                  <SelectValue placeholder="All Groups" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="All Groups">All Groups</SelectItem>
+                  {uniqueGroups.map((group) => (
+                    <SelectItem key={group} value={group}>
+                      {group}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
-          <ProductTable 
-            products={filteredProducts} 
-            onEdit={handleEditProduct} 
-            onDelete={handleDeleteProduct}
-            tableType={activeTab as 'items' | 'combos' | 'addons' | 'categories'}
-          />
+          <div className="rounded-md border overflow-x-auto">
+            <ProductTable
+              products={filteredProducts}
+              onEdit={handleEditProduct}
+              onDelete={handleDeleteProduct}
+              tableType={activeTab as "items" | "combos" | "addons" | "categories"}
+            />
+          </div>
+
+          {filteredProducts.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">
+              No {singularFormMap[activeTab as keyof typeof singularFormMap]}s found
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {isFormOpen && <ProductForm product={selectedProduct} onSave={handleSaveProduct} onCancel={() => setIsFormOpen(false)} />}
-      <DeleteConfirmationDialog 
-        isOpen={isDeleteDialogOpen} 
-        onCloseAction={() => setIsDeleteDialogOpen(false)} 
-        onConfirmAction={confirmDelete} 
-        productName={productToDelete?.name || ""} 
+      {isFormOpen && (
+        <ProductForm product={selectedProduct} onSave={handleSaveProduct} onCancel={() => setIsFormOpen(false)} />
+      )}
+      <DeleteConfirmationDialog
+        isOpen={isDeleteDialogOpen}
+        onCloseAction={() => setIsDeleteDialogOpen(false)}
+        onConfirmAction={confirmDelete}
+        productName={productToDelete?.name || ""}
       />
-    </AdminLayout>
-)
+    </div>
+  </AdminLayout>
+  )
+  
 }
+

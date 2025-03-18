@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Dashboard } from "@/components/dashboard"
 import ProductManagement from "@/components/product-management"
-import { CustomerManagement } from "@/components/customer-management"
+import CustomerManagement from "@/components/customer-management"
 import { DailyMenuSetup } from "@/components/daily-menu-setup"
 
 export default function AdminPage() {

@@ -1,36 +1,37 @@
 export enum ProductType {
-  BREAKFAST = "Breakfast",
-  LUNCH = "Lunch",
-  DINNER = "Dinner",
+  BREAKFAST = "BREAKFAST",
+  LUNCH = "LUNCH",
+  DINNER = "DINNER",
+  SNACK = "SNACK",
 }
 
 export interface Product {
-  addonItemName: any;
-  maxQuantity: any;
-  isMandatory: any;
-  mainItemName: any;
-  id: string;
-  name: string;
-  description: string;
-  price: number;
-  alias: string;
-  isSubItem: boolean;
-  isCombo: boolean;
-  itemType: ProductType;
-  group: string;
-  uom: string;
-  weightFactor: number;
-  weightUom: string;
-  hsnCode: string;
-  factor: number;
-  quantityPortion: string;
-  bufferPercentage: number;
-  image: string;
-  items?: Array<{  // Optional property for combo products
-    name: string;
-    quantity: number;
-  }>;
+  id: string
+  name: string
+  description: string
+  price: number
+  rate: number // Added rate field
+  itemType: ProductType | string
+  alias: string
+  group: string
+  isCombo: boolean
+  isSubItem: boolean
+  uom: string
+  weightFactor: number
+  weightUom: string
+  hsnCode: string
+  factor: number
+  quantityPortion: string
+  bufferPercentage: number
+  maxQuantity: number
+  isMandatory: boolean
+  mainItemName: string
+  image: string
+  addonItemName: string | undefined
+  items?: Array<{ name: string; quantity: number }> // For combo items
 }
+
+
 
 export interface ComboProduct {
   id: string;
