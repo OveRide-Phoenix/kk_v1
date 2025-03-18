@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Dashboard } from "@/components/dashboard"
 import ProductManagement from "@/components/product-management"
 import CustomerManagement from "@/components/customer-management"
-import { DailyMenuSetup } from "@/components/daily-menu-setup"
+import { DailyMenuSetup } from "@/components/dailymenusetup"
 
 export default function AdminPage() {
   const [activePage, setActivePage] = useState("dashboard")
@@ -14,7 +14,7 @@ export default function AdminPage() {
       {activePage === "dashboard" && <Dashboard />}
       {activePage === "productmgmt" && <ProductManagement />}
       {activePage === "customermgmt" && <CustomerManagement />}
-      {activePage === "menu" && <DailyMenuSetup />}
+      {activePage === "dailymenusetup" && <DailyMenuSetup />}
     </div>
   )
 }

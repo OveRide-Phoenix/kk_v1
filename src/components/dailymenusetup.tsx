@@ -27,7 +27,7 @@ export function DailyMenuSetup() {
   };
 
   return (
-    <AdminLayout activePage="dailymenusetup">
+    <AdminLayout activePage="daily-menu-setup">
       <Card>
         <CardHeader className="pb-2">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">

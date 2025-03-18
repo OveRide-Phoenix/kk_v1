@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -31,7 +31,7 @@ export default function RegisterForm({ onSubmit }: RegisterFormProps) {
     routeAssignment: "",
     isDefault: true,
   });
-
+  
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -49,6 +49,11 @@ export default function RegisterForm({ onSubmit }: RegisterFormProps) {
     e.preventDefault();
     onSubmit(formData);
   };
+
+  const MemoizedGoogleMap = useMemo(
+    () => <GoogleMapPicker onLocationSelect={handleLocationSelect} />,
+    []
+);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -103,128 +108,135 @@ export default function RegisterForm({ onSubmit }: RegisterFormProps) {
       </div>
 
         {/* Address Details */}
-                                   
-                                          <h3 className="text-lg font-medium border-b border-muted pb-2">
-                                              Address Details
-                                          </h3>
       
-                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                              <div className="space-y-2">
-                                                  <Label
-                                                      htmlFor="houseApartmentNo"
-                                                      className="text-foreground/90"
-                                                  >
-                                                      House/Apartment{" "}
-                                                      <span className="text-destructive">
-                                                          *
-                                                      </span>
-                                                  </Label>
-                                                  <Input
-                                                      id="houseApartmentNo"
-                                                      name="houseApartmentNo"
-                                                      value={
-                                                          formData.houseApartmentNo
-                                                      }
-                                                      onChange={handleChange}
-                                                      required
-                                                      className="border-input/50 bg-gray-100 text-foreground placeholder:text-foreground/50"
-                                                  />
-                                              </div>
-      
-                                              <div className="space-y-2 md:col-span-2">
-                                                  <Label
-                                                      htmlFor="writtenAddress"
-                                                      className="text-foreground/90"
-                                                  >
-                                                      Address{" "}
-                                                      <span className="text-destructive">
-                                                          *
-                                                      </span>
-                                                  </Label>
-                                                  <div className="space-y-2">
-                                                      <Textarea
-                                                          id="writtenAddress"
-                                                          name="writtenAddress"
-                                                          value={
-                                                              formData.writtenAddress
-                                                          }
-                                                          onChange={handleChange}
-                                                          required
-                                                          className="min-h-[100px] w-full border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
-                                                      />
-                                                  </div>
-                                              </div>
-                                          </div>
-      
-                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                              <div className="space-y-2">
-                                                  <Label
-                                                      htmlFor="city"
-                                                      className="text-foreground/90"
-                                                  >
-                                                      City{" "}
-                                                      <span className="text-destructive">
-                                                          *
-                                                      </span>
-                                                  </Label>
-                                                  <Select
-                                                      value={formData.city}
-                                                      onValueChange={(value) =>
-                                                          handleSelectChange(
-                                                              "city",
-                                                              value
-                                                          )
-                                                      }
-                                                  >
-                                                      <SelectTrigger
-                                                          id="city"
-                                                          className="border-input/50 bg-secondary text-foreground"
-                                                      >
-                                                          <SelectValue placeholder="Select city" />
-                                                      </SelectTrigger>
-                                                      <SelectContent>
-                                                          <SelectItem value="Mysore">
-                                                              Mysore
-                                                          </SelectItem>
-                                                          <SelectItem value="Bangalore">
-                                                              Bangalore
-                                                          </SelectItem>
-                                                      </SelectContent>
-                                                  </Select>
-                                              </div>
-      
-                                              <div className="space-y-2">
-                                                  <Label
-                                                      htmlFor="pinCode"
-                                                      className="text-foreground/90"
-                                                  >
-                                                      Pin code{" "}
-                                                      <span className="text-destructive">
-                                                          *
-                                                      </span>
-                                                  </Label>
-                                                  <Input
-                                                      id="pinCode"
-                                                      name="pinCode"
-                                                      type="text"
-                                                      value={formData.pinCode}
-                                                      onChange={handleChange}
-                                                      required
-                                                      className="border-input/50 bg-gray-100 text-foreground placeholder:text-foreground/50"
-                                                  />
-                                              </div>
-                                          </div>
+       <h3 className="text-lg font-medium border-b border-muted pb-2">
+           Address Details
+       </h3>
+    
+       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+           <div className="space-y-2">
+               <Label
+                   htmlFor="houseApartmentNo"
+                   className="text-foreground/90"
+               >
+                   House/Apartment{" "}
+                   <span className="text-destructive">
+                       *
+                   </span>
+               </Label>
+               <Input
+                   id="houseApartmentNo"
+                   name="houseApartmentNo"
+                   value={
+                       formData.houseApartmentNo
+                   }
+                   onChange={handleChange}
+                   required
+                   className="border-input/50 bg-gray-100 text-foreground placeholder:text-foreground/50"
+               />
+           </div>
+    
+           <div className="space-y-2 md:col-span-2">
+               <Label
+                   htmlFor="writtenAddress"
+                   className="text-foreground/90"
+               >
+                   Address{" "}
+                   <span className="text-destructive">
+                       *
+                   </span>
+               </Label>
+               <div className="space-y-2">
+                   <Textarea
+                       id="writtenAddress"
+                       name="writtenAddress"
+                       value={
+                           formData.writtenAddress
+                       }
+                       onChange={handleChange}
+                       required
+                       className="min-h-[100px] w-full border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
+                   />
+               </div>
+           </div>
+       </div>
+    
+       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+           <div className="space-y-2">
+               <Label
+                   htmlFor="city"
+                   className="text-foreground/90"
+               >
+                   City{" "}
+                   <span className="text-destructive">
+                       *
+                   </span>
+               </Label>
+               <Select
+                   value={formData.city}
+                   onValueChange={(value) =>
+                       handleSelectChange(
+                           "city",
+                           value
+                       )
+                   }
+               >
+                   <SelectTrigger
+                       id="city"
+                       className="border-input/50 bg-secondary text-foreground"
+                   >
+                       <SelectValue placeholder="Select city" />
+                   </SelectTrigger>
+                   <SelectContent>
+                       <SelectItem value="Mysore">
+                           Mysore
+                       </SelectItem>
+                       <SelectItem value="Bangalore">
+                           Bangalore
+                       </SelectItem>
+                   </SelectContent>
+               </Select>
+           </div>
+    
+           <div className="space-y-2">
+               <Label
+                   htmlFor="pinCode"
+                   className="text-foreground/90"
+               >
+                   Pin code{" "}
+                   <span className="text-destructive">
+                       *
+                   </span>
+               </Label>
+               <Input
+                   id="pinCode"
+                   name="pinCode"
+                   type="text"
+                   value={formData.pinCode}
+                   onChange={handleChange}
+                   required
+                   className="border-input/50 bg-gray-100 text-foreground placeholder:text-foreground/50"
+               />
+           </div>
+       </div>
 
-      {/* Google Map Picker */}
-      <div className="space-y-4">
-        <Label>Google Maps Location</Label>
-        <GoogleMapPicker onLocationSelect={handleLocationSelect} />
-        {formData.latitude && formData.longitude && (
-          <p className="text-sm text-muted-foreground">
-            Selected Location: {formData.latitude}, {formData.longitude}
-          </p>
-        )}
-      </div>
+           {/* Google Maps Placeholder */}
+           <div className="space-y-4">
+                                        <Label>Google Maps Location</Label>
+                                        {MemoizedGoogleMap}
+                                        {formData.latitude &&
+                                            formData.longitude && (
+                                                <p className="text-sm text-muted-foreground">
+                                                    Selected Location:{" "}
+                                                    {formData.latitude},{" "}
+                                                    {formData.longitude}
+                                                </p>
+                                            )}
+                                    </div>
+                              
     </form>
   );
 }
+
+   
+    

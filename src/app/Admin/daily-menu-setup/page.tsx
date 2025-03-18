@@ -1,4 +1,4 @@
-import { DailyMenuSetup } from "@/components/daily-menu-setup"
+import { DailyMenuSetup } from "@/components/dailymenusetup"
 
 export default function DailyMenuPage() {
   return <DailyMenuSetup />}

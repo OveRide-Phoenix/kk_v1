@@ -84,7 +84,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
             <TabsContent value="basic" className="space-y-4">
               <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Name *</Label>
+                  <Label htmlFor="name">Name <span className="text-destructive">*</span></Label>
                   <Input
                     id="name"
                     value={formData.name}
@@ -105,7 +105,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="itemType">Item Type *</Label>
+                    <Label htmlFor="itemType">Item Type <span className="text-destructive">*</span></Label>
                     <Select value={formData.itemType} onValueChange={(value) => handleChange("itemType", value)}>
                       <SelectTrigger id="itemType">
                         <SelectValue placeholder="Select type" />
@@ -122,7 +122,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="group">Group *</Label>
+                    <Label htmlFor="group">Group<span className="text-destructive">*</span></Label>
                     <Input
                       id="group"
                       value={formData.group}
@@ -134,7 +134,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="uom">Unit of Measure *</Label>
+                    <Label htmlFor="uom">Unit of Measure <span className="text-destructive">*</span></Label>
                     <Input
                       id="uom"
                       value={formData.uom}
@@ -144,7 +144,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="quantityPortion">Quantity Portion *</Label>
+                    <Label htmlFor="quantityPortion">Quantity Portion <span className="text-destructive">*</span></Label>
                     <Input
                       id="quantityPortion"
                       value={formData.quantityPortion}
@@ -175,7 +175,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
 
                 {formData.isSubItem && (
                   <div className="space-y-2">
-                    <Label htmlFor="mainItemName">Main Item Name *</Label>
+                    <Label htmlFor="mainItemName">Main Item Name <span className="text-destructive">*</span></Label>
                     <Input
                       id="mainItemName"
                       value={formData.mainItemName}
@@ -190,7 +190,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
             <TabsContent value="pricing" className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="price">Price (₹) *</Label>
+                  <Label htmlFor="price">Price (₹) <span className="text-destructive">*</span></Label>
                   <Input
                     id="price"
                     type="number"
@@ -202,7 +202,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="rate">Rate (₹) *</Label>
+                  <Label htmlFor="rate">Rate (₹) <span className="text-destructive">*</span></Label>
                   <Input
                     id="rate"
                     type="number"

@@ -5,15 +5,23 @@ import { Pencil, Trash2, Plus, Search, Eye } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import {Dialog,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle,DialogTrigger} from "@/components/ui/dialog"
-import {AlertDialog,AlertDialogAction,AlertDialogCancel,AlertDialogContent,AlertDialogDescription,AlertDialogFooter,AlertDialogHeader,AlertDialogTitle,AlertDialogTrigger,} from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
-import { Label } from "@/components/ui/label"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
-import RegisterForm from "@/components/registerform";
-import { AdminLayout } from "@/components/admin-layout"
+import { AddCustomerDialog } from "@/components/add-customer-dialog"
+import { EditCustomerDialog } from "@/components/edit-customer-dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { AdminLayout } from "./admin-layout"
 
 // Define customer types
 type CustomerType = "Regular" | "Reseller" | "Agent"
@@ -31,6 +39,17 @@ interface Customer {
   type: CustomerType
   paymentFrequency: PaymentFrequency
   routeNumber?: string
+  // Additional fields
+  referredBy?: string
+  alternativeMobile?: string
+  recipientName?: string
+  houseApartmentNo?: string
+  writtenAddress?: string
+  city?: string
+  pinCode?: string
+  latitude?: number | null
+  longitude?: number | null
+  addressType?: string
 }
 
 // Sample data
@@ -39,61 +58,91 @@ const initialCustomers: Customer[] = [
     id: "CUST-1000",
     name: "Rahul Sharma",
     email: "customer1@example.com",
-    phone: "+91 9876504321",
+    phone: "9876504321",
     orders: 2,
     status: "Active",
     address: "123 Main St, Mumbai, Maharashtra",
     type: "Regular",
     paymentFrequency: "Daily",
     routeNumber: "R-101",
+    recipientName: "Rahul Sharma",
+    houseApartmentNo: "123",
+    writtenAddress: "Main St",
+    city: "Mumbai",
+    pinCode: "400001",
+    addressType: "Home",
   },
   {
     id: "CUST-1001",
     name: "Priya Patel",
     email: "customer2@example.com",
-    phone: "+91 9876514321",
+    phone: "9876514321",
     orders: 9,
     status: "Pending",
     address: "456 Park Ave, Delhi, Delhi",
     type: "Reseller",
     paymentFrequency: "Monthly",
     routeNumber: "R-102",
+    recipientName: "Priya Patel",
+    houseApartmentNo: "456",
+    writtenAddress: "Park Ave",
+    city: "Delhi",
+    pinCode: "110001",
+    addressType: "Work",
   },
   {
     id: "CUST-1002",
     name: "Amit Kumar",
     email: "customer3@example.com",
-    phone: "+91 9876524321",
+    phone: "9876524321",
     orders: 3,
     status: "Inactive",
     address: "789 Lake View, Bangalore, Karnataka",
     type: "Regular",
     paymentFrequency: "Daily",
     routeNumber: "R-103",
+    recipientName: "Amit Kumar",
+    houseApartmentNo: "789",
+    writtenAddress: "Lake View",
+    city: "Bangalore",
+    pinCode: "560001",
+    addressType: "Home",
   },
   {
     id: "CUST-1003",
     name: "Sneha Reddy",
     email: "customer4@example.com",
-    phone: "+91 9876534321",
+    phone: "9876534321",
     orders: 18,
     status: "Active",
     address: "234 Hill Road, Chennai, Tamil Nadu",
     type: "Agent",
     paymentFrequency: "Weekly",
     routeNumber: "R-104",
+    recipientName: "Sneha Reddy",
+    houseApartmentNo: "234",
+    writtenAddress: "Hill Road",
+    city: "Chennai",
+    pinCode: "600001",
+    addressType: "Other",
   },
   {
     id: "CUST-1004",
     name: "Vikram Singh",
     email: "customer5@example.com",
-    phone: "+91 9876544321",
+    phone: "9876544321",
     orders: 15,
     status: "Pending",
     address: "567 Valley St, Hyderabad, Telangana",
     type: "Reseller",
     paymentFrequency: "Monthly",
     routeNumber: "R-105",
+    recipientName: "Vikram Singh",
+    houseApartmentNo: "567",
+    writtenAddress: "Valley St",
+    city: "Hyderabad",
+    pinCode: "500001",
+    addressType: "Work",
   },
 ]
 
@@ -101,8 +150,8 @@ export default function CustomerManagement() {
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
-  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [filterStatus, setFilterStatus] = useState<string>("All Customers")
 
@@ -127,7 +176,6 @@ export default function CustomerManagement() {
   // Handle customer update
   const handleUpdateCustomer = (updatedCustomer: Customer) => {
     setCustomers(customers.map((customer) => (customer.id === updatedCustomer.id ? updatedCustomer : customer)))
-    setIsEditDialogOpen(false)
   }
 
   // View customer details
@@ -138,44 +186,27 @@ export default function CustomerManagement() {
 
   // Edit customer
   const handleEditCustomer = (customer: Customer) => {
-    setEditingCustomer({ ...customer })
+    setSelectedCustomer(customer)
     setIsEditDialogOpen(true)
   }
-  const handleAddCustomer = (newCustomer: any) => {
-    const newCustomerWithId = { id: `CUST-${customers.length + 1000}`, ...newCustomer, orders: 0, status: "Pending" };
-    setCustomers([...customers, newCustomerWithId]);
-  };
-  
-  <RegisterForm onSubmit={handleAddCustomer} />
-  
 
-    
+  // Add new customer
+  const handleAddCustomer = (newCustomer: Customer) => {
+    setCustomers([...customers, newCustomer])
+  }
+
   return (
     <AdminLayout activePage="customermgmt">
+    
+
     <div className="space-y-6">
       <div className="bg-white rounded-lg border shadow-sm p-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <h2 className="text-xl font-semibold">All Customers</h2>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Add New Customer
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[900px]">
-              <DialogHeader>
-                <DialogTitle>Add New Customer</DialogTitle>
-                <DialogDescription>Enter the details of the new customer below.</DialogDescription>
-                </DialogHeader> 
-              <div className="max-h-[80vh] overflow-y-auto">
-                <RegisterForm  onSubmit={(data) => console.log("Registered:", data)} /> {/* Using the extracted form */}
-                <DialogFooter className="mt-4">
-                <Button variant="outline">Cancel</Button>
-                <Button>Save Customer</Button>
-              </DialogFooter></div>
-            </DialogContent>
-          </Dialog>
+          <Button onClick={() => setIsAddDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add New Customer
+          </Button>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-4 mb-6">
@@ -397,134 +428,18 @@ export default function CustomerManagement() {
         </DialogContent>
       </Dialog>
 
+      {/* Add Customer Dialog */}
+      <AddCustomerDialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen} onCustomerAdded={handleAddCustomer} />
+
       {/* Edit Customer Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>Edit Customer</DialogTitle>
-            <DialogDescription>Update customer information below.</DialogDescription>
-          </DialogHeader>
-          {editingCustomer && (
-            <div className="space-y-4 py-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Name</Label>
-                  <Input
-                    id="name"
-                    value={editingCustomer.name}
-                    onChange={(e) => setEditingCustomer({ ...editingCustomer, name: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={editingCustomer.email}
-                    onChange={(e) => setEditingCustomer({ ...editingCustomer, email: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone</Label>
-                  <Input
-                    id="phone"
-                    value={editingCustomer.phone}
-                    onChange={(e) => setEditingCustomer({ ...editingCustomer, phone: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="status">Status</Label>
-                  <Select
-                    value={editingCustomer.status}
-                    onValueChange={(value: CustomerStatus) => setEditingCustomer({ ...editingCustomer, status: value })}
-                  >
-                    <SelectTrigger id="status">
-                      <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Active">Active</SelectItem>
-                      <SelectItem value="Pending">Pending</SelectItem>
-                      <SelectItem value="Inactive">Inactive</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="address">Delivery Address</Label>
-                <Textarea
-                  id="address"
-                  value={editingCustomer.address}
-                  onChange={(e) => setEditingCustomer({ ...editingCustomer, address: e.target.value })}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Customer Type</Label>
-                <RadioGroup
-                  value={editingCustomer.type}
-                  onValueChange={(value: CustomerType) => setEditingCustomer({ ...editingCustomer, type: value })}
-                  className="flex flex-wrap gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="Regular" id="type-regular" />
-                    <Label htmlFor="type-regular">Regular</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="Reseller" id="type-reseller" />
-                    <Label htmlFor="type-reseller">Reseller</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="Agent" id="type-agent" />
-                    <Label htmlFor="type-agent">Agent</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Payment Frequency</Label>
-                <RadioGroup
-                  value={editingCustomer.paymentFrequency}
-                  onValueChange={(value: PaymentFrequency) =>
-                    setEditingCustomer({ ...editingCustomer, paymentFrequency: value })
-                  }
-                  className="flex flex-wrap gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="Daily" id="freq-daily" />
-                    <Label htmlFor="freq-daily">Daily</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="Weekly" id="freq-weekly" />
-                    <Label htmlFor="freq-weekly">Weekly</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="Monthly" id="freq-monthly" />
-                    <Label htmlFor="freq-monthly">Monthly</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="route">Route Number</Label>
-                <Input
-                  id="route"
-                  value={editingCustomer.routeNumber || ""}
-                  onChange={(e) => setEditingCustomer({ ...editingCustomer, routeNumber: e.target.value })}
-                  placeholder="e.g., R-101"
-                />
-              </div>
-
-              <DialogFooter className="mt-6">
-                <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={() => handleUpdateCustomer(editingCustomer)}>Save Changes</Button>
-              </DialogFooter>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      {selectedCustomer && (
+        <EditCustomerDialog
+          open={isEditDialogOpen}
+          onOpenChange={setIsEditDialogOpen}
+          customer={selectedCustomer}
+          onCustomerUpdated={handleUpdateCustomer}
+        />
+      )}
     </div>
     </AdminLayout>
   )

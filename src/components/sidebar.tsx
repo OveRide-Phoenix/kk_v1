@@ -16,7 +16,7 @@ const navigationItems = [
     { name: "Dashboard", icon: Home, href: "/admin", id: "dashboard" },
     { name: "Product Management", icon: Package, href: "/admin/productmgmt", id: "productmgmt" },
     { name: "Customer Management", icon: Users, href: "/admin/customermgmt", id: "customermgmt" },
-    { name: "Daily Menu Setup", icon: Calendar, href: "/admin/dailymenusetup", id: "dailymenusetup" },
+    { name: "Daily Menu Setup", icon: Calendar, href: "/admin/daily-menu-setup", id: "daily-menu-setup" },
     { name: "Kitchen Production", icon: Utensils, href: "/admin/production", id: "production" },
     { name: "Order History", icon: ShoppingCart, href: "/admin/orders", id: "orders" },
     { name: "Logs & Audit", icon: FileText, href: "/admin/logs", id: "logs" },

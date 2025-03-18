@@ -368,10 +368,7 @@ export default function ProductManagement() {
   return (
   <AdminLayout activePage="productmgmt">
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Product Management</h1>
-        <p className="text-muted-foreground">Manage your products, combos, add-ons, and categories</p>
-      </div>
+   
 
       <Card>
         <CardHeader className="pb-2">
