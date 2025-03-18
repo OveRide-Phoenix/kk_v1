@@ -3,15 +3,15 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
-import { X, Upload } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
 import { type Product, ProductType } from "@/types/product"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 
 interface ProductFormProps {
   product: Product | null
@@ -20,362 +20,309 @@ interface ProductFormProps {
 }
 
 export default function ProductForm({ product, onSave, onCancel }: ProductFormProps) {
-  const [formData, setFormData] = useState<Product>({
-    id: "",
-    name: "",
-    maxQuantity: 0,
-    isMandatory: false,
-    mainItemName: "",
-    addonItemName: "",
-    description: "",
-    price: 0,
-    alias: "",
-    isSubItem: false,
-    isCombo: false,
-    itemType: ProductType.BREAKFAST,
-    group: "",
-    uom: "",
-    weightFactor: 0,
-    weightUom: "kg",
-    hsnCode: "",
-    factor: 1,
-    quantityPortion: "",
-    bufferPercentage: 0,
-    image: "/placeholder.svg?height=200&width=200",
-  })
+  const isEditing = !!product
+  const [formData, setFormData] = useState<Partial<Product>>(
+    product || {
+      name: "",
+      description: "",
+      price: 0,
+      rate: 0, // Added rate field
+      itemType: ProductType.BREAKFAST,
+      group: "",
+      alias: "",
+      isCombo: false,
+      isSubItem: false,
+      uom: "",
+      weightFactor: 0,
+      weightUom: "kg",
+      hsnCode: "",
+      factor: 1,
+      quantityPortion: "",
+      bufferPercentage: 0,
+      maxQuantity: 0,
+      isMandatory: false,
+      mainItemName: "",
+      image: "/placeholder.svg?height=200&width=200",
+    },
+  )
 
-  const [imagePreview, setImagePreview] = useState<string>("/placeholder.svg?height=200&width=200")
-  const [errors, setErrors] = useState<Record<string, string>>({})
-
-  useEffect(() => {
-    if (product) {
-      setFormData(product)
-      setImagePreview(product.image)
-    }
-  }, [product])
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
-
-    // Clear error for this field if it exists
-    if (errors[name]) {
-      setErrors((prev) => {
-        const newErrors = { ...prev }
-        delete newErrors[name]
-        return newErrors
-      })
-    }
+  const handleChange = (field: keyof Product, value: any) => {
+    setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
-  const handleNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: Number.parseFloat(value) || 0 }))
-
-    // Clear error for this field if it exists
-    if (errors[name]) {
-      setErrors((prev) => {
-        const newErrors = { ...prev }
-        delete newErrors[name]
-        return newErrors
-      })
-    }
-  }
-
-  const handleSwitchChange = (name: string, checked: boolean) => {
-    setFormData((prev) => ({ ...prev, [name]: checked }))
-  }
-
-  const handleSelectChange = (name: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [name]: value }))
-
-    // Clear error for this field if it exists
-    if (errors[name]) {
-      setErrors((prev) => {
-        const newErrors = { ...prev }
-        delete newErrors[name]
-        return newErrors
-      })
-    }
-  }
-
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        const result = reader.result as string
-        setImagePreview(result)
-        setFormData((prev) => ({ ...prev, image: result }))
-      }
-      reader.readAsDataURL(file)
-    }
-  }
-
-  const validateForm = (): boolean => {
-    const newErrors: Record<string, string> = {}
-
-    if (!formData.name.trim()) newErrors.name = "Name is required"
-    if (!formData.description.trim()) newErrors.description = "Description is required"
-    if (!formData.alias.trim()) newErrors.alias = "Alias is required"
-    if (!formData.group.trim()) newErrors.group = "Group is required"
-    if (!formData.uom.trim()) newErrors.uom = "UOM is required"
-    if (!formData.weightUom.trim()) newErrors.weightUom = "Weight UOM is required"
-    if (!formData.hsnCode.trim()) newErrors.hsnCode = "HSN Code is required"
-    if (!formData.quantityPortion.trim()) newErrors.quantityPortion = "Quantity/Portion is required"
-
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
-  }
   const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-  
-    if (validateForm()) {
-      onSave({
-        ...formData,
-        id: product?.id || "",
-      });
+    e.preventDefault()
+    onSave(formData as Product)
+  }
+
+  // Generate alias from name
+  useEffect(() => {
+    if (formData.name && !isEditing) {
+      const alias = formData.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "")
+      handleChange("alias", alias)
     }
-  };
-  
+  }, [formData.name, isEditing])
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 p-4 overflow-auto">
-      <Card className="w-full max-w-4xl">
-        <CardHeader className="space-y-1">
-          <div className="flex justify-between items-center">
-            <CardTitle>{product ? "Edit Product" : "Add New Product"}</CardTitle>
-            <Button variant="ghost" size="icon" onClick={onCancel}>
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </CardHeader>
+    <Dialog open={true} onOpenChange={() => onCancel()}>
+      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{isEditing ? "Edit" : "Add"} Product</DialogTitle>
+        </DialogHeader>
         <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-6">
-            {/* Basic Information */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Basic Information</h3>
-              <div className="grid grid-cols-2 gap-4">
+          <Tabs defaultValue="basic" className="w-full">
+            <TabsList className="grid w-full grid-cols-3 mb-4">
+              <TabsTrigger value="basic">Basic Info</TabsTrigger>
+              <TabsTrigger value="pricing">Pricing & Inventory</TabsTrigger>
+              <TabsTrigger value="advanced">Advanced</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="basic" className="space-y-4">
+              <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Name <span className="text-red-500">*</span></Label>
+                  <Label htmlFor="name">Name *</Label>
                   <Input
                     id="name"
-                    name="name"
                     value={formData.name}
-                    onChange={handleChange}
-                    className={errors.name ? "border-red-500" : ""}
+                    onChange={(e) => handleChange("name", e.target.value)}
+                    required
                   />
-                  {errors.name && <p className="text-red-500 text-sm">{errors.name}</p>}
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="alias">Alias <span className="text-red-500">*</span></Label>
-                  <Input
-                    id="alias"
-                    name="alias"
-                    value={formData.alias}
-                    onChange={handleChange}
-                    className={errors.alias ? "border-red-500" : ""}
-                  />
-                  {errors.alias && <p className="text-red-500 text-sm">{errors.alias}</p>}
-                </div>
-              </div>
-              <div>
-                <Label htmlFor="description" className="block mb-2">Description <span className="text-red-500">*</span></Label>
-                <Textarea
-                  id="description"
-                  name="description"
-                  value={formData.description}
-                  onChange={handleChange}
-                  className={`w-full ${errors.description ? "border-red-500" : ""}`}
-                />
-                {errors.description && <p className="text-red-500 text-sm">{errors.description}</p>}
-              </div>
-            </div>
 
-            {/* Product Classification */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Product Classification</h3>
-              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="itemType">Item Type <span className="text-red-500">*</span></Label>
-                  <Select value={formData.itemType} onValueChange={(value) => handleSelectChange("itemType", value)}>
-                    <SelectTrigger id="itemType">
-                      <SelectValue placeholder="Select item type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={ProductType.BREAKFAST}>Breakfast</SelectItem>
-                      <SelectItem value={ProductType.LUNCH}>Lunch</SelectItem>
-                      <SelectItem value={ProductType.DINNER}>Dinner</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="group">Group <span className="text-red-500">*</span></Label>
-                  <Input
-                    id="group"
-                    name="group"
-                    value={formData.group}
-                    onChange={handleChange}
-                    className={errors.group ? "border-red-500" : ""}
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    value={formData.description}
+                    onChange={(e) => handleChange("description", e.target.value)}
+                    rows={3}
                   />
-                  {errors.group && <p className="text-red-500 text-sm">{errors.group}</p>}
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Product Type</Label>
-                  <div className="flex space-x-4">
-                    <div className="flex items-center space-x-2">
-                      <Switch
-                        id="isSubItem"
-                        checked={formData.isSubItem}
-                        onCheckedChange={(checked) => handleSwitchChange("isSubItem", checked)}
-                      />
-                      <Label htmlFor="isSubItem">Sub Item</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Switch
-                        id="isCombo"
-                        checked={formData.isCombo}
-                        onCheckedChange={(checked) => handleSwitchChange("isCombo", checked)}
-                      />
-                      <Label htmlFor="isCombo">Combo</Label>
-                    </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="itemType">Item Type *</Label>
+                    <Select value={formData.itemType} onValueChange={(value) => handleChange("itemType", value)}>
+                      <SelectTrigger id="itemType">
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={ProductType.BREAKFAST}>Breakfast</SelectItem>
+                        <SelectItem value={ProductType.LUNCH}>Lunch</SelectItem>
+                        <SelectItem value={ProductType.DINNER}>Dinner</SelectItem>
+                        <SelectItem value={ProductType.SNACK}>Snack</SelectItem>
+                        <SelectItem value="ADDON">Add-on</SelectItem>
+                        <SelectItem value="CATEGORY">Category</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="group">Group *</Label>
+                    <Input
+                      id="group"
+                      value={formData.group}
+                      onChange={(e) => handleChange("group", e.target.value)}
+                      required
+                    />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="hsnCode">HSN Code <span className="text-red-500">*</span></Label>
-                  <Input
-                    id="hsnCode"
-                    name="hsnCode"
-                    value={formData.hsnCode}
-                    onChange={handleChange}
-                    className={errors.hsnCode ? "border-red-500" : ""}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="uom">Unit of Measure *</Label>
+                    <Input
+                      id="uom"
+                      value={formData.uom}
+                      onChange={(e) => handleChange("uom", e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="quantityPortion">Quantity Portion *</Label>
+                    <Input
+                      id="quantityPortion"
+                      value={formData.quantityPortion}
+                      onChange={(e) => handleChange("quantityPortion", e.target.value)}
+                      required
+                      placeholder="e.g., 1 plate, 2 pieces"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="isCombo"
+                    checked={formData.isCombo}
+                    onCheckedChange={(checked) => handleChange("isCombo", checked)}
                   />
-                  {errors.hsnCode && <p className="text-red-500 text-sm">{errors.hsnCode}</p>}
+                  <Label htmlFor="isCombo">This is a combo item</Label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="isSubItem"
+                    checked={formData.isSubItem}
+                    onCheckedChange={(checked) => handleChange("isSubItem", checked)}
+                  />
+                  <Label htmlFor="isSubItem">This is a sub-item/add-on</Label>
+                </div>
+
+                {formData.isSubItem && (
+                  <div className="space-y-2">
+                    <Label htmlFor="mainItemName">Main Item Name *</Label>
+                    <Input
+                      id="mainItemName"
+                      value={formData.mainItemName}
+                      onChange={(e) => handleChange("mainItemName", e.target.value)}
+                      required={formData.isSubItem}
+                    />
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="pricing" className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="price">Price (₹) *</Label>
+                  <Input
+                    id="price"
+                    type="number"
+                    value={formData.price}
+                    onChange={(e) => handleChange("price", Number.parseFloat(e.target.value) || 0)}
+                    required
+                    min={0}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="rate">Rate (₹) *</Label>
+                  <Input
+                    id="rate"
+                    type="number"
+                    value={formData.rate}
+                    onChange={(e) => handleChange("rate", Number.parseFloat(e.target.value) || 0)}
+                    required
+                    min={0}
+                  />
+                  <p className="text-xs text-muted-foreground">The selling price shown to customers</p>
                 </div>
               </div>
-            </div>
 
-            {/* Measurement & Quantity */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Measurement & Quantity</h3>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="uom">UOM <span className="text-red-500">*</span></Label>
+                  <Label htmlFor="maxQuantity">Maximum Quantity</Label>
                   <Input
-                    id="uom"
-                    name="uom"
-                    value={formData.uom}
-                    onChange={handleChange}
-                    className={errors.uom ? "border-red-500" : ""}
+                    id="maxQuantity"
+                    type="number"
+                    value={formData.maxQuantity}
+                    onChange={(e) => handleChange("maxQuantity", Number.parseInt(e.target.value) || 0)}
+                    min={0}
                   />
-                  {errors.uom && <p className="text-red-500 text-sm">{errors.uom}</p>}
+                  <p className="text-xs text-muted-foreground">0 means no limit</p>
                 </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="bufferPercentage">Buffer Percentage (%)</Label>
+                  <Input
+                    id="bufferPercentage"
+                    type="number"
+                    value={formData.bufferPercentage}
+                    onChange={(e) => handleChange("bufferPercentage", Number.parseInt(e.target.value) || 0)}
+                    min={0}
+                    max={100}
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="isMandatory"
+                  checked={formData.isMandatory}
+                  onCheckedChange={(checked) => handleChange("isMandatory", checked)}
+                />
+                <Label htmlFor="isMandatory">This item is mandatory</Label>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="advanced" className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="alias">Alias</Label>
+                  <Input id="alias" value={formData.alias} onChange={(e) => handleChange("alias", e.target.value)} />
+                  <p className="text-xs text-muted-foreground">Auto-generated from name</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="hsnCode">HSN Code</Label>
+                  <Input
+                    id="hsnCode"
+                    value={formData.hsnCode}
+                    onChange={(e) => handleChange("hsnCode", e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="weightFactor">Weight Factor</Label>
                   <Input
                     id="weightFactor"
-                    name="weightFactor"
                     type="number"
-                    step="0.001"
                     value={formData.weightFactor}
-                    onChange={handleNumberChange}
+                    onChange={(e) => handleChange("weightFactor", Number.parseFloat(e.target.value) || 0)}
+                    step="0.01"
+                    min={0}
                   />
                 </div>
+
                 <div className="space-y-2">
-                  <Label htmlFor="weightUom">Weight UOM <span className="text-red-500">*</span></Label>
-                  <Select value={formData.weightUom} onValueChange={(value) => handleSelectChange("weightUom", value)}>
+                  <Label htmlFor="weightUom">Weight UOM</Label>
+                  <Select value={formData.weightUom} onValueChange={(value) => handleChange("weightUom", value)}>
                     <SelectTrigger id="weightUom">
-                      <SelectValue placeholder="Select weight UOM" />
+                      <SelectValue placeholder="Select unit" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="kg">Kilogram (kg)</SelectItem>
                       <SelectItem value="g">Gram (g)</SelectItem>
                       <SelectItem value="l">Liter (l)</SelectItem>
                       <SelectItem value="ml">Milliliter (ml)</SelectItem>
+                      <SelectItem value="N/A">Not Applicable</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="factor">Factor</Label>
-                  <Input
-                    id="factor"
-                    name="factor"
-                    type="number"
-                    step="0.01"
-                    value={formData.factor}
-                    onChange={handleNumberChange}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="quantityPortion">Quantity/Portion <span className="text-red-500">*</span></Label>
-                  <Input
-                    id="quantityPortion"
-                    name="quantityPortion"
-                    value={formData.quantityPortion}
-                    onChange={handleChange}
-                    className={errors.quantityPortion ? "border-red-500" : ""}
-                  />
-                  {errors.quantityPortion && <p className="text-red-500 text-sm">{errors.quantityPortion}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="bufferPercentage">Buffer Percentage</Label>
-                  <Input
-                    id="bufferPercentage"
-                    name="bufferPercentage"
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={formData.bufferPercentage}
-                    onChange={handleNumberChange}
-                  />
-                </div>
-              </div>
-            </div>
 
-            {/* Product Image */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Product Image</h3>
-              <div className="flex flex-col gap-4">
-                <div className="border rounded-lg overflow-hidden w-32 h-32">
-                  <img
-                    src={imagePreview}
-                    alt="Product preview"
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <Label
-                  htmlFor="image-upload"
-                  className="cursor-pointer flex items-center gap-2 border rounded-md px-4 py-2 hover:bg-gray-50 w-fit"
-                >
-                  <Upload className="h-4 w-4" />
-                  Upload Image
-                </Label>
+              <div className="space-y-2">
+                <Label htmlFor="factor">Factor</Label>
                 <Input
-                  id="image-upload"
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleImageChange}
+                  id="factor"
+                  type="number"
+                  value={formData.factor}
+                  onChange={(e) => handleChange("factor", Number.parseFloat(e.target.value) || 1)}
+                  min={0.1}
+                  step="0.1"
                 />
+                <p className="text-xs text-muted-foreground">Multiplication factor for inventory calculations</p>
               </div>
-            </div>
-          </CardContent>
+            </TabsContent>
+          </Tabs>
 
-          <CardFooter className="flex justify-end gap-4">
-            <Button variant="outline" type="button" onClick={onCancel}>
+          <DialogFooter className="mt-6">
+            <Button type="button" variant="outline" onClick={onCancel}>
               Cancel
             </Button>
-            <Button type="submit">
-              {product ? "Save Changes" : "Create Product"}
-            </Button>
-          </CardFooter>
+            <Button type="submit">{isEditing ? "Update" : "Create"}</Button>
+          </DialogFooter>
         </form>
-      </Card>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 

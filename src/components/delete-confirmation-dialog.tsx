@@ -1,47 +1,47 @@
 "use client"
 
-import { Button } from "@/components/ui/button"
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface DeleteConfirmationDialogProps {
   isOpen: boolean
   onCloseAction: () => void
-  onConfirmAction: () => void  // ✅ Renamed to follow Next.js convention
+  onConfirmAction: () => void
   productName: string
 }
 
 export default function DeleteConfirmationDialog({
   isOpen,
   onCloseAction,
-  onConfirmAction,  // ✅ Updated name
+  onConfirmAction,
   productName,
 }: DeleteConfirmationDialogProps) {
   return (
-    <Dialog open={isOpen} onOpenChange={onCloseAction}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Delete Product</DialogTitle>
-          <DialogDescription>
+    <AlertDialog open={isOpen} onOpenChange={onCloseAction}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete Product</AlertDialogTitle>
+          <AlertDialogDescription>
             Are you sure you want to delete <span className="font-medium">{productName}</span>? This action cannot be
             undone.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter className="flex flex-row justify-end gap-2 sm:justify-end">
-          <Button variant="outline" onClick={onCloseAction}>
-            Cancel
-          </Button>
-          <Button variant="destructive" onClick={onConfirmAction}>  {/* ✅ Updated */}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirmAction} className="bg-red-500 hover:bg-red-600">
             Delete
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }
+
