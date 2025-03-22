@@ -368,15 +368,10 @@ export default function ProductManagement() {
   return (
   <AdminLayout activePage="productmgmt">
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Product Management</h1>
-        <p className="text-muted-foreground">Manage your products, combos, add-ons, and categories</p>
-      </div>
-
       <Card>
         <CardHeader className="pb-2">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <CardTitle>{singularFormMap[activeTab as keyof typeof singularFormMap]}s</CardTitle>
+            <CardTitle className="text-xl font-semibold">{singularFormMap[activeTab as keyof typeof singularFormMap]}s</CardTitle>
             <Button onClick={handleAddProduct} className="flex items-center gap-2">
               <Plus className="h-4 w-4" />
               Add New {singularFormMap[activeTab as keyof typeof singularFormMap]}

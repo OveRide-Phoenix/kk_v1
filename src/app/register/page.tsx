@@ -85,8 +85,12 @@ export default function RegistrationPage() {
     const [addressType, setAddressType] = useState("");
     const [otherAddressName, setOtherAddressName] = useState("");
 
+    // Handle address type change
     const handleAddressTypeChange = (value: string) => {
         setAddressType(value);
+        // Update formData with the selected address type
+        setFormData(prev => ({ ...prev, addressType: value }));
+        
         if (value !== "OTHER") {
             setOtherAddressName(""); // Reset if switching away from "OTHER"
         }
@@ -148,6 +152,7 @@ export default function RegistrationPage() {
             setIsSubmitting(false);
 
             const data = await response.json();
+            console.log("API Response:", response.status, data);
             if (response.ok) {
                 setIsRegistered(true);
             } else {

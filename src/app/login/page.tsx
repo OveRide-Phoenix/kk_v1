@@ -25,37 +25,35 @@ export default function LoginPage() {
     const [errorMessage, setErrorMessage] = useState("");
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [showRegisterHighlight, setShowRegisterHighlight] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [rememberMe, setRememberMe] = useState(false);  // Move this here
 
     // When phone number changes, fetch city and is_admin flag when 10 digits are present.
-    const handlePhoneChange = async (
-        e: React.ChangeEvent<HTMLInputElement>
-    ) => {
+    const handlePhoneChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         let value = e.target.value;
-
-        // Remove all non-digit characters.
-        value = value.replace(/[^\d]/g, "");
-
-        // Ensure it starts with "+91 " appropriately.
-        if (value.startsWith("91")) {
-            value = "+91 " + value.slice(2);
-        } else if (value.startsWith("+91")) {
-            value = "+91 " + value.slice(3);
-        } else {
-            value = "+91 " + value;
+        
+        // Remove all non-digit characters including +91
+        const digitsOnly = value.replace(/\D/g, "");
+        
+        let formattedValue = "";
+        if (digitsOnly.length > 0) {
+            // Remove any leading 91 if present
+            const cleanNumber = digitsOnly.startsWith("91") 
+                ? digitsOnly.slice(2) 
+                : digitsOnly;
+                
+            // Add +91 prefix and limit to 10 digits
+            formattedValue = "+91 " + cleanNumber.slice(0, 10);
         }
+        
+        setPhoneNumber(formattedValue);
 
-        // Limit to "+91 " (4 characters) plus 10 digits = 14 characters.
-        if (value.length > 14) {
-            value = value.slice(0, 14);
-        }
-
-        setPhoneNumber(value);
-
-        // Extract only the 10-digit number after the "+91 " prefix.
-        const numericValue = value.replace(/\D/g, "").slice(2);
+        // Extract only the digits after +91 for API calls
+        const numericValue = formattedValue.replace(/\D/g, "").slice(2);
 
         if (numericValue.length === 10) {
             setErrorMessage("");
+            setIsLoading(true);
             try {
                 console.log("Numeric Value:", numericValue);
                 const response = await fetch(
@@ -83,15 +81,26 @@ export default function LoginPage() {
                 setCity("");
                 setAdmin(false);
                 setShowRegisterHighlight(false);
+            } finally {
+                setIsLoading(false);
             }
         } else {
+            // Remove the validation message during typing
+            setErrorMessage("");
             setCity("");
             setAdmin(false);
         }
     };
 
     const handleLogin = async () => {
-        setErrorMessage(""); // Clear previous errors
+        // Add validation check at login attempt
+        if (phoneNumber.replace(/\D/g, "").length !== 12) { // +91 + 10 digits = 12
+            setErrorMessage("Please enter a valid 10-digit phone number");
+            return;
+        }
+        
+        setErrorMessage(""); 
+        setIsLoading(true);
 
         try {
             const formattedPhone = phoneNumber.startsWith("+91")
@@ -100,9 +109,8 @@ export default function LoginPage() {
 
             const payload = {
                 phone: formattedPhone,
-                admin_password: adminPassword || null, // Send the admin password if isAdmin is true
+                admin_password: adminPassword || null,
             };
-            console.log("Payload:", payload); // Log to check the payload
 
             const response = await fetch("http://localhost:8000/api/login", {
                 method: "POST",
@@ -111,17 +119,26 @@ export default function LoginPage() {
             });
 
             const data = await response.json();
-
+            
             if (response.ok) {
                 console.log("Login successful:", data);
-
-                // Store the isAdmin and user details in localStorage
+    
+                // Store with different expiration based on remember me
+                if (rememberMe) {
+                    const thirtyDaysFromNow = new Date();
+                    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+                    localStorage.setItem("authExpiry", thirtyDaysFromNow.toISOString());
+                } else {
+                    const oneDayFromNow = new Date();
+                    oneDayFromNow.setDate(oneDayFromNow.getDate() + 1);
+                    localStorage.setItem("authExpiry", oneDayFromNow.toISOString());
+                }
+    
                 localStorage.setItem("isAdmin", JSON.stringify(data.is_admin));
-                localStorage.setItem("user", JSON.stringify(data.user)); // Assuming `data.user` contains user details
+                localStorage.setItem("user", JSON.stringify(data.user));
 
-                // After successful login, set isAdmin and user globally using Zustand store
                 useAuthStore.getState().setAdmin(data.is_admin);
-                useAuthStore.getState().setUser(data.user); // Update the store with user details
+                useAuthStore.getState().setUser(data.user);
 
                 if (data.is_admin) {
                     router.push("/admin");
@@ -136,7 +153,13 @@ export default function LoginPage() {
             }
         } catch (error) {
             console.error("Login error:", error);
-            setErrorMessage("Something went wrong. Please try again.");
+            if (!navigator.onLine) {
+                setErrorMessage("No internet connection. Please check your network.");
+            } else {
+                setErrorMessage("Something went wrong. Please try again.");
+            }
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -248,19 +271,32 @@ export default function LoginPage() {
                                 />
                             </div>
                         )}
-                        {errorMessage && (
-                            <p className="text-red-600 text-sm text-center pt-4">
-                                {errorMessage}
-                            </p>
-                        )}
+                        {/* Add Remember Me checkbox before error message */}
+                        <div className="flex items-center space-x-2 pt-4">
+                            <input
+                                type="checkbox"
+                                id="rememberMe"
+                                checked={rememberMe}
+                                onChange={(e) => setRememberMe(e.target.checked)}
+                                className="rounded border-gray-300"
+                            />
+                            <Label htmlFor="rememberMe" className="text-sm">Remember me</Label>
+                        </div>
                     </CardContent>
-                    <CardFooter className="flex flex-col space-y-2 ">
+                    <CardFooter className="flex flex-col space-y-2">
                         <Button
                             className="w-full bg-primary"
                             onClick={handleLogin}
-                            disabled={!phoneNumber}
+                            disabled={!phoneNumber || isLoading}
                         >
-                            Login
+                            {isLoading ? (
+                                <div className="flex items-center gap-2">
+                                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                                    <span>Logging in...</span>
+                                </div>
+                            ) : (
+                                "Login"
+                            )}
                         </Button>
                         <Button
                             className={`w-full transition-all ${
@@ -273,6 +309,11 @@ export default function LoginPage() {
                         >
                             Register
                         </Button>
+                        {errorMessage && (
+                            <p className="text-red-600 text-sm text-center mt-6">
+                                {errorMessage}
+                            </p>
+                        )}
                     </CardFooter>
                 </Card>
             </div>

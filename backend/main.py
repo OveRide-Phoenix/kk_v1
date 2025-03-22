@@ -1,9 +1,16 @@
 import mysql.connector
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Depends
 from pydantic import BaseModel
 from typing import List, Dict, Optional
 from fastapi.middleware.cors import CORSMiddleware
-
+from .customer.customer_crud import (
+    create_customer,
+    get_customer_by_id,
+    get_all_customers,
+    update_customer,
+    delete_customer,
+    CustomerUpdate
+)
 
 app = FastAPI()
 
@@ -50,7 +57,7 @@ def get_city(phone: str):
         print("Raw DB Result:", result)  # Debugging Output
 
         if not result:
-            raise HTTPException(status_code=404, detail="User not found")
+            raise HTTPException(status_code=404, detail="User does not exist. Please register.")
 
         # ✅ Ensure conversion to int before bool conversion
         is_admin = int(result["is_admin"]) if result["is_admin"] is not None else 0
@@ -236,3 +243,24 @@ def login(data: LoginRequest):
 
     # Return the is_admin flag in the response
     return {"message": "Login successful", "is_admin": is_admin}
+
+
+@app.post("/create-customer", response_model=dict)
+def add_customer(customer: CustomerCreate, db=Depends(get_db)):
+    return create_customer(db, customer)
+
+@app.get("/get-customer/{customer_id}", response_model=dict)
+def fetch_customer(customer_id: int, db=Depends(get_db)):
+    return get_customer_by_id(db, customer_id)
+
+@app.get("/get-all-customers", response_model=list)
+def fetch_all_customers(db=Depends(get_db)):
+    return get_all_customers(db)
+
+@app.put("/update-customer/{customer_id}", response_model=dict)
+def modify_customer(customer_id: int, customer: CustomerUpdate, db=Depends(get_db)):
+    return update_customer(db, customer_id, customer)
+
+@app.delete("/delete-customer/{customer_id}", response_model=dict)
+def remove_customer(customer_id: int, db=Depends(get_db)):
+    return delete_customer(db, customer_id)
