@@ -1,8 +1,8 @@
 import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
-import Script from "next/script"
 import "./globals.css"
-
+import { Toaster } from "@/components/ui/toaster"
+import Script from "next/script"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,15 +25,16 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
-      <head>
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
+      <body className="min-h-screen">
+        {children}
+        <Toaster />
+        
+        {/* ✅ Use Next.js `Script` component for better handling */}
         <Script
-          src={`https://maps.googleapis.com/maps/api/js?key=AIzaSyCE0f3L2qXluZn96UVI-U_Bh8WIWX_e_kI&libraries=places`}
-          strategy="beforeInteractive"
+          src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCE0f3L2qXluZn96UVI-U_Bh8WIWX_e_kI&libraries=places"
+          strategy="lazyOnload" 
         />
-      </head>
-      <body>
-        <main>{children}</main>
       </body>
     </html>
   )

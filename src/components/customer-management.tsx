@@ -14,7 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import RegisterForm from "@/components/registerform";
 import { AdminLayout } from "@/components/admin-layout"
-
+import { CustomerForm } from "./customer-form"
+import { toast, useToast } from "@/hooks/use-toast"
 // Define customer types
 type CustomerType = "Regular" | "Reseller" | "Agent"
 type PaymentFrequency = "Daily" | "Weekly" | "Monthly"
@@ -52,12 +53,28 @@ interface Customer {
   route_assignment: string | null
 }
 
-// Add these handlers at the top of the component
 export default function CustomerManagement() {
+  // Remove the destructuring
+  const { toast } = useToast()
+  const [open, setOpen] = useState(false)
+  
   // Initialize with empty array
-  const [customers, setCustomers] = useState<Customer[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [searchQuery, setSearchQuery] = useState("")
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  const refreshCustomers = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch('http://localhost:8000/get-all-customers');
+      const data = await response.json();
+      setCustomers(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error fetching customers:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
   const [filters, setFilters] = useState({
     orderCount: "all",
     address: "",
@@ -70,8 +87,6 @@ export default function CustomerManagement() {
         setIsLoading(true)
         const response = await fetch('http://localhost:8000/get-all-customers')
         const data = await response.json()
-        console.log('API Response:', response)
-        console.log('Response Data:', data)
         // Ensure we're setting an array
         setCustomers(Array.isArray(data) ? data : [])
       } catch (error) {
@@ -88,26 +103,26 @@ export default function CustomerManagement() {
   // Update the filter function to use the correct field names
   const filteredCustomers = Array.isArray(customers) ? customers.filter((customer) => {
     const matchesSearch = 
-      customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (customer.email?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
-      customer.primary_mobile.includes(searchQuery) ||
-      customer.customer_id.toString().includes(searchQuery)
+      (customer?.name?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+      (customer?.email?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+      (customer?.primary_mobile?.toString() || '').includes(searchQuery) ||
+      (customer?.customer_id?.toString() || '').includes(searchQuery);
 
-    const matchesOrderCount = true // Remove if not needed
+    const matchesOrderCount = true; // Remove if not needed
     const matchesAddress = !filters.address || 
-      customer.written_address.toLowerCase().includes(filters.address.toLowerCase())
+      (customer?.written_address?.toLowerCase() || '').includes(filters.address.toLowerCase());
 
-    return matchesSearch && matchesOrderCount && matchesAddress
-  }) : []
+    return matchesSearch && matchesOrderCount && matchesAddress;
+  }) : [];
 
-  // Update the table rendering
+  // Remove the throwing error function and update the Dialog component
   return (
     <AdminLayout activePage="customermgmt">
       <div className="space-y-6">
         <div className="bg-white rounded-lg border shadow-sm p-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <h2 className="text-xl font-semibold">All Customers</h2>
-            <Dialog>
+            <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
                 <Button>
                   <Plus className="mr-2 h-4 w-4" />
@@ -119,13 +134,68 @@ export default function CustomerManagement() {
                   <DialogTitle>Add New Customer</DialogTitle>
                   <DialogDescription>Enter the details of the new customer below.</DialogDescription>
                 </DialogHeader>
-                <div className="max-h-[80vh] overflow-y-auto">
-                  <RegisterForm onSubmit={handleAddCustomer} />
-                  <DialogFooter className="mt-4">
-                    <Button variant="outline">Cancel</Button>
-                    <Button>Save Customer</Button>
-                  </DialogFooter>
-                </div>
+                <CustomerForm 
+                  customer={null} 
+                  onSave={async (customerData) => {
+                    try {
+                      const formattedData = {
+                        referred_by: customerData.referredBy || null,
+                        primary_mobile: customerData.primaryMobile?.toString(),
+                        alternative_mobile: customerData.alternativeMobile || null,
+                        name: customerData.name?.trim(),
+                        recipient_name: customerData.recipientName?.trim(),
+                        payment_frequency: customerData.paymentFrequency || "Daily",
+                        email: customerData.email || null,
+                        house_apartment_no: customerData.houseApartmentNo?.trim() || null,
+                        written_address: customerData.writtenAddress?.trim(),
+                        city: customerData.city?.trim(),
+                        pin_code: customerData.pinCode?.toString(),
+                        latitude: customerData.latitude ? parseFloat(String(customerData.latitude)) : 0,
+                        longitude: customerData.longitude ? parseFloat(String(customerData.longitude)) : 0,
+                        address_type: customerData.addressType || "Home",
+                        route_assignment: customerData.routeAssignment || null,
+                        is_default: true
+                      };
+                      
+                      const response = await fetch('http://localhost:8000/api/register', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(formattedData),
+                      });
+                      
+                      const responseData = await response.json();
+                      
+                      if (!response.ok) {
+                        throw new Error(responseData.detail || 'Failed to add customer');
+                      }
+                      
+                      // Close dialog first
+                      setOpen(false);
+                      // Refresh customers
+                      await refreshCustomers();
+                      
+                      // Show success toast - this is where we call it
+                      toast({
+                        description: "Customer added successfully",
+                      });
+                      
+                      return { success: true, data: responseData };
+                    } catch (error: any) {
+                      // Show error toast
+                      toast({
+                        variant: "destructive",
+                        description: error.message || 'Failed to add customer',
+                      });
+                      return {
+                        success: false,
+                        message: error.message || 'Failed to add customer'
+                      };
+                    }
+                  }}
+                  onCancel={() => setOpen(false)} 
+                />
               </DialogContent>
             </Dialog>
           </div>
@@ -164,6 +234,7 @@ export default function CustomerManagement() {
                 value={filters.address}
                 onChange={(e) => setFilters(prev => ({ ...prev, address: e.target.value }))}
                 className="w-[200px]"
+                autoComplete="new-address-filter" 
               />
             </div>
           </div>
@@ -183,7 +254,7 @@ export default function CustomerManagement() {
               </TableHeader>
               <TableBody>
                 {isLoading ? (
-                  <TableRow>
+                  <TableRow key="loading-row">
                     <TableCell colSpan={7} className="text-center py-6">
                       <div className="flex justify-center items-center">
                         <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -191,7 +262,7 @@ export default function CustomerManagement() {
                     </TableCell>
                   </TableRow>
                 ) : filteredCustomers.length === 0 ? (
-                  <TableRow>
+                  <TableRow key="empty-row">
                     <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
                       No customers found
                     </TableCell>
@@ -241,44 +312,6 @@ export default function CustomerManagement() {
   )
 }
 
-const handleAddCustomer = async (customerData: any) => {
-    try {
-      const response = await fetch('http://localhost:8000/api/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...customerData,
-          payment_frequency: customerData.paymentFrequency || "Daily",
-          primary_mobile: customerData.phone,
-          written_address: customerData.address,
-          is_default: true,
-          // Adding required fields from your API model
-          recipient_name: customerData.name, // Using same name as recipient name
-          latitude: 0, // Default values, update as needed
-          longitude: 0,
-          pin_code: customerData.pinCode || "",
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to add customer');
-      }
-
-      const result = await response.json();
-      
-      if (result.success) {
-        // Refresh the customers list
-        const updatedResponse = await fetch('http://localhost:8000/get-all-customers');
-        const updatedData = await updatedResponse.json();
-        window.location.reload();
-      }
-    } catch (error) {
-      console.error('Error adding customer:', error);
-    }
-  };
-
   const handleViewCustomer = (customerId: number) => {
     // TODO: Implement view dialog
     console.log('View customer:', customerId)
@@ -289,13 +322,46 @@ const handleAddCustomer = async (customerData: any) => {
     console.log('Edit customer:', customerId)
   }
 
-  const handleDeleteCustomer = (customerId: number) => {
+  const handleDeleteCustomer = async (customerId: number) => {
     if (confirm('Are you sure you want to delete this customer?')) {
-      fetch(`http://localhost:8000/delete-customer/${customerId}`, {
-        method: 'DELETE'
-      }).then(() => {
-        window.location.reload()
-      })
+      try {
+        const response = await fetch(`http://localhost:8000/delete-customer/${customerId}`, {
+          method: 'DELETE'
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          if (data.detail && data.detail.includes('foreign key constraint fails (`kk_v1`.`orders`')) {
+            // Use toast directly
+            toast({
+              variant: "destructive",
+              description: "Cannot delete customer because they have orders linked to them",
+              duration: 3000,
+            });
+            return;
+          }
+          throw new Error(data.detail || 'Failed to delete customer');
+        }
+        
+        // Use toast directly
+        toast({
+          description: "Customer deleted successfully",
+          duration: 3000,
+        });
+
+        setTimeout(() => {
+          window.location.reload();
+        }, 3000);
+
+      } catch (error: any) {
+        // Use toast directly
+        toast({
+          variant: "destructive",
+          description: error.message || "An unexpected error occurred",
+          duration: 3000,
+        });
+      }
     }
   }
 

@@ -6,6 +6,7 @@ interface GoogleMapPickerProps {
   onLocationSelect: (lat: number, lng: number) => void
   lat?: number
   lng?: number
+  clearSearchOnSelect?: boolean; 
 }
 
 const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({ onLocationSelect, lat = 12.9716, lng = 77.5946 }) => {
