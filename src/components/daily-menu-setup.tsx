@@ -41,41 +41,43 @@ export function DailyMenuSetup() {
         <CardContent>
 
         {/* Date Picker */}
-        <div className="mb-4">
-          <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-              <Button 
-                variant="outline" 
-                className="w-[200px] justify-start text-left"
-                onClick={() => setOpen(true)}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {selectedDate ? format(selectedDate, "PPP") : "Select Date"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-4">
-              <Calendar
-                mode="single"
-                selected={selectedDate || undefined}
-                onSelect={(day) => setSelectedDate(day || null)}
-                initialFocus
-              />
-              <div className="mt-2 flex justify-end">
-                <Button 
-                  onClick={() => {
-                    if (selectedDate)
-                      setConfirmedDate(selectedDate); // Save the selected date
-                      setOpen(false); // Close popover if date is selected
-                  }} 
-                  size="sm" 
-                  disabled={!selectedDate}
-                >
-                  OK
-                </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
-        </div>
+   {/* Date Picker */}
+<div className="mb-4">
+  <Popover open={open} onOpenChange={setOpen}>
+    <PopoverTrigger asChild>
+      <Button 
+        variant="outline" 
+        className="w-[200px] justify-start text-left"
+      >
+        <CalendarIcon className="mr-2 h-4 w-4" />
+        {selectedDate ? format(selectedDate, "PPP") : "Select Date"}
+      </Button>
+    </PopoverTrigger>
+    <PopoverContent className="w-auto p-4">
+      <Calendar
+        mode="single"
+        selected={selectedDate || undefined}
+        onSelect={(day) => setSelectedDate(day || null)}
+        initialFocus
+      />
+      <div className="mt-2 flex justify-end">
+        <Button 
+          onClick={() => {
+            if (selectedDate) {
+              setConfirmedDate(selectedDate); // Save the selected date
+              setOpen(false); // Close popover if date is selected
+            }
+          }} 
+          size="sm" 
+          disabled={!selectedDate}
+        >
+          OK
+        </Button>
+      </div>
+    </PopoverContent>
+  </Popover>
+</div>
+
 
 
          {/* Menu Type and Meal Type */}
