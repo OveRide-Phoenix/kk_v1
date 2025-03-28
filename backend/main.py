@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException, Query, Depends
 from pydantic import BaseModel
 from typing import List, Dict, Optional
 from fastapi.middleware.cors import CORSMiddleware
-from .customer.customer_crud import (
+from customer.customer_crud import (
     create_customer,
     get_customer_by_id,
     get_all_customers,
