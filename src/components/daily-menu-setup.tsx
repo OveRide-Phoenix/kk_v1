@@ -12,6 +12,11 @@ import { Popover , PopoverTrigger, PopoverContent} from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { AdminLayout } from "@/components/admin-layout";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 
 export function DailyMenuSetup() {
@@ -21,10 +26,143 @@ export function DailyMenuSetup() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [confirmedDate, setConfirmedDate] = useState<Date | null>(null);
   const [open, setOpen] = useState(false);
+  const [itemDialogOpen, setItemDialogOpen] = useState(false);
+  const [itemSearchQuery, setItemSearchQuery] = useState("");
+  const [availableItems, setAvailableItems] = useState([
+    { 
+      id: 1, 
+      name: "Idli", 
+      rate: 30, 
+      category: "breakfast",
+      description: "Soft and fluffy steamed rice cakes",
+      preparationTime: "15 mins",
+      isVeg: true,
+      calories: 120
+    },
+    { 
+      id: 2, 
+      name: "Masala Dosa", 
+      rate: 40, 
+      category: "breakfast",
+      description: "Crispy rice crepe with spiced potato filling",
+      preparationTime: "20 mins",
+      isVeg: true,
+      calories: 250
+    },
+    { 
+      id: 3, 
+      name: "Vada", 
+      rate: 25, 
+      category: "breakfast",
+      description: "Crispy lentil doughnuts",
+      preparationTime: "15 mins",
+      isVeg: true,
+      calories: 150
+    },
+    { 
+      id: 4, 
+      name: "Thali", 
+      rate: 120, 
+      category: "lunch",
+      description: "Complete meal with rice, rotis, dal, and sides",
+      preparationTime: "30 mins",
+      isVeg: true,
+      calories: 800
+    },
+    { 
+      id: 5, 
+      name: "Biryani", 
+      rate: 150, 
+      category: "lunch",
+      description: "Fragrant rice dish with spices and vegetables",
+      preparationTime: "45 mins",
+      isVeg: true,
+      calories: 650
+    },
+    { 
+      id: 6, 
+      name: "Paneer Butter Masala", 
+      rate: 140, 
+      category: "dinner",
+      description: "Cottage cheese in rich tomato gravy",
+      preparationTime: "25 mins",
+      isVeg: true,
+      calories: 450
+    }
+  ]);
+  const [selectedItems, setSelectedItems] = useState<number[]>([]);
+
+  // Group items by category
+  const groupedItems = availableItems.reduce((acc, item) => {
+    if (!acc[item.category]) {
+      acc[item.category] = [];
+    }
+    acc[item.category].push(item);
+    return acc;
+  }, {} as Record<string, typeof availableItems>);
+
+  // Filter items based on search query
+  const filteredItems = (items: typeof availableItems) => {
+    return items.filter(item =>
+      item.name.toLowerCase().includes(itemSearchQuery.toLowerCase()) ||
+      item.description.toLowerCase().includes(itemSearchQuery.toLowerCase())
+    );
+  };
 
   const addMenuItem = () => {
-    setItems([...items, { name: "", qty: 1, rate: 0, sort: items.length + 1, date: undefined }]);
+    setItemDialogOpen(true);
   };
+
+  const handleItemSelection = () => {
+    const newItems = selectedItems.map(id => {
+      const item = availableItems.find(i => i.id === id);
+      return {
+        name: item?.name || "",
+        qty: 1,
+        rate: item?.rate || 0,
+        sort: items.length + 1,
+        date: undefined
+      };
+    });
+    setItems([...items, ...newItems]);
+    setItemDialogOpen(false);
+    setSelectedItems([]);
+  };
+
+  function ItemCard({ item }: { item: typeof availableItems[0] }) {
+    return (
+      <div className="flex items-center space-x-4 p-4 hover:bg-accent rounded-lg border">
+        <Checkbox
+          checked={selectedItems.includes(item.id)}
+          onCheckedChange={(checked) => {
+            if (checked) {
+              setSelectedItems([...selectedItems, item.id]);
+            } else {
+              setSelectedItems(selectedItems.filter(id => id !== item.id));
+            }
+          }}
+        />
+        <div className="flex-1 space-y-1">
+          <div className="flex items-center justify-between">
+            <div className="font-medium">{item.name}</div>
+            <div className="font-medium text-primary">₹{item.rate}</div>
+          </div>
+          <p className="text-sm text-muted-foreground">{item.description}</p>
+          <div className="flex items-center gap-2 text-xs">
+            <Badge variant="outline" className="text-xs">
+              {item.preparationTime}
+            </Badge>
+            <Badge variant="outline" className={item.isVeg ? "bg-green-50 text-green-700 border-green-300" : ""}>
+              {item.isVeg ? "Veg" : "Non-veg"}
+            </Badge>
+            <Badge variant="outline">
+              {item.calories} cal
+            </Badge>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AdminLayout activePage="dailymenusetup">
@@ -46,26 +184,33 @@ export function DailyMenuSetup() {
             <PopoverTrigger asChild>
               <Button 
                 variant="outline" 
-                className="w-[200px] justify-start text-left"
-                onClick={() => setOpen(true)}
+                className="w-[200px] justify-start text-left font-normal"
               >
                 <CalendarIcon className="mr-2 h-4 w-4" />
-                {selectedDate ? format(selectedDate, "PPP") : "Select Date"}
+                {confirmedDate ? format(confirmedDate, "PPP") : "Select Date"}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-4">
+            <PopoverContent className="w-auto p-4" align="start">
               <Calendar
                 mode="single"
                 selected={selectedDate || undefined}
-                onSelect={(day) => setSelectedDate(day || null)}
+                onSelect={(date: Date | undefined) => {
+                  if (date) {
+                    setSelectedDate(date);
+                  }
+                }}
+                disabled={(date) =>
+                  date < new Date(new Date().setHours(0, 0, 0, 0))
+                }
                 initialFocus
               />
-              <div className="mt-2 flex justify-end">
+              <div className="mt-4 flex justify-end">
                 <Button 
                   onClick={() => {
-                    if (selectedDate)
-                      setConfirmedDate(selectedDate); // Save the selected date
-                      setOpen(false); // Close popover if date is selected
+                    if (selectedDate) {
+                      setConfirmedDate(selectedDate);
+                      setOpen(false);
+                    }
                   }} 
                   size="sm" 
                   disabled={!selectedDate}
@@ -76,7 +221,6 @@ export function DailyMenuSetup() {
             </PopoverContent>
           </Popover>
         </div>
-
 
          {/* Menu Type and Meal Type */}
           <div className="flex flex-col sm:flex-row gap-4 mb-6">
@@ -198,6 +342,70 @@ export function DailyMenuSetup() {
               </TableBody>
             </Table>
           </div>
+
+          {/* Item Selection Dialog */}
+          <Dialog open={itemDialogOpen} onOpenChange={setItemDialogOpen}>
+            <DialogContent className="sm:max-w-[700px]">
+              <DialogHeader>
+                <DialogTitle>Select Menu Items</DialogTitle>
+                <div className="relative mt-4">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                  <Input
+                    placeholder="Search items..."
+                    className="pl-10"
+                    value={itemSearchQuery}
+                    onChange={(e) => setItemSearchQuery(e.target.value)}
+                  />
+                </div>
+              </DialogHeader>
+              
+              <Tabs defaultValue="all" className="mt-2">
+                <TabsList className="grid w-full grid-cols-4">
+                  <TabsTrigger value="all">All</TabsTrigger>
+                  <TabsTrigger value="breakfast">Breakfast</TabsTrigger>
+                  <TabsTrigger value="lunch">Lunch</TabsTrigger>
+                  <TabsTrigger value="dinner">Dinner</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="all">
+                  <ScrollArea className="h-[400px] pr-4">
+                    <div className="space-y-4">
+                      {filteredItems(availableItems).map((item) => (
+                        <ItemCard key={item.id} item={item} />
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </TabsContent>
+
+                {Object.entries(groupedItems).map(([category, items]) => (
+                  <TabsContent key={category} value={category}>
+                    <ScrollArea className="h-[400px] pr-4">
+                      <div className="space-y-4">
+                        {filteredItems(items).map((item) => (
+                          <ItemCard key={item.id} item={item} />
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </TabsContent>
+                ))}
+              </Tabs>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => {
+                  setItemDialogOpen(false);
+                  setItemSearchQuery("");
+                }}>
+                  Cancel
+                </Button>
+                <Button onClick={() => {
+                  handleItemSelection();
+                  setItemSearchQuery("");
+                }} disabled={selectedItems.length === 0}>
+                  Add Selected ({selectedItems.length})
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </CardContent>
       </Card>
     </AdminLayout>

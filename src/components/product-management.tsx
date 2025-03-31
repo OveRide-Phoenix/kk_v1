@@ -12,6 +12,8 @@ import ProductForm from "@/components/product-form"
 import DeleteConfirmationDialog from "@/components/delete-confirmation-dialog"
 import { type Product, ProductType } from "@/types/product"
 import { AdminLayout } from "./admin-layout"
+import ComboForm from "@/components/combo-form"
+import AddonForm from "@/components/addon-form"
 
 export default function ProductManagement() {
   const [products, setProducts] = useState<Product[]>([])
@@ -312,8 +314,19 @@ export default function ProductManagement() {
   }, [searchQuery, products, filterType, filterGroup])
 
   const handleAddProduct = () => {
-    setSelectedProduct(null)
-    setIsFormOpen(true)
+    if (activeTab === "combos") {
+      // For combos, use the specialized combo form
+      setSelectedProduct(null)
+      setIsFormOpen(true)
+    } else if (activeTab === "addons") {
+      // For add-ons, use the specialized add-on form
+      setSelectedProduct(null)
+      setIsFormOpen(true)
+    } else {
+      // For other types, use the regular product form
+      setSelectedProduct(null)
+      setIsFormOpen(true)
+    }
   }
 
   const handleEditProduct = (product: Product) => {
@@ -366,100 +379,116 @@ export default function ProductManagement() {
   }, [activeTab])
 
   return (
-  <AdminLayout activePage="productmgmt">
-    <div className="space-y-6">
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <CardTitle className="text-xl font-semibold">{singularFormMap[activeTab as keyof typeof singularFormMap]}s</CardTitle>
-            <Button onClick={handleAddProduct} className="flex items-center gap-2">
-              <Plus className="h-4 w-4" />
-              Add New {singularFormMap[activeTab as keyof typeof singularFormMap]}
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="items" className="mb-6" onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="items">Items</TabsTrigger>
-              <TabsTrigger value="combos">Combos</TabsTrigger>
-              <TabsTrigger value="addons">Add-ons</TabsTrigger>
-              <TabsTrigger value="categories">Categories</TabsTrigger>
-            </TabsList>
-          </Tabs>
+    <AdminLayout activePage="productmgmt">
+      <div className="space-y-6">
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <CardTitle className="text-xl font-semibold">{singularFormMap[activeTab as keyof typeof singularFormMap]}s</CardTitle>
+              <Button onClick={handleAddProduct} className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                Add New {singularFormMap[activeTab as keyof typeof singularFormMap]}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <Tabs defaultValue="items" className="mb-6" onValueChange={setActiveTab}>
+              <TabsList className="grid w-full grid-cols-4">
+                <TabsTrigger value="items">Items</TabsTrigger>
+                <TabsTrigger value="combos">Combos</TabsTrigger>
+                <TabsTrigger value="addons">Add-ons</TabsTrigger>
+                <TabsTrigger value="categories">Categories</TabsTrigger>
+              </TabsList>
+            </Tabs>
 
-          {/* Enhanced search and filter section */}
-          <div className="flex flex-col sm:flex-row gap-4 mb-6">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder={`Search ${singularFormMap[activeTab as keyof typeof singularFormMap]}s...`}
-                className="pl-10 h-10 bg-background"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+            {/* Enhanced search and filter section */}
+            <div className="flex flex-col sm:flex-row gap-4 mb-6">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder={`Search ${singularFormMap[activeTab as keyof typeof singularFormMap]}s...`}
+                  className="pl-10 h-10 bg-background"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-4">
+                <Select value={filterType} onValueChange={setFilterType}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <SelectValue placeholder="All Types" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="All Types">All Types</SelectItem>
+                    {uniqueTypes.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {type}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={filterGroup} onValueChange={setFilterGroup}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <SelectValue placeholder="All Groups" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="All Groups">All Groups</SelectItem>
+                    {uniqueGroups.map((group) => (
+                      <SelectItem key={`group-${group}`} value={group}>
+                        {group}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="rounded-md border overflow-x-auto">
+              <ProductTable
+                products={filteredProducts}
+                onEdit={handleEditProduct}
+                onDelete={handleDeleteProduct}
+                tableType={activeTab as "items" | "combos" | "addons" | "categories"}
               />
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Select value={filterType} onValueChange={setFilterType}>
-                <SelectTrigger className="w-full sm:w-[180px]">
-                  <SelectValue placeholder="All Types" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="All Types">All Types</SelectItem>
-                  {uniqueTypes.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            {filteredProducts.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                No {singularFormMap[activeTab as keyof typeof singularFormMap]}s found
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-              <Select value={filterGroup} onValueChange={setFilterGroup}>
-                <SelectTrigger className="w-full sm:w-[180px]">
-                  <SelectValue placeholder="All Groups" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="All Groups">All Groups</SelectItem>
-                  {uniqueGroups.map((group) => (
-                    <SelectItem key={group} value={group}>
-                      {group}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="rounded-md border overflow-x-auto">
-            <ProductTable
-              products={filteredProducts}
-              onEdit={handleEditProduct}
-              onDelete={handleDeleteProduct}
-              tableType={activeTab as "items" | "combos" | "addons" | "categories"}
-            />
-          </div>
-
-          {filteredProducts.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              No {singularFormMap[activeTab as keyof typeof singularFormMap]}s found
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {isFormOpen && (
-        <ProductForm product={selectedProduct} onSave={handleSaveProduct} onCancel={() => setIsFormOpen(false)} />
-      )}
-      <DeleteConfirmationDialog
-        isOpen={isDeleteDialogOpen}
-        onCloseAction={() => setIsDeleteDialogOpen(false)}
-        onConfirmAction={confirmDelete}
-        productName={productToDelete?.name || ""}
-      />
-    </div>
-  </AdminLayout>
+        {isFormOpen && activeTab === "combos" ? (
+          <ComboForm 
+            onSave={handleSaveProduct} 
+            onCancel={() => setIsFormOpen(false)}
+            existingItems={products.filter(p => !p.isCombo && !p.isSubItem)} // Pass regular items as options
+          />
+        ) : isFormOpen && activeTab === "addons" ? (
+          <AddonForm
+            onSave={handleSaveProduct}
+            onCancel={() => setIsFormOpen(false)}
+            existingItems={products.filter(p => !p.isCombo && !p.isSubItem)} // Pass regular items as options
+          />
+        ) : isFormOpen && (
+          <ProductForm 
+            product={selectedProduct} 
+            onSave={handleSaveProduct} 
+            onCancel={() => setIsFormOpen(false)} 
+          />
+        )}
+        
+        <DeleteConfirmationDialog
+          isOpen={isDeleteDialogOpen}
+          onCloseAction={() => setIsDeleteDialogOpen(false)}
+          onConfirmAction={confirmDelete}
+          productName={productToDelete?.name || ""}
+        />
+      </div>
+    </AdminLayout>
   )
-  
 }
 

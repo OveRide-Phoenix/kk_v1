@@ -93,13 +93,14 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   />
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-2 w-full">
                   <Label htmlFor="description">Description</Label>
                   <Textarea
                     id="description"
                     value={formData.description}
                     onChange={(e) => handleChange("description", e.target.value)}
                     rows={3}
+                    className="w-full resize-none"
                   />
                 </div>
 
