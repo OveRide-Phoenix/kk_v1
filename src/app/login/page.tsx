@@ -143,7 +143,7 @@ export default function LoginPage() {
                 if (data.is_admin) {
                     router.push("/admin");
                 } else {
-                    router.push("/dashboard");
+                    router.push("/customer");
                 }
             } else {
                 // Handle error message properly to prevent rendering the whole object
