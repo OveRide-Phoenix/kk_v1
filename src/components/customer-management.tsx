@@ -22,41 +22,35 @@ type PaymentFrequency = "Daily" | "Weekly" | "Monthly"
 type CustomerStatus = "Active" | "Pending" | "Inactive"
 
 interface Customer {
-  id: string
-  name: string
-  email: string
-  phone: string
-  orders: number
-  status: CustomerStatus
-  address: string
-  type: CustomerType
-  paymentFrequency: PaymentFrequency
-  routeNumber?: string
-}
-
-
-// Update the Customer interface to match the API response
-interface Customer {
   customer_id: number
   name: string
-  primary_mobile: string
-  email: string
-  written_address: string
-  // Add other fields from your API response
-  address_id: number
-  house_apartment_no: string | null
+  referredBy?: string
+  primaryMobile: string
+  alternativeMobile?: string
+  email?: string
+  recipientName: string
+  paymentFrequency: "Daily" | "Weekly" | "Monthly"
+  
+  addressType: "Home" | "Work" | "Other"
+  houseApartmentNo: string
+  writtenAddress: string
   city: string
-  pin_code: string
-  latitude: number
-  longitude: number
-  address_type: string | null
-  route_assignment: string | null
+  pinCode: string
+  latitude: number | null
+  longitude: number | null
+  
+  routeAssignment?: string
+  
+  // Additional fields from API
+  address_id?: number
+  created_at?: string
 }
 
 export default function CustomerManagement() {
-  // Remove the destructuring
   const { toast } = useToast()
   const [open, setOpen] = useState(false)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   
   // Initialize with empty array
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -105,17 +99,57 @@ export default function CustomerManagement() {
     const matchesSearch = 
       (customer?.name?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
       (customer?.email?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
-      (customer?.primary_mobile?.toString() || '').includes(searchQuery) ||
+      (customer?.primaryMobile?.toString() || '').includes(searchQuery) ||
       (customer?.customer_id?.toString() || '').includes(searchQuery);
 
     const matchesOrderCount = true; // Remove if not needed
     const matchesAddress = !filters.address || 
-      (customer?.written_address?.toLowerCase() || '').includes(filters.address.toLowerCase());
+      (customer?.writtenAddress?.toLowerCase() || '').includes(filters.address.toLowerCase());
 
     return matchesSearch && matchesOrderCount && matchesAddress;
   }) : [];
 
-  // Remove the throwing error function and update the Dialog component
+  const handleEditCustomer = async (customerId: number) => {
+    try {
+      const response = await fetch(`http://localhost:8000/get-customer/${customerId}`);
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.detail || 'Failed to fetch customer details');
+      }
+      
+      // Transform API response to match Customer type
+      const transformedCustomer: Customer = {
+        customer_id: data.customer_id,
+        name: data.name,
+        referredBy: data.referred_by || "",
+        primaryMobile: data.primary_mobile,
+        alternativeMobile: data.alternative_mobile || "",
+        email: data.email || "",
+        recipientName: data.recipient_name,
+        paymentFrequency: data.payment_frequency || "Daily",
+        addressType: data.address_type || "Home",
+        houseApartmentNo: data.house_apartment_no || "",
+        writtenAddress: data.written_address,
+        city: data.city,
+        pinCode: data.pin_code,
+        latitude: data.latitude || null,
+        longitude: data.longitude || null,
+        routeAssignment: data.route_assignment || "",
+        address_id: data.address_id,
+        created_at: data.created_at
+      };
+      
+      setSelectedCustomer(transformedCustomer);
+      setEditDialogOpen(true);
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        description: error.message || "Failed to load customer details",
+      });
+    }
+  }
+
   return (
     <AdminLayout activePage="customermgmt">
       <div className="space-y-6">
@@ -277,9 +311,9 @@ export default function CustomerManagement() {
                       </TableCell>
                       <TableCell>{customer.email || '-'}</TableCell>
                       <TableCell>
-                        <span className="font-medium">+91 {customer.primary_mobile}</span>
+                        <span className="font-medium">+91 {customer.primaryMobile}</span>
                       </TableCell>
-                      <TableCell>{customer.written_address}</TableCell>
+                      <TableCell>{customer.writtenAddress}</TableCell>
                       <TableCell className="text-center">-</TableCell>
                       <TableCell className="text-center pr-4">
                         <div className="flex justify-center gap-2">
@@ -306,7 +340,74 @@ export default function CustomerManagement() {
             </Table>
           </div>
         </div>
-        {/* Existing dialogs */}
+
+        {/* Edit Customer Dialog */}
+        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+          <DialogContent className="sm:max-w-[900px]">
+            <DialogHeader>
+              <DialogTitle>Edit Customer</DialogTitle>
+              <DialogDescription>Update customer information below.</DialogDescription>
+            </DialogHeader>
+            <CustomerForm 
+              customer={selectedCustomer}
+              onSave={async (customerData) => {
+                try {
+                  const formattedData = {
+                    referred_by: customerData.referredBy || null,
+                    primary_mobile: customerData.primaryMobile?.toString(),
+                    alternative_mobile: customerData.alternativeMobile || null,
+                    name: customerData.name?.trim(),
+                    recipient_name: customerData.recipientName?.trim(),
+                    payment_frequency: customerData.paymentFrequency || "Daily",
+                    email: customerData.email || null,
+                    house_apartment_no: customerData.houseApartmentNo?.trim() || null,
+                    written_address: customerData.writtenAddress?.trim(),
+                    city: customerData.city?.trim(),
+                    pin_code: customerData.pinCode?.toString(),
+                    latitude: customerData.latitude ? parseFloat(String(customerData.latitude)) : 0,
+                    longitude: customerData.longitude ? parseFloat(String(customerData.longitude)) : 0,
+                    address_type: customerData.addressType || "Home",
+                    route_assignment: customerData.routeAssignment || null,
+                    is_default: true
+                  };
+
+                  const response = await fetch(`http://localhost:8000/update-customer/${selectedCustomer?.customer_id}`, {
+                    method: 'PUT',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formattedData),
+                  });
+
+                  const responseData = await response.json();
+
+                  if (!response.ok) {
+                    throw new Error(responseData.detail || 'Failed to update customer');
+                  }
+
+                  setEditDialogOpen(false);
+                  await refreshCustomers();
+                  
+                  toast({
+                    description: "Customer updated successfully",
+                  });
+
+                  return { success: true, data: responseData };
+                } catch (error: any) {
+                  toast({
+                    variant: "destructive",
+                    description: error.message || 'Failed to update customer',
+                  });
+                  return {
+                    success: false,
+                    message: error.message || 'Failed to update customer'
+                  };
+                }
+              }}
+              onCancel={() => setEditDialogOpen(false)}
+            />
+          </DialogContent>
+        </Dialog>
       </div>
     </AdminLayout>
   )
@@ -315,11 +416,6 @@ export default function CustomerManagement() {
   const handleViewCustomer = (customerId: number) => {
     // TODO: Implement view dialog
     console.log('View customer:', customerId)
-  }
-
-  const handleEditCustomer = (customerId: number) => {
-    // TODO: Implement edit dialog
-    console.log('Edit customer:', customerId)
   }
 
   const handleDeleteCustomer = async (customerId: number) => {

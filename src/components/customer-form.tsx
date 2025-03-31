@@ -263,62 +263,63 @@ export function CustomerForm({ customer, onSave, onCancel }: CustomerFormProps) 
       </TabsContent>
 
       <TabsContent value="address" className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="addressType">Address Type</Label>
-            <Select
-              value={formData.addressType}
-              onValueChange={(value) => handleSelectChange("addressType", value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Home">Home</SelectItem>
-                <SelectItem value="Work">Work</SelectItem>
-                <SelectItem value="Other">Other</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="houseApartmentNo">House/Apartment <span className="text-destructive">*</span></Label>
-            <Input
-              id="houseApartmentNo"
-              name="houseApartmentNo"
-              value={formData.houseApartmentNo}
-              onChange={handleChange}
-              required
-            />
-          </div>
-          <div className="col-span-2 space-y-2">
-            <Label htmlFor="address">Address <span className="text-destructive">*</span></Label>
-            <Textarea
-              id="address"
-              name="writtenAddress"
-              value={formData.writtenAddress}
-              onChange={handleChange}
-              required
-              className="min-h-[100px] w-full resize-none border rounded-md"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="city">City <span className="text-destructive">*</span></Label>
-            <Select
-              value={formData.city}
-              onValueChange={(value) => handleSelectChange("city", value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select city" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Mysore">Mysore</SelectItem>
-                <SelectItem value="Bangalore">Bangalore</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="pinCode">Pin Code <span className="text-destructive">*</span></Label>
-            <Input
+        <div className="max-h-[calc(100vh-300px)] overflow-y-auto pr-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="addressType">Address Type</Label>
+              <Select
+                value={formData.addressType}
+                onValueChange={(value) => handleSelectChange("addressType", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Home">Home</SelectItem>
+                  <SelectItem value="Work">Work</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="houseApartmentNo">House/Apartment <span className="text-destructive">*</span></Label>
+              <Input
+                id="houseApartmentNo"
+                name="houseApartmentNo"
+                value={formData.houseApartmentNo}
+                onChange={handleChange}
+                required
+              />
+            </div>
+            <div className="col-span-2 space-y-2">
+              <Label htmlFor="address">Address <span className="text-destructive">*</span></Label>
+              <Textarea
+                id="address"
+                name="writtenAddress"
+                value={formData.writtenAddress}
+                onChange={handleChange}
+                required
+                className="min-h-[100px] w-full resize-none border rounded-md"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="city">City <span className="text-destructive">*</span></Label>
+              <Select
+                value={formData.city}
+                onValueChange={(value) => handleSelectChange("city", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select city" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Mysore">Mysore</SelectItem>
+                  <SelectItem value="Bangalore">Bangalore</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="pinCode">Pin Code <span className="text-destructive">*</span></Label>
+              <Input
                 id="pinCode"
                 name="pinCode"
                 type="text"
@@ -327,9 +328,10 @@ export function CustomerForm({ customer, onSave, onCancel }: CustomerFormProps) 
                 onChange={handleChange}
                 required
                 maxLength={6}
-            />
+              />
+            </div>
+            {MemoizedGoogleMap}
           </div>
-          {MemoizedGoogleMap}
         </div>
       </TabsContent>
 
