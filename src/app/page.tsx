@@ -1,113 +1,115 @@
-"use client";
+"use client"
 
-import Link from "next/link";
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Menu, X, Coffee } from "lucide-react";
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
+import Header from "@/components/header"
+import HeroSection from "@/components/hero-section"
+import MenuSections from "@/components/menu-section"
+import CultureSection from "@/components/culture-section"
+import Footer from "@/components/footer"
+import { Button } from "@/components/ui/button"
+import { Coffee, Menu } from "lucide-react"
 
-// --- Main Home Page ---
-export default function HomePage() {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+/**
+ * Main landing page component that brings all sections together
+ */
+export default function Home() {
+  const router = useRouter()
+
+  // Add smooth scrolling behavior for anchor links
+  useEffect(() => {
+    const handleAnchorClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      const anchor = target.closest("a")
+
+      const href = anchor?.getAttribute("href")
+      if (anchor && href?.startsWith("#") && href.length > 1) {
+        e.preventDefault()
+
+        const targetId = href.substring(1)
+        const targetElement = document.getElementById(targetId || "")
+
+        if (targetElement) {
+          // Add offset for fixed header
+          const headerOffset = 80
+          const elementPosition = targetElement.getBoundingClientRect().top
+          const offsetPosition = elementPosition + window.scrollY - headerOffset
+
+          window.scrollTo({
+            top: offsetPosition,
+            behavior: "smooth",
+          })
+        }
+      }
+    }
+
+    document.addEventListener("click", handleAnchorClick)
+
+    return () => {
+      document.removeEventListener("click", handleAnchorClick)
+    }
+  }, [])
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {/* Navigation Bar */}
-      <header className="sticky top-0 z-50 w-full border-b bg-background">
+    <div className="min-h-screen flex flex-col">
+      <header className="border-b border-muted">
         <div className="container mx-auto px-4">
           <div className="flex h-16 items-center justify-between">
+            {/* Logo */}
             <div className="flex items-center space-x-2">
-              <Coffee className="h-6 w-6 text-white" />
-              <a href="#" className="text-xl font-bold text-cream">
+              <Coffee className="h-6 w-6 text-primary" />
+              <a href="#" className="text-xl font-bold">
                 Kuteera Kitchen
               </a>
             </div>
 
-            {/* Desktop Navigation */}
-            <nav className="hidden md:flex space-x-4 items-center">
-              <Link href="/" className="text-sm font-medium text-white hover:text-primary transition-colors">
-                Home
-              </Link>
-              <Link href="/about" className="text-sm font-medium text-white hover:text-primary transition-colors">
-                About
-              </Link>
-              <Link href="/services" className="text-sm font-medium text-white hover:text-primary transition-colors">
-                Services
-              </Link>
-              <Link href="/contact" className="text-sm font-medium text-white hover:text-primary transition-colors">
-                Contact
-              </Link>
+            {/* Navigation Links */}
+            <nav className="hidden md:flex items-center space-x-8">
+              <a href="#" className="text-sm font-medium hover:text-primary">Home</a>
+              <a href="#" className="text-sm font-medium hover:text-primary">Menu</a>
+              <a href="#" className="text-sm font-medium hover:text-primary">About</a>
+              <a href="#" className="text-sm font-medium hover:text-primary">Contact</a>
+              
+              {/* Phone number */}
+              <a href="tel:+919876543210" className="text-sm font-medium">
+                +91 98 7654 3210
+              </a>
+
+              {/* Auth buttons */}
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => router.push('/login')}
+                  className="text-sm"
+                >
+                  Login
+                </Button>
+                <Button 
+                  onClick={() => router.push('/register')}
+                  className="bg-primary hover:bg-primary/90 text-white text-sm"
+                >
+                  Register
+                </Button>
+              </div>
             </nav>
 
-            {/* Mobile Menu Button */}
+            {/* Mobile menu button */}
             <div className="md:hidden">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                aria-label="Toggle menu"
-                className="text-white hover:text-primary"
-              >
-                {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+              <Button variant="ghost" size="sm">
+                <Menu className="h-6 w-6" />
               </Button>
             </div>
           </div>
-
-          {/* Mobile Navigation */}
-          {mobileMenuOpen && (
-            <div className="md:hidden py-4 space-y-2 bg-[#6F4D38] text-white">
-              <Link href="/" className="block px-3 py-2 rounded-md text-base font-medium hover:bg-accent hover:text-primary">
-                Home
-              </Link>
-              <Link href="/about" className="block px-3 py-2 rounded-md text-base font-medium hover:bg-accent hover:text-primary">
-                About
-              </Link>
-              <Link href="/services" className="block px-3 py-2 rounded-md text-base font-medium hover:bg-accent hover:text-primary">
-                Services
-              </Link>
-              <Link href="/contact" className="block px-3 py-2 rounded-md text-base font-medium hover:bg-accent hover:text-primary">
-                Contact
-              </Link>
-              <Link href="/login" className="block px-3 py-2 rounded-md text-base font-medium bg-primary text-primary-foreground hover:bg-primary/90">
-                Login
-              </Link>
-              <Link href="/register" className="block px-3 py-2 rounded-md text-base font-medium bg-primary text-primary-foreground hover:bg-primary/90">
-                Register
-              </Link>
-            </div>
-          )}
         </div>
       </header>
 
-      {/* Hero Section */}
-      <main className="relative flex-grow flex items-center justify-center text-center p-6">
-        <div className="relative z-10 bg-card p-8 rounded-lg shadow-lg">
-          <h1 className="text-4xl font-bold">Welcome to Kuteera Kitchen</h1>
-          <p className="text-lg text-muted-foreground mt-4 max-w-lg">
-            Experience fresh, homemade meals delivered right to your doorstep in Mysore and Bangalore.
-          </p>
-          <div>
-          <Link href="/register">
-            <Button className="mt-6 px-6 py-3 text-sm text-white border-primary hover:bg-primary hover:text-white rounded-full">
-              Get Started
-            </Button>
-          </Link></div>
-         
-          <Link href="/login">
-            <Button variant="outline" className="text-sm mt-4 text-primary border-primary hover:bg-primary hover:text-white rounded-full">
-              Login
-            </Button>
-          </Link>
-        </div>
+      <main className="flex-grow">
+        <HeroSection />
+        <MenuSections />
+        <CultureSection />
       </main>
-
-      {/* Footer */}
-      <footer className="py-6 border-t w-full text-center text-sm bg-background">
-        <p>© {new Date().getFullYear()} Kuteera Kitchen. All rights reserved.</p>
-        <div className="flex justify-center space-x-4 mt-2">
-          <a href="#" className="hover:underline">Privacy Policy</a>
-          <a href="#" className="hover:underline">Terms of Service</a>
-        </div>
-      </footer>
+      <Footer />
     </div>
   )
 }
+

@@ -2,10 +2,10 @@
 module.exports = {
 	darkMode: ["class"],
 	content: [
-	  "./pages/**/*.{js,ts,jsx,tsx}",
-	  "./components/**/*.{js,ts,jsx,tsx}",
-	  "./app/**/*.{js,ts,jsx,tsx}",
-	  "./src/**/*.{js,ts,jsx,tsx}",
+	  "./pages/**/*.{ts,tsx}",
+	  "./components/**/*.{ts,tsx}",
+	  "./app/**/*.{ts,tsx}",
+	  "./src/**/*.{ts,tsx}",
 	  "*.{js,ts,jsx,tsx,mdx}",
 	],
 	theme: {
@@ -17,10 +17,15 @@ module.exports = {
     		}
     	},
     	extend: {
+    		fontFamily: {
+    			sans: ['var(--font-sans)', 'var(--font-geist-sans)', 'system-ui', 'sans-serif'],
+    			serif: ['var(--font-serif)', 'serif'],
+    			mono: ['var(--font-geist-mono)'],
+    		},
     		borderRadius: {
     			lg: 'var(--radius)',
-    			md: 'calc(var(--radius) - 2px)',
-    			sm: 'calc(var(--radius) - 4px)'
+    			md: 'calc(var(--radius) - 0.25rem)',
+    			sm: 'calc(var(--radius) - 0.5rem)'
     		},
     		colors: {
     			background: 'hsl(var(--background))',
@@ -49,8 +54,8 @@ module.exports = {
     				foreground: 'hsl(var(--accent-foreground))'
     			},
     			popover: {
-    				DEFAULT: 'hsl(var(--popover))',
-    				foreground: 'hsl(var(--popover-foreground))'
+    				DEFAULT: 'hsl(var(--background))',
+    				foreground: 'hsl(var(--foreground))'
     			},
     			card: {
     				DEFAULT: 'hsl(var(--card))',
@@ -95,7 +100,10 @@ module.exports = {
     		animation: {
     			'accordion-down': 'accordion-down 0.2s ease-out',
     			'accordion-up': 'accordion-up 0.2s ease-out'
-    		}
+    		},
+    		backgroundImage: {
+    			"food-pattern": "url('/food-pattern.png')",
+    		},
     	}
     },
 	plugins: [require("tailwindcss-animate")],
