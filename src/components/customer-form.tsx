@@ -262,7 +262,7 @@ export function CustomerForm({ customer, onSave, onCancel }: CustomerFormProps) 
         </div>
       </TabsContent>
 
-      <TabsContent value="address" className="space-y-4">
+      <TabsContent value="address" className="space-y-4 max-h-[calc(100vh-300px)] overflow-y-auto p-4">
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="addressType">Address Type</Label>

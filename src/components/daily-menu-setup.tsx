@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Plus, Calendar as CalendarIcon } from "lucide-react";
+import { Search, Plus, Calendar as CalendarIcon, Eye, Pencil, Trash2,Check  } from "lucide-react";
 import { Popover , PopoverTrigger, PopoverContent} from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 
+
 export function DailyMenuSetup() {
   const [menuType, setMenuType] = useState<string>("");
   const [mealType, setMealType] = useState<string>("");
@@ -28,6 +29,8 @@ export function DailyMenuSetup() {
   const [open, setOpen] = useState(false);
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
   const [itemSearchQuery, setItemSearchQuery] = useState("");
+
+  
   const [availableItems, setAvailableItems] = useState([
     { 
       id: 1, 
@@ -90,6 +93,8 @@ export function DailyMenuSetup() {
       calories: 450
     }
   ]);
+
+  
   const [selectedItems, setSelectedItems] = useState<number[]>([]);
 
   // Group items by category
@@ -128,6 +133,25 @@ export function DailyMenuSetup() {
     setItemDialogOpen(false);
     setSelectedItems([]);
   };
+
+  const [editIndex, setEditIndex] = useState<number | null>(null);
+  const [viewItem, setViewItem] = useState<{ name: string; qty: number; rate: number; sort: number; date?: Date } | null>(null);
+  
+  const handleEdit = (index: number) => {
+    setEditIndex(index);
+  };
+  
+  const handleDelete = (index: number) => {
+    setItems(items.filter((_, i) => i !== index));
+  };
+  
+  const handleSave = (index: number, field: keyof (typeof items)[number], value: string | number | Date) => {
+      const newItems = [...items];
+      newItems[index][field] = value as never; // Type assertion to satisfy TypeScript
+      setItems(newItems);
+  };
+
+  
 
   function ItemCard({ item }: { item: typeof availableItems[0] }) {
     return (
@@ -170,10 +194,10 @@ export function DailyMenuSetup() {
         <CardHeader className="pb-2">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <CardTitle>Setup Daily Menu</CardTitle>
-            <Button onClick={addMenuItem}>
-              <Plus size={16} className="mr-2" />
-              Add Menu Item
-            </Button>
+            <Button onClick={addMenuItem} disabled={!confirmedDate} className={!confirmedDate ? "opacity-50 cursor-not-allowed" : ""}>
+            <Plus size={16} className="mr-2" />
+            Add Menu Item
+          </Button>
           </div>
         </CardHeader>
         <CardContent>
@@ -263,19 +287,23 @@ export function DailyMenuSetup() {
 
           {/* Menu Items Table */}
           <div className="rounded-md border">
+          
             <Table>
               <TableHeader>
                 <TableRow>
+                <TableHead>Sl.no</TableHead>
                   <TableHead>Item Name</TableHead>
-                  <TableHead>Increment Qty</TableHead>
+                  <TableHead>Available Qty</TableHead> {/* yet to make it uneditable (available - ordered)- backend */}
                   <TableHead>Planned Qty</TableHead>
-                  <TableHead>Rate</TableHead>
-                  <TableHead>Sort Order</TableHead>
+                  <TableHead>Menu Rate</TableHead>
+                  {/*<TableHead>Sort Order</TableHead>*/}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {items.map((item, index) => (
                   <TableRow key={index}>
+
+                      <TableCell>{index + 1}</TableCell> {/* ✅ Auto-incremented Serial Number */}
 
                      {/*Item Name*/}
                     <TableCell>
@@ -313,6 +341,7 @@ export function DailyMenuSetup() {
                         }}
                       />
                     </TableCell>
+
                     { /* Rate */}
                     <TableCell>
                       <Input
@@ -325,22 +354,51 @@ export function DailyMenuSetup() {
                         }}
                       />
                     </TableCell>
-                    {/* Sort Order */}
-                    <TableCell>
-                      <Input
-                        type="number"
-                        value={item.sort}
-                        onChange={(e) => {
-                          const newItems = [...items];
-                          newItems[index].sort = parseInt(e.target.value) || 0;
-                          setItems(newItems);
-                        }}
-                      />
-                    </TableCell>
+                    {/* Sort Order removed */}
+
+
+                    {/* Actions */}
+                    <TableBody>
+                    {items.map((item, index: number) => (
+                    <TableRow key={index}>
+                   <TableCell>
+                    {editIndex === index ? (
+                      <Input value={item.name} onChange={(e) => handleSave(index, 'name', e.target.value)} />
+                    ) : (
+                      item.name
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {editIndex === index ? (
+                      <Input type="number" value={item.qty} onChange={(e) => handleSave(index, 'qty', e.target.value)} />
+                    ) : (
+                      item.qty
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {editIndex === index ? (
+                      <Input type="number" value={item.rate} onChange={(e) => handleSave(index, 'rate', e.target.value)} />
+                    ) : (
+                      `₹${item.rate}`
+                    )}
+                  </TableCell> 
+                  <TableCell>
+                    <Button size="icon" variant="ghost" onClick={() => setViewItem(item)}><Eye className="h-4 w-4" /></Button>
+                    {editIndex === index ? (
+                      <Button size="icon" variant="ghost" onClick={() => setEditIndex(null)}><Check className="h-4 w-4" /></Button>
+                    ) : (
+                      <Button size="icon" variant="ghost" onClick={() => handleEdit(index)}><Pencil className="h-4 w-4" /></Button>
+                    )}
+                    <Button size="icon" variant="destructive" onClick={() => handleDelete(index)}><Trash2 className="h-4 w-4" /></Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>     
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
+            
           </div>
 
           {/* Item Selection Dialog */}
@@ -372,6 +430,7 @@ export function DailyMenuSetup() {
                     <div className="space-y-4">
                       {filteredItems(availableItems).map((item) => (
                         <ItemCard key={item.id} item={item} />
+                       
                       ))}
                     </div>
                   </ScrollArea>
@@ -391,19 +450,26 @@ export function DailyMenuSetup() {
               </Tabs>
 
               <DialogFooter>
-                <Button variant="outline" onClick={() => {
+              <Button
+                variant="outline"
+                onClick={() => {
                   setItemDialogOpen(false);
                   setItemSearchQuery("");
-                }}>
-                  Cancel
-                </Button>
-                <Button onClick={() => {
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
                   handleItemSelection();
                   setItemSearchQuery("");
-                }} disabled={selectedItems.length === 0}>
-                  Add Selected ({selectedItems.length})
-                </Button>
-              </DialogFooter>
+                }}
+                disabled={selectedItems.length === 0}
+              >
+                Add Selected ({selectedItems.length})
+              </Button>
+            </DialogFooter>
+
             </DialogContent>
           </Dialog>
         </CardContent>
@@ -411,3 +477,4 @@ export function DailyMenuSetup() {
     </AdminLayout>
   );
 }
+

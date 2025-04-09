@@ -1,22 +1,26 @@
 import type { Metadata } from "next"
-import { Geist, Geist_Mono } from "next/font/google"
+import { Inter, Playfair_Display } from "next/font/google"
+import { GeistSans } from 'geist/font/sans'
 import "./globals.css"
 import { Toaster } from "@/components/ui/toaster"
 import Script from "next/script"
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
   subsets: ["latin"],
+  variable: "--font-sans",
 })
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const playfair = Playfair_Display({
   subsets: ["latin"],
+  variable: "--font-serif",
 })
+
+const geist = GeistSans
 
 export const metadata: Metadata = {
-  title: "Kuteera Kitchen",
-  description: "Home cooked meals delivered to your doorstep",
+  title: "Kuteera Kitchen - Authentic Home-Cooked Meals",
+  description:
+    "Freshly prepared, authentic home-cooked meals delivered to your doorstep. Healthy, hygienic & delicious – Subscribe or order now.",
 }
 
 export default function RootLayout({
@@ -24,9 +28,17 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  // Check if we're on the home page
+  const isHomePage = typeof window !== 'undefined' && window.location.pathname === '/'
+
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
-      <body className="min-h-screen">
+    <html lang="en">
+      <body 
+        className={`
+          ${isHomePage ? `${inter.variable} ${playfair.variable} font-sans` : geist.className}
+          min-h-screen
+        `}
+      >
         {children}
         <Toaster />
         
