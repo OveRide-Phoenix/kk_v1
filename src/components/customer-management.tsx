@@ -205,10 +205,11 @@ export default function CustomerManagement() {
             <div className="relative flex-1">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
+                className="w-full customer-form-field px-3 py-2"
                 placeholder="Search customers..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-8"
+            
               />
             </div>
             
@@ -240,7 +241,7 @@ export default function CustomerManagement() {
           </div>
 
           <div className="rounded-md border overflow-x-auto">
-            <Table>
+            <Table className="w-full customer-table">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[100px] pl-4">ID</TableHead>
@@ -249,7 +250,7 @@ export default function CustomerManagement() {
                   <TableHead>Phone</TableHead>
                   <TableHead>Address</TableHead>
                   <TableHead className="text-center">Orders</TableHead>
-                  <TableHead className="text-center pr-4">Actions</TableHead>
+                  <TableHead className="text-right pr-4">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

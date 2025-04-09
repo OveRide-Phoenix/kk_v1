@@ -32,7 +32,7 @@
     --muted: 36 30% 90%;
     --muted-foreground: 27 30% 35%;
 
-    --accent: 43 100% 52%;
+    --accent: 35 80% 45%;  /* Changed from 43 100% 52% to a more muted gold */
     --accent-foreground: 27 50% 16%;
 
     --destructive: 0 85% 60%;
@@ -137,6 +137,31 @@
 /* Custom utility classes */
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
+}
+
+/* Add these new styles for customer management */
+.customer-table {
+  @apply bg-card border-border rounded-lg;
+}
+
+.customer-table th {
+  @apply bg-muted text-muted-foreground font-medium px-4 py-3 text-left;
+}
+
+.customer-table td {
+  @apply border-t border-border px-4 py-3 text-foreground;
+}
+
+.customer-table tr:hover {
+  @apply bg-muted/50 transition-colors;
+}
+
+.customer-form-field {
+  @apply bg-background border-input rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+}
+
+.customer-form-label {
+  @apply text-foreground font-medium;
 }
 
 .scrollbar-hide {
