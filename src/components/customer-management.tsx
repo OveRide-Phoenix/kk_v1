@@ -103,10 +103,7 @@ export default function CustomerManagement() {
   // Update the filter function to use the correct field names
   const filteredCustomers = Array.isArray(customers) ? customers.filter((customer) => {
     const matchesSearch = 
-      (customer?.name?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
-      (customer?.email?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
-      (customer?.primary_mobile?.toString() || '').includes(searchQuery) ||
-      (customer?.customer_id?.toString() || '').includes(searchQuery);
+      (customer?.name?.toLowerCase() || '').includes(searchQuery.toLowerCase());
 
     const matchesOrderCount = true; // Remove if not needed
     const matchesAddress = !filters.address || 
@@ -205,11 +202,10 @@ export default function CustomerManagement() {
             <div className="relative flex-1">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                className="w-full customer-form-field px-3 py-2"
+                className="w-full customer-form-field pl-8 pr-3 py-2"
                 placeholder="Search customers..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-            
               />
             </div>
             

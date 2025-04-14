@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Menu, X, Coffee } from "lucide-react";
+import { Menu, X, Coffee, Eye, EyeOff } from "lucide-react";
 import { useAuthStore } from "@/store/store";
 
 export default function LoginPage() {
@@ -26,26 +26,29 @@ export default function LoginPage() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [showRegisterHighlight, setShowRegisterHighlight] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
-    const [rememberMe, setRememberMe] = useState(false);  // Move this here
+    const [rememberMe, setRememberMe] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
 
     // When phone number changes, fetch city and is_admin flag when 10 digits are present.
-    const handlePhoneChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handlePhoneChange = async (
+        e: React.ChangeEvent<HTMLInputElement>
+    ) => {
         let value = e.target.value;
-        
+
         // Remove all non-digit characters including +91
         const digitsOnly = value.replace(/\D/g, "");
-        
+
         let formattedValue = "";
         if (digitsOnly.length > 0) {
             // Remove any leading 91 if present
-            const cleanNumber = digitsOnly.startsWith("91") 
-                ? digitsOnly.slice(2) 
+            const cleanNumber = digitsOnly.startsWith("91")
+                ? digitsOnly.slice(2)
                 : digitsOnly;
-                
+
             // Add +91 prefix and limit to 10 digits
             formattedValue = "+91 " + cleanNumber.slice(0, 10);
         }
-        
+
         setPhoneNumber(formattedValue);
 
         // Extract only the digits after +91 for API calls
@@ -94,12 +97,13 @@ export default function LoginPage() {
 
     const handleLogin = async () => {
         // Add validation check at login attempt
-        if (phoneNumber.replace(/\D/g, "").length !== 12) { // +91 + 10 digits = 12
+        if (phoneNumber.replace(/\D/g, "").length !== 12) {
+            // +91 + 10 digits = 12
             setErrorMessage("Please enter a valid 10-digit phone number");
             return;
         }
-        
-        setErrorMessage(""); 
+
+        setErrorMessage("");
         setIsLoading(true);
 
         try {
@@ -119,21 +123,27 @@ export default function LoginPage() {
             });
 
             const data = await response.json();
-            
+
             if (response.ok) {
                 console.log("Login successful:", data);
-    
+
                 // Store with different expiration based on remember me
                 if (rememberMe) {
                     const thirtyDaysFromNow = new Date();
                     thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-                    localStorage.setItem("authExpiry", thirtyDaysFromNow.toISOString());
+                    localStorage.setItem(
+                        "authExpiry",
+                        thirtyDaysFromNow.toISOString()
+                    );
                 } else {
                     const oneDayFromNow = new Date();
                     oneDayFromNow.setDate(oneDayFromNow.getDate() + 1);
-                    localStorage.setItem("authExpiry", oneDayFromNow.toISOString());
+                    localStorage.setItem(
+                        "authExpiry",
+                        oneDayFromNow.toISOString()
+                    );
                 }
-    
+
                 localStorage.setItem("isAdmin", JSON.stringify(data.is_admin));
                 localStorage.setItem("user", JSON.stringify(data.user));
 
@@ -154,7 +164,9 @@ export default function LoginPage() {
         } catch (error) {
             console.error("Login error:", error);
             if (!navigator.onLine) {
-                setErrorMessage("No internet connection. Please check your network.");
+                setErrorMessage(
+                    "No internet connection. Please check your network."
+                );
             } else {
                 setErrorMessage("Something went wrong. Please try again.");
             }
@@ -171,53 +183,50 @@ export default function LoginPage() {
                         <div className="flex items-center space-x-2">
                             <Coffee className="h-6 w-6 text-primary" />
                             <a
-                                href="#"
+                                href="/"
                                 className="text-xl font-bold text-cream"
                             >
                                 Kuteera Kitchen
                             </a>
                         </div>
-                        <nav className="hidden md:flex space-x-8">
+                        <nav className="hidden md:flex items-center space-x-8">
                             <a
-                                href="#"
-                                className="text-sm font-medium text-foreground/80 hover:text-primary"
+                                href="/"
+                                className="text-sm font-medium hover:text-primary"
                             >
                                 Home
                             </a>
                             <a
-                                href="#"
-                                className="text-sm font-medium text-foreground/80 hover:text-primary"
+                                href="/menu"
+                                className="text-sm font-medium hover:text-primary"
+                            >
+                                Menu
+                            </a>
+                            <a
+                                href="/about"
+                                className="text-sm font-medium hover:text-primary"
                             >
                                 About
                             </a>
                             <a
-                                href="#"
-                                className="text-sm font-medium text-foreground/80 hover:text-primary"
-                            >
-                                Services
-                            </a>
-                            <a
-                                href="#"
-                                className="text-sm font-medium text-foreground/80 hover:text-primary"
+                                href="/contact"
+                                className="text-sm font-medium hover:text-primary"
                             >
                                 Contact
                             </a>
-                        </nav>
-                        <div className="md:hidden">
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() =>
-                                    setMobileMenuOpen(!mobileMenuOpen)
-                                }
+                            <a
+                                href="tel:+919876543210"
+                                className="text-sm font-medium hover:text-primary"
                             >
-                                {mobileMenuOpen ? (
-                                    <X size={24} />
-                                ) : (
-                                    <Menu size={24} />
-                                )}
+                                +91 98765 43210
+                            </a>
+                            <Button
+                                onClick={() => router.push("/register")}
+                                className="bg-primary hover:bg-primary/90 text-white text-sm"
+                            >
+                                Register
                             </Button>
-                        </div>
+                        </nav>
                     </div>
                 </div>
             </header>
@@ -259,16 +268,35 @@ export default function LoginPage() {
                                 <Label htmlFor="adminPassword">
                                     Admin Password
                                 </Label>
-                                <Input
-                                    id="adminPassword"
-                                    type="password"
-                                    placeholder="Enter admin password"
-                                    value={adminPassword}
-                                    onChange={(e) =>
-                                        setAdminPassword(e.target.value)
-                                    }
-                                    required
-                                />
+                                <div className="relative">
+                                    <Input
+                                        id="adminPassword"
+                                        type={
+                                            showPassword ? "text" : "password"
+                                        }
+                                        placeholder="Enter admin password"
+                                        value={adminPassword}
+                                        onChange={(e) =>
+                                            setAdminPassword(e.target.value)
+                                        }
+                                        required
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                                        onClick={() =>
+                                            setShowPassword(!showPassword)
+                                        }
+                                    >
+                                        {showPassword ? (
+                                            <Eye className="h-4 w-4" />
+                                        ) : (
+                                            <EyeOff className="h-4 w-4" />
+                                        )}
+                                    </Button>
+                                </div>
                             </div>
                         )}
                         {/* Add Remember Me checkbox before error message */}
@@ -277,11 +305,15 @@ export default function LoginPage() {
                                 type="checkbox"
                                 id="rememberMe"
                                 checked={rememberMe}
-                                onChange={(e) => setRememberMe(e.target.checked)}
+                                onChange={(e) =>
+                                    setRememberMe(e.target.checked)
+                                }
                                 className="rounded border-gray-300"
                                 title="Remember me"
                             />
-                            <Label htmlFor="rememberMe" className="text-sm">Remember me</Label>
+                            <Label htmlFor="rememberMe" className="text-sm">
+                                Remember me
+                            </Label>
                         </div>
                     </CardContent>
                     <CardFooter className="flex flex-col space-y-2">
