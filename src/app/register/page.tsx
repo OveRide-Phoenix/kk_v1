@@ -4,10 +4,23 @@ import type React from "react";
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation"; // Import useRouter
 import { Button } from "@/components/ui/button";
-import {Card,CardContent,CardDescription,CardFooter,CardHeader,CardTitle} from "@/components/ui/card";
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardFooter,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {Select,SelectContent,SelectItem,SelectTrigger,SelectValue} from "@/components/ui/select";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Coffee } from "lucide-react";
 import GoogleMapPicker from "@/components/gmap/GoogleMapPicker";
@@ -89,8 +102,8 @@ export default function RegistrationPage() {
     const handleAddressTypeChange = (value: string) => {
         setAddressType(value);
         // Update formData with the selected address type
-        setFormData(prev => ({ ...prev, addressType: value }));
-        
+        setFormData((prev) => ({ ...prev, addressType: value }));
+
         if (value !== "OTHER") {
             setOtherAddressName(""); // Reset if switching away from "OTHER"
         }
@@ -181,49 +194,55 @@ export default function RegistrationPage() {
 
     return (
         <div className="min-h-screen bg-background text-foreground">
-            {/* Navigation Bar */}
             <header className="border-b border-muted">
                 <div className="container mx-auto px-4">
                     <div className="flex h-16 items-center justify-between">
                         <div className="flex items-center space-x-2">
                             <Coffee className="h-6 w-6 text-primary" />
-                            <a href="#" className="text-xl font-bold">
+                            <a
+                                href="#"
+                                className="text-xl font-bold text-cream"
+                            >
                                 Kuteera Kitchen
                             </a>
                         </div>
-
-                        {/* Desktop Navigation */}
-                        <nav className="hidden md:flex space-x-8">
+                        <nav className="hidden md:flex items-center space-x-8">
                             <a
-                                href="#"
-                                className="text-sm font-medium text-foreground/80 hover:text-primary transition-colors"
+                                href="/"
+                                className="text-sm font-medium text-foreground/80 hover:text-primary"
                             >
                                 Home
                             </a>
                             <a
                                 href="#"
-                                className="text-sm font-medium text-foreground/80 hover:text-primary transition-colors"
+                                className="text-sm font-medium text-foreground/80 hover:text-primary"
                             >
                                 About
                             </a>
                             <a
                                 href="#"
-                                className="text-sm font-medium text-foreground/80 hover:text-primary transition-colors"
+                                className="text-sm font-medium text-foreground/80 hover:text-primary"
                             >
                                 Services
                             </a>
                             <a
                                 href="#"
-                                className="text-sm font-medium text-foreground/80 hover:text-primary transition-colors"
+                                className="text-sm font-medium text-foreground/80 hover:text-primary"
                             >
                                 Contact
                             </a>
                             <a
-                                href="/login"
-                                className="block px-3 py-2 rounded-md text-base font-medium bg-primary text-primary-foreground hover:bg-primary/90"
+                                href="tel:+919876543210"
+                                className="text-sm font-medium hover:text-primary"
+                            >
+                                +91 98765 43210
+                            </a>
+                            <Button
+                                onClick={() => router.push("/login")}
+                                className="bg-primary hover:bg-primary/90 text-white text-sm"
                             >
                                 Login
-                            </a>
+                            </Button>
                         </nav>
                     </div>
                 </div>
@@ -266,7 +285,7 @@ export default function RegistrationPage() {
                                                 value={formData.name}
                                                 onChange={handleChange}
                                                 required
-                                                className="border-input/50 bg-gray-100 text-foreground placeholder:text-foreground/50"
+                                                className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
                                             />
                                         </div>
 
@@ -282,7 +301,7 @@ export default function RegistrationPage() {
                                                 name="referredBy"
                                                 value={formData.referredBy}
                                                 onChange={handleChange}
-                                                className="border-input/50 bg-gray-100 text-foreground placeholder:text-foreground/50"
+                                                className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
                                             />
                                         </div>
                                     </div>
@@ -310,7 +329,7 @@ export default function RegistrationPage() {
                                                 onChange={handleChange}
                                                 placeholder="+91"
                                                 required
-                                                className="border-input/50 bg-gray-100 text-foreground placeholder:text-foreground/50"
+                                                className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
                                             />
                                         </div>
 
@@ -332,7 +351,7 @@ export default function RegistrationPage() {
                                                 }
                                                 onChange={handleChange}
                                                 placeholder="+91"
-                                                className="border-input/50 bg-gray-100 text-foreground placeholder:text-foreground/50"
+                                                className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
                                             />
                                         </div>
                                     </div>
@@ -361,7 +380,7 @@ export default function RegistrationPage() {
                                                 value={formData.recipientName}
                                                 onChange={handleChange}
                                                 required
-                                                className="border-input/50 bg-gray-100 text-foreground placeholder:text-foreground/50"
+                                                className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
                                             />
                                         </div>
 
@@ -378,7 +397,7 @@ export default function RegistrationPage() {
                                                     handleAddressTypeChange
                                                 }
                                             >
-                                                <SelectTrigger className="border-input/50 bg-gray-100 text-foreground">
+                                                <SelectTrigger className="border-input/50 bg-secondary text-foreground">
                                                     <SelectValue placeholder="Select address type" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -413,7 +432,7 @@ export default function RegistrationPage() {
                                                             )
                                                         }
                                                         placeholder="Enter address name"
-                                                        className="border-input/50 bg-gray-100 text-foreground"
+                                                        className="border-input/50 bg-secondary text-foreground"
                                                     />
                                                 </div>
                                             )}
@@ -446,7 +465,7 @@ export default function RegistrationPage() {
                                                 }
                                                 onChange={handleChange}
                                                 required
-                                                className="border-input/50 bg-gray-100 text-foreground placeholder:text-foreground/50"
+                                                className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
                                             />
                                         </div>
 
@@ -529,7 +548,7 @@ export default function RegistrationPage() {
                                                 value={formData.pinCode}
                                                 onChange={handleChange}
                                                 required
-                                                className="border-input/50 bg-gray-100 text-foreground placeholder:text-foreground/50"
+                                                className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
                                             />
                                         </div>
                                     </div>
@@ -568,7 +587,7 @@ export default function RegistrationPage() {
                                             type="email"
                                             value={formData.email}
                                             onChange={handleChange}
-                                            className="border-input/50 bg-gray-100 text-foreground placeholder:text-foreground/50"
+                                            className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
                                         />
                                         <p className="text-xs text-foreground/70 mt-1">
                                             Payment details will be sent to this
@@ -611,7 +630,7 @@ export default function RegistrationPage() {
                                         >
                                             Go to Login
                                         </Button>
-										<p className="text-green-600 font-medium text-center sm:text-left">
+                                        <p className="text-green-600 font-medium text-center sm:text-left">
                                             User registered successfully!
                                         </p>
                                     </div>

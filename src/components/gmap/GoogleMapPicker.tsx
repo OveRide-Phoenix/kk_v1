@@ -22,7 +22,7 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({ onLocationSelect, lat
     const defaultLocation = { lat, lng }
     const newMap = new window.google.maps.Map(mapRef.current, {
       center: defaultLocation,
-      zoom: 12,
+      zoom: 17,
     })
     setMap(newMap)
 
@@ -52,9 +52,9 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({ onLocationSelect, lat
         const place = autocompleteRef.current?.getPlace()
         if (place?.geometry?.location) {
           const location = place.geometry.location
-          newMap.setCenter(location)
-          newMarker.setPosition(location)
-          onLocationSelect(location.lat(), location.lng())
+          newMap.setCenter(location)  // Update map center
+          newMarker.setPosition(location)  // Update marker position
+          onLocationSelect(location.lat(), location.lng())  // Call onLocationSelect
         }
       })
     }
@@ -79,10 +79,10 @@ const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({ onLocationSelect, lat
   useEffect(() => {
     if (map && marker) {
       const newPosition = new google.maps.LatLng(lat, lng)
-      marker.setPosition(newPosition)
-      map.setCenter(newPosition)
+      marker.setPosition(newPosition)  // Update marker position
+      map.setCenter(newPosition)  // Update map center
     }
-  }, [lat, lng])
+  }, [lat, lng, map, marker])
 
   return (
     <div className="space-y-2 relative z-50">

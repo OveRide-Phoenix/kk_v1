@@ -29,7 +29,6 @@ export function CustomerForm({ customer, onSave, onCancel }: CustomerFormProps) 
     email: customer?.email || "",
     recipientName: customer?.recipientName || "",
     paymentFrequency: customer?.paymentFrequency || "Daily",
-    
     addressType: customer?.addressType || "Home",
     houseApartmentNo: customer?.houseApartmentNo || "",
     writtenAddress: customer?.writtenAddress || "",
@@ -37,17 +36,14 @@ export function CustomerForm({ customer, onSave, onCancel }: CustomerFormProps) 
     pinCode: customer?.pinCode || "",
     latitude: customer?.latitude || null,
     longitude: customer?.longitude || null,
-    
     routeAssignment: customer?.routeAssignment || "",
-  })
-  
-  // Add state for validation errors
-  const [errors, setErrors] = useState<string[]>([])
+  });
+
+  const [errors, setErrors] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [submitMessage, setSubmitMessage] = useState('');
-  
-  // Update the handleChange function
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       const { name, value } = e.target;
       setFormData(prev => {
@@ -71,10 +67,9 @@ export function CustomerForm({ customer, onSave, onCancel }: CustomerFormProps) 
   };
 
   const handleSelectChange = (name: string, value: string) => {
-    setFormData(prev => ({ ...prev, [name]: value }))
-  }
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
 
-  // Update the location handler to handle both coordinates and address
   const handleLocationSelect = (lat: number, lng: number, address?: string) => {
     setFormData(prev => ({
       ...prev,
@@ -84,7 +79,6 @@ export function CustomerForm({ customer, onSave, onCancel }: CustomerFormProps) 
     }));
   };
 
-  // Memoize the map component correctly
   const MemoizedGoogleMap = useMemo(
     () => (
       <div className="col-span-2 space-y-2">
@@ -100,7 +94,7 @@ export function CustomerForm({ customer, onSave, onCancel }: CustomerFormProps) 
         )}
       </div>
     ),
-    [handleLocationSelect]
+    [handleLocationSelect, formData.latitude, formData.longitude]
   );
 
   const handleSubmit = async (event: React.MouseEvent<HTMLButtonElement>) => {
