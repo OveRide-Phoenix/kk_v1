@@ -3,133 +3,135 @@ export enum ProductType {
   LUNCH = "LUNCH",
   DINNER = "DINNER",
   SNACK = "SNACK",
-}
-
-export interface Product {
-  id: string
-  name: string
-  description: string
-  price: number
-  rate: number // Added rate field
-  itemType: ProductType | string
-  alias: string
-  group: string
-  isCombo: boolean
-  isSubItem: boolean
-  uom: string
-  weightFactor: number
-  weightUom: string
-  hsnCode: string
-  factor: number
-  quantityPortion: string
-  bufferPercentage: number
-  maxQuantity: number
-  isMandatory: boolean
-  mainItemName: string
-  image: string
-  addonItemName: string | undefined
-  items?: Array<{ name: string; quantity: number }> // For combo items
-}
-
-
-
-export interface ComboProduct {
-  id: string;
-  name: string;
-  description?: string;
-  price: number;
-  includedItems: Array<{
-    name: string;
-    quantity: number;
-    isCategory?: boolean;
-  }>;
-  itemType: string;
-}
-
-export interface AddOnProduct {
-  id: string;
-  mainItem: string;
-  addOnItem: string;
-  isMandatory: boolean;
-  maxQuantity: number;
-  price: number;
-}
-
-export interface CategoryProduct {
-  id: string;
-  name: string;
-  description: string;
-  itemCount?: number;
+  CONDIMENTS = "CONDIMENTS",
+  OTHER = "OTHER"
 }
 
 export enum ItemType {
   BREAKFAST = "Breakfast",
   LUNCH = "Lunch",
   DINNER = "Dinner",
-  CONDIMENTS = "Condiments"
+  SNACK = "Snack",
+  CONDIMENTS = "Condiments",
+  OTHER = "Other"
 }
 
-// Basic category type
+// Item product from items table
+export interface Product {
+  isSubItem: any
+  id: any
+  group: string
+  item_id: number
+  name: string
+  description?: string
+  alias?: string
+  category_id: number
+  category_name: string
+  uom: string
+  weight_factor?: number
+  weight_uom?: string
+  item_type: ItemType | string
+  hsn_code?: string
+  factor?: number
+  quantity_portion?: number
+  buffer_percentage?: number
+  picture_url?: string
+  breakfast_price?: number
+  lunch_price?: number
+  dinner_price?: number
+  condiments_price?: number
+  festival_price?: number
+  cgst?: number
+  sgst?: number
+  igst?: number
+  net_price?: number
+  is_combo: boolean
+}
+
+// Combo product from item_combos
+export interface ComboProduct {
+  combo_id: number
+  combo_name: string
+  included_item_names: string // comma-separated
+  included_category_names: string // comma-separated
+  quantity: number
+}
+
+// Addon product from item_add_ons
+export interface AddonProduct {
+  add_on_id: number
+  main_item_name: string
+  add_on_item_name: string
+  is_mandatory: boolean
+  max_quantity: number
+}
+
+// Category product from categories
+export interface CategoryProduct {
+  category_id: number
+  category_name: string
+}
+
+// Category base type
 export interface Category {
-  id: number;
-  name: string;
-  description?: string;
-  itemCount?: number;
+  id: number
+  name: string
+  description?: string
+  itemCount?: number
 }
 
-// Basic item type
+// Item base type (used internally)
 export interface Item {
-  id: number;
-  name: string;
-  description?: string;
-  alias?: string;
-  categoryId?: number;
-  uom: string;
-  weightFactor?: number;
-  weightUom?: string;
-  itemType: ItemType;
-  hsnCode?: string;
-  factor?: number;
-  quantityPortion?: number;
-  bufferPercentage?: number;
-  pictureUrl?: string;
-  breakfastPrice?: number;
-  lunchPrice?: number;
-  dinnerPrice?: number;
-  condimentsPrice?: number;
-  festivalPrice?: number;
-  cgst?: number;
-  sgst?: number;
-  igst?: number;
-  netPrice?: number;
-  isCombo: boolean;
-  group?: string;
+  id: number
+  name: string
+  description?: string
+  alias?: string
+  categoryId?: number
+  uom: string
+  weightFactor?: number
+  weightUom?: string
+  itemType: ItemType
+  hsnCode?: string
+  factor?: number
+  quantityPortion?: number
+  bufferPercentage?: number
+  pictureUrl?: string
+  breakfastPrice?: number
+  lunchPrice?: number
+  dinnerPrice?: number
+  condimentsPrice?: number
+  festivalPrice?: number
+  cgst?: number
+  sgst?: number
+  igst?: number
+  netPrice?: number
+  isCombo: boolean
+  group?: string
 }
 
-// Combo type
+// Combo detailed structure for editing
 export interface Combo {
-  id: number;
-  comboItemId: number;
-  comboName: string;
-  price?: number;
-  description?: string;
+  id: number
+  comboItemId: number
+  comboName: string
+  price?: number
+  description?: string
   includedItems: Array<{
-    itemId?: number;
-    categoryId?: number;
-    quantity: number;
-    name: string;
-  }>;
+    itemId?: number
+    categoryId?: number
+    quantity: number
+    name: string
+  }>
 }
 
-// Add-on type
+// Add-on detailed structure for editing
 export interface Addon {
-  id: number;
-  mainItemId: number;
-  mainItemName: string;
-  addOnItemId: number;
-  addOnItemName: string;
-  isMandatory: boolean;
-  maxQuantity: number;
-  price?: number;
+  id: number
+  mainItemId: number
+  mainItemName: string
+  addOnItemId: number
+  addOnItemName: string
+  isMandatory: boolean
+  maxQuantity: number
+  price?: number
 }
-

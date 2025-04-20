@@ -264,3 +264,87 @@ def modify_customer(customer_id: int, customer: CustomerUpdate, db=Depends(get_d
 @app.delete("/delete-customer/{customer_id}", response_model=dict)
 def remove_customer(customer_id: int, db=Depends(get_db)):
     return delete_customer(db, customer_id)
+
+# ---------------- Product Management ----------------
+@app.get("/api/products/items", tags=["Products"])
+def get_all_items():
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute("""
+            SELECT 
+                i.item_id, i.name, i.description, i.alias, i.category_id, c.category_name,
+                i.uom, i.weight_factor, i.weight_uom, i.item_type, i.hsn_code, i.factor,
+                i.quantity_portion, i.buffer_percentage, i.picture_url,
+                i.breakfast_price, i.lunch_price, i.dinner_price, i.condiments_price, i.festival_price,
+                i.cgst, i.sgst, i.igst, i.net_price, i.is_combo
+            FROM items i
+            LEFT JOIN categories c ON i.category_id = c.category_id
+        """)
+        return cursor.fetchall()
+    except mysql.connector.Error as err:
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+@app.get("/api/products/combos", tags=["Products"])
+def get_all_combos():
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute("""
+            SELECT 
+                ic.combo_id,
+                combo_item.name AS combo_name,
+                GROUP_CONCAT(DISTINCT included_item.name) AS included_item_names,
+                GROUP_CONCAT(DISTINCT cat.category_name) AS included_category_names,
+                ic.quantity
+            FROM item_combos ic
+            LEFT JOIN items combo_item ON ic.combo_item_id = combo_item.item_id
+            LEFT JOIN items included_item ON ic.included_item_id = included_item.item_id
+            LEFT JOIN categories cat ON ic.included_category_id = cat.category_id
+            GROUP BY ic.combo_id
+        """)
+        return cursor.fetchall()
+    except mysql.connector.Error as err:
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+@app.get("/api/products/addons", tags=["Products"])
+def get_all_addons():
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute("""
+            SELECT 
+                ia.add_on_id,
+                main_item.name AS main_item_name,
+                add_on_item.name AS add_on_item_name,
+                ia.is_mandatory,
+                ia.max_quantity
+            FROM item_add_ons ia
+            LEFT JOIN items main_item ON ia.main_item_id = main_item.item_id
+            LEFT JOIN items add_on_item ON ia.add_on_item_id = add_on_item.item_id
+        """)
+        return cursor.fetchall()
+    except mysql.connector.Error as err:
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+@app.get("/api/products/categories", tags=["Products"])
+def get_all_categories():
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT category_id, category_name FROM categories")
+        return cursor.fetchall()
+    except mysql.connector.Error as err:
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
