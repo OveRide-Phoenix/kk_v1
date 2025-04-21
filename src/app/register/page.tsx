@@ -299,7 +299,7 @@ export default function RegistrationPage() {
                                                 value={formData.name}
                                                 onChange={handleChange}
                                                 required
-                                                className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
+                                                className=""
                                             />
                                         </div>
 
@@ -315,7 +315,7 @@ export default function RegistrationPage() {
                                                 name="referredBy"
                                                 value={formData.referredBy}
                                                 onChange={handleChange}
-                                                className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
+                                                className=""
                                             />
                                         </div>
                                     </div>
@@ -343,7 +343,7 @@ export default function RegistrationPage() {
                                                 onChange={handleChange}
                                                 placeholder="+91"
                                                 required
-                                                className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
+                                                className=""
                                             />
                                         </div>
 
@@ -365,7 +365,7 @@ export default function RegistrationPage() {
                                                 }
                                                 onChange={handleChange}
                                                 placeholder="+91"
-                                                className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
+                                                className=""
                                             />
                                         </div>
                                     </div>
@@ -394,7 +394,7 @@ export default function RegistrationPage() {
                                                 value={formData.recipientName}
                                                 onChange={handleChange}
                                                 required
-                                                className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
+                                                className=""
                                             />
                                         </div>
 
@@ -479,7 +479,7 @@ export default function RegistrationPage() {
                                                 }
                                                 onChange={handleChange}
                                                 required
-                                                className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
+                                                className=""
                                             />
                                         </div>
 
@@ -502,7 +502,7 @@ export default function RegistrationPage() {
                                                     }
                                                     onChange={handleChange}
                                                     required
-                                                    className="min-h-[100px] w-full border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
+                                                    className="min-h-[100px] w-full "
                                                 />
                                             </div>
                                         </div>
@@ -562,7 +562,7 @@ export default function RegistrationPage() {
                                                 value={formData.pinCode}
                                                 onChange={handleChange}
                                                 required
-                                                className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
+                                                className=""
                                             />
                                         </div>
                                     </div>
@@ -601,7 +601,7 @@ export default function RegistrationPage() {
                                             type="email"
                                             value={formData.email}
                                             onChange={handleChange}
-                                            className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
+                                            className=""
                                         />
                                         <p className="text-xs text-foreground/70 mt-1">
                                             Payment details will be sent to this
