@@ -31,259 +31,45 @@ export default function ProductManagement() {
   const uniqueGroups = Array.from(new Set(products.map((product) => product.group)))
 
   // Get unique product types for filter dropdown
-  const uniqueTypes = Array.from(new Set(products.map((product) => product.itemType)))
+  const uniqueTypes = Array.from(new Set(products.map((product) => product.item_type)))
 
-  // Load sample data (replace with real db data)
+  // Remove categories state, not needed anymore
+
+  // Fetch data from FastAPI based on activeTab
   useEffect(() => {
-    // Define type for sample data structure
-    const sampleData: Record<string, Array<Product>> = {
-      items: [
-        {
-          id: "1",
-          name: "Rice 350 gms",
-          description: "Traditional South Indian breakfast item",
-          price: 213,
-          rate: 250, // Added rate field
-          itemType: ProductType.BREAKFAST,
-          alias: "rice-350-breakfast",
-          group: "South Indian",
-          isCombo: false,
-          isSubItem: false,
-          uom: "Plate",
-          weightFactor: 0.35,
-          maxQuantity: 0,
-          isMandatory: false,
-          mainItemName: "",
-          weightUom: "kg",
-          hsnCode: "1234",
-          factor: 1,
-          quantityPortion: "1 plate",
-          bufferPercentage: 10,
-          image: "/placeholder.svg?height=200&width=200",
-          addonItemName: undefined,
-        },
-        {
-          id: "2",
-          name: "Idli Sambar",
-          description: "Steamed rice cakes with lentil soup",
-          price: 180,
-          rate: 200, // Added rate field
-          itemType: ProductType.BREAKFAST,
-          alias: "idli-sambar",
-          group: "South Indian",
-          isCombo: false,
-          isSubItem: false,
-          uom: "Plate",
-          weightFactor: 0.3,
-          maxQuantity: 0,
-          isMandatory: false,
-          mainItemName: "",
-          weightUom: "kg",
-          hsnCode: "1234",
-          factor: 1,
-          quantityPortion: "2 pieces",
-          bufferPercentage: 10,
-          image: "/placeholder.svg?height=200&width=200",
-          addonItemName: undefined,
-        },
-        {
-          id: "3",
-          name: "Chapati",
-          description: "Whole wheat flatbread",
-          price: 25,
-          rate: 30, // Added rate field
-          itemType: ProductType.DINNER,
-          alias: "chapati",
-          group: "North Indian",
-          isCombo: false,
-          isSubItem: false,
-          uom: "Piece",
-          weightFactor: 0.05,
-          maxQuantity: 0,
-          isMandatory: false,
-          mainItemName: "",
-          weightUom: "kg",
-          hsnCode: "1905",
-          factor: 1,
-          quantityPortion: "1 piece",
-          bufferPercentage: 5,
-          image: "/placeholder.svg?height=200&width=200",
-          addonItemName: undefined,
-        },
-      ],
-      combos: [
-        {
-          id: "c1",
-          name: "South Indian Thali",
-          description: "Complete meal with rice, sambar, and sides",
-          price: 299,
-          rate: 350, // Added rate field
-          itemType: ProductType.LUNCH,
-          alias: "south-indian-thali",
-          maxQuantity: 1,
-          isMandatory: false,
-          mainItemName: "",
-          group: "Combos",
-          isCombo: true,
-          isSubItem: false,
-          uom: "Plate",
-          weightFactor: 0.8,
-          weightUom: "kg",
-          hsnCode: "1234",
-          factor: 1,
-          quantityPortion: "1 plate",
-          bufferPercentage: 10,
-          image: "/placeholder.svg?height=200&width=200",
-          items: [
-            { name: "Rice", quantity: 1 },
-            { name: "Sambar", quantity: 1 },
-            { name: "Rasam", quantity: 1 },
-            { name: "Papad", quantity: 2 },
-          ],
-          addonItemName: undefined,
-        },
-        {
-          id: "c2",
-          name: "North Indian Thali",
-          description: "Complete meal with roti, dal, and sides",
-          price: 329,
-          rate: 380, // Added rate field
-          itemType: ProductType.LUNCH,
-          alias: "north-indian-thali",
-          maxQuantity: 1,
-          isMandatory: false,
-          mainItemName: "",
-          group: "Combos",
-          isCombo: true,
-          isSubItem: false,
-          uom: "Plate",
-          weightFactor: 0.75,
-          weightUom: "kg",
-          hsnCode: "1234",
-          factor: 1,
-          quantityPortion: "1 plate",
-          bufferPercentage: 10,
-          image: "/placeholder.svg?height=200&width=200",
-          items: [
-            { name: "Roti", quantity: 3 },
-            { name: "Dal", quantity: 1 },
-            { name: "Paneer Curry", quantity: 1 },
-            { name: "Raita", quantity: 1 },
-          ],
-          addonItemName: undefined,
-        },
-      ],
-      addons: [
-        {
-          id: "a1",
-          name: "Extra Papad",
-          description: "Crispy papad",
-          price: 15,
-          rate: 20, // Added rate field
-          itemType: "ADDON" as ProductType,
-          alias: "extra-papad",
-          uom: "Piece",
-          weightFactor: 0.02,
-          weightUom: "kg",
-          hsnCode: "2106",
-          factor: 1,
-          quantityPortion: "1 piece",
-          bufferPercentage: 5,
-          maxQuantity: 10,
-          isMandatory: false,
-          mainItemName: "Lunch Thali",
-          image: "/placeholder.svg?height=200&width=200",
-          group: "Sides",
-          isCombo: false,
-          isSubItem: true,
-          addonItemName: undefined,
-        },
-        {
-          id: "a2",
-          name: "Extra Rice",
-          description: "Additional serving of rice",
-          price: 40,
-          rate: 50, // Added rate field
-          itemType: "ADDON" as ProductType,
-          alias: "extra-rice",
-          uom: "Bowl",
-          weightFactor: 0.15,
-          weightUom: "kg",
-          hsnCode: "1006",
-          factor: 1,
-          quantityPortion: "1 bowl",
-          bufferPercentage: 5,
-          maxQuantity: 5,
-          isMandatory: false,
-          mainItemName: "South Indian Thali",
-          image: "/placeholder.svg?height=200&width=200",
-          group: "Sides",
-          isCombo: false,
-          isSubItem: true,
-          addonItemName: undefined,
-        },
-      ],
-      categories: [
-        {
-          id: "cat1",
-          maxQuantity: 0,
-          isMandatory: false,
-          mainItemName: "",
-          name: "South Indian",
-          description: "Traditional South Indian items",
-          itemType: "CATEGORY" as ProductType,
-          group: "Cuisine",
-          price: 0,
-          rate: 0, // Added rate field
-          alias: "south-indian-cuisine",
-          uom: "Category",
-          weightFactor: 0,
-          weightUom: "N/A",
-          hsnCode: "N/A",
-          factor: 1,
-          quantityPortion: "N/A",
-          bufferPercentage: 0,
-          image: "/placeholder.svg?height=200&width=200",
-          isCombo: false,
-          isSubItem: false,
-          addonItemName: undefined,
-        },
-        {
-          id: "cat2",
-          name: "North Indian",
-          description: "Traditional North Indian cuisine",
-          itemType: "CATEGORY" as ProductType,
-          group: "Cuisine",
-          price: 0,
-          rate: 0, // Added rate field
-          alias: "north-indian-cuisine",
-          uom: "Category",
-          weightFactor: 0,
-          maxQuantity: 0,
-          isMandatory: false,
-          mainItemName: "",
-          weightUom: "N/A",
-          hsnCode: "N/A",
-          factor: 1,
-          quantityPortion: "N/A",
-          bufferPercentage: 0,
-          image: "/placeholder.svg?height=200&width=200",
-          isCombo: false,
-          isSubItem: false,
-          addonItemName: undefined,
-        },
-      ],
+    const fetchProducts = async () => {
+      let url = ""
+      switch (activeTab) {
+        case "items":
+          url = "http://localhost:8000/api/products/items"
+          break
+        case "combos":
+          url = "http://localhost:8000/api/products/combos"
+          break
+        case "addons":
+          url = "http://localhost:8000/api/products/addons"
+          break
+        case "categories":
+          url = "http://localhost:8000/api/products/categories"
+          break
+      }
+
+      try {
+        const response = await fetch(url)
+        const data = await response.json()
+        
+        // Remove the mapping - pass the raw API data directly to ProductTable
+        setProducts(data)
+        setFilteredProducts(data)
+      } catch (err) {
+        setProducts([])
+        setFilteredProducts([])
+      }
     }
 
-    // Ensure activeTab exists as a key in sampleData before setting state
-    if (activeTab in sampleData) {
-      setProducts(sampleData[activeTab as keyof typeof sampleData] || [])
-      setFilteredProducts(sampleData[activeTab as keyof typeof sampleData] || [])
-    } else {
-      setProducts([])
-      setFilteredProducts([])
-    }
+    fetchProducts()
   }, [activeTab])
+  
 
   // Filter products based on search query and filters
   useEffect(() => {
@@ -295,14 +81,14 @@ export default function ProductManagement() {
         (product) =>
           product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
           product.group.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          product.itemType.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          product.item_type.toLowerCase().includes(searchQuery.toLowerCase()) ||
           (product.description && product.description.toLowerCase().includes(searchQuery.toLowerCase())),
       )
     }
 
     // Apply type filter
     if (filterType !== "All Types") {
-      filtered = filtered.filter((product) => product.itemType === filterType)
+      filtered = filtered.filter((product) => product.item_type === filterType)
     }
 
     // Apply group filter
@@ -420,11 +206,12 @@ export default function ProductManagement() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="All Types">All Types</SelectItem>
-                    {uniqueTypes.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        {type}
-                      </SelectItem>
-                    ))}
+                    {uniqueTypes.map((type, index) => (
+  <SelectItem key={`type-${type || index}`} value={type}>
+    {type}
+  </SelectItem>
+))}
+
                   </SelectContent>
                 </Select>
 
@@ -434,11 +221,12 @@ export default function ProductManagement() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="All Groups">All Groups</SelectItem>
-                    {uniqueGroups.map((group) => (
-                      <SelectItem key={`group-${group}`} value={group}>
-                        {group}
-                      </SelectItem>
-                    ))}
+                    {uniqueGroups.map((group, index) => (
+  <SelectItem key={`group-${group || index}`} value={group}>
+    {group}
+  </SelectItem>
+))}
+
                   </SelectContent>
                 </Select>
               </div>
@@ -465,13 +253,13 @@ export default function ProductManagement() {
           <ComboForm 
             onSave={handleSaveProduct} 
             onCancel={() => setIsFormOpen(false)}
-            existingItems={products.filter(p => !p.isCombo && !p.isSubItem)} // Pass regular items as options
+            existingItems={products.filter(p => !p.is_combo && !p.isSubItem)} // Pass regular items as options
           />
         ) : isFormOpen && activeTab === "addons" ? (
           <AddonForm
             onSave={handleSaveProduct}
             onCancel={() => setIsFormOpen(false)}
-            existingItems={products.filter(p => !p.isCombo && !p.isSubItem)} // Pass regular items as options
+            existingItems={products.filter(p => !p.is_combo && !p.isSubItem)} // Pass regular items as options
           />
         ) : isFormOpen && (
           <ProductForm 

@@ -82,7 +82,7 @@ export function Dashboard() {
             <Button
               variant="outline"
               className="h-auto flex flex-col items-center justify-center p-4 space-y-2"
-              onClick={() => router.push('/admin/daily-menu-setup')}
+              onClick={() => router.push('/admin/dailymenusetup')}
             >
               <Calendar className="h-8 w-8" />
               <span>Update Menu</span>

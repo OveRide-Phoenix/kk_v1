@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Header from "@/components/header"
 import HeroSection from "@/components/hero-section"
@@ -15,6 +15,16 @@ import { Coffee, Menu } from "lucide-react"
  */
 export default function Home() {
   const router = useRouter()
+  const [isScrolled, setIsScrolled] = useState(false)
+
+  // Add scroll detection
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 50)
+    }
+    window.addEventListener("scroll", handleScroll)
+    return () => window.removeEventListener("scroll", handleScroll)
+  }, [])
 
   // Add smooth scrolling behavior for anchor links
   useEffect(() => {
@@ -52,7 +62,9 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="border-b border-muted">
+      <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+        isScrolled ? "bg-background/95 backdrop-blur-sm shadow-md" : "bg-background"
+      }`}>
         <div className="container mx-auto px-4">
           <div className="flex h-16 items-center justify-between">
             {/* Logo */}
@@ -103,7 +115,7 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="flex-grow">
+      <main className="flex-grow pt-16">
         <HeroSection />
         <MenuSections />
         <CultureSection />

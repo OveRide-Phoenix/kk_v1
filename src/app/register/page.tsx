@@ -1,7 +1,7 @@
 "use client";
 
+import { useEffect, useCallback, useMemo, useState } from "react";
 import type React from "react";
-import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation"; // Import useRouter
 import { Button } from "@/components/ui/button";
 import {
@@ -26,6 +26,7 @@ import { Coffee } from "lucide-react";
 import GoogleMapPicker from "@/components/gmap/GoogleMapPicker";
 
 export default function RegistrationPage() {
+    const [isScrolled, setIsScrolled] = useState(false);
     // Form state
     const [formData, setFormData] = useState({
         referredBy: "", // Matches referred_by
@@ -192,9 +193,22 @@ export default function RegistrationPage() {
         []
     );
 
+    // Add scroll detection
+    useEffect(() => {
+        const handleScroll = () => {
+            setIsScrolled(window.scrollY > 50);
+        };
+        window.addEventListener("scroll", handleScroll);
+        return () => window.removeEventListener("scroll", handleScroll);
+    }, []);
+
     return (
         <div className="min-h-screen bg-background text-foreground">
-            <header className="border-b border-muted">
+            <header 
+                className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+                    isScrolled ? "bg-background/95 backdrop-blur-sm shadow-md" : "bg-background"
+                }`}
+            >
                 <div className="container mx-auto px-4">
                     <div className="flex h-16 items-center justify-between">
                         <div className="flex items-center space-x-2">
@@ -217,13 +231,13 @@ export default function RegistrationPage() {
                                 href="#"
                                 className="text-sm font-medium text-foreground/80 hover:text-primary"
                             >
-                                About
+                                Menu
                             </a>
                             <a
                                 href="#"
                                 className="text-sm font-medium text-foreground/80 hover:text-primary"
                             >
-                                Services
+                                About
                             </a>
                             <a
                                 href="#"
@@ -249,7 +263,7 @@ export default function RegistrationPage() {
             </header>
 
             {/* Registration Form */}
-            <div className="container mx-auto py-8 px-4">
+            <div className="container mx-auto py-8 px-4 pt-24">
                 <Card className="border-primary/20 max-w-4xl mx-auto">
                     <CardHeader className="space-y-1">
                         <CardTitle className="text-2xl font-bold">
@@ -285,7 +299,7 @@ export default function RegistrationPage() {
                                                 value={formData.name}
                                                 onChange={handleChange}
                                                 required
-                                                className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
+                                                className=""
                                             />
                                         </div>
 
@@ -301,7 +315,7 @@ export default function RegistrationPage() {
                                                 name="referredBy"
                                                 value={formData.referredBy}
                                                 onChange={handleChange}
-                                                className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
+                                                className=""
                                             />
                                         </div>
                                     </div>
@@ -329,7 +343,7 @@ export default function RegistrationPage() {
                                                 onChange={handleChange}
                                                 placeholder="+91"
                                                 required
-                                                className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
+                                                className=""
                                             />
                                         </div>
 
@@ -351,7 +365,7 @@ export default function RegistrationPage() {
                                                 }
                                                 onChange={handleChange}
                                                 placeholder="+91"
-                                                className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
+                                                className=""
                                             />
                                         </div>
                                     </div>
@@ -380,7 +394,7 @@ export default function RegistrationPage() {
                                                 value={formData.recipientName}
                                                 onChange={handleChange}
                                                 required
-                                                className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
+                                                className=""
                                             />
                                         </div>
 
@@ -465,7 +479,7 @@ export default function RegistrationPage() {
                                                 }
                                                 onChange={handleChange}
                                                 required
-                                                className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
+                                                className=""
                                             />
                                         </div>
 
@@ -488,7 +502,7 @@ export default function RegistrationPage() {
                                                     }
                                                     onChange={handleChange}
                                                     required
-                                                    className="min-h-[100px] w-full border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
+                                                    className="min-h-[100px] w-full "
                                                 />
                                             </div>
                                         </div>
@@ -548,7 +562,7 @@ export default function RegistrationPage() {
                                                 value={formData.pinCode}
                                                 onChange={handleChange}
                                                 required
-                                                className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
+                                                className=""
                                             />
                                         </div>
                                     </div>
@@ -587,7 +601,7 @@ export default function RegistrationPage() {
                                             type="email"
                                             value={formData.email}
                                             onChange={handleChange}
-                                            className="border-input/50 bg-secondary text-foreground placeholder:text-foreground/50"
+                                            className=""
                                         />
                                         <p className="text-xs text-foreground/70 mt-1">
                                             Payment details will be sent to this

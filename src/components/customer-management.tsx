@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {Dialog,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle,DialogTrigger} from "@/components/ui/dialog"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {AlertDialog,AlertDialogAction,AlertDialogCancel,AlertDialogContent,AlertDialogDescription,AlertDialogFooter,AlertDialogHeader,AlertDialogTitle,AlertDialogTrigger,} from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
@@ -116,194 +117,201 @@ export default function CustomerManagement() {
   return (
     <AdminLayout activePage="customermgmt">
       <div className="space-y-6">
-        <div className="bg-white rounded-lg border shadow-sm p-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-            <h2 className="text-xl font-semibold">All Customers</h2>
-            <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add New Customer
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[900px]">
-                <DialogHeader>
-                  <DialogTitle>Add New Customer</DialogTitle>
-                  <DialogDescription>Enter the details of the new customer below.</DialogDescription>
-                </DialogHeader>
-                <CustomerForm 
-                  customer={null} 
-                  onSave={async (customerData) => {
-                    try {
-                      const formattedData = {
-                        referred_by: customerData.referredBy || null,
-                        primary_mobile: customerData.primaryMobile?.toString(),
-                        alternative_mobile: customerData.alternativeMobile || null,
-                        name: customerData.name?.trim(),
-                        recipient_name: customerData.recipientName?.trim(),
-                        payment_frequency: customerData.paymentFrequency || "Daily",
-                        email: customerData.email || null,
-                        house_apartment_no: customerData.houseApartmentNo?.trim() || null,
-                        written_address: customerData.writtenAddress?.trim(),
-                        city: customerData.city?.trim(),
-                        pin_code: customerData.pinCode?.toString(),
-                        latitude: customerData.latitude ? parseFloat(String(customerData.latitude)) : 0,
-                        longitude: customerData.longitude ? parseFloat(String(customerData.longitude)) : 0,
-                        address_type: customerData.addressType || "Home",
-                        route_assignment: customerData.routeAssignment || null,
-                        is_default: true
-                      };
-                      
-                      const response = await fetch('http://localhost:8000/api/register', {
-                        method: 'POST',
-                        headers: {
-                          'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(formattedData),
-                      });
-                      
-                      const responseData = await response.json();
-                      
-                      if (!response.ok) {
-                        throw new Error(responseData.detail || 'Failed to add customer');
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <CardTitle className="text-xl font-semibold">All Customers</CardTitle>
+              <Dialog open={open} onOpenChange={setOpen}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add New Customer
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[900px]">
+                  <DialogHeader>
+                    <DialogTitle>Add New Customer</DialogTitle>
+                    <DialogDescription>Enter the details of the new customer below.</DialogDescription>
+                  </DialogHeader>
+                  <CustomerForm 
+                    customer={null} 
+                    onSave={async (customerData) => {
+                      try {
+                        const formattedData = {
+                          referred_by: customerData.referredBy || null,
+                          primary_mobile: customerData.primaryMobile?.toString(),
+                          alternative_mobile: customerData.alternativeMobile || null,
+                          name: customerData.name?.trim(),
+                          recipient_name: customerData.recipientName?.trim(),
+                          payment_frequency: customerData.paymentFrequency || "Daily",
+                          email: customerData.email || null,
+                          house_apartment_no: customerData.houseApartmentNo?.trim() || null,
+                          written_address: customerData.writtenAddress?.trim(),
+                          city: customerData.city?.trim(),
+                          pin_code: customerData.pinCode?.toString(),
+                          latitude: customerData.latitude ? parseFloat(String(customerData.latitude)) : 0,
+                          longitude: customerData.longitude ? parseFloat(String(customerData.longitude)) : 0,
+                          address_type: customerData.addressType || "Home",
+                          route_assignment: customerData.routeAssignment || null,
+                          is_default: true
+                        };
+                        
+                        const response = await fetch('http://localhost:8000/api/register', {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                          },
+                          body: JSON.stringify(formattedData),
+                        });
+                        
+                        const responseData = await response.json();
+                        
+                        if (!response.ok) {
+                          throw new Error(responseData.detail || 'Failed to add customer');
+                        }
+                        
+                        // Close dialog first
+                        setOpen(false);
+                        // Refresh customers
+                        await refreshCustomers();
+                        
+                        // Show success toast - this is where we call it
+                        toast({
+                          description: "Customer added successfully",
+                        });
+                        
+                        return { success: true, data: responseData };
+                      } catch (error: any) {
+                        // Show error toast
+                        toast({
+                          variant: "destructive",
+                          description: error.message || 'Failed to add customer',
+                        });
+                        return {
+                          success: false,
+                          message: error.message || 'Failed to add customer'
+                        };
                       }
-                      
-                      // Close dialog first
-                      setOpen(false);
-                      // Refresh customers
-                      await refreshCustomers();
-                      
-                      // Show success toast - this is where we call it
-                      toast({
-                        description: "Customer added successfully",
-                      });
-                      
-                      return { success: true, data: responseData };
-                    } catch (error: any) {
-                      // Show error toast
-                      toast({
-                        variant: "destructive",
-                        description: error.message || 'Failed to add customer',
-                      });
-                      return {
-                        success: false,
-                        message: error.message || 'Failed to add customer'
-                      };
-                    }
-                  }}
-                  onCancel={() => setOpen(false)} 
+                    }}
+                    onCancel={() => setOpen(false)} 
+                  />
+                </DialogContent>
+              </Dialog>
+            </div>
+          </CardHeader>
+
+          <CardContent className="space-y-6">
+            {/* Search and Filters */}
+            <div className="flex flex-col sm:flex-row gap-4">
+              {/* Search input */}
+              <div className="relative flex-1">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  className="w-full customer-form-field pl-8 pr-3 py-2"
+                  placeholder="Search customers..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
                 />
-              </DialogContent>
-            </Dialog>
-          </div>
+              </div>
+              
+              {/* Filters */}
+              <div className="flex gap-2">
+                <Select
+                  value={filters.orderCount}
+                  onValueChange={(value) => setFilters(prev => ({ ...prev, orderCount: value }))}
+                >
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Filter by orders" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Orders</SelectItem>
+                    <SelectItem value="5">5+ Orders</SelectItem>
+                    <SelectItem value="10">10+ Orders</SelectItem>
+                    <SelectItem value="20">20+ Orders</SelectItem>
+                  </SelectContent>
+                </Select>
 
-          <div className="flex flex-col sm:flex-row gap-4 mb-6">
-            {/* Search input */}
-            <div className="relative flex-1">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                className="w-full customer-form-field pl-8 pr-3 py-2"
-                placeholder="Search customers..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+                <Input
+                  placeholder="Filter by address..."
+                  value={filters.address}
+                  onChange={(e) => setFilters(prev => ({ ...prev, address: e.target.value }))}
+                  className="w-[200px]"
+                  autoComplete="new-address-filter" 
+                />
+              </div>
             </div>
-            
-            {/* Existing filters div */}
-            <div className="flex gap-2">
-              <Select
-                value={filters.orderCount}
-                onValueChange={(value) => setFilters(prev => ({ ...prev, orderCount: value }))}
-              >
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Filter by orders" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Orders</SelectItem>
-                  <SelectItem value="5">5+ Orders</SelectItem>
-                  <SelectItem value="10">10+ Orders</SelectItem>
-                  <SelectItem value="20">20+ Orders</SelectItem>
-                </SelectContent>
-              </Select>
 
-              <Input
-                placeholder="Filter by address..."
-                value={filters.address}
-                onChange={(e) => setFilters(prev => ({ ...prev, address: e.target.value }))}
-                className="w-[200px]"
-                autoComplete="new-address-filter" 
-              />
-            </div>
-          </div>
-
-          <div className="rounded-md border overflow-x-auto">
-            <Table className="w-full customer-table">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[100px] pl-4">ID</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>Address</TableHead>
-                  <TableHead className="text-center">Orders</TableHead>
-                  <TableHead className="text-right pr-4">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  <TableRow key="loading-row">
-                    <TableCell colSpan={7} className="text-center py-6">
-                      <div className="flex justify-center items-center">
-                        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                      </div>
-                    </TableCell>
+            {/* Table */}
+            <div className="rounded-md border">
+              <Table className="w-full customer-table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[100px] pl-4">ID</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Phone</TableHead>
+                    <TableHead>Address</TableHead>
+                    <TableHead className="text-center">Orders</TableHead>
+                    <TableHead className="text-center px-2 align-middle">
+                      <div className="flex justify-center">Actions</div>
+                    </TableHead>
                   </TableRow>
-                ) : filteredCustomers.length === 0 ? (
-                  <TableRow key="empty-row">
-                    <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
-                      No customers found
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  // Update the TableRow and TableCell in the mapping section
-                  filteredCustomers.map((customer) => (
-                    <TableRow key={customer.customer_id} className="h-14">
-                      <TableCell className="font-medium pl-4">{customer.customer_id}</TableCell>
-                      <TableCell>
-                        <span className="font-medium">{customer.name}</span>
-                      </TableCell>
-                      <TableCell>{customer.email || '-'}</TableCell>
-                      <TableCell>
-                        <span className="font-medium">+91 {customer.primary_mobile}</span>
-                      </TableCell>
-                      <TableCell>{customer.written_address}</TableCell>
-                      <TableCell className="text-center">-</TableCell>
-                      <TableCell className="text-center pr-4">
-                        <div className="flex justify-center gap-2">
-                          <Button variant="ghost" size="sm" onClick={() => handleViewCustomer(customer.customer_id)}>
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => handleEditCustomer(customer.customer_id)}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => handleDeleteCustomer(customer.customer_id)}
-                            className="text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                </TableHeader>
+                <TableBody>
+                  {isLoading ? (
+                    <TableRow key="loading-row">
+                      <TableCell colSpan={7} className="text-center py-6">
+                        <div className="flex justify-center items-center">
+                          <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
-        {/* Existing dialogs */}
+                  ) : filteredCustomers.length === 0 ? (
+                    <TableRow key="empty-row">
+                      <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
+                        No customers found
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    // Update the TableRow and TableCell in the mapping section
+                    filteredCustomers.map((customer) => (
+                      <TableRow key={customer.customer_id} className="h-14">
+                        <TableCell className="font-medium pl-4">{customer.customer_id}</TableCell>
+                        <TableCell>
+                          <span className="font-medium">{customer.name}</span>
+                        </TableCell>
+                        <TableCell>{customer.email || '-'}</TableCell>
+                        <TableCell>
+                          <span className="font-medium">+91 {customer.primary_mobile}</span>
+                        </TableCell>
+                        <TableCell>{customer.written_address}</TableCell>
+                        <TableCell className="text-center">-</TableCell>
+                        <TableCell className="text-center pr-4">
+                          <div className="flex justify-center gap-2">
+                            <Button variant="ghost" size="sm" onClick={() => handleViewCustomer(customer.customer_id)}>
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleEditCustomer(customer.customer_id)}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => handleDeleteCustomer(customer.customer_id)}
+                              className="text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </AdminLayout>
   )
