@@ -1,14 +1,23 @@
 "use client"
 
-import { useState } from "react"
-import Image from "next/image"
 import Link from "next/link"
-import { Home, ShoppingBag, ShoppingCart, User, MapPin, Utensils, ClipboardList, Settings, History } from "lucide-react"
-
+import Image from "next/image"
+import { useState } from "react"
+import { Home, ShoppingBag, ShoppingCart, User, MapPin, Plus, Minus } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
-import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+} from "@/components/ui/card"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Dialog,
   DialogContent,
@@ -18,27 +27,27 @@ import {
 } from "@/components/ui/dialog"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 
-// Add these imports at the top
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-
-export default function KuteeraKitchen() {
+// Add these state variables at the top of the component
+export default function NewOrder() {
+  const [quantities, setQuantities] = useState<{ [key: number]: number }>({})
+  const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [location, setLocation] = useState("WORK No. 3, St. Mark's Road, Bengaluru - 04......")
-  const [selectedAddress, setSelectedAddress] = useState("work") // Initialize with default address type
+  const [selectedAddress, setSelectedAddress] = useState("work")
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState("breakfast")
   const [addresses] = useState([
     { type: "HOME", address: "123 Home Street, Bengaluru - 01" },
     { type: "WORK", address: "WORK No. 3, St. Mark's Road, Bengaluru - 04" },
     { type: "FRIEND", address: "456 Friend Avenue, Bengaluru - 02" },
   ])
 
-  // Updated menu data with categories
-  // Updated menu data with more items
+  const handleQuantityChange = (itemId: number, change: number) => {
+    setQuantities(prev => ({
+      ...prev,
+      [itemId]: Math.max(0, (prev[itemId] || 0) + change)
+    }))
+  }
+
+  // Menu items data
   const menuItems = [
     // Breakfast Items
     {
@@ -238,9 +247,6 @@ export default function KuteeraKitchen() {
     }
   ]
 
-  // Filter items based on active tab
-  const filteredItems = activeTab === "all" ? menuItems : menuItems.filter(item => item.category === activeTab)
-
   return (
     <div className="min-h-screen bg-[#f9f3e8]">
       {/* Navigation Bar */}
@@ -264,7 +270,7 @@ export default function KuteeraKitchen() {
                 </DialogHeader>
                 <div className="mt-4">
                   <RadioGroup 
-                    value={selectedAddress} // Change defaultValue to value
+                    value={selectedAddress}
                     className="gap-4" 
                     onValueChange={(value) => {
                       setSelectedAddress(value)
@@ -300,23 +306,22 @@ export default function KuteeraKitchen() {
               </DialogContent>
             </Dialog>
           </div>
+
           <div className="flex items-center gap-6">
+            <Link href="/customer">
+              <Button variant="ghost" className="text-[#5d4037] p-2 flex items-center group hover:bg-[#8d6e63] hover:text-white w-[40px] hover:w-[100px] transition-all duration-200">
+                <Home className="h-5 w-5" />
+                <span className="hidden group-hover:inline text-sm ml-2 whitespace-nowrap overflow-hidden">Home</span>
+              </Button>
+            </Link>
             <Button variant="ghost" className="text-[#5d4037] p-2 flex items-center group hover:bg-[#8d6e63] hover:text-white w-[40px] hover:w-[100px] transition-all duration-200">
-              <Home className="h-5 w-5" />
-              <span className="hidden group-hover:inline text-sm ml-2 whitespace-nowrap overflow-hidden">Home</span>
+              <ShoppingBag className="h-5 w-5" />
+              <span className="hidden group-hover:inline text-sm ml-2 whitespace-nowrap overflow-hidden">Order</span>
             </Button>
-            <Link href="/customer/new-order">
-              <Button variant="ghost" className="text-[#5d4037] p-2 flex items-center group hover:bg-[#8d6e63] hover:text-white w-[40px] hover:w-[100px] transition-all duration-200">
-                <ShoppingBag className="h-5 w-5" />
-                <span className="hidden group-hover:inline text-sm ml-2 whitespace-nowrap overflow-hidden">Order</span>
-              </Button>
-            </Link>
-            <Link href="/customer/cart">
-              <Button variant="ghost" className="text-[#5d4037] p-2 flex items-center group hover:bg-[#8d6e63] hover:text-white w-[40px] hover:w-[100px] transition-all duration-200">
-                <ShoppingCart className="h-5 w-5" />
-                <span className="hidden group-hover:inline text-sm ml-2 whitespace-nowrap overflow-hidden">Cart</span>
-              </Button>
-            </Link>
+            <Button variant="ghost" className="text-[#5d4037] p-2 flex items-center group hover:bg-[#8d6e63] hover:text-white w-[40px] hover:w-[100px] transition-all duration-200">
+              <ShoppingCart className="h-5 w-5" />
+              <span className="hidden group-hover:inline text-sm ml-2 whitespace-nowrap overflow-hidden">Cart</span>
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="text-[#5d4037] p-2 flex items-center group hover:bg-[#8d6e63] hover:text-white w-[40px] hover:w-[120px] transition-all duration-200">
@@ -342,130 +347,103 @@ export default function KuteeraKitchen() {
         <div className="md:hidden flex items-center gap-2 text-[#5d4037] mt-2">
           <MapPin className="h-4 w-4" />
           <span className="text-xs">Deliver to:</span>
-          <span className="text-xs font-medium truncate">{location}</span>
+          <span className="text-xs font-medium truncate">WORK No. 3, St. Mark's Road, Bengaluru - 04......</span>
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8">
-        {/* Today's Menu Section */}
-        <section className="mb-12">
-          <h2 className="text-center text-3xl font-bold text-[#5d4037] mb-8">Today's Menu</h2>
+      <main className="container mx-auto px-4">
+        <div className="py-4">
+          <h1 className="text-3xl font-bold text-[#5d4037] text-center mb-6">Place a New Order</h1>
           
-          <Tabs defaultValue="breakfast" className="mb-16" onValueChange={setActiveTab}>
-            <div className="flex justify-center mb-8">
-              <TabsList className="grid w-[600px] grid-cols-5 bg-[#f9f3e8] border border-[#8d6e63] rounded-full p-1 shadow-md">
-                <TabsTrigger 
-                  value="all"
-                  className="data-[state=active]:bg-[#8d6e63] data-[state=active]:text-white data-[state=active]:shadow-sm rounded-full"
-                >
-                  ALL
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="breakfast"
-                  className="data-[state=active]:bg-[#8d6e63] data-[state=active]:text-white data-[state=active]:shadow-sm rounded-full"
-                >
-                  BREAKFAST
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="lunch"
-                  className="data-[state=active]:bg-[#8d6e63] data-[state=active]:text-white rounded-full"
-                >
-                  LUNCH
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="dinner"
-                  className="data-[state=active]:bg-[#8d6e63] data-[state=active]:text-white rounded-full"
-                >
-                  DINNER
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="condiments"
-                  className="data-[state=active]:bg-[#8d6e63] data-[state=active]:text-white rounded-full"
-                >
-                  CONDIMENTS
-                </TabsTrigger>
-              </TabsList>
-            </div>
-          
-          <TabsContent value={activeTab}>
-            <div className="px-16">
-              <Carousel 
-                className="w-full relative mx-auto max-w-5xl"
-                opts={{
-                  slidesToScroll: 2,
-                  align: "start"
-                }}
+          {/* Category Buttons */}
+          <div className="flex justify-center gap-4 mb-8">
+            {["breakfast", "lunch", "dinner", "condiments"].map((category) => (
+              <button
+                key={category}
+                onClick={() => setActiveCategory(activeCategory === category ? null : category)}
+                className={`px-6 py-2 rounded-full border border-[#8d6e63] capitalize transition-colors
+                  ${activeCategory === category 
+                    ? 'bg-[#8d6e63] text-white' 
+                    : 'bg-transparent text-[#8d6e63] hover:bg-[#8d6e63] hover:text-white'
+                  }`}
               >
-                <CarouselContent className="-ml-4">
-                  {filteredItems.map((item) => (
-                    <CarouselItem key={item.id} className="pl-4 basis-full md:basis-1/2 lg:basis-1/4">
-                      <Card className="border border-[#e6dfd0] bg-[#f9f3e8] shadow-sm max-w-[240px] mx-auto h-[360px] flex flex-col">
-                        <CardHeader className="p-0">
-                          <div className="aspect-square overflow-hidden rounded-t-lg">
+                {category}
+              </button>
+            ))}
+          </div>
+
+          <div className="px-16">
+            <div className="grid grid-cols-1 gap-16">
+              {["breakfast", "lunch", "dinner", "condiments"].map((category) => (
+                <div
+                  key={category}
+                  className={`transition-all duration-300 ${
+                    activeCategory === category ? 'order-[-1]' : ''
+                  }`}
+                  style={{
+                    gridRow: activeCategory === category ? '1' : 'auto'
+                  }}
+                >
+                  <h2 className="text-xl font-semibold text-[#5d4037] mb-4 capitalize">{category}</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {menuItems
+                      .filter(item => item.category === category)
+                      .map((item) => (
+                        <div key={item.id} className="flex bg-white border-2 border-[#e6dfd0] rounded-lg overflow-hidden h-[120px] shadow-[0_2px_8px_rgba(0,0,0,0.1)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)] transition-shadow duration-200">
+                          <div className="w-[120px] relative">
                             <Image
-                              src={item.image || "/placeholder.svg"}
+                              src={item.image}
                               alt={item.name}
-                              width={240}
-                              height={240}
-                              className="h-full w-full object-cover"
+                              fill
+                              className="object-cover"
                             />
                           </div>
-                        </CardHeader>
-                        <CardContent className="p-4 flex-1">
-                          <h3 className="font-medium text-[#5d4037]">{item.name}</h3>
-                          <p className="text-xs text-[#8d6e63] mt-1 line-clamp-2 h-[32px]">{item.description}</p>
-                        </CardContent>
-                        <CardFooter className="p-4 pt-0">
-                          <p className="text-sm font-medium text-[#5d4037]">Rs. {item.price}</p>
-                        </CardFooter>
-                      </Card>
-                    </CarouselItem>
-                  ))}
-                </CarouselContent>
-                <CarouselPrevious className="bg-[#8d6e63] text-white hover:bg-[#5d4037] border-none -left-12" />
-                <CarouselNext className="bg-[#8d6e63] text-white hover:bg-[#5d4037] border-none -right-12" />
-              </Carousel>
+                          <div className="flex-1 p-3 relative">
+                            <h3 className="font-semibold text-[#5d4037] text-sm">{item.name}</h3>
+                            <p className="text-xs text-[#8d6e63] mt-1 line-clamp-2">{item.description}</p>
+                            <div className="absolute bottom-3 right-3 flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-6 w-6 border-[#8d6e63] text-[#8d6e63] hover:bg-[#8d6e63] hover:text-white"
+                                onClick={() => handleQuantityChange(item.id, -1)}
+                              >
+                                <Minus className="h-3 w-3" />
+                              </Button>
+                              <span className="text-sm text-[#5d4037] font-medium min-w-[20px] text-center">
+                                {quantities[item.id] || 0}
+                              </span>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-6 w-6 border-[#8d6e63] text-[#8d6e63] hover:bg-[#8d6e63] hover:text-white"
+                                onClick={() => handleQuantityChange(item.id, 1)}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              ))}
             </div>
-          </TabsContent>
-        </Tabs>
-        </section>
-
-        {/* Quick Actions Section */}
-        <section>
-          <h2 className="text-center text-3xl font-bold text-[#5d4037] mb-8">Quick Actions</h2>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Link href="/customer/new-order" className="flex flex-col items-center">
-              <div className="flex h-24 w-24 items-center justify-center rounded-full border-2 border-[#8d6e63] bg-[#f9f3e8] mb-2">
-                <Utensils className="h-10 w-10 text-[#8d6e63]" />
-              </div>
-              <span className="text-center font-medium text-[#5d4037]">New order</span>
-            </Link>
-
-            <Link href="/customer/subscription" className="flex flex-col items-center">
-              <div className="flex h-24 w-24 items-center justify-center rounded-full border-2 border-[#8d6e63] bg-[#f9f3e8] mb-2">
-                <ClipboardList className="h-10 w-10 text-[#8d6e63]" />
-              </div>
-              <span className="text-center font-medium text-[#5d4037]">Subscription</span>
-            </Link>
-
-            <Link href="#" className="flex flex-col items-center">
-              <div className="flex h-24 w-24 items-center justify-center rounded-full border-2 border-[#8d6e63] bg-[#f9f3e8] mb-2">
-                <Settings className="h-10 w-10 text-[#8d6e63]" />
-              </div>
-              <span className="text-center font-medium text-[#5d4037]">Account Settings</span>
-            </Link>
-
-            <Link href="#" className="flex flex-col items-center">
-              <div className="flex h-24 w-24 items-center justify-center rounded-full border-2 border-[#8d6e63] bg-[#f9f3e8] mb-2">
-                <History className="h-10 w-10 text-[#8d6e63]" />
-              </div>
-              <span className="text-center font-medium text-[#5d4037]">Order History</span>
-            </Link>
           </div>
-        </section>
+        </div>
       </main>
+
+      {/* Floating Cart Button */}
+      <div className="fixed bottom-6 right-6">
+        <Button 
+          className="h-14 w-14 rounded-full bg-[#8d6e63] hover:bg-[#5d4037] text-white shadow-lg flex items-center justify-center relative"
+        >
+          <ShoppingCart className="h-5 w-5" />
+          <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+            {Object.values(quantities).reduce((a, b) => a + b, 0)}
+          </span>
+        </Button>
+      </div>
     </div>
   )
 }
-
