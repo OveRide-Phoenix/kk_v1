@@ -157,7 +157,7 @@ export default function Footer() {
               </li>
             </ul>
 
-            <div className="mt-6 p-4 bg-secondary rounded-lg">
+            <div className="mt-6 p-4 bg-secondary rounded-lg w-[350px] -ml-14">
               <h4 className="font-medium mb-2">Subscribe to our newsletter</h4>
               <form className="flex gap-2">
                 <input
@@ -166,7 +166,7 @@ export default function Footer() {
                   className="flex-1 px-3 py-2 rounded-md border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary"
                   aria-label="Email for newsletter"
                 />
-                <Button type="submit" size="sm">
+                <Button type="submit" size="sm" className="px-4">
                   Join
                 </Button>
               </form>
