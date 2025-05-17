@@ -36,9 +36,9 @@ export default function RootLayout({
       <body 
         className={`
           ${isHomePage ? `${inter.variable} ${playfair.variable} font-sans` : geist.className}
-          // Add this class to your main content wrapper
-          <main className="min-h-screen scroll-smooth">
+          min-h-screen
         `}
+        style={{ backgroundColor: '#faf7f2', color: '#463028' }}
       >
         {children}
         <Toaster />

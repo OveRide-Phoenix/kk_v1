@@ -1,9 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Home, ShoppingBag, ShoppingCart, User, MapPin, Utensils, ClipboardList, Settings, History } from "lucide-react"
+import Autoplay from "embla-carousel-autoplay"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
@@ -25,6 +26,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import NavBar from "@/components/nav-bar"
+import CustomerNavBar from "@/components/customer-nav-bar"
 
 export default function KuteeraKitchen() {
   const [location, setLocation] = useState("WORK No. 3, St. Mark's Road, Bengaluru - 04......")
@@ -46,7 +49,7 @@ export default function KuteeraKitchen() {
       name: "Masala Dosa",
       description: "Crispy rice crepe served with potato filling, sambar and chutneys",
       price: 120,
-      image: "/placeholder.svg?height=300&width=300",
+      image: "/images/menu/masala-dosa.jpg",
       category: "breakfast"
     },
     {
@@ -54,7 +57,7 @@ export default function KuteeraKitchen() {
       name: "Idli Sambar",
       description: "Steamed rice cakes served with lentil soup and coconut chutney",
       price: 80,
-      image: "/placeholder.svg?height=300&width=300",
+      image: "/images/menu/idli-sambar.jpg",
       category: "breakfast"
     },
     {
@@ -62,7 +65,7 @@ export default function KuteeraKitchen() {
       name: "Poori Bhaji",
       description: "Deep-fried bread served with spiced potato curry",
       price: 100,
-      image: "/placeholder.svg?height=300&width=300",
+      image: "/images/menu/poori.jpg",
       category: "breakfast"
     },
     {
@@ -70,7 +73,7 @@ export default function KuteeraKitchen() {
       name: "Upma",
       description: "Savory semolina porridge with vegetables and spices",
       price: 90,
-      image: "/placeholder.svg?height=300&width=300",
+      image: "/images/menu/upma.jpg",
       category: "breakfast"
     },
     {
@@ -78,7 +81,7 @@ export default function KuteeraKitchen() {
       name: "Vada Sambar",
       description: "Crispy lentil doughnuts served with lentil soup",
       price: 85,
-      image: "/placeholder.svg?height=300&width=300",
+      image: "/images/menu/vada-sambar.jpg",
       category: "breakfast"
     },
     {
@@ -86,7 +89,7 @@ export default function KuteeraKitchen() {
       name: "Rava Dosa",
       description: "Crispy semolina crepe served with potato curry",
       price: 110,
-      image: "/placeholder.svg?height=300&width=300",
+      image: "/images/menu/rava-dosa.jpg",
       category: "breakfast"
     },
     // Lunch Items
@@ -242,189 +245,157 @@ export default function KuteeraKitchen() {
   const filteredItems = activeTab === "all" ? menuItems : menuItems.filter(item => item.category === activeTab)
 
   return (
-    <div className="min-h-screen bg-[#f9f3e8]">
-      {/* Navigation Bar */}
-      <header className="border-b border-[#e6dfd0] bg-[#f9f3e8] py-4 px-4 md:px-6">
-        <div className="flex items-center justify-between">
-          <div className="font-bold text-[#5d4037] text-lg">KUTEERA KITCHEN</div>
+    <div className="min-h-screen bg-[#faf7f2]">
+      <CustomerNavBar />
+      <main className="container mx-auto px-4 py-8 pt-20">
+        {/* Quick Actions Icons */}
+        <div className="flex justify-center gap-8 mb-8">
+          <Link href="/customer/new-order" className="flex flex-col items-center group h-16">
+            <div className="flex h-12 w-12 items-center justify-center transition-all duration-300 group-hover:scale-110 relative">
+              <Utensils className="h-6 w-6 text-primary transition-transform duration-300 group-hover:scale-110" />
+              <div className="absolute inset-0 bg-primary/10 rounded-full scale-0 group-hover:scale-100 transition-transform duration-500 group-hover:animate-ripple"></div>
+            </div>
+            <span className="text-xs font-medium text-[#463028] opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-3 transition-all duration-200">New Order</span>
+          </Link>
 
-          {/* Navigation dropdown */}
-          <div className="hidden md:flex items-center gap-2 text-[#5d4037] w-[400px] justify-center">
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="ghost" className="flex items-center gap-2 px-2 w-full justify-center">
-                  <MapPin className="h-4 w-4 flex-shrink-0" />
-                  <span className="text-sm flex-shrink-0">Deliver to:</span>
-                  <span className="text-sm font-medium truncate max-w-[200px]">{location}</span>
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="bg-white sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle className="text-xl font-semibold text-[#5d4037]">Select Delivery Address</DialogTitle>
-                </DialogHeader>
-                <div className="mt-4">
-                  <RadioGroup 
-                    value={selectedAddress} // Change defaultValue to value
-                    className="gap-4" 
-                    onValueChange={(value) => {
-                      setSelectedAddress(value)
-                    }}
-                  >
-                    {addresses.map((addr) => (
-                      <div key={addr.type} className="flex items-center space-x-2 border rounded-lg p-4">
-                        <RadioGroupItem value={addr.type.toLowerCase()} id={addr.type.toLowerCase()} />
-                        <label htmlFor={addr.type.toLowerCase()} className="flex-1 cursor-pointer">
-                          <div className="font-medium text-[#5d4037]">{addr.type}</div>
-                          <div className="text-sm text-[#8d6e63]">{addr.address}</div>
-                        </label>
-                      </div>
-                    ))}
-                  </RadioGroup>
-                  <Button 
-                    className="w-full mt-6 bg-black text-white hover:bg-[#5d4037] flex items-center gap-2"
-                    onClick={() => {
-                      const selected = addresses.find(addr => addr.type.toLowerCase() === selectedAddress)
-                      if (selected) {
-                        setLocation(selected.address)
-                        setDialogOpen(false)
-                      }
-                    }}
-                  >
-                    <MapPin className="h-4 w-4" />
-                    Deliver to this Address
-                  </Button>
-                  <Button variant="outline" className="w-full mt-3 border-dashed">
-                    + Add New Address
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-          <div className="flex items-center gap-6">
-            <Button variant="ghost" className="text-[#5d4037] p-2 flex items-center group hover:bg-[#8d6e63] hover:text-white w-[40px] hover:w-[100px] transition-all duration-200">
-              <Home className="h-5 w-5" />
-              <span className="hidden group-hover:inline text-sm ml-2 whitespace-nowrap overflow-hidden">Home</span>
-            </Button>
-            <Link href="/customer/new-order">
-              <Button variant="ghost" className="text-[#5d4037] p-2 flex items-center group hover:bg-[#8d6e63] hover:text-white w-[40px] hover:w-[100px] transition-all duration-200">
-                <ShoppingBag className="h-5 w-5" />
-                <span className="hidden group-hover:inline text-sm ml-2 whitespace-nowrap overflow-hidden">Order</span>
-              </Button>
-            </Link>
-            <Link href="/customer/cart">
-              <Button variant="ghost" className="text-[#5d4037] p-2 flex items-center group hover:bg-[#8d6e63] hover:text-white w-[40px] hover:w-[100px] transition-all duration-200">
-                <ShoppingCart className="h-5 w-5" />
-                <span className="hidden group-hover:inline text-sm ml-2 whitespace-nowrap overflow-hidden">Cart</span>
-              </Button>
-            </Link>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="text-[#5d4037] p-2 flex items-center group hover:bg-[#8d6e63] hover:text-white w-[40px] hover:w-[120px] transition-all duration-200">
-                  <User className="h-5 w-5" />
-                  <span className="hidden group-hover:inline text-sm ml-2 whitespace-nowrap overflow-hidden">Tim Cook</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="bg-[#f9f3e8] border border-[#e6dfd0] shadow-md">
-                <DropdownMenuItem className="hover:bg-[#8d6e63] hover:text-white focus:bg-[#8d6e63] focus:text-white">
-                  Profile
-                </DropdownMenuItem>
-                <DropdownMenuItem className="hover:bg-[#8d6e63] hover:text-white focus:bg-[#8d6e63] focus:text-white">
-                  Settings
-                </DropdownMenuItem>
-                <DropdownMenuItem className="hover:bg-[#8d6e63] hover:text-white focus:bg-[#8d6e63] focus:text-white">
-                  Logout
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+          <Link href="/customer/subscription" className="flex flex-col items-center group h-16">
+            <div className="flex h-12 w-12 items-center justify-center transition-all duration-300 group-hover:scale-110 relative">
+              <ClipboardList className="h-6 w-6 text-primary transition-transform duration-300 group-hover:scale-110" />
+              <div className="absolute inset-0 bg-primary/10 rounded-full scale-0 group-hover:scale-100 transition-transform duration-500 group-hover:animate-ripple"></div>
+            </div>
+            <span className="text-xs font-medium text-[#463028] opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-3 transition-all duration-200">Subscription</span>
+          </Link>
+
+          <Link href="#" className="flex flex-col items-center group h-16">
+            <div className="flex h-12 w-12 items-center justify-center transition-all duration-300 group-hover:scale-110 relative">
+              <Settings className="h-6 w-6 text-primary transition-transform duration-300 group-hover:scale-110" />
+              <div className="absolute inset-0 bg-primary/10 rounded-full scale-0 group-hover:scale-100 transition-transform duration-500 group-hover:animate-ripple"></div>
+            </div>
+            <span className="text-xs font-medium text-[#463028] opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-3 transition-all duration-200">Settings</span>
+          </Link>
+
+          <Link href="#" className="flex flex-col items-center group h-16">
+            <div className="flex h-12 w-12 items-center justify-center transition-all duration-300 group-hover:scale-110 relative">
+              <History className="h-6 w-6 text-primary transition-transform duration-300 group-hover:scale-110" />
+              <div className="absolute inset-0 bg-primary/10 rounded-full scale-0 group-hover:scale-100 transition-transform duration-500 group-hover:animate-ripple"></div>
+            </div>
+            <span className="text-xs font-medium text-[#463028] opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-3 transition-all duration-200">History</span>
+          </Link>
         </div>
 
-        <div className="md:hidden flex items-center gap-2 text-[#5d4037] mt-2">
-          <MapPin className="h-4 w-4" />
-          <span className="text-xs">Deliver to:</span>
-          <span className="text-xs font-medium truncate">{location}</span>
-        </div>
-      </header>
-
-      <main className="container mx-auto px-4 py-8">
         {/* Today's Menu Section */}
         <section className="mb-12">
-          <h2 className="text-center text-3xl font-bold text-[#5d4037] mb-8">Today's Menu</h2>
+          <div className="flex items-center justify-center mb-8">
+            <div className="h-px bg-border flex-grow max-w-xs"></div>
+            <div className="mx-4 flex items-center">
+              <Utensils className="h-5 w-5 text-[#463028] mr-2" />
+              <h2 className="text-3xl font-serif font-bold text-[#463028]">Today's Menu</h2>
+            </div>
+            <div className="h-px bg-border flex-grow max-w-xs"></div>
+          </div>
           
           <Tabs defaultValue="breakfast" className="mb-16" onValueChange={setActiveTab}>
             <div className="flex justify-center mb-8">
-              <TabsList className="grid w-[600px] grid-cols-5 bg-[#f9f3e8] border border-[#8d6e63] rounded-full p-1 shadow-md">
+              <TabsList className="grid w-[600px] grid-cols-5 bg-[#faf7f2] border border-primary rounded-full p-1 shadow-md">
                 <TabsTrigger 
                   value="all"
-                  className="data-[state=active]:bg-[#8d6e63] data-[state=active]:text-white data-[state=active]:shadow-sm rounded-full"
+                  className="data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm rounded-full font-serif"
                 >
-                  ALL
+                  All
                 </TabsTrigger>
                 <TabsTrigger 
                   value="breakfast"
-                  className="data-[state=active]:bg-[#8d6e63] data-[state=active]:text-white data-[state=active]:shadow-sm rounded-full"
+                  className="data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm rounded-full font-serif"
                 >
-                  BREAKFAST
+                  Breakfast
                 </TabsTrigger>
                 <TabsTrigger 
                   value="lunch"
-                  className="data-[state=active]:bg-[#8d6e63] data-[state=active]:text-white rounded-full"
+                  className="data-[state=active]:bg-primary data-[state=active]:text-white rounded-full font-serif"
                 >
-                  LUNCH
+                  Lunch
                 </TabsTrigger>
                 <TabsTrigger 
                   value="dinner"
-                  className="data-[state=active]:bg-[#8d6e63] data-[state=active]:text-white rounded-full"
+                  className="data-[state=active]:bg-primary data-[state=active]:text-white rounded-full font-serif"
                 >
-                  DINNER
+                  Dinner
                 </TabsTrigger>
                 <TabsTrigger 
                   value="condiments"
-                  className="data-[state=active]:bg-[#8d6e63] data-[state=active]:text-white rounded-full"
+                  className="data-[state=active]:bg-primary data-[state=active]:text-white rounded-full font-serif"
                 >
-                  CONDIMENTS
+                  Condiments
                 </TabsTrigger>
               </TabsList>
             </div>
           
           <TabsContent value={activeTab}>
             <div className="px-16">
-              <Carousel 
-                className="w-full relative mx-auto max-w-5xl"
-                opts={{
-                  slidesToScroll: 2,
-                  align: "start"
-                }}
-              >
-                <CarouselContent className="-ml-4">
+              {activeTab === "all" ? (
+                <Carousel
+                  className="w-full relative mx-auto"
+                  opts={{
+                    slidesToScroll: 1,
+                    align: "start",
+                    loop: true,
+                  }}
+                  plugins={[
+                    Autoplay({
+                      delay: 5000,
+                      stopOnInteraction: false,
+                    })
+                  ]}
+                >
+                  <CarouselContent>
+                    {Array.from({ length: Math.ceil(filteredItems.length / 6) }).map((_, index) => (
+                      <CarouselItem key={index}>
+                        <div className="grid grid-cols-3 gap-4">
+                          {filteredItems.slice(index * 6, (index + 1) * 6).map((item) => (
+                            <div key={item.id} className="flex bg-[#faf7f2] border-2 border-[#e6dfd0] rounded-lg overflow-hidden h-[120px] shadow-sm hover:shadow-md transition-shadow duration-200">
+                              <div className="w-[120px] h-[120px] flex-shrink-0">
+                                <Image
+                                  src={item.image || "/placeholder.svg"}
+                                  alt={item.name}
+                                  width={120}
+                                  height={120}
+                                  className="object-cover h-full w-full"
+                                />
+                              </div>
+                              <div className="flex-1 p-3">
+                                <h3 className="font-medium text-[#463028] text-sm">{item.name}</h3>
+                                <p className="text-xs text-[#8d6e63] mt-1 line-clamp-2">{item.description}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CarouselItem>
+                    ))}
+                  </CarouselContent>
+                  <CarouselPrevious className="absolute -left-12 top-1/2 -translate-y-1/2" />
+                  <CarouselNext className="absolute -right-12 top-1/2 -translate-y-1/2" />
+                </Carousel>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {filteredItems.map((item) => (
-                    <CarouselItem key={item.id} className="pl-4 basis-full md:basis-1/2 lg:basis-1/4">
-                      <Card className="border border-[#e6dfd0] bg-[#f9f3e8] shadow-sm max-w-[240px] mx-auto h-[360px] flex flex-col">
-                        <CardHeader className="p-0">
-                          <div className="aspect-square overflow-hidden rounded-t-lg">
-                            <Image
-                              src={item.image || "/placeholder.svg"}
-                              alt={item.name}
-                              width={240}
-                              height={240}
-                              className="h-full w-full object-cover"
-                            />
-                          </div>
-                        </CardHeader>
-                        <CardContent className="p-4 flex-1">
-                          <h3 className="font-medium text-[#5d4037]">{item.name}</h3>
-                          <p className="text-xs text-[#8d6e63] mt-1 line-clamp-2 h-[32px]">{item.description}</p>
-                        </CardContent>
-                        <CardFooter className="p-4 pt-0">
-                          <p className="text-sm font-medium text-[#5d4037]">Rs. {item.price}</p>
-                        </CardFooter>
-                      </Card>
-                    </CarouselItem>
+                    <div key={item.id} className="flex bg-[#faf7f2] border-2 border-[#e6dfd0] rounded-lg overflow-hidden h-[120px] shadow-sm hover:shadow-md transition-shadow duration-200">
+                      <div className="w-[120px] h-[120px] flex-shrink-0">
+                        <Image
+                          src={item.image || "/placeholder.svg"}
+                          alt={item.name}
+                          width={120}
+                          height={120}
+                          className="object-cover h-full w-full"
+                        />
+                      </div>
+                      <div className="flex-1 p-3">
+                        <h3 className="font-medium text-[#463028] text-sm">{item.name}</h3>
+                        <p className="text-xs text-[#8d6e63] mt-1 line-clamp-2">{item.description}</p>
+                      </div>
+                    </div>
                   ))}
-                </CarouselContent>
-                <CarouselPrevious className="bg-[#8d6e63] text-white hover:bg-[#5d4037] border-none -left-12" />
-                <CarouselNext className="bg-[#8d6e63] text-white hover:bg-[#5d4037] border-none -right-12" />
-              </Carousel>
+                </div>
+              )}
             </div>
           </TabsContent>
         </Tabs>
@@ -432,35 +403,43 @@ export default function KuteeraKitchen() {
 
         {/* Quick Actions Section */}
         <section>
-          <h2 className="text-center text-3xl font-bold text-[#5d4037] mb-8">Quick Actions</h2>
+          <div className="flex items-center justify-center mb-8">
+            <div className="h-px bg-border flex-grow max-w-xs"></div>
+            <h2 className="mx-4 text-3xl font-serif font-bold text-[#5d4037]">Quick Actions</h2>
+            <div className="h-px bg-border flex-grow max-w-xs"></div>
+          </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Link href="/customer/new-order" className="flex flex-col items-center">
-              <div className="flex h-24 w-24 items-center justify-center rounded-full border-2 border-[#8d6e63] bg-[#f9f3e8] mb-2">
-                <Utensils className="h-10 w-10 text-[#8d6e63]" />
+            <Link href="/customer/new-order" className="flex flex-col items-center group relative overflow-hidden pt-4">
+              <div className="flex h-16 w-16 items-center justify-center mb-2 transition-all duration-300 group-hover:scale-110 relative">
+                <Utensils className="h-7 w-7 text-primary transition-transform duration-300 group-hover:scale-110" />
+                <div className="absolute inset-0 bg-primary/10 rounded-full scale-0 group-hover:scale-100 transition-transform duration-500 group-hover:animate-ripple"></div>
               </div>
-              <span className="text-center font-medium text-[#5d4037]">New order</span>
+              <span className="text-center font-medium text-[#463028]">New order</span>
             </Link>
 
-            <Link href="/customer/subscription" className="flex flex-col items-center">
-              <div className="flex h-24 w-24 items-center justify-center rounded-full border-2 border-[#8d6e63] bg-[#f9f3e8] mb-2">
-                <ClipboardList className="h-10 w-10 text-[#8d6e63]" />
+            <Link href="/customer/subscription" className="flex flex-col items-center group relative overflow-hidden pt-4">
+              <div className="flex h-16 w-16 items-center justify-center mb-2 transition-all duration-300 group-hover:scale-110 relative">
+                <ClipboardList className="h-7 w-7 text-primary transition-transform duration-300 group-hover:scale-110" />
+                <div className="absolute inset-0 bg-primary/10 rounded-full scale-0 group-hover:scale-100 transition-transform duration-500 group-hover:animate-ripple"></div>
               </div>
-              <span className="text-center font-medium text-[#5d4037]">Subscription</span>
+              <span className="text-center font-medium text-[#463028]">Subscription</span>
             </Link>
 
-            <Link href="#" className="flex flex-col items-center">
-              <div className="flex h-24 w-24 items-center justify-center rounded-full border-2 border-[#8d6e63] bg-[#f9f3e8] mb-2">
-                <Settings className="h-10 w-10 text-[#8d6e63]" />
+            <Link href="#" className="flex flex-col items-center group relative overflow-hidden pt-4">
+              <div className="flex h-16 w-16 items-center justify-center mb-2 transition-all duration-300 group-hover:scale-110 relative">
+                <Settings className="h-7 w-7 text-primary transition-transform duration-300 group-hover:scale-110" />
+                <div className="absolute inset-0 bg-primary/10 rounded-full scale-0 group-hover:scale-100 transition-transform duration-500 group-hover:animate-ripple"></div>
               </div>
-              <span className="text-center font-medium text-[#5d4037]">Account Settings</span>
+              <span className="text-center font-medium text-[#463028]">Account Settings</span>
             </Link>
 
-            <Link href="#" className="flex flex-col items-center">
-              <div className="flex h-24 w-24 items-center justify-center rounded-full border-2 border-[#8d6e63] bg-[#f9f3e8] mb-2">
-                <History className="h-10 w-10 text-[#8d6e63]" />
+            <Link href="#" className="flex flex-col items-center group relative overflow-hidden pt-4">
+              <div className="flex h-16 w-16 items-center justify-center mb-2 transition-all duration-300 group-hover:scale-110 relative">
+                <History className="h-7 w-7 text-primary transition-transform duration-300 group-hover:scale-110" />
+                <div className="absolute inset-0 bg-primary/10 rounded-full scale-0 group-hover:scale-100 transition-transform duration-500 group-hover:animate-ripple"></div>
               </div>
-              <span className="text-center font-medium text-[#5d4037]">Order History</span>
+              <span className="text-center font-medium text-[#463028]">Order History</span>
             </Link>
           </div>
         </section>

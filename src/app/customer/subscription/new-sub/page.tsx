@@ -28,7 +28,7 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import CustomerNavBar from "@/components/customer-nav-bar"
 
-export default function NewOrder() {
+export default function NewSubscription() {
   const [quantities, setQuantities] = useState<{ [key: number]: number }>({})
   const [popupQuantities, setPopupQuantities] = useState<{ [key: number]: number }>({});
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
@@ -36,7 +36,7 @@ export default function NewOrder() {
   const [selectedAddress, setSelectedAddress] = useState("work");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
-  const [quantityChanged, setQuantityChanged] = useState(false); // New state variable
+  const [quantityChanged, setQuantityChanged] = useState(false);
   const [addresses] = useState([
     { type: "HOME", address: "123 Home Street, Bengaluru - 01" },
     { type: "WORK", address: "WORK No. 3, St. Mark's Road, Bengaluru - 04" },
@@ -55,7 +55,7 @@ export default function NewOrder() {
       ...prev,
       [itemId]: Math.max(0, (prev[itemId] || 0) + change)
     }));
-    setQuantityChanged(true); // Mark that the quantity has been changed
+    setQuantityChanged(true);
   };
 
   const handleConfirm = () => {
@@ -64,12 +64,12 @@ export default function NewOrder() {
       [selectedItem.id]: popupQuantities[selectedItem.id] || 0
     }));
     setSelectedItem(null);
-    setQuantityChanged(false); // Reset the change tracker
+    setQuantityChanged(false);
   };
 
   const handleCloseDialog = () => {
     if (quantityChanged) {
-      alert("Please confirm your changes before closing."); // Warning message
+      alert("Please confirm your changes before closing.");
     } else {
       setSelectedItem(null);
     }
@@ -81,208 +81,29 @@ export default function NewOrder() {
       ...prev,
       [item.id]: quantities[item.id] || 0
     }));
-    setQuantityChanged(false); // Reset the change tracker when opening
+    setQuantityChanged(false);
   };
 
-  // Menu items data
   const menuItems = [
-    // Breakfast Items
+    // Sample items
     {
       id: 1,
-      name: "Masala Dosa",
-      description: "Crispy rice crepe served with potato filling, sambar and chutneys",
-      price: 120,
-      image: "/images/menu/masala-dosa.jpg",
-      category: "breakfast"
+      name: "Sample Item 1",
+      description: "Description for item 1",
+      price: 100,
+      image: "/images/sample1.jpg",
+      category: "category1"
     },
     {
       id: 2,
-      name: "Idli Sambar",
-      description: "Steamed rice cakes served with lentil soup and coconut chutney",
-      price: 80,
-      image: "/images/menu/idli-sambar.jpg",
-      category: "breakfast"
-    },
-    {
-      id: 3,
-      name: "Poori Bhaji",
-      description: "Deep-fried bread served with spiced potato curry",
-      price: 100,
-      image: "/images/menu/poori.jpg",
-      category: "breakfast"
-    },
-    {
-      id: 13,
-      name: "Upma",
-      description: "Savory semolina porridge with vegetables and spices",
-      price: 90,
-      image: "/images/menu/upma.jpg",
-      category: "breakfast"
-    },
-    {
-      id: 14,
-      name: "Vada Sambar",
-      description: "Crispy lentil doughnuts served with lentil soup",
-      price: 85,
-      image: "/images/menu/vada-sambar.jpg",
-      category: "breakfast"
-    },
-    {
-      id: 15,
-      name: "Rava Dosa",
-      description: "Crispy semolina crepe served with potato curry",
-      price: 110,
-      image: "/images/menu/rava-dosa.jpg",
-      category: "breakfast"
-    },
-    // Lunch Items
-    {
-      id: 4,
-      name: "Veg Thali",
-      description: "Complete meal with rice, rotis, dal, sabzi, and dessert",
-      price: 200,
-      image: "/images/menu/idli-sambar.jpg",
-      category: "lunch"
-    },
-    {
-      id: 5,
-      name: "Pulao",
-      description: "Fragrant rice cooked with mixed vegetables and spices",
-      price: 180,
-      image: "/images/menu/idli-sambar.jpg",
-      category: "lunch"
-    },
-    {
-      id: 6,
-      name: "Dal Makhani",
-      description: "Creamy black lentils cooked overnight with butter and spices",
-      price: 160,
-      image: "/images/menu/idli-sambar.jpg",
-      category: "lunch"
-    },
-    {
-      id: 16,
-      name: "Chole Bhature",
-      description: "Spiced chickpea curry with deep-fried bread",
+      name: "Sample Item 2",
+      description: "Description for item 2",
       price: 150,
-      image: "/images/menu/idli-sambar.jpg",
-      category: "lunch"
+      image: "/images/sample2.jpg",
+      category: "category2"
     },
-    {
-      id: 17,
-      name: "Rajma Chawal",
-      description: "Kidney bean curry served with steamed rice",
-      price: 170,
-      image: "/images/menu/idli-sambar.jpg",
-      category: "lunch"
-    },
-    {
-      id: 18,
-      name: "Kadai Paneer",
-      description: "Cottage cheese in spicy bell pepper gravy",
-      price: 190,
-      image: "/images/menu/idli-sambar.jpg",
-      category: "lunch"
-    },
-    // Dinner Items
-    {
-      id: 7,
-      name: "Paneer Butter Masala",
-      description: "Cottage cheese cubes in rich tomato gravy",
-      price: 220,
-      image: "/images/menu/idli-sambar.jpg",
-      category: "dinner"
-    },
-    {
-      id: 8,
-      name: "Veg Biryani",
-      description: "Aromatic rice layered with mixed vegetables and spices",
-      price: 250,
-      image: "/images/menu/idli-sambar.jpg",
-      category: "dinner"
-    },
-    {
-      id: 9,
-      name: "Roti Basket",
-      description: "Assorted Indian breads with butter",
-      price: 120,
-      image: "/images/menu/idli-sambar.jpg",
-      category: "dinner"
-    },
-    {
-      id: 19,
-      name: "Malai Kofta",
-      description: "Vegetable dumplings in creamy curry sauce",
-      price: 230,
-      image: "/images/menu/idli-sambar.jpg",
-      category: "dinner"
-    },
-    {
-      id: 20,
-      name: "Palak Paneer",
-      description: "Cottage cheese in creamy spinach gravy",
-      price: 210,
-      image: "/images/menu/idli-sambar.jpg",
-      category: "dinner"
-    },
-    {
-      id: 21,
-      name: "Dal Tadka",
-      description: "Yellow lentils tempered with spices",
-      price: 140,
-      image: "/images/menu/idli-sambar.jpg",
-      category: "dinner"
-    },
-    // Condiments
-    {
-      id: 10,
-      name: "Mint Chutney",
-      description: "Fresh mint and coriander chutney",
-      price: 40,
-      image: "/images/menu/idli-sambar.jpg",
-      category: "condiments"
-    },
-    {
-      id: 11,
-      name: "Mixed Pickle",
-      description: "Spicy mixed vegetable pickle",
-      price: 50,
-      image: "/images/menu/idli-sambar.jpg",
-      category: "condiments"
-    },
-    {
-      id: 12,
-      name: "Raita",
-      description: "Yogurt with mixed vegetables and mild spices",
-      price: 60,
-      image: "/images/menu/idli-sambar.jpg",
-      category: "condiments"
-    },
-    {
-      id: 22,
-      name: "Mango Chutney",
-      description: "Sweet and tangy mango relish",
-      price: 45,
-      image: "/images/menu/idli-sambar.jpg",
-      category: "condiments"
-    },
-    {
-      id: 23,
-      name: "Onion Salad",
-      description: "Sliced onions with lemon and spices",
-      price: 30,
-      image: "/images/menu/idli-sambar.jpg",
-      category: "condiments"
-    },
-    {
-      id: 24,
-      name: "Papad Basket",
-      description: "Assorted crispy lentil wafers",
-      price: 55,
-      image: "/images/menu/idli-sambar.jpg",
-      category: "condiments"
-    }
-  ]
+    // Add more items as needed
+  ];
 
   return (
     <div className="min-h-screen bg-[#faf7f2]">
@@ -294,15 +115,14 @@ export default function NewOrder() {
             <div className="h-px bg-border flex-grow max-w-xs"></div>
             <div className="mx-4 flex items-center">
               <ShoppingBag className="h-5 w-5 text-[#463028] mr-2" />
-              <h1 className="text-3xl font-serif font-bold text-[#463028]">Place a New Order</h1>
+              <h1 className="text-3xl font-serif font-bold text-[#463028]">New Subscription</h1>
             </div>
             <div className="h-px bg-border flex-grow max-w-xs"></div>
           </div>
           
-          {/* Category Buttons */}
           <div className="sticky top-20 z-10">
             <div className="flex justify-center gap-2">
-              {["breakfast", "lunch", "dinner", "condiments"].map((category) => (
+              {["category1", "category2"].map((category) => (
                 <button
                   key={category}
                   onClick={() => {
@@ -331,7 +151,7 @@ export default function NewOrder() {
 
           <div className="px-16">
             <div className="grid grid-cols-1 gap-16">
-              {["breakfast", "lunch", "dinner", "condiments"].map((category) => (
+              {["category1", "category2"].map((category) => (
                 <div key={category} id={category}>
                   <h2 className="text-xl font-semibold text-[#463028] mb-4 capitalize font-serif">{category}</h2>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -360,7 +180,7 @@ export default function NewOrder() {
                                 size="icon"
                                 className="h-6 w-6 border-primary text-primary hover:bg-primary hover:text-white"
                                 onClick={(e) => {
-                                  e.stopPropagation(); // Prevents the click from triggering the parent onClick
+                                  e.stopPropagation();
                                   handleQuantityChange(item.id, -1);
                                 }}
                               >
@@ -374,7 +194,7 @@ export default function NewOrder() {
                                 size="icon"
                                 className="h-6 w-6 border-primary text-primary hover:bg-primary hover:text-white"
                                 onClick={(e) => {
-                                  e.stopPropagation(); // Prevents the click from triggering the parent onClick
+                                  e.stopPropagation();
                                   handleQuantityChange(item.id, 1);
                                 }}
                               >
@@ -392,7 +212,6 @@ export default function NewOrder() {
         </div>
       </main>
 
-      {/* Floating Cart Button */}
       <div className="fixed bottom-6 right-6">
         <Button 
           className="h-12 w-12 rounded-full bg-primary/80 hover:bg-primary text-white shadow-xl flex items-center justify-center relative"
@@ -404,7 +223,6 @@ export default function NewOrder() {
         </Button>
       </div>
 
-      {/* Dialog Component */}
       <Dialog open={selectedItem !== null} onOpenChange={handleCloseDialog}>
         <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden bg-[#faf7f2]">
           <div className="relative w-full h-[250px]">
