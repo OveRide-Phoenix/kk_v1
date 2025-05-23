@@ -277,7 +277,7 @@ def get_all_items():
                 i.uom, i.weight_factor, i.weight_uom, i.item_type, i.hsn_code, i.factor,
                 i.quantity_portion, i.buffer_percentage, i.picture_url,
                 i.breakfast_price, i.lunch_price, i.dinner_price, i.condiments_price, i.festival_price,
-                i.cgst, i.sgst, i.igst, i.net_price, i.is_combo
+                i.cgst, i.sgst, i.igst, i.net_price
             FROM items i
             LEFT JOIN categories c ON i.category_id = c.category_id
         """)
@@ -293,20 +293,50 @@ def get_all_combos():
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
+        # Step 1: Get all combos and their category
         cursor.execute("""
             SELECT 
-                ic.combo_id,
-                combo_item.name AS combo_name,
-                GROUP_CONCAT(DISTINCT included_item.name) AS included_item_names,
-                GROUP_CONCAT(DISTINCT cat.category_name) AS included_category_names,
-                ic.quantity
-            FROM item_combos ic
-            LEFT JOIN items combo_item ON ic.combo_item_id = combo_item.item_id
-            LEFT JOIN items included_item ON ic.included_item_id = included_item.item_id
-            LEFT JOIN categories cat ON ic.included_category_id = cat.category_id
-            GROUP BY ic.combo_id
+                c.combo_id,
+                c.combo_name,
+                c.price,
+                c.category_id,
+                cat.category_name
+            FROM combos c
+            LEFT JOIN categories cat ON c.category_id = cat.category_id
         """)
-        return cursor.fetchall()
+        combos = cursor.fetchall()
+
+        # Step 2: Get all items in each combo
+        cursor.execute("""
+            SELECT 
+                ci.combo_id,
+                ci.item_id,
+                ci.quantity,
+                i.name AS item_name
+            FROM combo_items ci
+            LEFT JOIN items i ON ci.item_id = i.item_id
+        """)
+        combo_items = cursor.fetchall()
+
+        # Step 3: Map combo_id → list of items
+        combo_item_map = {}
+        for item in combo_items:
+            combo_id = item["combo_id"]
+            if combo_id not in combo_item_map:
+                combo_item_map[combo_id] = []
+            combo_item_map[combo_id].append({
+                "itemId": item["item_id"],
+                "name": item["item_name"],
+                "quantity": item["quantity"]
+            })
+
+        # Step 4: Attach includedItems to each combo
+        for combo in combos:
+            combo_id = combo["combo_id"]
+            combo["includedItems"] = combo_item_map.get(combo_id, [])
+
+        return combos
+
     except mysql.connector.Error as err:
         raise HTTPException(status_code=500, detail=str(err))
     finally:
