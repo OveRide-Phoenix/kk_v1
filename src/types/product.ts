@@ -48,12 +48,13 @@ export interface Product {
   is_combo: boolean
 }
 
-// Combo product from item_combos
+// Combo product from item_combos table
 export interface ComboProduct {
   combo_id: number
-  combo_name: string
-  included_item_names: string // comma-separated
-  included_category_names: string // comma-separated
+  combo_item_id: number
+  combo_name: string | null
+  included_category_id: number | null
+  included_item_id: number | null
   quantity: number
 }
 

@@ -10,14 +10,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import ProductTable from "@/components/product-table"
 import ProductForm from "@/components/product-form"
 import DeleteConfirmationDialog from "@/components/delete-confirmation-dialog"
-import { type Product, ProductType } from "@/types/product"
+import { type Product, type ComboProduct, type AddonProduct, type CategoryProduct, ProductType } from "@/types/product"
 import { AdminLayout } from "./admin-layout"
 import ComboForm from "@/components/combo-form"
 import AddonForm from "@/components/addon-form"
 
 export default function ProductManagement() {
-  const [products, setProducts] = useState<Product[]>([])
-  const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
+  const [products, setProducts] = useState<Product | ComboProduct | AddonProduct | CategoryProduct[]>([])
+  const [filteredProducts, setFilteredProducts] = useState<Product | ComboProduct | AddonProduct | CategoryProduct[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
@@ -28,12 +28,10 @@ export default function ProductManagement() {
   const [activeTab, setActiveTab] = useState("items")
 
   // Get unique groups for filter dropdown
-  const uniqueGroups = Array.from(new Set(products.map((product) => product.group)))
+const uniqueGroups = Array.from(new Set((products as any[]).map((product) => product.group)))
 
   // Get unique product types for filter dropdown
-  const uniqueTypes = Array.from(new Set(products.map((product) => product.item_type)))
-
-  // Remove categories state, not needed anymore
+const uniqueTypes = Array.from(new Set((products as any[]).map((product) => product.item_type)))
 
   // Fetch data from FastAPI based on activeTab
   useEffect(() => {
@@ -73,17 +71,37 @@ export default function ProductManagement() {
 
   // Filter products based on search query and filters
   useEffect(() => {
-    let filtered = [...products]
+    let filtered = [...(products as any[])]
 
     // Apply search filter
     if (searchQuery.trim() !== "") {
-      filtered = filtered.filter(
-        (product) =>
-          product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          product.group.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          product.item_type.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (product.description && product.description.toLowerCase().includes(searchQuery.toLowerCase())),
-      )
+      filtered = filtered.filter((product) => {
+        const searchLower = searchQuery.toLowerCase()
+        
+        // Get the appropriate name and ID fields based on table type
+        let name, id
+        switch (activeTab) {
+          case "items":
+            name = (product as Product).name
+            id = (product as Product).item_id
+            break
+          case "combos":
+            name = (product as ComboProduct).combo_name
+            id = (product as ComboProduct).combo_id
+            break
+          case "addons":
+            name = (product as AddonProduct).add_on_item_name
+            id = (product as AddonProduct).add_on_id
+            break
+          case "categories":
+            name = (product as CategoryProduct).category_name
+            id = (product as CategoryProduct).category_id
+            break
+        }
+        
+        return (name && String(name).toLowerCase().includes(searchLower)) ||
+               (id && String(id).toLowerCase().includes(searchLower))
+      })
     }
 
     // Apply type filter
@@ -127,7 +145,7 @@ export default function ProductManagement() {
 
   const confirmDelete = () => {
     if (productToDelete) {
-      const updatedProducts = products.filter((p) => p.id !== productToDelete.id)
+      const updatedProducts = (products as any[]).filter((p) => p.id !== productToDelete.id)
       setProducts(updatedProducts)
       setIsDeleteDialogOpen(false)
       setProductToDelete(null)
@@ -137,7 +155,7 @@ export default function ProductManagement() {
   const handleSaveProduct = (product: Product) => {
     if (selectedProduct) {
       // Update existing product
-      const updatedProducts = products.map((p) => (p.id === product.id ? product : p))
+      const updatedProducts = (products as any[]).map((p) => (p.id === product.id ? product : p))
       setProducts(updatedProducts)
     } else {
       // Add new product
@@ -145,7 +163,7 @@ export default function ProductManagement() {
         ...product,
         id: Date.now().toString(), // Simple ID generation
       }
-      setProducts([...products, newProduct])
+      setProducts([...(products as any[]), newProduct])
     }
     setIsFormOpen(false)
   }
@@ -234,18 +252,12 @@ export default function ProductManagement() {
 
             <div className="rounded-md border overflow-x-auto">
               <ProductTable
-                products={filteredProducts}
+                products={filteredProducts as (Product | ComboProduct | AddonProduct | CategoryProduct)[]}
                 onEdit={handleEditProduct}
                 onDelete={handleDeleteProduct}
                 tableType={activeTab as "items" | "combos" | "addons" | "categories"}
               />
             </div>
-
-            {filteredProducts.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground">
-                No {singularFormMap[activeTab as keyof typeof singularFormMap]}s found
-              </div>
-            )}
           </CardContent>
         </Card>
 
@@ -253,13 +265,13 @@ export default function ProductManagement() {
           <ComboForm 
             onSave={handleSaveProduct} 
             onCancel={() => setIsFormOpen(false)}
-            existingItems={products.filter(p => !p.is_combo && !p.isSubItem)} // Pass regular items as options
+            existingItems={(products as any[]).filter(p => !p.is_combo && !p.isSubItem)} // Pass regular items as options
           />
         ) : isFormOpen && activeTab === "addons" ? (
           <AddonForm
             onSave={handleSaveProduct}
             onCancel={() => setIsFormOpen(false)}
-            existingItems={products.filter(p => !p.is_combo && !p.isSubItem)} // Pass regular items as options
+            existingItems={(products as any[]).filter(p => !p.is_combo && !p.isSubItem)} // Pass regular items as options
           />
         ) : isFormOpen && (
           <ProductForm 
