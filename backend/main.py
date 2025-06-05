@@ -378,3 +378,291 @@ def get_all_categories():
     finally:
         cursor.close()
         db.close()
+
+# 1. Fetch available items for a given meal (BLD)
+@app.get("/api/menu/available-items", tags=["Daily Menu"])
+def get_available_items(bld_type: str = Query(..., description="BLD type: Breakfast, Lunch, Dinner, Condiments")):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        # 1) Find the corresponding bld_id (integer) by matching bld_type (case-insensitive)
+        cursor.execute(
+            "SELECT bld_id FROM bld WHERE LOWER(bld_type) = LOWER(%s) LIMIT 1",
+            (bld_type,)
+        )
+        bld_row = cursor.fetchone()
+        if not bld_row:
+            raise HTTPException(status_code=404, detail="BLD type not found")
+
+        bld_id = bld_row["bld_id"]
+
+        # 2) Fetch all items whose bld_id matches that integer
+        query = """
+            SELECT 
+                item_id,
+                bld_id,
+                name,
+                description,
+                alias,
+                category_id,
+                uom,
+                weight_factor,
+                weight_uom,
+                item_type,
+                hsn_code,
+                factor,
+                quantity_portion,
+                buffer_percentage,
+                picture_url,
+                breakfast_price,
+                lunch_price,
+                dinner_price,
+                condiments_price,
+                festival_price,
+                cgst,
+                sgst,
+                igst,
+                net_price
+            FROM items
+            WHERE bld_id = %s
+        """
+        cursor.execute(query, (bld_id,))
+        items = cursor.fetchall()
+        return items
+
+    except mysql.connector.Error as err:
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+
+# 2. Fetch existing menu by date and BLD
+@app.get("/api/menu", tags=["Daily Menu"])
+def get_daily_menu(
+    date: str = Query(..., description="Date in YYYY-MM-DD"),
+    bld_type: str = Query(..., description="BLD type: Breakfast, Lunch, Dinner, Condiments"),
+    period_type: Optional[str] = Query(None, description="Period type: one_day, subscription, all_days, or null for festivals")
+):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        # Find bld_id from bld_type
+        cursor.execute("SELECT bld_id FROM bld WHERE LOWER(bld_type)=LOWER(%s) LIMIT 1", (bld_type,))
+        bld_row = cursor.fetchone()
+        if not bld_row:
+            raise HTTPException(status_code=404, detail="BLD type not found")
+
+        bld_id = bld_row["bld_id"]
+
+        # Fetch menu row for that date and bld_id
+        menu_query = """
+            SELECT
+                menu_id,
+                date,
+                is_festival,
+                is_released,
+                period_type,
+                bld_id
+            FROM menu
+            WHERE date = %s
+              AND bld_id = %s
+              AND (
+                    (period_type IS NULL AND %s IS NULL)
+                    OR (period_type = %s)
+                  )
+            LIMIT 1
+        """
+        # pass the same period_type string twice; if it’s “festivals” we expect period_type IS NULL
+        param_period = None if period_type == "festivals" else period_type
+        cursor.execute(menu_query, (date, bld_id, param_period, param_period))
+        menu_row = cursor.fetchone()
+        if not menu_row:
+            raise HTTPException(status_code=404, detail="Menu not found")
+
+        menu_id = menu_row["menu_id"]
+
+        # Fetch associated menu_items
+        items_query = """
+            SELECT
+                mi.menu_item_id,
+                mi.item_id,
+                i.name AS item_name,
+                mi.category_id,
+                mi.planned_qty,
+                mi.available_qty,
+                mi.rate,
+                mi.is_default,
+                mi.sort_order
+            FROM menu_items mi
+            JOIN items i ON mi.item_id = i.item_id
+            WHERE mi.menu_id = %s
+            ORDER BY mi.sort_order ASC
+        """
+        cursor.execute(items_query, (menu_id,))
+        menu_items = cursor.fetchall()
+
+        return {
+            "menu_id": menu_id,
+            "date": menu_row["date"],
+            "is_festival": bool(menu_row["is_festival"]),
+            "is_released": bool(menu_row["is_released"]),
+            "period_type": menu_row["period_type"],
+            "bld_id": menu_row["bld_id"],
+            "bld_type": bld_type,
+            "items": [
+                {
+                    "menu_item_id": it["menu_item_id"],
+                    "item_id": it["item_id"],
+                    "item_name": it["item_name"],
+                    "category_id": it["category_id"],
+                    "planned_qty": it["planned_qty"],
+                    "available_qty": it["available_qty"],
+                    "rate": float(it["rate"]),
+                    "is_default": bool(it["is_default"]),
+                    "sort_order": it["sort_order"],
+                }
+                for it in menu_items
+            ]
+        }
+    except mysql.connector.Error as err:
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+# 3. Create or update (upsert) a daily menu using BLD
+class MenuItemPayload(BaseModel):
+    item_id: int
+    category_id: Optional[int] = None
+    planned_qty: Optional[int] = None
+    available_qty: Optional[int] = None
+    rate: float
+    is_default: bool = False
+    sort_order: Optional[int] = None
+
+class DailyMenuPayload(BaseModel):
+    date: str
+    bld_type: str
+    is_festival: bool = False
+    period_type: Optional[str] = None
+    items: List[MenuItemPayload]
+
+@app.post("/api/menu", tags=["Daily Menu"])
+def upsert_daily_menu(payload: DailyMenuPayload):
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        # Find bld_id from bld_type
+        cursor.execute("SELECT bld_id FROM bld WHERE LOWER(bld_type)=LOWER(%s) LIMIT 1", (payload.bld_type,))
+        bld_row = cursor.fetchone()
+        if not bld_row:
+            raise HTTPException(status_code=404, detail="BLD type not found")
+        bld_id = bld_row[0]
+
+        # Check if a menu exists for date + bld_id
+        find_query = "SELECT menu_id FROM menu WHERE date = %s AND bld_id = %s"
+        cursor.execute(find_query, (payload.date, bld_id))
+        existing = cursor.fetchone()
+
+        if existing:
+            menu_id = existing[0]
+            # Update existing menu row
+            update_query = """
+                UPDATE menu
+                   SET is_festival = %s,
+                       period_type = %s
+                 WHERE menu_id = %s
+            """
+            cursor.execute(update_query, (int(payload.is_festival), payload.period_type, menu_id))
+        else:
+            # Insert new menu row
+            insert_query = """
+                INSERT INTO menu (date, is_festival, is_released, period_type, bld_id)
+                VALUES (%s, %s, 0, %s, %s)
+            """
+            cursor.execute(insert_query, (payload.date, int(payload.is_festival), payload.period_type, bld_id))
+            menu_id = cursor.lastrowid
+
+        # Delete existing menu_items for this menu
+        delete_items_query = "DELETE FROM menu_items WHERE menu_id = %s"
+        cursor.execute(delete_items_query, (menu_id,))
+
+        # Insert each item from payload
+        for idx, mi in enumerate(payload.items, start=1):
+            insert_item_query = """
+                INSERT INTO menu_items
+                    (menu_id, item_id, category_id, planned_qty, available_qty, rate, is_default, sort_order)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(
+                insert_item_query,
+                (
+                    menu_id,
+                    mi.item_id,
+                    mi.category_id,
+                    mi.planned_qty,
+                    mi.available_qty,
+                    mi.rate,
+                    int(mi.is_default),
+                    mi.sort_order or idx,
+                )
+            )
+
+        db.commit()
+        return get_daily_menu(date=payload.date, bld_type=payload.bld_type, period_type=payload.period_type)
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+# 4. Release a menu by menu_id
+@app.patch("/api/menu/{menu_id}/release", tags=["Daily Menu"])
+def release_menu(menu_id: int):
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        # Verify that menu exists
+        cursor.execute("SELECT menu_id FROM menu WHERE menu_id = %s", (menu_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Menu not found")
+
+        # Mark is_released = TRUE
+        update_query = "UPDATE menu SET is_released = 1 WHERE menu_id = %s"
+        cursor.execute(update_query, (menu_id,))
+        db.commit()
+        return {"status": "released", "menu_id": menu_id}
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+# 5. Un-Release a menu by menu_id
+@app.patch("/api/menu/{menu_id}/unrelease", tags=["Daily Menu"])
+def unrelease_menu(menu_id: int):
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        # Verify that menu exists
+        cursor.execute("SELECT menu_id FROM menu WHERE menu_id = %s", (menu_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Menu not found")
+
+        # Mark is_released = FALSE
+        update_query = "UPDATE menu SET is_released = 0 WHERE menu_id = %s"
+        cursor.execute(update_query, (menu_id,))
+        db.commit()
+        return {"status": "unreleased", "menu_id": menu_id}
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
