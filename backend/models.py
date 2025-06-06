@@ -94,11 +94,16 @@ class Category(Base):
 # Items Table
 class Item(Base):
     __tablename__ = "items"
+
     item_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     alias = Column(String(100), nullable=True)
+
+    # ─── Existing foreign key to categories ────────────────
     category_id = Column(Integer, ForeignKey("categories.category_id"), nullable=True)
+    # ────────────────────────────────────────────────────────
+
     uom = Column(String(50), nullable=False)
     weight_factor = Column(DECIMAL(5, 3), nullable=True)
     weight_uom = Column(String(50), nullable=True)
@@ -108,19 +113,27 @@ class Item(Base):
     quantity_portion = Column(Integer, nullable=True)
     buffer_percentage = Column(DECIMAL(5, 2), nullable=True)
     picture_url = Column(String(255), nullable=True)
+
     breakfast_price = Column(DECIMAL(10, 2), nullable=True)
     lunch_price = Column(DECIMAL(10, 2), nullable=True)
     dinner_price = Column(DECIMAL(10, 2), nullable=True)
     condiments_price = Column(DECIMAL(10, 2), nullable=True)
     festival_price = Column(DECIMAL(10, 2), nullable=True)
+
     cgst = Column(DECIMAL(5, 2), nullable=True)
     sgst = Column(DECIMAL(5, 2), nullable=True)
     igst = Column(DECIMAL(5, 2), nullable=True)
     net_price = Column(DECIMAL(10, 2), nullable=True)
     is_combo = Column(Boolean, nullable=False, default=False)
 
+    # ─── NEW FOREIGN KEY to BLD ────────────────────────────
+    bld_id = Column(Integer, ForeignKey("bld.bld_id"), nullable=True)
+    bld = relationship("BLD", back_populates="items")
+    # ────────────────────────────────────────────────────────
+
     category = relationship("Category", back_populates="items")
     order_items = relationship("OrderItem", back_populates="item")
+
 
 
 # Menu Items Table
@@ -131,6 +144,7 @@ class MenuItem(Base):
     item_id = Column(Integer, ForeignKey("items.item_id"), nullable=False)
     category_id = Column(Integer, ForeignKey("categories.category_id"), nullable=True)
     planned_qty = Column(Integer, nullable=True)
+    available_qty = Column(Integer, nullable=True)
     rate = Column(DECIMAL(10, 2), nullable=False)
     is_default = Column(Boolean, nullable=False, default=False)
     sort_order = Column(Integer, nullable=True)
@@ -242,12 +256,40 @@ class OrderItem(Base):
 # Menu Table
 class Menu(Base):
     __tablename__ = "menu"
+
     menu_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    menu_type = Column(Enum("Breakfast", "Lunch", "Dinner", "Condiments"), nullable=False)
+    # (remove the old `menu_type` column entirely)
+    # menu_type = Column(Enum("Breakfast","Lunch","Dinner","Condiments"), nullable=False)
     date = Column(Date, nullable=False)
     is_festival = Column(Boolean, nullable=False, default=False)
+    is_released = Column(Boolean, nullable=False, default=False)
+    period_type = Column(
+        Enum("one_day", "subscription", "all_days", name="period_type_enum"),
+        nullable=True,
+    )
+
+    # ─── NEW FOREIGN KEY to BLD ───────────────────────────
+    bld_id = Column(Integer, ForeignKey("bld.bld_id"), nullable=False)
+    bld = relationship("BLD", back_populates="menus")
+    # ────────────────────────────────────────────────────────
 
     menu_items = relationship("MenuItem", back_populates="menu")
+
+
+# ─── New: BLD Table ────────────────────────────────────────────────────────────────
+class BLD(Base):
+    __tablename__ = "bld"
+
+    bld_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    bld_type = Column(
+        Enum("Breakfast", "Lunch", "Dinner", "Condiments", name="bld_type_enum"),
+        nullable=False,
+        unique=True
+    )
+
+    # backrefs so you can do bld.menu_items or bld.items
+    menus = relationship("Menu", back_populates="bld")
+    items = relationship("Item", back_populates="bld")
 
 
 # Categories Table
@@ -300,6 +342,7 @@ class MenuItem(Base):
     item_id = Column(Integer, ForeignKey("items.item_id"), nullable=False)
     category_id = Column(Integer, ForeignKey("categories.category_id"), nullable=True)
     planned_qty = Column(Integer, nullable=True)
+    available_qty = Column(Integer, nullable=True)
     rate = Column(DECIMAL(10, 2), nullable=False)
     is_default = Column(Boolean, nullable=False, default=False)
     sort_order = Column(Integer, nullable=True)
@@ -344,3 +387,4 @@ class ItemPriceHistory(Base):
     sgst = Column(DECIMAL(5, 2), nullable=True)
     igst = Column(DECIMAL(5, 2), nullable=True)
     net_price = Column(DECIMAL(10, 2), nullable=True)
+
