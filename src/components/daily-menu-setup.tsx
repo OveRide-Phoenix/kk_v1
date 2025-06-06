@@ -451,7 +451,7 @@ export function DailyMenuSetup() {
                       </Popover>
                   </div>
 
-                  {/* Four Sections: Breakfast, Lunch, Dinner, Condiments */}
+                  {/* Four Sections: Breakfast, Lunch, Dinner, Condiments temp */}
                   {["breakfast", "lunch", "dinner", "condiments"].map(
                       (meal) => (
                           <section key={meal} className="mb-8">
