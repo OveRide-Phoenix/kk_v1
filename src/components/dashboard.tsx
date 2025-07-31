@@ -1,12 +1,38 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Package, Users, ShoppingCart, User, Calendar, BarChart3, ChevronDown, IndianRupee } from "lucide-react"
 import { useAuthStore } from "@/store/store"
 import { AdminLayout } from "@/components/admin-layout"
+import { getDashboardMetrics } from "@/lib/api"
+
+// Define types for the metrics
+type Order = {
+  id: string
+  customer: string
+  items: number
+  total: number
+  status: "Pending" | "In Progress" | "Delivered"
+}
+
+type PopularItem = {
+  name: string
+  orders: number
+}
+
+type DashboardMetrics = {
+  totalOrders: number
+  pendingOrders: number
+  totalCustomers: number
+  activeSubscriptions: number
+  todayRevenue: number
+  monthlyRevenue: number
+  popularItems: PopularItem[]
+  recentOrders: Order[]
+}
 
 // Currency formatter
 const formatCurrency = (amount: number) => {
@@ -17,36 +43,49 @@ const formatCurrency = (amount: number) => {
   }).format(amount)
 }
 
-// Dashboard metrics data
-const dashboardMetrics = {
-  totalOrders: 128,
-  pendingOrders: 24,
-  totalCustomers: 87,
-  activeSubscriptions: 62,
-  todayRevenue: 24850,
-  monthlyRevenue: 345200,
-  popularItems: [
-    { name: "Anna 350 gms", orders: 42 },
-    { name: "Masala Dosa", orders: 38 },
-    { name: "South Indian Thali", orders: 31 },
-    { name: "Mysore Pak", orders: 27 },
-  ],
-  recentOrders: [
-    { id: "ORD-1234", customer: "Rahul Sharma", items: 3, total: 450, status: "Delivered" },
-    { id: "ORD-1235", customer: "Priya Patel", items: 2, total: 320, status: "In Progress" },
-    { id: "ORD-1236", customer: "Amit Kumar", items: 5, total: 780, status: "Pending" },
-    { id: "ORD-1237", customer: "Sneha Reddy", items: 1, total: 150, status: "Delivered" },
-  ],
+// Default dashboard metrics data with proper typing
+const defaultDashboardMetrics: DashboardMetrics = {
+  totalOrders: 0,
+  pendingOrders: 0,
+  totalCustomers: 0,
+  activeSubscriptions: 0,
+  todayRevenue: 0,
+  monthlyRevenue: 0,
+  popularItems: [],
+  recentOrders: [],
 }
 
 export function Dashboard() {
   const { isAdmin } = useAuthStore()
   const router = useRouter()
+  const [dashboardMetrics, setDashboardMetrics] = useState<DashboardMetrics>(defaultDashboardMetrics)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!isAdmin) {
       console.log("Not admin, redirecting to login")
       router.push("/login")
+    } else {
+      // Fetch dashboard metrics
+      getDashboardMetrics()
+        .then(data => {
+          setDashboardMetrics({
+            ...defaultDashboardMetrics,
+            totalOrders: data.totalOrders || 0,
+            pendingOrders: data.pendingOrders || 0,
+            totalCustomers: data.totalCustomers || 0,
+            activeSubscriptions: data.activeSubscriptions || 0,
+            todayRevenue: data.todaysRevenue || 0,
+            monthlyRevenue: data.monthlyRevenue || 0,
+            popularItems: data.popularItems || [],
+            recentOrders: data.recentOrders || [],
+          })
+          setLoading(false)
+        })
+        .catch(err => {
+          console.error("Error fetching dashboard metrics:", err)
+          setLoading(false)
+        })
     }
   }, [isAdmin, router])
 

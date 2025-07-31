@@ -206,3 +206,13 @@ def delete_customer(db, customer_id):
         raise HTTPException(status_code=500, detail=f"Database error: {str(err)}")
     finally:
         cursor.close()
+
+def get_customer_count(db):
+    try:
+        cursor = db.cursor(dictionary=True)
+        query = "SELECT COUNT(*) as total FROM customers"
+        cursor.execute(query)
+        result = cursor.fetchone()
+        return result["total"]
+    finally:
+        cursor.close()
