@@ -1,3 +1,4 @@
+from calendar import month
 import mysql.connector
 from fastapi import FastAPI, HTTPException, Query, Depends
 from pydantic import BaseModel
@@ -9,7 +10,8 @@ from .customer.customer_crud import (
     get_all_customers,
     update_customer,
     delete_customer,
-    CustomerUpdate
+    CustomerUpdate,
+    get_customer_count  # Add this line
 )
 
 app = FastAPI()
@@ -665,4 +667,36 @@ def unrelease_menu(menu_id: int):
         raise HTTPException(status_code=500, detail=str(err))
     finally:
         cursor.close()
+        db.close()
+
+@app.get("/api/dashboard/metrics")
+def get_dashboard_metrics():
+    db = get_db()
+    try:
+        total_customers = get_customer_count(db)
+        total_orders = 128
+        todays_revenue = 24850
+        monthly_revenue = 345200
+        popularItems = [
+            {"name": "Anna 350 gms", "orders": 42},
+            {"name": "Masala Dosa", "orders": 38},
+            {"name": "South Indian Thali", "orders": 31},
+            {"name": "Mysore Pak", "orders": 27},
+        ]
+        recentOrders = [
+            {"id": "ORD-1234", "customer": "Rahul Sharma", "items": 3, "total": 450, "status": "Delivered"},
+            {"id": "ORD-1235", "customer": "Priya Patel", "items": 2, "total": 320, "status": "In Progress"},
+            {"id": "ORD-1236", "customer": "Amit Kumar", "items": 5, "total": 780, "status": "Pending"},
+            {"id": "ORD-1237", "customer": "Sneha Reddy", "items": 1, "total": 150, "status": "Delivered"},
+        ]
+        
+        return {
+            "totalCustomers": total_customers,
+            "totalOrders": total_orders,
+            "todaysRevenue": todays_revenue,
+            "monthlyRevenue": monthly_revenue,
+            "popularItems": popularItems,
+            "recentOrders": recentOrders,
+        }
+    finally:
         db.close()

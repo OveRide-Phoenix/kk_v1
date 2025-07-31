@@ -19,3 +19,12 @@ export async function getCityByPhone(phone: string): Promise<string | null> {
     return res.json();
   }
   
+export async function getDashboardMetrics() {
+  const res = await fetch("http://localhost:8000/api/dashboard/metrics")  // 🔁 use your FastAPI base URL here
+
+  if (!res.ok) {
+    throw new Error("Failed to fetch dashboard metrics")
+  }
+
+  return res.json()
+}
