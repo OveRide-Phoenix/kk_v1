@@ -18,8 +18,8 @@ export enum ItemType {
 
 // Item product from items table
 export interface Product {
-  isSubItem: any
-  id: any
+  isSubItem: boolean // Changed from any
+  id: number | string // Changed from any
   group: string
   item_id: number
   name: string

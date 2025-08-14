@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Bell, User, Coffee, ChevronDown, Menu, X } from "lucide-react"
+import { Bell, User, ChevronDown, Menu } from "lucide-react"
 import Sidebar from "@/components/sidebar"
 import { useAuthStore } from "@/store/store"
 
@@ -15,7 +15,25 @@ interface AdminLayoutProps {
 export function AdminLayout({ children, activePage }: AdminLayoutProps) {
   const { logout } = useAuthStore()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
+  
+  // Check if we're on mobile and set initial collapsed state
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 768) {
+        setSidebarOpen(false)
+      }
+    }
+    
+    // Set initial state
+    handleResize()
+    
+    // Add event listener
+    window.addEventListener('resize', handleResize)
+    
+    // Cleanup
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   const getPageTitle = () => {
     switch (activePage) {
@@ -41,12 +59,22 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
         setSidebarOpen={setSidebarOpen} 
         activePage={activePage} 
         setActivePage={() => {}}
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
       />
       
       <div className="flex-1 flex flex-col">
         <header className="sticky top-0 z-50 w-full border-b bg-background">
           <div className="flex h-16 items-center justify-between px-6">
-            <div>
+            <div className="flex items-center space-x-3">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="md:hidden" 
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+              >
+                <Menu className="h-5 w-5" />
+              </Button>
               <h1 className="text-xl font-semibold">{getPageTitle()}</h1>
             </div>
 

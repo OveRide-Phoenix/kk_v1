@@ -7,7 +7,7 @@ import CustomerManagement from "@/components/customer-management"
 import { DailyMenuSetup } from "@/components/daily-menu-setup"
 
 export default function AdminPage() {
-  const [activePage, setActivePage] = useState("dashboard")
+  const [activePage] = useState("dashboard")
 
   return (
     <div className="flex-1 overflow-auto">
