@@ -250,13 +250,15 @@ const uniqueTypes = Array.from(new Set((products as any[]).map((product) => prod
               </div>
             </div>
 
-            <div className="rounded-md border overflow-x-auto">
-              <ProductTable
-                products={filteredProducts as (Product | ComboProduct | AddonProduct | CategoryProduct)[]}
-                onEdit={handleEditProduct}
-                onDelete={handleDeleteProduct}
-                tableType={activeTab as "items" | "combos" | "addons" | "categories"}
-              />
+            <div className="rounded-md border overflow-hidden">
+              <div className="overflow-x-auto w-full">
+                <ProductTable
+                  products={filteredProducts as (Product | ComboProduct | AddonProduct | CategoryProduct)[]}
+                  onEdit={handleEditProduct}
+                  onDelete={handleDeleteProduct}
+                  tableType={activeTab as "items" | "combos" | "addons" | "categories"}
+                />
+              </div>
             </div>
           </CardContent>
         </Card>
