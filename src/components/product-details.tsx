@@ -28,7 +28,7 @@ export default function ProductDetails({ product, open, onOpenChange }: ProductD
         <CardHeader className="sticky top-0 bg-white z-10 border-b">
           <div className="flex justify-between items-center">
             <CardTitle>Product Details</CardTitle>
-            <Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()}>
+            <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)}>
               <X className="h-4 w-4" />
               <span className="sr-only">Close</span>
             </Button>
@@ -129,4 +129,3 @@ export default function ProductDetails({ product, open, onOpenChange }: ProductD
     </div>
   )
 }
-
