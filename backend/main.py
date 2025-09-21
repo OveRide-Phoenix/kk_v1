@@ -13,12 +13,20 @@ from .customer.customer_crud import (
     CustomerUpdate,
     get_customer_count  # Add this line
 )
+import os, time, uuid, jwt, bcrypt
+from fastapi import Response, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import os
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Change this to specific domains if needed
+    allow_origins=[
+        "http://127.0.0.1:3000",
+        "http://localhost:3000",
+        "http://127.0.0.1:8000",  # swagger same-origin
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -32,6 +40,86 @@ def get_db():
         password="password",
         database="kk_v1"
     )
+
+from .config import (
+    SECRET_KEY, ALGORITHM,
+    ACCESS_TOKEN_TTL_SEC, REFRESH_TOKEN_TTL_SEC,
+    COOKIE_SECURE, COOKIE_SAMESITE, COOKIE_DOMAIN
+)
+
+def _create_jwt(payload: dict, ttl: int) -> str:
+    now = int(time.time())
+    body = dict(payload)
+    body["iat"] = now
+    body["exp"] = now + ttl
+    return jwt.encode(body, SECRET_KEY, algorithm=ALGORITHM)
+
+def create_access_token(sub: dict) -> str:
+    return _create_jwt({"sub": sub, "type": "access"}, ACCESS_TOKEN_TTL_SEC)
+
+def create_refresh_token(sub: dict, jti: str) -> str:
+    return _create_jwt({"sub": sub, "type": "refresh", "jti": jti}, REFRESH_TOKEN_TTL_SEC)
+
+def decode_token(token: str) -> dict:
+    # Disable "sub must be string" validation
+    return jwt.decode(
+        token,
+        SECRET_KEY,
+        algorithms=[ALGORITHM],
+        options={"verify_sub": False},
+    )
+
+
+def verify_password(plain: str, hashed: str) -> bool:
+    try:
+        return bcrypt.checkpw(plain.encode(), hashed.encode())
+    except Exception:
+        return False
+
+def set_cookie(resp: Response, name: str, value: str, max_age: int):
+    resp.set_cookie(
+        key=name,
+        value=value,
+        max_age=max_age,
+        httponly=True,
+        secure=COOKIE_SECURE,
+        samesite=COOKIE_SAMESITE,
+        domain=COOKIE_DOMAIN,
+        path="/",
+    )
+
+def clear_cookie(resp: Response, name: str):
+    resp.delete_cookie(key=name, domain=COOKIE_DOMAIN, path="/")
+
+bearer = HTTPBearer(auto_error=False)
+
+def _read_access_token(req: Request, creds: HTTPAuthorizationCredentials | None):
+    if creds and creds.scheme.lower() == "bearer":
+        return creds.credentials
+    return req.cookies.get("access_token")
+
+def get_current_user(request: Request, creds: HTTPAuthorizationCredentials | None = Depends(bearer)):
+    token = _read_access_token(request, creds)
+
+    if not token:
+
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+
+        payload = decode_token(token)
+
+        if payload.get("type") != "access":
+            raise ValueError("wrong token type")
+
+        return payload["sub"]
+    except Exception:
+
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+def admin_required(user = Depends(get_current_user)):
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    return user
 
 # Get city by phone number
 @app.get("/api/get-city")
@@ -196,55 +284,121 @@ def register_customer(data: CustomerCreate):
     finally:
         db.close()
 
+
+#Login
 class LoginRequest(BaseModel):
     phone: str
     admin_password: Optional[str]
 
-#Login
+# --- LOGIN: return tokens in JSON for localStorage ---
 @app.post("/api/login")
-def login(data: LoginRequest):
+def login(data: LoginRequest, response: Response):
     db = get_db()
     cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute("""
+            SELECT
+                c.customer_id,
+                c.primary_mobile AS phone_number,
+                au.admin_id,
+                au.password_hash,
+                au.role,
+                au.is_active
+            FROM customers c
+            LEFT JOIN admin_users au ON au.customer_id = c.customer_id
+            WHERE c.primary_mobile = %s
+            LIMIT 1
+        """, (data.phone,))
+        result = cursor.fetchone()
 
-    query = """
-    SELECT c.customer_id, a.city, u.admin_password
-    FROM customers c
-    JOIN addresses a ON c.customer_id = a.customer_id
-    LEFT JOIN admin_users u ON c.customer_id = u.customer_id
-    WHERE c.primary_mobile = %s;
-    """
-    cursor.execute(query, (data.phone,))
-    result = cursor.fetchone()
+        if not result:
+            raise HTTPException(status_code=404, detail="User not found. Please register.")
 
-    # Debugging output
-    print("Query result:", result)  # Check full result
-    if result:
-        print("Result keys:", result.keys())  # See what keys are present
-        print("Stored password in DB:", result.get("admin_password"))  # Check admin password
+        is_admin = bool(result["admin_id"])
 
-    if not result:
+        # If admin, validate password and build tokens
+        access = None
+        refresh = None
+        user_payload = None
+
+        if is_admin:
+            if not data.admin_password:
+                raise HTTPException(status_code=400, detail="Admin password is required")
+            if not result["is_active"]:
+                raise HTTPException(status_code=403, detail="Admin account disabled")
+            if not verify_password(data.admin_password, result["password_hash"]):
+                raise HTTPException(status_code=401, detail="Invalid admin password")
+
+            user_payload = {
+                "admin_id": result["admin_id"],
+                "customer_id": result["customer_id"],
+                "phone": result["phone_number"],
+                "role": result["role"],
+            }
+            access  = create_access_token(user_payload)
+            refresh = create_refresh_token(user_payload, str(uuid.uuid4()))
+
+        # IMPORTANT: do NOT set cookies — tokens are returned in JSON
+        # set_cookie(response, "access_token",  access,  60 * 15)
+        # set_cookie(response, "refresh_token", refresh, 60 * 60 * 24 * 7)
+
+        return {
+            "message": "Login successful",
+            "is_admin": is_admin,
+            "user": user_payload,           # null if not admin
+            "access_token": access,         # null if not admin
+            "refresh_token": refresh        # null if not admin
+        }
+    finally:
         cursor.close()
         db.close()
-        raise HTTPException(status_code=404, detail="User not found")
 
-    is_admin = bool(result["admin_password"])
 
-    if is_admin:
-        if not data.admin_password:
-            cursor.close()
-            db.close()
-            raise HTTPException(status_code=400, detail="Admin password is required")
+@app.post("/auth/refresh")
+def refresh(request: Request, response: Response, creds: HTTPAuthorizationCredentials | None = Depends(bearer)):
+    # Try Authorization: Bearer <refresh_token> first
+    token = None
+    if creds and creds.scheme.lower() == "bearer":
+        token = creds.credentials
 
-        if data.admin_password != result["admin_password"]:
-            cursor.close()
-            db.close()
-            raise HTTPException(status_code=401, detail="Invalid admin password")
+    # Fallback: JSON body with {"refresh_token": "..."}
+    if not token:
+        try:
+            body = request.json() if hasattr(request, "json") else None
+        except Exception:
+            body = None
+        if body and isinstance(body, dict):
+            token = body.get("refresh_token")
 
-    cursor.close()
-    db.close()
+    # Fallback: legacy cookie (if you still keep it set somewhere)
+    if not token:
+        token = request.cookies.get("refresh_token")
 
-    # Return the is_admin flag in the response
-    return {"message": "Login successful", "is_admin": is_admin}
+    if not token:
+        raise HTTPException(status_code=401, detail="No refresh token")
+
+    try:
+        payload = decode_token(token)  # your helper already configured
+        if payload.get("type") != "refresh":
+            raise ValueError("wrong token type")
+        sub = payload["sub"] if "sub" in payload else payload.get("usr")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+    new_access = create_access_token(sub)
+
+    return {"access_token": new_access}
+
+@app.post("/auth/logout")
+def logout(response: Response):
+    clear_cookie(response, "access_token")
+    clear_cookie(response, "refresh_token")
+    return {"ok": True}
+
+@app.get("/auth/me")
+def me(user = Depends(get_current_user)):
+    return user
+
 
 
 @app.post("/create-customer", response_model=dict)
