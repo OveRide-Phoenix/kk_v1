@@ -3,7 +3,6 @@ import { Eye, Pencil, Trash2, ChevronUp, MoreHorizontal } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useEffect, useState } from "react"
 import type { Product, ComboProduct, AddonProduct, CategoryProduct } from "@/types/product"
 import {
@@ -12,6 +11,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import ProductDetails from "@/components/product-details" 
+
 
 interface ProductTableProps {
   products: (Product | ComboProduct | AddonProduct | CategoryProduct)[]
@@ -321,35 +322,11 @@ export default function ProductTable({ products, onEdit, onDelete, tableType }: 
         </Table>
       </div>
 
-      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-        <DialogContent className="sm:max-w-[600px] max-h-[calc(100vh-8rem)] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Product Details</DialogTitle>
-            <DialogDescription>View detailed information about this product.</DialogDescription>
-          </DialogHeader>
-          {viewProduct && (
-            <div className="space-y-6">
-              {/* Mobile-friendly product details view */}
-              {isMobile ? (
-                <div className="space-y-4">
-                  {Object.entries(viewProduct).map(([key, value]) => (
-                    <div key={key} className="border-b pb-2">
-                      <div className="font-medium text-sm">{key}</div>
-                      <div className="text-sm">
-                        {typeof value === 'object' ? JSON.stringify(value) : String(value || '-')}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <pre className="text-sm whitespace-pre-wrap break-words">
-                  {JSON.stringify(viewProduct, null, 2)}
-                </pre>
-              )}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+       <ProductDetails
+        product={viewProduct}
+        open={isViewDialogOpen}
+        onOpenChange={setIsViewDialogOpen}
+      />
     </>
   )
 }
