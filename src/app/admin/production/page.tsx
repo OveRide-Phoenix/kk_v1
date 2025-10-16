@@ -534,7 +534,7 @@ async function fetchProductionPlanStatus(
   date: string,
 ): Promise<Record<Category, boolean>> {
   const initial = createCategoryBooleanState(false);
-  const response = await fetch(`/api/production-plan/status?date=${date}`);
+  const response = await fetch(`/api/production/status?date=${date}`);
   if (!response.ok) {
     console.warn("Production plan status unavailable, defaulting to pending");
     return initial;
@@ -743,15 +743,33 @@ function KitchenProductionPlanningContent() {
   };
 
   const handleSaveCategory = async (category: Category) => {
-    setSavingCategory((prev) => ({ ...prev, [category]: true }));
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 400));
-      setLastSavedAt((prev) => ({ ...prev, [category]: Date.now() }));
-      setPlanGeneratedState((prev) => ({ ...prev, [category]: true }));
-    } finally {
-      setSavingCategory((prev) => ({ ...prev, [category]: false }));
-    }
-  };
+  setSavingCategory((prev) => ({ ...prev, [category]: true }));
+  try {
+    const response = await fetch("http://localhost:8000/api/production/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        date: selectedDateISO,
+        menu_type: category,
+        plans: planData[category],
+      }),
+    });
+
+    if (!response.ok) throw new Error("Failed to save production plan");
+
+    const data = await response.json();
+    console.log("✅ Production plan saved:", data);
+
+    setLastSavedAt((prev) => ({ ...prev, [category]: Date.now() }));
+    setPlanGeneratedState((prev) => ({ ...prev, [category]: true }));
+  } catch (err) {
+    console.error(err);
+    alert("Error saving production plan");
+  } finally {
+    setSavingCategory((prev) => ({ ...prev, [category]: false }));
+  }
+};
+
 
   const currentItems = planData[selectedCategory];
   const currentMenuAvailable = menuAvailability[selectedCategory];
@@ -897,7 +915,15 @@ function KitchenProductionPlanningContent() {
           )}
         </div>
         <div className="flex justify-end">
-          <Button onClick={() => setPlanPreviewOpen(true)}>Generate Plan</Button>
+          <Button
+  onClick={async () => {
+    await handleSaveCategory(selectedCategory); // Save first
+    setPlanPreviewOpen(true);                   // Then open preview
+  }}
+>
+  Generate Plan
+</Button>
+
         </div>
       </div>
 

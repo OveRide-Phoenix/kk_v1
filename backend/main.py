@@ -1,7 +1,8 @@
 from calendar import month
 import mysql.connector
 from fastapi import FastAPI, HTTPException, Query, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from decimal import Decimal
 from typing import List, Dict, Optional
 from fastapi.middleware.cors import CORSMiddleware
 from .customer.customer_crud import (
@@ -853,4 +854,105 @@ def get_dashboard_metrics():
             "recentOrders": recentOrders,
         }
     finally:
+        db.close()
+
+
+class ProductionPlanItem(BaseModel):
+    item_name: str
+    unit: Optional[str] = None
+    category: Optional[str] = None
+    planned_quantity: int
+    available_quantity: int
+    customer_orders: int
+    buffer_quantity: int
+    final_quantity: int
+
+class ProductionPlanRequest(BaseModel):
+    date: str
+    menu_type: str
+    plans: List[ProductionPlanItem]
+
+
+@app.post("/api/production/generate", tags=["Production"])
+def generate_production_plan(payload: ProductionPlanRequest):
+    db = get_db()
+    cursor = db.cursor()
+    updated = 0
+    try:
+        # Step 1: Find bld_id
+        cursor.execute("SELECT bld_id FROM bld WHERE LOWER(bld_type)=LOWER(%s) LIMIT 1", (payload.menu_type,))
+        bld_row = cursor.fetchone()
+        if not bld_row:
+            raise HTTPException(status_code=404, detail="BLD type not found")
+        bld_id = bld_row[0]
+
+        # Step 2: Find menu_id for this date and bld_id
+        cursor.execute("SELECT menu_id FROM menu WHERE date=%s AND bld_id=%s LIMIT 1", (payload.date, bld_id))
+        menu_row = cursor.fetchone()
+        if not menu_row:
+            raise HTTPException(status_code=404, detail="Menu not found for this date/type")
+        menu_id = menu_row[0]
+
+        # Step 3: Update menu_items
+        for plan in payload.plans:
+            cursor.execute(
+                """
+                UPDATE menu_items mi
+                JOIN items i ON mi.item_id = i.item_id
+                   SET mi.buffer_quantity = %s,
+                       mi.final_quantity = %s,
+                       mi.is_production_generated = 1
+                 WHERE mi.menu_id = %s
+                   AND i.name = %s
+                """,
+                (
+                    int(plan.buffer_quantity),
+                    int(plan.final_quantity),
+                    menu_id,
+                    plan.item_name,
+                ),
+            )
+            updated += cursor.rowcount
+
+        db.commit()
+        return {
+            "success": True,
+            "message": "Production plan saved successfully",
+            "menu_type": payload.menu_type,
+            "updated_items": updated,
+        }
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+@app.get("/api/production/status", tags=["Production"])
+def get_production_plan_status(date: str):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            SELECT m.bld_id, b.bld_type,
+                   MAX(mi.is_production_generated) AS is_generated
+              FROM menu m
+              JOIN menu_items mi ON m.menu_id = mi.menu_id
+              JOIN bld b ON m.bld_id = b.bld_id
+             WHERE m.date = %s
+          GROUP BY m.bld_id, b.bld_type
+            """,
+            (date,),
+        )
+        rows = cursor.fetchall()
+        return {
+            "date": date,
+            "status": [
+                {"bld_id": r["bld_id"], "menu_type": r["bld_type"], "is_generated": bool(r["is_generated"])}
+                for r in rows
+            ],
+        }
+    finally:
+        cursor.close()
         db.close()
