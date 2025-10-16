@@ -23,11 +23,13 @@ import {
 interface DatePickerWithPresetsProps {
   selectedDate?: Date;
   onSelectDate: (date: Date) => void;
+  showQuickSelect?: boolean;
 }
 
 export function DatePickerWithPresets({
   selectedDate,
   onSelectDate,
+  showQuickSelect = true,
 }: DatePickerWithPresetsProps) {
   const [open, setOpen] = React.useState(false);
   const [draftDate, setDraftDate] = React.useState<Date | undefined>(
@@ -64,17 +66,19 @@ export function DatePickerWithPresets({
         className="flex w-[300px] flex-col space-y-4 p-4"
       >
         {/* 1) Quick‐pick dropdown */}
-        <Select onValueChange={handlePresetClick}>
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Quick pick…" />
-          </SelectTrigger>
-          <SelectContent position="popper">
-            <SelectItem value="0">Today</SelectItem>
-            <SelectItem value="1">Tomorrow</SelectItem>
-            <SelectItem value="3">In 3 days</SelectItem>
-            <SelectItem value="7">In a week</SelectItem>
-          </SelectContent>
-        </Select>
+        {showQuickSelect && (
+          <Select onValueChange={handlePresetClick}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Quick pick…" />
+            </SelectTrigger>
+            <SelectContent position="popper">
+              <SelectItem value="0">Today</SelectItem>
+              <SelectItem value="1">Tomorrow</SelectItem>
+              <SelectItem value="3">In 3 days</SelectItem>
+              <SelectItem value="7">In a week</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
 
         {/* 2) Calendar grid */}
         <div className="rounded-md border">

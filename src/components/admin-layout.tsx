@@ -45,6 +45,8 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
         return "Customer Management"
       case "menu":
         return "Daily Menu Setup"
+      case "production":
+        return "Kitchen Production Planning"
       case "reports":
         return "Reports & Analytics"
       default:

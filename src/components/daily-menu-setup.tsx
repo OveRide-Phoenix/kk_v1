@@ -42,7 +42,6 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 interface MenuItem {
   menu_item_id?: number;
@@ -70,9 +69,11 @@ export function DailyMenuSetup() {
   });
 
   // Calendar state
-  const [selectedDate, setSelectedDate] = useState<Date | null>(
-    new Date(new Date().setHours(0, 0, 0, 0))
-  );
+  const [draftDate, setDraftDate] = useState<Date | null>(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  });
   const [confirmedDate, setConfirmedDate] = useState<Date | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
 
@@ -109,10 +110,12 @@ export function DailyMenuSetup() {
     }[]
   >([]);
   const [selectedItems, setSelectedItems] = useState<number[]>([]);
-  const [currentSection, setCurrentSection] = useState<string>("breakfast");
+  const [currentSection, setCurrentSection] = useState<string>("Breakfast");
 
   // Edit / view states
-  const [editIndexByMeal, setEditIndexByMeal] = useState<Record<string, number | null>>({
+  const [editIndexByMeal, setEditIndexByMeal] = useState<
+    Record<string, number | null>
+  >({
     breakfast: null,
     lunch: null,
     dinner: null,
@@ -127,13 +130,17 @@ export function DailyMenuSetup() {
   const [togglingRelease, setTogglingRelease] = useState(false);
 
   // Menu metadata
-  const [menuIdByMeal, setMenuIdByMeal] = useState<Record<string, number | null>>({
+  const [menuIdByMeal, setMenuIdByMeal] = useState<
+    Record<string, number | null>
+  >({
     breakfast: null,
     lunch: null,
     dinner: null,
     condiments: null,
   });
-  const [isReleasedByMeal, setIsReleasedByMeal] = useState<Record<string, boolean>>({
+  const [isReleasedByMeal, setIsReleasedByMeal] = useState<
+    Record<string, boolean>
+  >({
     breakfast: false,
     lunch: false,
     dinner: false,
@@ -143,7 +150,22 @@ export function DailyMenuSetup() {
   // ───────────────────────────────────────────────────────────────────────
   // Helpers: format date → "YYYY-MM-DD"
   // ───────────────────────────────────────────────────────────────────────
-  const formatISODate = (d: Date) => formatDate(d, "yyyy-MM-dd");
+  const normalizeToMidnight = (date: Date) => {
+    const normalized = new Date(date);
+    normalized.setHours(0, 0, 0, 0);
+    return normalized;
+  };
+
+  const formatISODate = (d: Date) =>
+    formatDate(normalizeToMidnight(d), "yyyy-MM-dd");
+
+  useEffect(() => {
+    if (!calendarOpen) return;
+    const base = confirmedDate
+      ? normalizeToMidnight(confirmedDate)
+      : normalizeToMidnight(new Date());
+    setDraftDate(base);
+  }, [calendarOpen, confirmedDate]);
 
   // ───────────────────────────────────────────────────────────────────────
   // 1) Fetch for all meal sections when date is confirmed
@@ -206,9 +228,12 @@ export function DailyMenuSetup() {
   useEffect(() => {
     if (!itemDialogOpen) return;
     setLoadingItemsAPI(true);
-    fetch(`http://localhost:8000/api/menu/available-items?bld_type=${currentSection}`)
+    fetch(
+      `http://localhost:8000/api/menu/available-items?bld_type=${currentSection}`
+    )
       .then(async (res) => {
-        if (!res.ok) throw new Error(`Failed to load items for ${currentSection}`);
+        if (!res.ok)
+          throw new Error(`Failed to load items for ${currentSection}`);
         return res.json();
       })
       .then((data) => setAvailableItems(data))
@@ -285,7 +310,7 @@ export function DailyMenuSetup() {
           item_id: row.item_id,
           category_id: row.category_id,
           planned_qty: row.planned_qty,
-          available_qty: row.planned_qty,
+          available_qty: row.planned_qty, // mirror on first save
           rate: row.rate,
           is_default: row.is_default,
           sort_order: row.sort_order || idx + 1,
@@ -295,7 +320,7 @@ export function DailyMenuSetup() {
         item_id: row.item_id,
         category_id: row.category_id,
         planned_qty: row.planned_qty,
-        available_qty: row.available_qty,
+        available_qty: row.available_qty, // keep any later adjustments
         rate: row.rate,
         is_default: row.is_default,
         sort_order: row.sort_order || idx + 1,
@@ -349,18 +374,24 @@ export function DailyMenuSetup() {
   // 6) Release / Unrelease for a specific meal
   // ───────────────────────────────────────────────────────────────────────
   const handleToggleRelease = async (meal: string, unrelease = false) => {
-    if (!menuIdByMeal[meal]) return;
+    if (!menuIdByMeal[meal]) return; // keep your existing guard
     setTogglingRelease(true);
     try {
+      // On release, always save first so UI changes are persisted
+      if (!unrelease) {
+        await handleSaveMenu(meal);
+      }
+
       const endpoint = unrelease
         ? `http://localhost:8000/api/menu/${menuIdByMeal[meal]}/unrelease`
         : `http://localhost:8000/api/menu/${menuIdByMeal[meal]}/release`;
+
       const res = await fetch(endpoint, { method: "PATCH" });
       if (!res.ok) {
         console.error("Toggle release failed:", await res.text());
         return;
       }
-      const result = await res.json();
+      await res.json();
       setIsReleasedByMeal((prev) => ({ ...prev, [meal]: !unrelease }));
     } catch (err) {
       console.error(err);
@@ -381,498 +412,419 @@ export function DailyMenuSetup() {
           .includes(itemSearchQuery.toLowerCase())
     );
 
+  const displayDate = confirmedDate ?? draftDate;
+
   // ───────────────────────────────────────────────────────────────────────
   // JSX
   // ───────────────────────────────────────────────────────────────────────
   return (
-      <AdminLayout activePage="dailymenusetup">
-          <Card>
-              <CardHeader className="pb-2">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                      <CardTitle>Setup Daily Menu</CardTitle>
-                      <div />
-                  </div>
-              </CardHeader>
+    <AdminLayout activePage="dailymenusetup">
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <CardTitle>Setup Daily Menu</CardTitle>
+            <div />
+          </div>
+        </CardHeader>
 
-              <CardContent>
-                  {/* Date Picker */}
-                  <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                      <Popover
-                          open={calendarOpen}
-                          onOpenChange={setCalendarOpen}
-                      >
-                          <PopoverTrigger asChild>
-                              <Button
-                                  variant="outline"
-                                  className="w-[200px] justify-start text-left font-normal"
-                                  disabled={false}
-                              >
-                                  <CalendarIcon className="mr-2 h-4 w-4" />
-                                  {confirmedDate
-                                      ? formatDate(confirmedDate, "PPP")
-                                      : "Pick Date"}
-                              </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-4" align="start">
-                              <Calendar
-                                  mode="single"
-                                  selected={selectedDate || undefined}
-                                  onSelect={(date: Date | undefined) => {
-                                      if (!date) return;
-                                      setSelectedDate(date);
-                                  }}
-                                  disabled={(date) => {
-                                      const today = new Date();
-                                      today.setHours(0, 0, 0, 0);
-                                      return date < today;
-                                  }}
-                                  initialFocus
-                                  className="text-center"
-                                  classNames={{
-                                      day: "p-0 mx-auto inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted",
-                                      day_today: "font-bold underline",
-                                      day_selected:
-                                          "bg-blue-600 text-white rounded-full",
-                                  }}
-                              />
-                              <div className="mt-4 flex justify-end">
-                                  <Button
-                                      onClick={() => {
-                                          setConfirmedDate(selectedDate);
-                                          setCalendarOpen(false);
-                                      }}
-                                      size="sm"
-                                      disabled={!selectedDate}
-                                  >
-                                      OK
-                                  </Button>
-                              </div>
-                          </PopoverContent>
-                      </Popover>
-                  </div>
+        <CardContent>
+          {/* Date Picker */}
+          <div className="mb-6">
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Quick actions */}
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const today = normalizeToMidnight(new Date());
+                  setDraftDate(today);
+                  setConfirmedDate(today);
+                }}
+              >
+                Today
+              </Button>
 
-                  {/* Four Sections: Breakfast, Lunch, Dinner, Condiments temp */}
-                  {["breakfast", "lunch", "dinner", "condiments"].map(
-                      (meal) => (
-                          <section key={meal} className="mb-8">
-                              <div className="flex items-center justify-between mb-4">
-                                  <h2 className="text-lg font-semibold capitalize">
-                                      {meal}
-                                  </h2>
-                                  <Button
-                                      onClick={() => {
-                                          setCurrentSection(meal);
-                                          setItemDialogOpen(true);
-                                      }}
-                                      disabled={
-                                          !confirmedDate ||
-                                          isReleasedByMeal[meal]
-                                      }
-                                  >
-                                      <Plus size={16} className="mr-1" />
-                                      Add{" "}
-                                      {meal.slice(0, 1).toUpperCase() +
-                                          meal.slice(1)}{" "}
-                                      Item
-                                  </Button>
-                              </div>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const tomorrow = new Date();
+                  tomorrow.setDate(tomorrow.getDate() + 1);
+                  const normalizedTomorrow = normalizeToMidnight(tomorrow);
+                  setDraftDate(normalizedTomorrow);
+                  setConfirmedDate(normalizedTomorrow);
+                }}
+              >
+                Tomorrow
+              </Button>
 
-                              <div className="rounded-md border">
-                                  <Table>
-                                      <TableHeader>
-                                          <TableRow>
-                                              <TableHead>Sl.no</TableHead>
-                                              <TableHead>Item Name</TableHead>
-                                              <TableHead>Planned Qty</TableHead>
-                                              <TableHead>
-                                                  Available Qty
-                                              </TableHead>
-                                              <TableHead>Menu Rate</TableHead>
-                                              <TableHead>Default</TableHead>
-                                              <TableHead>Actions</TableHead>
-                                          </TableRow>
-                                      </TableHeader>
-                                      <TableBody>
-                                          {(!confirmedDate ||
-                                              itemsByMeal[meal].length ===
-                                                  0) && (
-                                              <TableRow>
-                                                  <TableCell
-                                                      colSpan={7}
-                                                      className="text-center text-gray-500"
-                                                  >
-                                                      {!confirmedDate
-                                                          ? "Please pick a date to see or add items"
-                                                          : "No items added yet"}
-                                                  </TableCell>
-                                              </TableRow>
-                                          )}
-                                          {itemsByMeal[meal].map(
-                                              (row, index) => (
-                                                  <TableRow key={index}>
-                                                      <TableCell>
-                                                          {index + 1}
-                                                      </TableCell>
-                                                      <TableCell>
-                                                          {row.item_name}
-                                                      </TableCell>
-
-                                                      <TableCell>
-                                                          {editIndexByMeal[
-                                                              meal
-                                                          ] === index ? (
-                                                              <InputWithButton
-                                                                  value={
-                                                                      row.planned_qty
-                                                                  }
-                                                                  onChange={(
-                                                                      val: number
-                                                                  ) =>
-                                                                      handleSave(
-                                                                          meal,
-                                                                          index,
-                                                                          "planned_qty",
-                                                                          val
-                                                                      )
-                                                                  }
-                                                              />
-                                                          ) : (
-                                                              row.planned_qty
-                                                          )}
-                                                      </TableCell>
-
-                                                      <TableCell>
-                                                          {editIndexByMeal[
-                                                              meal
-                                                          ] === index ? (
-                                                              <InputWithButton
-                                                                  value={
-                                                                      row.available_qty
-                                                                  }
-                                                                  onChange={(
-                                                                      val: number
-                                                                  ) =>
-                                                                      handleSave(
-                                                                          meal,
-                                                                          index,
-                                                                          "available_qty",
-                                                                          val
-                                                                      )
-                                                                  }
-                                                              />
-                                                          ) : (
-                                                              row.available_qty
-                                                          )}
-                                                      </TableCell>
-
-                                                      <TableCell>
-                                                          {editIndexByMeal[
-                                                              meal
-                                                          ] === index ? (
-                                                              <Input
-                                                                  type="number"
-                                                                  value={
-                                                                      row.rate
-                                                                  }
-                                                                  onChange={(
-                                                                      e
-                                                                  ) =>
-                                                                      handleSave(
-                                                                          meal,
-                                                                          index,
-                                                                          "rate",
-                                                                          Number(
-                                                                              e
-                                                                                  .target
-                                                                                  .value
-                                                                          )
-                                                                      )
-                                                                  }
-                                                              />
-                                                          ) : (
-                                                              `₹${row.rate}`
-                                                          )}
-                                                      </TableCell>
-
-                                                      <TableCell>
-                                                          {editIndexByMeal[
-                                                              meal
-                                                          ] === index ? (
-                                                              <Checkbox
-                                                                  checked={
-                                                                      row.is_default
-                                                                  }
-                                                                  onCheckedChange={(
-                                                                      checked
-                                                                  ) =>
-                                                                      handleSave(
-                                                                          meal,
-                                                                          index,
-                                                                          "is_default",
-                                                                          checked
-                                                                              ? 1
-                                                                              : 0
-                                                                      )
-                                                                  }
-                                                              />
-                                                          ) : row.is_default ? (
-                                                              <Badge variant="secondary">
-                                                                  Yes
-                                                              </Badge>
-                                                          ) : (
-                                                              <Badge variant="outline">
-                                                                  No
-                                                              </Badge>
-                                                          )}
-                                                      </TableCell>
-
-                                                      <TableCell className="flex gap-2">
-                                                          <Button
-                                                              size="icon"
-                                                              variant="ghost"
-                                                              disabled={
-                                                                  isReleasedByMeal[
-                                                                      meal
-                                                                  ]
-                                                              }
-                                                              onClick={() =>
-                                                                  setViewItem(
-                                                                      row
-                                                                  )
-                                                              }
-                                                          >
-                                                              <Eye className="h-4 w-4" />
-                                                          </Button>
-                                                          {editIndexByMeal[
-                                                              meal
-                                                          ] === index ? (
-                                                              <Button
-                                                                  size="icon"
-                                                                  variant="ghost"
-                                                                  disabled={
-                                                                      isReleasedByMeal[
-                                                                          meal
-                                                                      ]
-                                                                  }
-                                                                  onClick={() =>
-                                                                      setEditIndexByMeal(
-                                                                          (
-                                                                              prev
-                                                                          ) => ({
-                                                                              ...prev,
-                                                                              [meal]: null,
-                                                                          })
-                                                                      )
-                                                                  }
-                                                              >
-                                                                  <Check className="h-4 w-4" />
-                                                              </Button>
-                                                          ) : (
-                                                              <Button
-                                                                  size="icon"
-                                                                  variant="ghost"
-                                                                  disabled={
-                                                                      isReleasedByMeal[
-                                                                          meal
-                                                                      ]
-                                                                  }
-                                                                  onClick={() =>
-                                                                      handleEdit(
-                                                                          meal,
-                                                                          index
-                                                                      )
-                                                                  }
-                                                              >
-                                                                  <Pencil className="h-4 w-4" />
-                                                              </Button>
-                                                          )}
-                                                          <Button
-                                                              size="icon"
-                                                              variant="destructive"
-                                                              disabled={
-                                                                  isReleasedByMeal[
-                                                                      meal
-                                                                  ]
-                                                              }
-                                                              onClick={() =>
-                                                                  handleDelete(
-                                                                      meal,
-                                                                      index
-                                                                  )
-                                                              }
-                                                          >
-                                                              <Trash2 className="h-4 w-4" />
-                                                          </Button>
-                                                      </TableCell>
-                                                  </TableRow>
-                                              )
-                                          )}
-                                      </TableBody>
-                                  </Table>
-                              </div>
-
-                              {/* Save / Release Buttons for this section */}
-                              <div className="mt-4 flex justify-end gap-4">
-                                  <Button
-                                      variant="destructive"
-                                      onClick={() =>
-                                          handleToggleRelease(meal, false)
-                                      }
-                                      disabled={
-                                          !menuIdByMeal[meal] || togglingRelease
-                                      }
-                                  >
-                                      {togglingRelease &&
-                                      !isReleasedByMeal[meal]
-                                          ? "Releasing…"
-                                          : `Release ${meal}`}
-                                  </Button>
-                                  {isReleasedByMeal[meal] && (
-                                      <Button
-                                          variant="outline"
-                                          onClick={() =>
-                                              handleToggleRelease(meal, true)
-                                          }
-                                          disabled={togglingRelease}
-                                      >
-                                          {togglingRelease
-                                              ? "Unreleasing…"
-                                              : `Unrelease ${meal}`}
-                                      </Button>
-                                  )}
-                                  <Button
-                                      onClick={() => handleSaveMenu(meal)}
-                                      disabled={
-                                          !confirmedDate ||
-                                          itemsByMeal[meal].length === 0 ||
-                                          savingMenu ||
-                                          isReleasedByMeal[meal]
-                                      }
-                                  >
-                                      {savingMenu ? "Saving…" : `Save ${meal}`}
-                                  </Button>
-                              </div>
-                          </section>
-                      )
-                  )}
-
-                  {/* Item Selection Dialog */}
-                  <Dialog
-                      open={itemDialogOpen}
-                      onOpenChange={setItemDialogOpen}
+              {/* Custom date via calendar */}
+              <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="secondary"
+                    className="w-[220px] justify-start text-left font-normal"
                   >
-                      <DialogContent className="sm:max-w-[700px]">
-                          <DialogHeader>
-                              <DialogTitle>
-                                  Select Menu Items for {currentSection}
-                              </DialogTitle>
-                              <div className="relative mt-4">
-                                  <Search
-                                      className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                                      size={18}
-                                  />
-                                  <Input
-                                      placeholder="Search items..."
-                                      className="pl-10"
-                                      value={itemSearchQuery}
-                                      onChange={(e) =>
-                                          setItemSearchQuery(e.target.value)
-                                      }
-                                      disabled={loadingItemsAPI}
-                                  />
-                              </div>
-                          </DialogHeader>
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {displayDate
+                      ? formatDate(displayDate, "PPP")
+                      : "Pick custom date"}
+                  </Button>
+                </PopoverTrigger>
 
-                          <Tabs defaultValue="all" className="mt-2">
-                              <TabsList className="grid w-full grid-cols-3">
-                                  <TabsTrigger value="all">All</TabsTrigger>
-                                  <TabsTrigger value="available">
-                                      Available
-                                  </TabsTrigger>
-                                  <TabsTrigger value="picked">
-                                      Picked
-                                  </TabsTrigger>
-                              </TabsList>
+                <PopoverContent
+                  className="w-auto p-0 overflow-hidden"
+                  align="start"
+                >
+                  <div className="flex flex-col">
+                    {/* Calendar area with small top/side padding */}
+                    <div className="px-3 pt-3">
+                      <Calendar
+                        mode="single"
+                        selected={draftDate ?? undefined}
+                        defaultMonth={draftDate ?? new Date()}
+                        onSelect={(date: Date | undefined) => {
+                          if (!date) return;
+                          setDraftDate(normalizeToMidnight(date));
+                        }}
+                        disabled={(date) => {
+                          const today = normalizeToMidnight(new Date());
+                          return normalizeToMidnight(date) < today;
+                        }}
+                        initialFocus
+                        className="text-center"
+                      />
+                    </div>
 
-                              <TabsContent value="all">
-                                  <ScrollArea className="h-[400px] pr-4">
-                                      <div className="space-y-4">
-                                          {filteredItemsByQuery(
-                                              availableItems
-                                          ).map((it) => (
-                                              <div
-                                                  key={it.item_id}
-                                                  className="flex items-center space-x-4 p-4 border rounded-lg"
-                                              >
-                                                  <Checkbox
-                                                      checked={selectedItems.includes(
-                                                          it.item_id
-                                                      )}
-                                                      onCheckedChange={(
-                                                          checked
-                                                      ) => {
-                                                          if (checked) {
-                                                              setSelectedItems(
-                                                                  (prev) => [
-                                                                      ...prev,
-                                                                      it.item_id,
-                                                                  ]
-                                                              );
-                                                          } else {
-                                                              setSelectedItems(
-                                                                  (prev) =>
-                                                                      prev.filter(
-                                                                          (
-                                                                              id
-                                                                          ) =>
-                                                                              id !==
-                                                                              it.item_id
-                                                                      )
-                                                              );
-                                                          }
-                                                      }}
-                                                  />
-                                                  <div>
-                                                      <h4 className="font-medium">
-                                                          {it.name}
-                                                      </h4>
-                                                      {it.description && (
-                                                          <p className="text-sm text-gray-500">
-                                                              {it.description}
-                                                          </p>
-                                                      )}
-                                                  </div>
-                                              </div>
-                                          ))}
-                                      </div>
-                                  </ScrollArea>
-                              </TabsContent>
-                          </Tabs>
+                    {/* Action row with divider; no extra bottom padding */}
+                    <div className="flex justify-end gap-2 px-3 pt-2 pb-2 border-t">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setDraftDate(
+                            confirmedDate
+                              ? normalizeToMidnight(confirmedDate)
+                              : normalizeToMidnight(new Date())
+                          );
+                          setCalendarOpen(false);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          if (!draftDate) return;
+                          const normalized = normalizeToMidnight(draftDate);
+                          setDraftDate(normalized);
+                          setConfirmedDate(normalized);
+                          setCalendarOpen(false);
+                        }}
+                      >
+                        Apply
+                      </Button>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
 
-                          <DialogFooter>
-                              <Button
-                                  variant="outline"
-                                  onClick={() => {
-                                      setItemDialogOpen(false);
-                                      setItemSearchQuery("");
-                                  }}
-                              >
-                                  Cancel
-                              </Button>
-                              <Button
-                                  onClick={() => {
-                                      handleItemSelection();
-                                      setItemSearchQuery("");
-                                  }}
-                                  disabled={selectedItems.length === 0}
-                              >
-                                  Add Selected ({selectedItems.length})
-                              </Button>
-                          </DialogFooter>
-                      </DialogContent>
-                  </Dialog>
-              </CardContent>
-          </Card>
-      </AdminLayout>
+          {/* Four Sections: Breakfast, Lunch, Dinner, Condiments temp */}
+          {["breakfast", "lunch", "dinner", "condiments"].map((meal) => (
+            <section key={meal} className="mb-8">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold capitalize">{meal}</h2>
+                <Button
+                  onClick={() => {
+                    setCurrentSection(meal);
+                    setItemDialogOpen(true);
+                  }}
+                  disabled={!confirmedDate || isReleasedByMeal[meal]}
+                >
+                  <Plus size={16} className="mr-1" />
+                  Add {meal.slice(0, 1).toUpperCase() + meal.slice(1)} Item
+                </Button>
+              </div>
+
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Sl.no</TableHead>
+                      <TableHead>Item Name</TableHead>
+                      <TableHead>Planned Qty</TableHead>
+                      <TableHead>Available Qty</TableHead>
+                      <TableHead>Menu Rate</TableHead>
+                      <TableHead>Default</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(!confirmedDate || itemsByMeal[meal].length === 0) && (
+                      <TableRow>
+                        <TableCell
+                          colSpan={7}
+                          className="text-center text-gray-500"
+                        >
+                          {!confirmedDate
+                            ? "Please pick a date to see or add items"
+                            : "No items added yet"}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {itemsByMeal[meal].map((row, index) => (
+                      <TableRow key={index}>
+                        <TableCell>{index + 1}</TableCell>
+                        <TableCell>{row.item_name}</TableCell>
+
+                        <TableCell>
+                          {row.menu_item_id == null ||
+                          editIndexByMeal[meal] === index ? (
+                            // editable
+                            <InputWithButton
+                              value={row.planned_qty}
+                              onChange={(val: number) =>
+                                handleSave(meal, index, "planned_qty", val)
+                              }
+                            />
+                          ) : (
+                            // read-only
+                            row.planned_qty
+                          )}
+                        </TableCell>
+
+                        <TableCell>
+                          {row.menu_item_id == null ? (
+                            // first-time setup: show what will be saved
+                            row.planned_qty
+                          ) : isReleasedByMeal[meal] ? (
+                            // released: read-only
+                            row.available_qty
+                          ) : (
+                            // existing & not released: inline-editable
+                            <InputWithButton
+                              value={row.available_qty}
+                              onChange={(val: number) =>
+                                handleSave(meal, index, "available_qty", val)
+                              }
+                            />
+                          )}
+                        </TableCell>
+
+                        <TableCell>
+                          {editIndexByMeal[meal] === index ? (
+                            <Input
+                              type="number"
+                              value={row.rate}
+                              onChange={(e) =>
+                                handleSave(
+                                  meal,
+                                  index,
+                                  "rate",
+                                  Number(e.target.value)
+                                )
+                              }
+                            />
+                          ) : (
+                            `₹${row.rate}`
+                          )}
+                        </TableCell>
+
+                        <TableCell>
+                          {editIndexByMeal[meal] === index ? (
+                            <Checkbox
+                              checked={row.is_default}
+                              onCheckedChange={(checked) =>
+                                handleSave(
+                                  meal,
+                                  index,
+                                  "is_default",
+                                  checked ? 1 : 0
+                                )
+                              }
+                            />
+                          ) : row.is_default ? (
+                            <Badge variant="secondary">Yes</Badge>
+                          ) : (
+                            <Badge variant="outline">No</Badge>
+                          )}
+                        </TableCell>
+
+                        <TableCell className="flex gap-2">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            disabled={isReleasedByMeal[meal]}
+                            onClick={() => setViewItem(row)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          {editIndexByMeal[meal] === index ? (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              disabled={isReleasedByMeal[meal]}
+                              onClick={() =>
+                                setEditIndexByMeal((prev) => ({
+                                  ...prev,
+                                  [meal]: null,
+                                }))
+                              }
+                            >
+                              <Check className="h-4 w-4" />
+                            </Button>
+                          ) : (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              disabled={isReleasedByMeal[meal]}
+                              onClick={() => handleEdit(meal, index)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <Button
+                            size="icon"
+                            variant="destructive"
+                            disabled={isReleasedByMeal[meal]}
+                            onClick={() => handleDelete(meal, index)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Save / Release Buttons for this section */}
+              <div className="mt-4 flex justify-end gap-4">
+                <Button
+                  variant="destructive"
+                  onClick={() => handleToggleRelease(meal, false)}
+                  disabled={!menuIdByMeal[meal] || togglingRelease}
+                >
+                  {togglingRelease && !isReleasedByMeal[meal]
+                    ? "Releasing…"
+                    : `Release ${meal}`}
+                </Button>
+                {isReleasedByMeal[meal] && (
+                  <Button
+                    variant="outline"
+                    onClick={() => handleToggleRelease(meal, true)}
+                    disabled={togglingRelease}
+                  >
+                    {togglingRelease ? "Unreleasing…" : `Unrelease ${meal}`}
+                  </Button>
+                )}
+                <Button
+                  onClick={() => handleSaveMenu(meal)}
+                  disabled={
+                    !confirmedDate ||
+                    itemsByMeal[meal].length === 0 ||
+                    savingMenu ||
+                    isReleasedByMeal[meal]
+                  }
+                >
+                  {savingMenu ? "Saving…" : `Save ${meal}`}
+                </Button>
+              </div>
+            </section>
+          ))}
+
+          {/* Item Selection Dialog */}
+          <Dialog open={itemDialogOpen} onOpenChange={setItemDialogOpen}>
+            <DialogContent className="w-[95vw] sm:max-w-[1100px] max-h-[85vh] overflow-y-auto p-6">
+              <DialogHeader>
+                <DialogTitle>
+                  Select Menu Items for{" "}
+                  <span className="capitalize">{currentSection}</span>
+                </DialogTitle>
+
+                {/* Search */}
+                <div className="relative !mt-6 sm:!mt-6">
+                  <Search
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                    size={18}
+                  />
+                  <Input
+                    placeholder="Search items..."
+                    className="pl-10"
+                    value={itemSearchQuery}
+                    onChange={(e) => setItemSearchQuery(e.target.value)}
+                    disabled={loadingItemsAPI}
+                  />
+                </div>
+              </DialogHeader>
+
+              {/* Grid like the sketch: NO grouping, NO ScrollArea */}
+              <div className="mt-4 grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {filteredItemsByQuery(availableItems).map((it) => {
+                  const checked = selectedItems.includes(it.item_id);
+                  return (
+                    <label
+                      key={it.item_id}
+                      className={[
+                        "flex items-center gap-3 rounded-xl",
+                        "border border-border/60 bg-amber-50/70 hover:bg-amber-50",
+                        "px-4 py-3 cursor-pointer transition-colors",
+                      ].join(" ")}
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={(isChecked) => {
+                          if (isChecked) {
+                            setSelectedItems((prev) =>
+                              prev.includes(it.item_id)
+                                ? prev
+                                : [...prev, it.item_id]
+                            );
+                          } else {
+                            setSelectedItems((prev) =>
+                              prev.filter((id) => id !== it.item_id)
+                            );
+                          }
+                        }}
+                        className="shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">{it.name}</div>
+                        {it.description ? (
+                          <div className="text-xs text-muted-foreground line-clamp-2">
+                            {it.description}
+                          </div>
+                        ) : null}
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setItemDialogOpen(false);
+                    setItemSearchQuery("");
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => {
+                    handleItemSelection();
+                    setItemSearchQuery("");
+                  }}
+                  disabled={selectedItems.length === 0}
+                >
+                  Add Selected ({selectedItems.length})
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </CardContent>
+      </Card>
+    </AdminLayout>
   );
 }

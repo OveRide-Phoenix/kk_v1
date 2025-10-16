@@ -3,10 +3,10 @@
         "connectionId": "overide-phoenix",
         "projectKey": "OveRide-Phoenix_kk_v1"
     },
-    "editor.defaultFormatter": "rvest.vs-code-prettier-eslint",
-    "editor.formatOnType": false, // required
-    "editor.formatOnPaste": false, // optional
-    "editor.formatOnSave": false, // optional
+    "editor.defaultFormatter": "trae.ai-code-completion",
+    "editor.formatOnType": true, // required
+    "editor.formatOnPaste": true, // optional
+    "editor.formatOnSave": true, // optional
     "editor.formatOnSaveMode": "file", // required to format on save
     "files.autoSave": "onFocusChange", // optional but recommended
     "vs-code-prettier-eslint.prettierLast": false // set as "true" to run 'prettier' last not first
