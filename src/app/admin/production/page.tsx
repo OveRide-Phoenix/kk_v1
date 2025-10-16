@@ -426,8 +426,10 @@ function PlanItemCard({
   return (
     <div
       className={cn(
-        "flex h-full flex-col rounded-lg border border-border bg-card p-4 shadow-sm",
-        planGenerated ? "border-solid" : "border-dotted",
+        "flex h-full min-w-[260px] flex-col rounded-lg border-2 bg-card p-5 shadow-sm sm:min-w-[300px]",
+        planGenerated
+          ? "border-border border-solid"
+          : "border-[3px] border-dotted border-primary",
       )}
     >
       <div className="flex items-start justify-between gap-3">
