@@ -5,7 +5,6 @@ import { addDays, format, isSameDay } from "date-fns";
 import type {
   ProductionItem,
   PublishedMenuItem,
-  ProductionPlanStatus,
 } from "@/data/production-mock";
 import { AdminLayout } from "@/components/admin-layout";
 import { DatePickerWithPresets } from "@/components/ui/date-picker";
@@ -64,6 +63,7 @@ type MenuApiResponse = {
   items?: MenuApiItem[];
 };
 
+
 const categories: Category[] = ["Breakfast", "Lunch", "Dinner", "Condiments"];
 
 const createEmptyPlanState = (): Record<Category, PlanItem[]> => ({
@@ -96,6 +96,10 @@ function mapMenuItems(menuItems: PublishedMenuItem[]): PlanItem[] {
   return menuItems.map((menuItem) => {
     const plannedQuantity = Number(menuItem.planned_quantity.toFixed(2));
     const availableQuantity = Number(menuItem.available_quantity.toFixed(2));
+    const bufferQuantity = Number(menuItem.buffer_quantity ?? 0);
+    const finalQuantity = Number(
+      menuItem.final_quantity ?? plannedQuantity + bufferQuantity
+    );
     const customerOrders = Math.max(plannedQuantity - availableQuantity, 0);
     const roundedCustomerOrders = Number(customerOrders.toFixed(2));
 
@@ -106,11 +110,12 @@ function mapMenuItems(menuItems: PublishedMenuItem[]): PlanItem[] {
       planned_quantity: plannedQuantity,
       available_quantity: availableQuantity,
       customer_orders: roundedCustomerOrders,
-      buffer_quantity: 0,
-      final_quantity: plannedQuantity,
+      buffer_quantity: bufferQuantity,
+      final_quantity: finalQuantity,
     };
   });
 }
+
 
 function applyReplacementsToPlan(
   items: PlanItem[],
@@ -380,6 +385,7 @@ type PlanItemCardProps = {
   item: PlanItem;
   onBufferChange?: (value: string) => void;
   readOnly?: boolean;
+  planGenerated?: boolean;
 };
 
 type SummaryHighlight = "success" | "info" | "muted" | "none";
@@ -411,9 +417,19 @@ function SummaryRow({ label, value, highlight }: SummaryRowProps) {
   );
 }
 
-function PlanItemCard({ item, onBufferChange, readOnly = false }: PlanItemCardProps) {
+function PlanItemCard({
+  item,
+  onBufferChange,
+  readOnly = false,
+  planGenerated = false,
+}: PlanItemCardProps) {
   return (
-    <div className="flex h-full flex-col rounded-lg border border-border bg-card p-4 shadow-sm">
+    <div
+      className={cn(
+        "flex h-full flex-col rounded-lg border border-border bg-card p-4 shadow-sm",
+        planGenerated ? "border-solid" : "border-dotted",
+      )}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-base font-semibold text-gray-900">
@@ -469,8 +485,12 @@ function PlanItemCard({ item, onBufferChange, readOnly = false }: PlanItemCardPr
   );
 }
 
-async function fetchPublishedMenu(date: string): Promise<PublishedMenuItem[]> {
+async function fetchPublishedMenu(
+  date: string,
+  setPlanGeneratedState: React.Dispatch<React.SetStateAction<Record<Category, boolean>>>
+): Promise<PublishedMenuItem[]> {
   const collected: PublishedMenuItem[] = [];
+
   await Promise.all(
     categories.map(async (category) => {
       const url = new URL("http://localhost:8000/api/menu");
@@ -479,13 +499,22 @@ async function fetchPublishedMenu(date: string): Promise<PublishedMenuItem[]> {
       url.searchParams.set("period_type", "one_day");
 
       const response = await fetch(url.toString());
-      if (response.status === 404) {
-        return;
-      }
-      if (!response.ok) {
+      if (response.status === 404) return;
+      if (!response.ok)
         throw new Error(`Failed to fetch published menu for ${category}`);
-      }
-      const data = (await response.json()) as MenuApiResponse;
+
+      const data = (await response.json()) as MenuApiResponse & {
+        is_production_generated?: boolean;
+      };
+
+      // ✅ Update planGeneratedState directly from menu response
+      if (data?.is_production_generated) {
+      setPlanGeneratedState((prev) => ({
+        ...prev,
+        [category]: true,
+      }));
+    }
+
       if (!data?.items?.length) return;
 
       data.items.forEach((item) => {
@@ -518,6 +547,7 @@ async function fetchPublishedMenu(date: string): Promise<PublishedMenuItem[]> {
   return collected;
 }
 
+
 async function fetchSubscriptionReplacements(): Promise<
   SubscriptionReplacement[]
 > {
@@ -530,24 +560,6 @@ async function fetchSubscriptionReplacements(): Promise<
   return data;
 }
 
-async function fetchProductionPlanStatus(
-  date: string,
-): Promise<Record<Category, boolean>> {
-  const initial = createCategoryBooleanState(false);
-  const response = await fetch(`/api/production/status?date=${date}`);
-  if (!response.ok) {
-    console.warn("Production plan status unavailable, defaulting to pending");
-    return initial;
-  }
-  const data = (await response.json()) as ProductionPlanStatus[];
-  const mapped = { ...initial };
-  data
-    .filter((entry) => entry.date === date)
-    .forEach((entry) => {
-      mapped[entry.category] = entry.is_generated;
-    });
-  return mapped;
-}
 
 function KitchenProductionPlanningContent() {
   const [selectedDate, setSelectedDate] = useState<Date>(() =>
@@ -557,12 +569,16 @@ function KitchenProductionPlanningContent() {
   const [planData, setPlanData] = useState<Record<Category, PlanItem[]>>(
     createEmptyPlanState,
   );
+  const [editingState, setEditingState] = useState<Record<Category, boolean>>(
+    () => createCategoryBooleanState(false),
+  );
   const [menuAvailability, setMenuAvailability] = useState<
     Record<Category, boolean>
   >(() => createCategoryBooleanState(false));
-  const [planGeneratedState, setPlanGeneratedState] = useState<
-    Record<Category, boolean>
-  >(() => createCategoryBooleanState(false));
+  const [planGeneratedState, setPlanGeneratedState] = useState(
+  createCategoryBooleanState(false)
+);
+
   const [savingCategory, setSavingCategory] = useState<Record<Category, boolean>>(
     () => createCategoryBooleanState(false),
   );
@@ -588,64 +604,70 @@ function KitchenProductionPlanningContent() {
     [selectedDate],
   );
 
-  useEffect(() => {
-    let cancelled = false;
+useEffect(() => {
+  let cancelled = false;
 
-    const load = async () => {
-      setIsLoading(true);
-      setLoadError(null);
-      try {
-        const [publishedMenu, replacements, planStatus] = await Promise.all([
-          fetchPublishedMenu(selectedDateISO),
-          fetchSubscriptionReplacements(),
-          fetchProductionPlanStatus(selectedDateISO),
-        ]);
+  const load = async () => {
+    setIsLoading(true);
+    setLoadError(null);
 
-        const menuByCategory: Record<Category, PublishedMenuItem[]> = {
-          Breakfast: [],
-          Lunch: [],
-          Dinner: [],
-          Condiments: [],
-        };
-        publishedMenu.forEach((item) => {
-          menuByCategory[item.category].push(item);
-        });
+    try {
+      // ✅ Fetch all menus for the date, and auto-update planGeneratedState
+      const publishedMenu = await fetchPublishedMenu(
+        selectedDateISO,
+        setPlanGeneratedState
+      );
 
-        const availability = createCategoryBooleanState(false);
-        const nextState = createEmptyPlanState();
+      const replacements = await fetchSubscriptionReplacements();
 
-        categories.forEach((category) => {
-          const menuItems = menuByCategory[category];
-          if (menuItems.length > 0) {
-            availability[category] = true;
-            const mappedItems = mapMenuItems(menuItems);
-            const replacedItems = applyReplacementsToPlan(mappedItems, replacements);
-            nextState[category] = replacedItems;
-          } else {
-            availability[category] = false;
-            nextState[category] = [];
-          }
-        });
+      // Group items by category
+      const menuByCategory: Record<Category, PublishedMenuItem[]> = {
+        Breakfast: [],
+        Lunch: [],
+        Dinner: [],
+        Condiments: [],
+      };
+      publishedMenu.forEach((item) => {
+        menuByCategory[item.category].push(item);
+      });
 
-        if (!cancelled) {
-          setMenuAvailability(availability);
-          setPlanData(nextState);
-          setPlanGeneratedState(planStatus);
+      const availability = createCategoryBooleanState(false);
+      const nextState = createEmptyPlanState();
+
+      categories.forEach((category) => {
+        const menuItems = menuByCategory[category];
+        if (menuItems.length > 0) {
+          availability[category] = true;
+          const mappedItems = mapMenuItems(menuItems);
+          const replacedItems = applyReplacementsToPlan(
+            mappedItems,
+            replacements
+          );
+          nextState[category] = replacedItems;
+        } else {
+          availability[category] = false;
+          nextState[category] = [];
         }
-      } catch (error) {
-        console.error(error);
-        if (!cancelled) setLoadError("Unable to load production data.");
-      } finally {
-        if (!cancelled) setIsLoading(false);
+      });
+
+      if (!cancelled) {
+        setMenuAvailability(availability);
+        setPlanData(nextState);
       }
-    };
+    } catch (error) {
+      console.error(error);
+      if (!cancelled) setLoadError("Unable to load production data.");
+    } finally {
+      if (!cancelled) setIsLoading(false);
+    }
+  };
 
-    load();
+  load();
+  return () => {
+    cancelled = true;
+  };
+}, [selectedDateISO]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedDateISO]);
 
   const flattenedPlan = useMemo(
     () => categories.flatMap((category) => planData[category]),
@@ -734,6 +756,13 @@ function KitchenProductionPlanningContent() {
     setGlobalBufferDialogOpen(false);
   };
 
+  const toggleCategoryEdit = (category: Category) => {
+    setEditingState((prev) => ({
+      ...prev,
+      [category]: !prev[category],
+    }));
+  };
+
   const handleExportCSV = () => {
     exportToCSV(flattenedPlan);
   };
@@ -743,39 +772,41 @@ function KitchenProductionPlanningContent() {
   };
 
   const handleSaveCategory = async (category: Category) => {
-  setSavingCategory((prev) => ({ ...prev, [category]: true }));
-  try {
-    const response = await fetch("http://localhost:8000/api/production/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        date: selectedDateISO,
-        menu_type: category,
-        plans: planData[category],
-      }),
-    });
+    setSavingCategory((prev) => ({ ...prev, [category]: true }));
+    try {
+      const response = await fetch("http://localhost:8000/api/production/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: selectedDateISO,
+          menu_type: category,
+          plans: planData[category],
+        }),
+      });
 
-    if (!response.ok) throw new Error("Failed to save production plan");
+      if (!response.ok) throw new Error("Failed to save production plan");
 
-    const data = await response.json();
-    console.log("✅ Production plan saved:", data);
+      const data = await response.json();
+      console.log("✅ Production plan saved:", data);
 
-    setLastSavedAt((prev) => ({ ...prev, [category]: Date.now() }));
-    setPlanGeneratedState((prev) => ({ ...prev, [category]: true }));
-  } catch (err) {
-    console.error(err);
-    alert("Error saving production plan");
-  } finally {
-    setSavingCategory((prev) => ({ ...prev, [category]: false }));
-  }
-};
-
+      setLastSavedAt((prev) => ({ ...prev, [category]: Date.now() }));
+      setPlanGeneratedState((prev) => ({ ...prev, [category]: true }));
+      setEditingState((prev) => ({ ...prev, [category]: false }));
+    } catch (err) {
+      console.error(err);
+      alert("Error saving production plan");
+    } finally {
+      setSavingCategory((prev) => ({ ...prev, [category]: false }));
+    }
+  };
 
   const currentItems = planData[selectedCategory];
   const currentMenuAvailable = menuAvailability[selectedCategory];
   const currentPlanGenerated = planGeneratedState[selectedCategory];
   const isSavingCategory = savingCategory[selectedCategory];
   const lastSavedTimestamp = lastSavedAt[selectedCategory];
+  const isCurrentCategoryEditable =
+    !currentPlanGenerated || editingState[selectedCategory];
 
   return (
     <div className="flex flex-col gap-6">
@@ -786,6 +817,11 @@ function KitchenProductionPlanningContent() {
           </h2>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
+          <DatePickerWithPresets
+            selectedDate={selectedDate}
+            onSelectDate={(date) => setSelectedDate(normalizeDate(date))}
+            showQuickSelect={false}
+          />
           {quickDateOptions.map((option) => {
             const isActive = isSameDay(selectedDate, option.date);
             return (
@@ -799,17 +835,6 @@ function KitchenProductionPlanningContent() {
               </Button>
             );
           })}
-          <DatePickerWithPresets
-            selectedDate={selectedDate}
-            onSelectDate={(date) => setSelectedDate(normalizeDate(date))}
-            showQuickSelect={false}
-          />
-          <Button
-            variant="outline"
-            onClick={() => setGlobalBufferDialogOpen(true)}
-          >
-            Set Global Buffer %
-          </Button>
         </div>
       </div>
 
@@ -886,6 +911,23 @@ function KitchenProductionPlanningContent() {
               <Button
                 variant="outline"
                 size="sm"
+                onClick={() => setGlobalBufferDialogOpen(true)}
+                disabled={!isCurrentCategoryEditable}
+              >
+                Set Global Buffer %
+              </Button>
+              {currentPlanGenerated && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => toggleCategoryEdit(selectedCategory)}
+                >
+                  {editingState[selectedCategory] ? "Stop Editing" : "Edit"}
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => handleSaveCategory(selectedCategory)}
                 disabled={isSavingCategory || !currentMenuAvailable}
               >
@@ -909,6 +951,8 @@ function KitchenProductionPlanningContent() {
                   onBufferChange={(value) =>
                     handleBufferChange(selectedCategory, index, value)
                   }
+                  readOnly={!isCurrentCategoryEditable}
+                  planGenerated={currentPlanGenerated}
                 />
               ))}
             </div>
@@ -995,6 +1039,7 @@ function KitchenProductionPlanningContent() {
                           key={`${item.item_name}-${index}-preview`}
                           item={item}
                           readOnly
+                          planGenerated={planGeneratedState[category]}
                         />
                       ))}
                     </div>

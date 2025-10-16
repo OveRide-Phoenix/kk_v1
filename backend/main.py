@@ -620,6 +620,7 @@ def get_daily_menu(
                 date,
                 is_festival,
                 is_released,
+                is_production_generated,
                 period_type,
                 bld_id
             FROM menu
@@ -649,6 +650,8 @@ def get_daily_menu(
                 mi.category_id,
                 mi.planned_qty,
                 mi.available_qty,
+                mi.buffer_qty,
+                mi.final_qty,
                 mi.rate,
                 mi.is_default,
                 mi.sort_order
@@ -665,6 +668,7 @@ def get_daily_menu(
             "date": menu_row["date"],
             "is_festival": bool(menu_row["is_festival"]),
             "is_released": bool(menu_row["is_released"]),
+            "is_production_generated": bool(menu_row["is_production_generated"]),
             "period_type": menu_row["period_type"],
             "bld_id": menu_row["bld_id"],
             "bld_type": bld_type,
@@ -676,6 +680,8 @@ def get_daily_menu(
                     "category_id": it["category_id"],
                     "planned_qty": it["planned_qty"],
                     "available_qty": it["available_qty"],
+                    "buffer_qty": float(it["buffer_qty"] or 0),
+                    "final_qty": float(it["final_qty"] or 0),
                     "rate": float(it["rate"]),
                     "is_default": bool(it["is_default"]),
                     "sort_order": it["sort_order"],
@@ -859,67 +865,67 @@ def get_dashboard_metrics():
 
 class ProductionPlanItem(BaseModel):
     item_name: str
-    unit: Optional[str] = None
-    category: Optional[str] = None
-    planned_quantity: int
-    available_quantity: int
-    customer_orders: int
-    buffer_quantity: int
-    final_quantity: int
+    buffer_quantity: float
+    final_quantity: float
 
 class ProductionPlanRequest(BaseModel):
     date: str
     menu_type: str
     plans: List[ProductionPlanItem]
 
-
 @app.post("/api/production/generate", tags=["Production"])
 def generate_production_plan(payload: ProductionPlanRequest):
     db = get_db()
-    cursor = db.cursor()
+    cursor = db.cursor(dictionary=True)
     updated = 0
     try:
-        # Step 1: Find bld_id
-        cursor.execute("SELECT bld_id FROM bld WHERE LOWER(bld_type)=LOWER(%s) LIMIT 1", (payload.menu_type,))
-        bld_row = cursor.fetchone()
-        if not bld_row:
-            raise HTTPException(status_code=404, detail="BLD type not found")
-        bld_id = bld_row[0]
+        # Get bld_id from menu_type
+        cursor.execute(
+            "SELECT bld_id FROM bld WHERE LOWER(bld_type)=LOWER(%s) LIMIT 1",
+            (payload.menu_type,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Invalid menu_type")
+        bld_id = row["bld_id"]
 
-        # Step 2: Find menu_id for this date and bld_id
-        cursor.execute("SELECT menu_id FROM menu WHERE date=%s AND bld_id=%s LIMIT 1", (payload.date, bld_id))
-        menu_row = cursor.fetchone()
-        if not menu_row:
-            raise HTTPException(status_code=404, detail="Menu not found for this date/type")
-        menu_id = menu_row[0]
+        # Find menu_id for that date + bld_id
+        cursor.execute(
+            "SELECT menu_id FROM menu WHERE date=%s AND bld_id=%s LIMIT 1",
+            (payload.date, bld_id)
+        )
+        menu = cursor.fetchone()
+        if not menu:
+            raise HTTPException(status_code=404, detail="Menu not found for that date/type")
+        menu_id = menu["menu_id"]
 
-        # Step 3: Update menu_items
+        # Update buffer and final quantities for each menu item
         for plan in payload.plans:
             cursor.execute(
                 """
                 UPDATE menu_items mi
                 JOIN items i ON mi.item_id = i.item_id
-                   SET mi.buffer_quantity = %s,
-                       mi.final_quantity = %s,
-                       mi.is_production_generated = 1
-                 WHERE mi.menu_id = %s
-                   AND i.name = %s
+                SET mi.buffer_qty = %s,
+                    mi.final_qty = %s
+                WHERE mi.menu_id = %s
+                AND LOWER(i.name) = LOWER(%s)
                 """,
-                (
-                    int(plan.buffer_quantity),
-                    int(plan.final_quantity),
-                    menu_id,
-                    plan.item_name,
-                ),
+                (plan.buffer_quantity, plan.final_quantity, menu_id, plan.item_name)
             )
             updated += cursor.rowcount
 
+
+        # Mark plan as generated
+        cursor.execute(
+            "UPDATE menu SET is_production_generated = 1 WHERE menu_id=%s", (menu_id,)
+        )
         db.commit()
+
         return {
             "success": True,
-            "message": "Production plan saved successfully",
-            "menu_type": payload.menu_type,
             "updated_items": updated,
+            "menu_type": payload.menu_type,
+            "message": "Production plan saved successfully"
         }
     except mysql.connector.Error as err:
         db.rollback()
@@ -927,6 +933,7 @@ def generate_production_plan(payload: ProductionPlanRequest):
     finally:
         cursor.close()
         db.close()
+
 
 @app.get("/api/production/status", tags=["Production"])
 def get_production_plan_status(date: str):

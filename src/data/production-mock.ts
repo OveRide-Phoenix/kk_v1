@@ -13,6 +13,8 @@ export interface PublishedMenuItem {
   unit: string;
   planned_quantity: number;
   available_quantity: number;
+  buffer_quantity?: number;
+  final_quantity?: number;
   category: 'Breakfast' | 'Lunch' | 'Dinner' | 'Condiments';
 }
 
