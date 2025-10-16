@@ -786,11 +786,6 @@ function KitchenProductionPlanningContent() {
           </h2>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <DatePickerWithPresets
-            selectedDate={selectedDate}
-            onSelectDate={(date) => setSelectedDate(normalizeDate(date))}
-            showQuickSelect={false}
-          />
           {quickDateOptions.map((option) => {
             const isActive = isSameDay(selectedDate, option.date);
             return (
@@ -804,6 +799,11 @@ function KitchenProductionPlanningContent() {
               </Button>
             );
           })}
+          <DatePickerWithPresets
+            selectedDate={selectedDate}
+            onSelectDate={(date) => setSelectedDate(normalizeDate(date))}
+            showQuickSelect={false}
+          />
           <Button
             variant="outline"
             onClick={() => setGlobalBufferDialogOpen(true)}
