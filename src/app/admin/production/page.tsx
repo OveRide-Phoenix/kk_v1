@@ -802,11 +802,11 @@ useEffect(() => {
 
   const currentItems = planData[selectedCategory];
   const currentMenuAvailable = menuAvailability[selectedCategory];
-  const currentPlanGenerated = planGeneratedState[selectedCategory];
+  const planGenerated = planGeneratedState[selectedCategory];
   const isSavingCategory = savingCategory[selectedCategory];
   const lastSavedTimestamp = lastSavedAt[selectedCategory];
   const isCurrentCategoryEditable =
-    !currentPlanGenerated || editingState[selectedCategory];
+    !planGenerated || editingState[selectedCategory];
 
   return (
     <div className="flex flex-col gap-6">
@@ -896,7 +896,7 @@ useEffect(() => {
                 {selectedCategory}
               </Badge>
               <span className="text-sm text-muted-foreground">
-                {currentItems.length} items · {currentPlanGenerated ? "Plan generated" : "Plan pending"}
+                {currentItems.length} items · {planGenerated ? "Plan generated" : "Plan pending"}
               </span>
               {lastSavedTimestamp && (
                 <span className="text-xs text-muted-foreground">
@@ -916,7 +916,7 @@ useEffect(() => {
               >
                 Set Global Buffer %
               </Button>
-              {currentPlanGenerated && (
+              {planGenerated && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -952,7 +952,7 @@ useEffect(() => {
                     handleBufferChange(selectedCategory, index, value)
                   }
                   readOnly={!isCurrentCategoryEditable}
-                  planGenerated={currentPlanGenerated}
+                  planGenerated={planGenerated}
                 />
               ))}
             </div>
