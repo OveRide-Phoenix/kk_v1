@@ -2,13 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { addDays, format, isSameDay } from "date-fns";
-import {
-  mockOrders,
+import type {
   ProductionItem,
   PublishedMenuItem,
-  mockPublishedMenus,
   ProductionPlanStatus,
-  mockProductionPlanStatus,
 } from "@/data/production-mock";
 import { AdminLayout } from "@/components/admin-layout";
 import { DatePickerWithPresets } from "@/components/ui/date-picker";
@@ -33,13 +30,6 @@ import { cn } from "@/lib/utils";
 
 type Category = ProductionItem["category"];
 
-type AggregatedOrderItem = {
-  item_name: string;
-  unit: string;
-  category: Category;
-  total: number;
-};
-
 type PlanItem = {
   item_name: string;
   unit: string;
@@ -47,7 +37,6 @@ type PlanItem = {
   planned_quantity: number;
   available_quantity: number;
   customer_orders: number;
-  base_quantity: number;
   buffer_quantity: number;
   final_quantity: number;
 };
@@ -84,23 +73,12 @@ const createEmptyPlanState = (): Record<Category, PlanItem[]> => ({
   Condiments: [],
 });
 
-const createEmptyAggregatedState = (): Record<Category, AggregatedOrderItem[]> => ({
-  Breakfast: [],
-  Lunch: [],
-  Dinner: [],
-  Condiments: [],
-});
-
 const createCategoryBooleanState = (value: boolean): Record<Category, boolean> => ({
   Breakfast: value,
   Lunch: value,
   Dinner: value,
   Condiments: value,
 });
-
-const mockReplacements: SubscriptionReplacement[] = [
-  { group: "Breakfast Combo", default_item: "Masala Dosa" },
-];
 
 // ────────────────────────────────────────────────────────────────────────
 // utils
@@ -112,122 +90,43 @@ function normalizeDate(date: Date) {
   return normalized;
 }
 
-function aggregateOrders(orders: ProductionItem[]): AggregatedOrderItem[] {
-  const result: Record<
-    string,
-    { unit: string; category: Category; total: number; item_name: string }
-  > = {};
+function mapMenuItems(menuItems: PublishedMenuItem[]): PlanItem[] {
+  if (menuItems.length === 0) return [];
 
-  orders.forEach((order) => {
-    if (order.is_combo && order.combo_items?.length) {
-      order.combo_items.forEach((comboItem) => {
-        const key = `${order.category}::${comboItem.item_name}`;
-        const unit = comboItem.unit ?? order.unit;
-
-        if (!result[key]) {
-          result[key] = {
-            unit,
-            category: order.category,
-            total: 0,
-            item_name: comboItem.item_name,
-          };
-        }
-
-        result[key].total += comboItem.quantity * order.quantity;
-      });
-      return;
-    }
-
-    const key = `${order.category}::${order.item_name}`;
-    if (!result[key]) {
-      result[key] = {
-        unit: order.unit,
-        category: order.category,
-        total: 0,
-        item_name: order.item_name,
-      };
-    }
-
-    result[key].total += order.quantity;
-  });
-
-  return Object.values(result).map((entry) => ({
-    item_name: entry.item_name,
-    unit: entry.unit,
-    category: entry.category,
-    total: Number(entry.total.toFixed(2)),
-  }));
-}
-
-function applySubscriptionReplacements(
-  orders: ProductionItem[],
-  replacements: SubscriptionReplacement[],
-): ProductionItem[] {
-  if (!replacements.length) return orders;
-
-  return orders.map((order) => {
-    const replacement = replacements.find((r) => r.group === order.item_name);
-    if (!replacement) return order;
-    return {
-      ...order,
-      item_name: replacement.default_item,
-    };
-  });
-}
-
-function mergeMenuWithOrders(
-  menuItems: PublishedMenuItem[],
-  aggregatedItems: AggregatedOrderItem[],
-): PlanItem[] {
-  const aggregatedMap = new Map<string, AggregatedOrderItem>();
-  aggregatedItems.forEach((item) => {
-    aggregatedMap.set(item.item_name, item);
-  });
-
-  const seen = new Set<string>();
-
-  const planItems = menuItems.map((menuItem) => {
-    const aggregated = aggregatedMap.get(menuItem.item_name);
-    const fallbackOrders = Math.max(
-      menuItem.planned_quantity - menuItem.available_quantity,
-      0,
-    );
-    const customerOrders = aggregated ? aggregated.total : fallbackOrders;
+  return menuItems.map((menuItem) => {
+    const plannedQuantity = Number(menuItem.planned_quantity.toFixed(2));
+    const availableQuantity = Number(menuItem.available_quantity.toFixed(2));
+    const customerOrders = Math.max(plannedQuantity - availableQuantity, 0);
     const roundedCustomerOrders = Number(customerOrders.toFixed(2));
 
     return {
       item_name: menuItem.item_name,
       unit: menuItem.unit,
       category: menuItem.category,
-      planned_quantity: Number(menuItem.planned_quantity.toFixed(2)),
-      available_quantity: Number(menuItem.available_quantity.toFixed(2)),
+      planned_quantity: plannedQuantity,
+      available_quantity: availableQuantity,
       customer_orders: roundedCustomerOrders,
-      base_quantity: roundedCustomerOrders,
       buffer_quantity: 0,
-      final_quantity: roundedCustomerOrders,
+      final_quantity: plannedQuantity,
     };
   });
+}
 
-  planItems.forEach((item) => seen.add(item.item_name));
+function applyReplacementsToPlan(
+  items: PlanItem[],
+  replacements: SubscriptionReplacement[],
+): PlanItem[] {
+  if (!replacements.length) return items;
 
-  const additionalItems = aggregatedItems
-    .filter((item) => !seen.has(item.item_name))
-    .map((item) => {
-      const roundedTotal = Number(item.total.toFixed(2));
-      return {
-        item_name: item.item_name,
-        unit: item.unit,
-        category: item.category,
-        planned_quantity: 0,
-        available_quantity: 0,
-        customer_orders: roundedTotal,
-        base_quantity: roundedTotal,
-        buffer_quantity: 0,
-        final_quantity: roundedTotal,
-      };
-    });
+  return items.map((item) => {
+    const replacement = replacements.find((r) => r.group === item.item_name);
+    if (!replacement) return item;
 
-  return [...planItems, ...additionalItems];
+    return {
+      ...item,
+      item_name: replacement.default_item,
+    };
+  });
 }
 
 function exportToCSV(data: PlanItem[]) {
@@ -570,111 +469,84 @@ function PlanItemCard({ item, onBufferChange, readOnly = false }: PlanItemCardPr
   );
 }
 
-async function fetchAggregatedOrders(): Promise<ProductionItem[]> {
-  try {
-    const response = await fetch("/api/orders/aggregate");
-    if (!response.ok) throw new Error("Failed to fetch orders");
-    const data = (await response.json()) as ProductionItem[];
-    return data;
-  } catch (error) {
-    console.warn("Falling back to mock orders", error);
-    return mockOrders;
-  }
-}
-
 async function fetchPublishedMenu(date: string): Promise<PublishedMenuItem[]> {
   const collected: PublishedMenuItem[] = [];
-  try {
-    await Promise.all(
-      categories.map(async (category) => {
-        const url = new URL("http://localhost:8000/api/menu");
-        url.searchParams.set("date", date);
-        url.searchParams.set("bld_type", category.toLowerCase());
-        url.searchParams.set("period_type", "one_day");
+  await Promise.all(
+    categories.map(async (category) => {
+      const url = new URL("http://localhost:8000/api/menu");
+      url.searchParams.set("date", date);
+      url.searchParams.set("bld_type", category.toLowerCase());
+      url.searchParams.set("period_type", "one_day");
 
-        const response = await fetch(url.toString());
-        if (response.status === 404) {
-          return;
-        }
-        if (!response.ok) {
-          throw new Error(`Failed to fetch published menu for ${category}`);
-        }
-        const data = (await response.json()) as MenuApiResponse;
-        if (!data?.items?.length) return;
+      const response = await fetch(url.toString());
+      if (response.status === 404) {
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(`Failed to fetch published menu for ${category}`);
+      }
+      const data = (await response.json()) as MenuApiResponse;
+      if (!data?.items?.length) return;
 
-        data.items.forEach((item) => {
-          const plannedQtyRaw =
-            item.planned_qty ?? item.planned_quantity ?? item.quantity ?? 0;
-          const availableQtyRaw =
-            item.available_qty ?? item.quantity ?? item.available_qty ?? 0;
-          const plannedQuantity = Number(plannedQtyRaw) || 0;
-          const availableQuantity = Math.max(Number(availableQtyRaw) || 0, 0);
-          const unit =
-            item.uom ??
-            item.unit ??
-            item.unit_name ??
-            item.measure_unit ??
-            item.quantity_uom ??
-            "Nos";
-          const itemName = item.item_name ?? item.name ?? "Unnamed Item";
-          collected.push({
-            date,
-            item_name: itemName,
-            unit,
-            planned_quantity: plannedQuantity,
-            available_quantity: availableQuantity,
-            category,
-          });
+      data.items.forEach((item) => {
+        const plannedQtyRaw =
+          item.planned_qty ?? item.planned_quantity ?? item.quantity ?? 0;
+        const availableQtyRaw =
+          item.available_qty ?? item.available_qty ?? item.quantity ?? 0;
+        const plannedQuantity = Number(plannedQtyRaw) || 0;
+        const availableQuantity = Math.max(Number(availableQtyRaw) || 0, 0);
+        const unit =
+          item.uom ??
+          item.unit ??
+          item.unit_name ??
+          item.measure_unit ??
+          item.quantity_uom ??
+          "Nos";
+        const itemName = item.item_name ?? item.name ?? "Unnamed Item";
+        collected.push({
+          date,
+          item_name: itemName,
+          unit,
+          planned_quantity: plannedQuantity,
+          available_quantity: availableQuantity,
+          category,
         });
-      }),
-    );
+      });
+    }),
+  );
 
-    return collected;
-  } catch (error) {
-    console.warn("Falling back to mock published menu", error);
-    return mockPublishedMenus.filter((item) => item.date === date) || [];
-  }
+  return collected;
 }
 
 async function fetchSubscriptionReplacements(): Promise<
   SubscriptionReplacement[]
 > {
-  try {
-    const response = await fetch("/api/subscriptions/replacements");
-    if (!response.ok) throw new Error("Failed to fetch replacements");
-    const data = (await response.json()) as SubscriptionReplacement[];
-    return data;
-  } catch (error) {
-    console.warn("Falling back to mock subscription replacements", error);
-    return mockReplacements;
+  const response = await fetch("/api/subscriptions/replacements");
+  if (!response.ok) {
+    console.warn("Subscription replacements unavailable, continuing without them");
+    return [];
   }
+  const data = (await response.json()) as SubscriptionReplacement[];
+  return data;
 }
 
 async function fetchProductionPlanStatus(
   date: string,
 ): Promise<Record<Category, boolean>> {
   const initial = createCategoryBooleanState(false);
-  try {
-    const response = await fetch(`/api/production-plan/status?date=${date}`);
-    if (!response.ok) throw new Error("Failed to fetch production plan status");
-    const data = (await response.json()) as ProductionPlanStatus[];
-    const mapped = { ...initial };
-    data
-      .filter((entry) => entry.date === date)
-      .forEach((entry) => {
-        mapped[entry.category] = entry.is_generated;
-      });
-    return mapped;
-  } catch (error) {
-    console.warn("Falling back to mock production plan status", error);
-    const mapped = { ...initial };
-    mockProductionPlanStatus
-      .filter((entry) => entry.date === date)
-      .forEach((entry) => {
-        mapped[entry.category] = entry.is_generated;
-      });
-    return mapped;
+  const response = await fetch(`/api/production-plan/status?date=${date}`);
+  if (!response.ok) {
+    console.warn("Production plan status unavailable, defaulting to pending");
+    return initial;
   }
+  const data = (await response.json()) as ProductionPlanStatus[];
+  const mapped = { ...initial };
+  data
+    .filter((entry) => entry.date === date)
+    .forEach((entry) => {
+      mapped[entry.category] = entry.is_generated;
+    });
+  return mapped;
 }
 
 function KitchenProductionPlanningContent() {
@@ -723,22 +595,11 @@ function KitchenProductionPlanningContent() {
       setIsLoading(true);
       setLoadError(null);
       try {
-        const [publishedMenu, orders, replacements, planStatus] = await Promise.all([
+        const [publishedMenu, replacements, planStatus] = await Promise.all([
           fetchPublishedMenu(selectedDateISO),
-          fetchAggregatedOrders(),
           fetchSubscriptionReplacements(),
           fetchProductionPlanStatus(selectedDateISO),
         ]);
-
-        const normalizedOrders = applySubscriptionReplacements(
-          orders,
-          replacements,
-        );
-        const aggregatedOrders = aggregateOrders(normalizedOrders);
-        const aggregatedByCategory = createEmptyAggregatedState();
-        aggregatedOrders.forEach((item) => {
-          aggregatedByCategory[item.category].push(item);
-        });
 
         const menuByCategory: Record<Category, PublishedMenuItem[]> = {
           Breakfast: [],
@@ -757,10 +618,9 @@ function KitchenProductionPlanningContent() {
           const menuItems = menuByCategory[category];
           if (menuItems.length > 0) {
             availability[category] = true;
-            nextState[category] = mergeMenuWithOrders(
-              menuItems,
-              aggregatedByCategory[category],
-            );
+            const mappedItems = mapMenuItems(menuItems);
+            const replacedItems = applyReplacementsToPlan(mappedItems, replacements);
+            nextState[category] = replacedItems;
           } else {
             availability[category] = false;
             nextState[category] = [];
@@ -831,7 +691,7 @@ function KitchenProductionPlanningContent() {
     setPlanData((prev) => {
       const updatedCategory = prev[category].map((item, itemIndex) => {
         if (itemIndex !== index) return item;
-        const finalQuantity = Number((item.customer_orders + buffer).toFixed(2));
+        const finalQuantity = Number((item.planned_quantity + buffer).toFixed(2));
         return {
           ...item,
           buffer_quantity: Number(buffer.toFixed(2)),
@@ -856,10 +716,10 @@ function KitchenProductionPlanningContent() {
       categories.forEach((category) => {
         nextState[category] = prev[category].map((item) => {
           const bufferQuantity = Number(
-            ((item.customer_orders * percentValue) / 100).toFixed(2),
+            ((item.planned_quantity * percentValue) / 100).toFixed(2),
           );
           const finalQuantity = Number(
-            (item.customer_orders + bufferQuantity).toFixed(2),
+            (item.planned_quantity + bufferQuantity).toFixed(2),
           );
           return {
             ...item,
@@ -906,9 +766,6 @@ function KitchenProductionPlanningContent() {
           <h2 className="text-xl font-semibold text-foreground">
             Kitchen Production Planning
           </h2>
-          <p className="text-sm text-muted-foreground">
-            Select a service date, adjust buffers, and save the kitchen plan for each meal.
-          </p>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <DatePickerWithPresets
@@ -962,11 +819,8 @@ function KitchenProductionPlanningContent() {
               )}
             >
               <CardHeader className="pb-2">
-                <CardTitle className="flex items-center justify-between text-base font-semibold text-foreground">
+                <CardTitle className="text-base font-semibold text-foreground">
                   {summary.category}
-                  <Badge variant="secondary" className="text-xs">
-                    {summary.items} items
-                  </Badge>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-1 text-sm text-muted-foreground">
@@ -1024,13 +878,9 @@ function KitchenProductionPlanningContent() {
 
           {loadError ? (
             <div className="px-4 py-6 text-sm text-red-600">{loadError}</div>
-          ) : !currentMenuAvailable ? (
-            <div className="px-4 py-6 text-sm text-muted-foreground">
-              Menu not planned for {selectedCategory.toLowerCase()} on this date.
-            </div>
           ) : currentItems.length === 0 ? (
             <div className="px-4 py-6 text-sm text-muted-foreground">
-              No published items for {selectedCategory.toLowerCase()} on this date.
+              No menu published for {selectedCategory.toLowerCase()} on this date.
             </div>
           ) : (
             <div className="grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -1072,7 +922,7 @@ function KitchenProductionPlanningContent() {
               placeholder="Enter percentage"
             />
             <p className="text-xs text-muted-foreground">
-              Applies the percentage to every item&apos;s base quantity.
+              Applies the percentage to every item&apos;s planned quantity.
             </p>
           </div>
           <DialogFooter>
