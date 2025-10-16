@@ -7,10 +7,11 @@ import {
   ProductionItem,
   PublishedMenuItem,
   mockPublishedMenus,
+  ProductionPlanStatus,
+  mockProductionPlanStatus,
 } from "@/data/production-mock";
 import { AdminLayout } from "@/components/admin-layout";
 import { DatePickerWithPresets } from "@/components/ui/date-picker";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +29,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 type Category = ProductionItem["category"];
 
@@ -43,6 +45,8 @@ type PlanItem = {
   unit: string;
   category: Category;
   planned_quantity: number;
+  available_quantity: number;
+  customer_orders: number;
   base_quantity: number;
   buffer_quantity: number;
   final_quantity: number;
@@ -180,22 +184,50 @@ function mergeMenuWithOrders(
     aggregatedMap.set(item.item_name, item);
   });
 
-  return menuItems.map((menuItem) => {
+  const seen = new Set<string>();
+
+  const planItems = menuItems.map((menuItem) => {
     const aggregated = aggregatedMap.get(menuItem.item_name);
-    const baseQuantity = aggregated
-      ? aggregated.total
-      : menuItem.planned_quantity;
+    const fallbackOrders = Math.max(
+      menuItem.planned_quantity - menuItem.available_quantity,
+      0,
+    );
+    const customerOrders = aggregated ? aggregated.total : fallbackOrders;
+    const roundedCustomerOrders = Number(customerOrders.toFixed(2));
 
     return {
       item_name: menuItem.item_name,
       unit: menuItem.unit,
       category: menuItem.category,
       planned_quantity: Number(menuItem.planned_quantity.toFixed(2)),
-      base_quantity: Number(baseQuantity.toFixed(2)),
+      available_quantity: Number(menuItem.available_quantity.toFixed(2)),
+      customer_orders: roundedCustomerOrders,
+      base_quantity: roundedCustomerOrders,
       buffer_quantity: 0,
-      final_quantity: Number(baseQuantity.toFixed(2)),
+      final_quantity: roundedCustomerOrders,
     };
   });
+
+  planItems.forEach((item) => seen.add(item.item_name));
+
+  const additionalItems = aggregatedItems
+    .filter((item) => !seen.has(item.item_name))
+    .map((item) => {
+      const roundedTotal = Number(item.total.toFixed(2));
+      return {
+        item_name: item.item_name,
+        unit: item.unit,
+        category: item.category,
+        planned_quantity: 0,
+        available_quantity: 0,
+        customer_orders: roundedTotal,
+        base_quantity: roundedTotal,
+        buffer_quantity: 0,
+        final_quantity: roundedTotal,
+      };
+    });
+
+  return [...planItems, ...additionalItems];
 }
 
 function exportToCSV(data: PlanItem[]) {
@@ -206,7 +238,7 @@ function exportToCSV(data: PlanItem[]) {
       "Item Name",
       "Unit",
       "Planned Quantity",
-      "Base Quantity",
+      "Customer Orders",
       "Buffer Quantity",
       "Final Quantity",
     ].join(","),
@@ -215,7 +247,7 @@ function exportToCSV(data: PlanItem[]) {
         item.item_name,
         item.unit,
         item.planned_quantity,
-        item.base_quantity,
+        item.customer_orders,
         item.buffer_quantity,
         item.final_quantity,
       ].join(","),
@@ -252,8 +284,14 @@ function buildPrintableMarkup(
       }
 
       const cards = planByCategory[category]
-        .map(
-          (item) => `<article class="card">
+        .map((item) => {
+          const detailRows = [
+            `<div><span class="label">Planned Qty</span><span class="value">${escapeHtml(formatQuantity(item.planned_quantity))}</span></div>`,
+            `<div><span class="label">Customer orders</span><span class="value">${escapeHtml(formatQuantity(item.customer_orders))}</span></div>`,
+            `<div><span class="label">Buffer</span><span class="value">${escapeHtml(formatQuantity(item.buffer_quantity))}</span></div>`,
+          ].join("\n    ");
+
+          return `<article class="card">
   <div class="card-top">
     <div>
       <h3 class="card-title">${escapeHtml(item.item_name)}</h3>
@@ -265,12 +303,10 @@ function buildPrintableMarkup(
     </div>
   </div>
   <div class="card-details">
-    <div><span class="label">Planned</span><span class="value">${escapeHtml(formatQuantity(item.planned_quantity))}</span></div>
-    <div><span class="label">Base Orders</span><span class="value">${escapeHtml(formatQuantity(item.base_quantity))}</span></div>
-    <div><span class="label">Buffer</span><span class="value">${escapeHtml(formatQuantity(item.buffer_quantity))}</span></div>
+    ${detailRows}
   </div>
-</article>`,
-        )
+</article>`;
+        })
         .join("");
 
       return `<section class="section">
@@ -322,7 +358,7 @@ function buildPrintableMarkup(
         justify-content: space-between;
         align-items: center;
         margin-bottom: 16px;
-        color: #b91c1c;
+        color: #0f172a;
       }
       .section-header h2 {
         margin: 0;
@@ -336,13 +372,13 @@ function buildPrintableMarkup(
       }
       .card {
         background: #ffffff;
-        border: 1px solid #fecaca;
+        border: 1px solid #e2e8f0;
         border-radius: 16px;
         padding: 20px;
         display: flex;
         flex-direction: column;
         gap: 16px;
-        box-shadow: 0 12px 24px -18px rgba(185, 28, 28, 0.35);
+        box-shadow: 0 8px 20px -16px rgba(15, 23, 42, 0.18);
       }
       .card-top {
         display: flex;
@@ -396,7 +432,7 @@ function buildPrintableMarkup(
         margin-top: 48px;
         font-size: 16px;
         text-align: center;
-        color: #b91c1c;
+        color: #475569;
       }
       @media print {
         body {
@@ -447,9 +483,38 @@ type PlanItemCardProps = {
   readOnly?: boolean;
 };
 
+type SummaryHighlight = "success" | "info" | "muted" | "none";
+
+type SummaryRowProps = {
+  label: string;
+  value: string;
+  highlight: SummaryHighlight;
+};
+
+function SummaryRow({ label, value, highlight }: SummaryRowProps) {
+  const highlightClass: Record<Exclude<SummaryHighlight, "none">, string> = {
+    success: "border-green-200 bg-green-50 text-green-700",
+    info: "border-blue-200 bg-blue-50 text-blue-700",
+    muted: "border-border bg-muted text-muted-foreground",
+  };
+
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span>{label}</span>
+      {highlight === "none" ? (
+        <span className="font-medium text-foreground">{value}</span>
+      ) : (
+        <Badge variant="outline" className={`text-xs ${highlightClass[highlight]}`}>
+          {value}
+        </Badge>
+      )}
+    </div>
+  );
+}
+
 function PlanItemCard({ item, onBufferChange, readOnly = false }: PlanItemCardProps) {
   return (
-    <div className="flex h-full flex-col rounded-lg border border-red-100 bg-white p-4 shadow-sm">
+    <div className="flex h-full flex-col rounded-lg border border-border bg-card p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-base font-semibold text-gray-900">
@@ -468,15 +533,15 @@ function PlanItemCard({ item, onBufferChange, readOnly = false }: PlanItemCardPr
       </div>
       <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
         <div>
-          <p className="text-muted-foreground">Planned</p>
+          <p className="text-muted-foreground">Planned Qty</p>
           <p className="font-medium text-gray-900">
             {formatQuantity(item.planned_quantity)}
           </p>
         </div>
         <div>
-          <p className="text-muted-foreground">Base Orders</p>
+          <p className="text-muted-foreground">Customer orders</p>
           <p className="font-medium text-gray-900">
-            {formatQuantity(item.base_quantity)}
+            {formatQuantity(item.customer_orders)}
           </p>
         </div>
         <div className="sm:col-span-2">
@@ -539,12 +604,11 @@ async function fetchPublishedMenu(date: string): Promise<PublishedMenuItem[]> {
 
         data.items.forEach((item) => {
           const plannedQtyRaw =
-            item.planned_qty ??
-            item.available_qty ??
-            item.quantity ??
-            item.planned_quantity ??
-            0;
+            item.planned_qty ?? item.planned_quantity ?? item.quantity ?? 0;
+          const availableQtyRaw =
+            item.available_qty ?? item.quantity ?? item.available_qty ?? 0;
           const plannedQuantity = Number(plannedQtyRaw) || 0;
+          const availableQuantity = Math.max(Number(availableQtyRaw) || 0, 0);
           const unit =
             item.uom ??
             item.unit ??
@@ -558,6 +622,7 @@ async function fetchPublishedMenu(date: string): Promise<PublishedMenuItem[]> {
             item_name: itemName,
             unit,
             planned_quantity: plannedQuantity,
+            available_quantity: availableQuantity,
             category,
           });
         });
@@ -567,7 +632,7 @@ async function fetchPublishedMenu(date: string): Promise<PublishedMenuItem[]> {
     return collected;
   } catch (error) {
     console.warn("Falling back to mock published menu", error);
-    return mockPublishedMenus.filter((menu) => menu.date === date);
+    return mockPublishedMenus.filter((item) => item.date === date) || [];
   }
 }
 
@@ -585,17 +650,56 @@ async function fetchSubscriptionReplacements(): Promise<
   }
 }
 
+async function fetchProductionPlanStatus(
+  date: string,
+): Promise<Record<Category, boolean>> {
+  const initial = createCategoryBooleanState(false);
+  try {
+    const response = await fetch(`/api/production-plan/status?date=${date}`);
+    if (!response.ok) throw new Error("Failed to fetch production plan status");
+    const data = (await response.json()) as ProductionPlanStatus[];
+    const mapped = { ...initial };
+    data
+      .filter((entry) => entry.date === date)
+      .forEach((entry) => {
+        mapped[entry.category] = entry.is_generated;
+      });
+    return mapped;
+  } catch (error) {
+    console.warn("Falling back to mock production plan status", error);
+    const mapped = { ...initial };
+    mockProductionPlanStatus
+      .filter((entry) => entry.date === date)
+      .forEach((entry) => {
+        mapped[entry.category] = entry.is_generated;
+      });
+    return mapped;
+  }
+}
+
 function KitchenProductionPlanningContent() {
   const [selectedDate, setSelectedDate] = useState<Date>(() =>
     normalizeDate(new Date()),
   );
-  const [activeTab, setActiveTab] = useState<Category>("Breakfast");
+  const [selectedCategory, setSelectedCategory] = useState<Category>("Breakfast");
   const [planData, setPlanData] = useState<Record<Category, PlanItem[]>>(
     createEmptyPlanState,
   );
   const [menuAvailability, setMenuAvailability] = useState<
     Record<Category, boolean>
   >(() => createCategoryBooleanState(false));
+  const [planGeneratedState, setPlanGeneratedState] = useState<
+    Record<Category, boolean>
+  >(() => createCategoryBooleanState(false));
+  const [savingCategory, setSavingCategory] = useState<Record<Category, boolean>>(
+    () => createCategoryBooleanState(false),
+  );
+  const [lastSavedAt, setLastSavedAt] = useState<Record<Category, number | null>>({
+    Breakfast: null,
+    Lunch: null,
+    Dinner: null,
+    Condiments: null,
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [globalBufferDialogOpen, setGlobalBufferDialogOpen] = useState(false);
@@ -619,10 +723,11 @@ function KitchenProductionPlanningContent() {
       setIsLoading(true);
       setLoadError(null);
       try {
-        const [publishedMenu, orders, replacements] = await Promise.all([
+        const [publishedMenu, orders, replacements, planStatus] = await Promise.all([
           fetchPublishedMenu(selectedDateISO),
           fetchAggregatedOrders(),
           fetchSubscriptionReplacements(),
+          fetchProductionPlanStatus(selectedDateISO),
         ]);
 
         const normalizedOrders = applySubscriptionReplacements(
@@ -665,6 +770,7 @@ function KitchenProductionPlanningContent() {
         if (!cancelled) {
           setMenuAvailability(availability);
           setPlanData(nextState);
+          setPlanGeneratedState(planStatus);
         }
       } catch (error) {
         console.error(error);
@@ -686,60 +792,15 @@ function KitchenProductionPlanningContent() {
     [planData],
   );
 
-  const totals = useMemo(() => {
-    const totalItems = flattenedPlan.length;
-    const totalPlanned = flattenedPlan.reduce(
-      (acc, item) => acc + item.planned_quantity,
-      0,
-    );
-    const totalBase = flattenedPlan.reduce(
-      (acc, item) => acc + item.base_quantity,
-      0,
-    );
-    return {
-      totalItems,
-      totalPlanned: Number(totalPlanned.toFixed(2)),
-      totalBase: Number(totalBase.toFixed(2)),
-    };
-  }, [flattenedPlan]);
-
-  const categoryTotals = useMemo(
-    () =>
-      categories.reduce<Record<Category, { planned: number; base: number }>>(
-        (acc, category) => {
-          const planned = planData[category].reduce(
-            (total, item) => total + item.planned_quantity,
-            0,
-          );
-          const base = planData[category].reduce(
-            (total, item) => total + item.base_quantity,
-            0,
-          );
-          acc[category] = {
-            planned: Number(planned.toFixed(2)),
-            base: Number(base.toFixed(2)),
-          };
-          return acc;
-        },
-        {
-          Breakfast: { planned: 0, base: 0 },
-          Lunch: { planned: 0, base: 0 },
-          Dinner: { planned: 0, base: 0 },
-          Condiments: { planned: 0, base: 0 },
-        },
-      ),
-    [planData],
-  );
-
   const categorySummaries = useMemo(
     () =>
       categories.map((category) => ({
         category,
         items: planData[category].length,
-        planned: categoryTotals[category].planned,
-        base: categoryTotals[category].base,
+        menuPublished: menuAvailability[category],
+        planGenerated: planGeneratedState[category],
       })),
-    [planData, categoryTotals],
+    [planData, menuAvailability, planGeneratedState],
   );
 
   const quickDateOptions = useMemo(() => {
@@ -770,7 +831,7 @@ function KitchenProductionPlanningContent() {
     setPlanData((prev) => {
       const updatedCategory = prev[category].map((item, itemIndex) => {
         if (itemIndex !== index) return item;
-        const finalQuantity = Number((item.base_quantity + buffer).toFixed(2));
+        const finalQuantity = Number((item.customer_orders + buffer).toFixed(2));
         return {
           ...item,
           buffer_quantity: Number(buffer.toFixed(2)),
@@ -795,10 +856,10 @@ function KitchenProductionPlanningContent() {
       categories.forEach((category) => {
         nextState[category] = prev[category].map((item) => {
           const bufferQuantity = Number(
-            ((item.base_quantity * percentValue) / 100).toFixed(2),
+            ((item.customer_orders * percentValue) / 100).toFixed(2),
           );
           const finalQuantity = Number(
-            (item.base_quantity + bufferQuantity).toFixed(2),
+            (item.customer_orders + bufferQuantity).toFixed(2),
           );
           return {
             ...item,
@@ -821,162 +882,169 @@ function KitchenProductionPlanningContent() {
     exportCardLayout(planData, selectedDateLabel, menuAvailability);
   };
 
+  const handleSaveCategory = async (category: Category) => {
+    setSavingCategory((prev) => ({ ...prev, [category]: true }));
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      setLastSavedAt((prev) => ({ ...prev, [category]: Date.now() }));
+      setPlanGeneratedState((prev) => ({ ...prev, [category]: true }));
+    } finally {
+      setSavingCategory((prev) => ({ ...prev, [category]: false }));
+    }
+  };
+
+  const currentItems = planData[selectedCategory];
+  const currentMenuAvailable = menuAvailability[selectedCategory];
+  const currentPlanGenerated = planGeneratedState[selectedCategory];
+  const isSavingCategory = savingCategory[selectedCategory];
+  const lastSavedTimestamp = lastSavedAt[selectedCategory];
+
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4 rounded-lg border bg-card/60 p-4 shadow-sm md:flex-row md:items-center md:justify-between">
-        <div className="space-y-1">
-          <h2 className="text-xl font-semibold text-gray-900">
+      <div className="rounded-lg border border-border bg-card/50 p-4 shadow-sm">
+        <div className="space-y-2">
+          <h2 className="text-xl font-semibold text-foreground">
             Kitchen Production Planning
           </h2>
-          
+          <p className="text-sm text-muted-foreground">
+            Select a service date, adjust buffers, and save the kitchen plan for each meal.
+          </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            {quickDateOptions.map((option) => {
-              const isActive = isSameDay(selectedDate, option.date);
-              return (
-                <Button
-                  key={option.label}
-                  size="sm"
-                  variant={isActive ? "default" : "ghost"}
-                  onClick={() => setSelectedDate(normalizeDate(option.date))}
-                >
-                  {option.label}
-                </Button>
-              );
-            })}
-            <DatePickerWithPresets
-              selectedDate={selectedDate}
-              onSelectDate={(date) => setSelectedDate(normalizeDate(date))}
-              showQuickSelect={false}
-            />
-          </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <DatePickerWithPresets
+            selectedDate={selectedDate}
+            onSelectDate={(date) => setSelectedDate(normalizeDate(date))}
+            showQuickSelect={false}
+          />
+          {quickDateOptions.map((option) => {
+            const isActive = isSameDay(selectedDate, option.date);
+            return (
+              <Button
+                key={option.label}
+                size="sm"
+                variant={isActive ? "default" : "ghost"}
+                onClick={() => setSelectedDate(normalizeDate(option.date))}
+              >
+                {option.label}
+              </Button>
+            );
+          })}
           <Button
             variant="outline"
             onClick={() => setGlobalBufferDialogOpen(true)}
           >
             Set Global Buffer %
           </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline">Export</Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={handleExportCSV}>
-                Export CSV
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={handleExportPDF}>
-                Print Layout (PDF)
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {categorySummaries.map((summary) => (
-          <Card key={summary.category} className="border-red-100 shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center justify-between text-sm font-medium text-red-700">
-                {summary.category}
-                <Badge variant="outline" className="text-xs">
-                  {summary.items} items
-                </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-1 text-sm text-muted-foreground">
-              <div>
-                Planned{" "}
-                <span className="font-semibold text-gray-900">
-                  {formatQuantity(summary.planned)}
-                </span>
-              </div>
-              <div>
-                Orders (Base){" "}
-                <span className="font-semibold text-gray-900">
-                  {formatQuantity(summary.base)}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+        {categorySummaries.map((summary) => {
+          const isSelected = summary.category === selectedCategory;
+          return (
+            <Card
+              key={summary.category}
+              role="button"
+              tabIndex={0}
+              onClick={() => setSelectedCategory(summary.category)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setSelectedCategory(summary.category);
+                }
+              }}
+              className={cn(
+                "border border-border shadow-none transition-colors",
+                "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
+                isSelected
+                  ? "border-primary bg-primary/5 focus-visible:ring-primary"
+                  : "hover:border-primary/60",
+              )}
+            >
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center justify-between text-base font-semibold text-foreground">
+                  {summary.category}
+                  <Badge variant="secondary" className="text-xs">
+                    {summary.items} items
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1 text-sm text-muted-foreground">
+                <SummaryRow
+                  label="Menu published"
+                  value={summary.menuPublished ? "Yes" : "No"}
+                  highlight={summary.menuPublished ? "success" : "muted"}
+                />
+                <SummaryRow
+                  label="Items planned"
+                  value={`${summary.items}`}
+                  highlight="none"
+                />
+                <SummaryRow
+                  label="Plan generated"
+                  value={summary.planGenerated ? "Yes" : "Not yet"}
+                  highlight={summary.planGenerated ? "info" : "muted"}
+                />
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
-      <Tabs
-        value={activeTab}
-        onValueChange={(value) => setActiveTab(value as Category)}
-        className="space-y-6"
-      >
-        <TabsList className="grid w-full grid-cols-4 md:w-auto">
-          {categories.map((category) => (
-            <TabsTrigger key={category} value={category}>
-              {category}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-
-        {categories.map((category) => (
-          <TabsContent key={category} value={category}>
-            <div className="rounded-lg border bg-white shadow-sm">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="px-3 py-1">
-                    {category}
-                  </Badge>
-                  <span className="text-sm text-muted-foreground">
-                    {planData[category].length} items
-                  </span>
-                </div>
-                {isLoading && (
-                  <span className="text-sm text-muted-foreground">
-                    Loading…
-                  </span>
-                )}
-              </div>
-
-              {loadError ? (
-                <div className="px-4 py-6 text-sm text-red-600">{loadError}</div>
-              ) : !menuAvailability[category] ? (
-                <div className="px-4 py-6 text-sm text-muted-foreground">
-                  Menu not planned for {category.toLowerCase()} on this date.
-                </div>
-              ) : planData[category].length === 0 ? (
-                <div className="px-4 py-6 text-sm text-muted-foreground">
-                  No published items for {category.toLowerCase()} on this date.
-                </div>
-              ) : (
-                <div className="grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3">
-                  {planData[category].map((item, index) => (
-                    <PlanItemCard
-                      key={`${item.item_name}-${index}`}
-                      item={item}
-                      onBufferChange={(value) =>
-                        handleBufferChange(category, index, value)
-                      }
-                    />
-                  ))}
-                </div>
+      <div className="space-y-3">
+        <div className="rounded-lg border border-border bg-transparent">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <Badge variant="outline" className="px-4 py-1 text-base font-semibold">
+                {selectedCategory}
+              </Badge>
+              <span className="text-sm text-muted-foreground">
+                {currentItems.length} items · {currentPlanGenerated ? "Plan generated" : "Plan pending"}
+              </span>
+              {lastSavedTimestamp && (
+                <span className="text-xs text-muted-foreground">
+                  Last saved {format(new Date(lastSavedTimestamp), "p")}
+                </span>
               )}
             </div>
-          </TabsContent>
-        ))}
-      </Tabs>
+            <div className="flex items-center gap-2">
+              {isLoading && (
+                <span className="text-sm text-muted-foreground">Loading…</span>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleSaveCategory(selectedCategory)}
+                disabled={isSavingCategory || !currentMenuAvailable}
+              >
+                {isSavingCategory ? "Saving…" : "Save"}
+              </Button>
+            </div>
+          </div>
 
-      <div className="sticky bottom-0 z-10 flex flex-col gap-2 border-t bg-white/95 px-4 py-3 backdrop-blur">
-        <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
-          <span>Total Items: {totals.totalItems}</span>
-          <span>
-            Total Planned:{" "}
-            <span className="font-semibold text-gray-900">
-              {formatQuantity(totals.totalPlanned)}
-            </span>
-          </span>
-          <span>
-            Total Base Orders:{" "}
-            <span className="font-semibold text-gray-900">
-              {formatQuantity(totals.totalBase)}
-            </span>
-          </span>
+          {loadError ? (
+            <div className="px-4 py-6 text-sm text-red-600">{loadError}</div>
+          ) : !currentMenuAvailable ? (
+            <div className="px-4 py-6 text-sm text-muted-foreground">
+              Menu not planned for {selectedCategory.toLowerCase()} on this date.
+            </div>
+          ) : currentItems.length === 0 ? (
+            <div className="px-4 py-6 text-sm text-muted-foreground">
+              No published items for {selectedCategory.toLowerCase()} on this date.
+            </div>
+          ) : (
+            <div className="grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3">
+              {currentItems.map((item, index) => (
+                <PlanItemCard
+                  key={`${item.item_name}-${index}`}
+                  item={item}
+                  onBufferChange={(value) =>
+                    handleBufferChange(selectedCategory, index, value)
+                  }
+                />
+              ))}
+            </div>
+          )}
         </div>
         <div className="flex justify-end">
           <Button onClick={() => setPlanPreviewOpen(true)}>Generate Plan</Button>
@@ -1041,9 +1109,8 @@ function KitchenProductionPlanningContent() {
                         {category}
                       </Badge>
                       <span className="text-muted-foreground">
-                        {items.length} items · Planned{" "}
-                        {formatQuantity(categoryTotals[category].planned)} · Base{" "}
-                        {formatQuantity(categoryTotals[category].base)}
+                        {items.length} items ·{" "}
+                        {planGeneratedState[category] ? "Plan generated" : "Plan pending"}
                       </span>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -1060,14 +1127,28 @@ function KitchenProductionPlanningContent() {
               })
             )}
           </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setPlanPreviewOpen(false)}
-            >
-              Close
-            </Button>
-            <Button onClick={handleExportPDF}>Print Layout</Button>
+          <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <div className="flex items-center gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline">Export</Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={handleExportCSV}>
+                    Export CSV
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={handleExportPDF}>
+                    Export PDF
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button
+                variant="outline"
+                onClick={() => setPlanPreviewOpen(false)}
+              >
+                Close
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
