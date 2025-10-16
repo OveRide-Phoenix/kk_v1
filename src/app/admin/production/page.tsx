@@ -498,54 +498,76 @@ async function fetchPublishedMenu(
       url.searchParams.set("bld_type", category.toLowerCase());
       url.searchParams.set("period_type", "one_day");
 
-      const response = await fetch(url.toString());
-      if (response.status === 404) return;
-      if (!response.ok)
-        throw new Error(`Failed to fetch published menu for ${category}`);
+      try {
+        const response = await fetch(url.toString());
 
-      const data = (await response.json()) as MenuApiResponse & {
-        is_production_generated?: boolean;
-      };
+        // ✅ If menu doesn't exist, explicitly set false
+        if (response.status === 404) {
+          setPlanGeneratedState((prev) => ({
+            ...prev,
+            [category]: false,
+          }));
+          return;
+        }
 
-      // ✅ Update planGeneratedState directly from menu response
-      if (data?.is_production_generated) {
-      setPlanGeneratedState((prev) => ({
-        ...prev,
-        [category]: true,
-      }));
-    }
+        if (!response.ok) {
+          throw new Error(`Failed to fetch published menu for ${category}`);
+        }
 
-      if (!data?.items?.length) return;
+        const data = (await response.json()) as MenuApiResponse & {
+          is_production_generated?: boolean;
+        };
 
-      data.items.forEach((item) => {
-        const plannedQtyRaw =
-          item.planned_qty ?? item.planned_quantity ?? item.quantity ?? 0;
-        const availableQtyRaw =
-          item.available_qty ?? item.available_qty ?? item.quantity ?? 0;
-        const plannedQuantity = Number(plannedQtyRaw) || 0;
-        const availableQuantity = Math.max(Number(availableQtyRaw) || 0, 0);
-        const unit =
-          item.uom ??
-          item.unit ??
-          item.unit_name ??
-          item.measure_unit ??
-          item.quantity_uom ??
-          "Nos";
-        const itemName = item.item_name ?? item.name ?? "Unnamed Item";
-        collected.push({
-          date,
-          item_name: itemName,
-          unit,
-          planned_quantity: plannedQuantity,
-          available_quantity: availableQuantity,
-          category,
+        // ✅ Always set the planGenerated flag (true/false)
+        setPlanGeneratedState((prev) => ({
+          ...prev,
+          [category]: !!data?.is_production_generated,
+        }));
+
+        // ✅ If no items, just return
+        if (!data?.items?.length) return;
+
+        // ✅ Collect items normally
+        data.items.forEach((item) => {
+          const plannedQtyRaw =
+            item.planned_qty ?? item.planned_quantity ?? item.quantity ?? 0;
+          const availableQtyRaw =
+            item.available_qty ?? item.available_qty ?? item.quantity ?? 0;
+          const plannedQuantity = Number(plannedQtyRaw) || 0;
+          const availableQuantity = Math.max(Number(availableQtyRaw) || 0, 0);
+          const unit =
+            item.uom ??
+            item.unit ??
+            item.unit_name ??
+            item.measure_unit ??
+            item.quantity_uom ??
+            "Nos";
+          const itemName = item.item_name ?? item.name ?? "Unnamed Item";
+
+          collected.push({
+            date,
+            item_name: itemName,
+            unit,
+            planned_quantity: plannedQuantity,
+            available_quantity: availableQuantity,
+            category,
+          });
         });
-      });
-    }),
+      } catch (error) {
+        console.error(`Error fetching menu for ${category}:`, error);
+
+        // ✅ On any failure, set planGenerated to false
+        setPlanGeneratedState((prev) => ({
+          ...prev,
+          [category]: false,
+        }));
+      }
+    })
   );
 
   return collected;
 }
+
 
 
 async function fetchSubscriptionReplacements(): Promise<
@@ -965,7 +987,7 @@ useEffect(() => {
     setPlanPreviewOpen(true);                   // Then open preview
   }}
 >
-  Generate Plan
+  Export Plan
 </Button>
 
         </div>
@@ -1050,6 +1072,12 @@ useEffect(() => {
           </div>
           <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">
             <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setPlanPreviewOpen(false)}
+              >
+                Close
+              </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline">Export</Button>
@@ -1063,12 +1091,7 @@ useEffect(() => {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button
-                variant="outline"
-                onClick={() => setPlanPreviewOpen(false)}
-              >
-                Close
-              </Button>
+              
             </div>
           </DialogFooter>
         </DialogContent>
