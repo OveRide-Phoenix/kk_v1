@@ -52,6 +52,7 @@ type CartLine = {
 type CartContext = {
   order_date: string
   address_id: number
+  order_type?: string
 }
 
 type AddressEntry = {
@@ -62,6 +63,9 @@ type AddressEntry = {
   city: string
   pin_code: string
   is_default: boolean
+  latitude?: number | null
+  longitude?: number | null
+  route_assignment?: string | null
 }
 
 type OrderResponse = {
@@ -195,6 +199,7 @@ export default function CartPage() {
       address_id: selectedAddress.address_id,
       payment_method: paymentMethod,
       order_date: cartContext?.order_date,
+      order_type: cartContext?.order_type ?? "one_time",
       items: cartItems.map((item) => ({
         item_id: item.item_id,
         quantity: item.quantity,
@@ -240,6 +245,7 @@ export default function CartPage() {
     const context: CartContext = {
       order_date: cartContext?.order_date ?? formatDate(new Date(), "yyyy-MM-dd"),
       address_id: selectedAddress.address_id,
+      order_type: cartContext?.order_type ?? "one_time",
     }
     localStorage.setItem(CART_CONTEXT_KEY, JSON.stringify(context))
   }, [cartItems, selectedAddress, cartContext])

@@ -89,6 +89,7 @@ CREATE TABLE orders (
     total_price DECIMAL(10,2) NOT NULL,
     status VARCHAR(50) NULL DEFAULT 'Pending',
     payment_method VARCHAR(50) NOT NULL,
+    order_type VARCHAR(50) NULL DEFAULT 'one_time',
     discount DECIMAL(10,2) NULL DEFAULT 0.00,
     created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP(),
     FOREIGN KEY (customer_id) REFERENCES customers(customer_id),

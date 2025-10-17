@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useAuthStore } from "@/store/store"
+import { toast } from "@/hooks/use-toast"
 
 const CART_STORAGE_KEY = "customer_cart_items"
 const CART_CONTEXT_KEY = "customer_cart_context"
@@ -67,6 +68,7 @@ type CartLine = {
 type CartContext = {
   order_date: string
   address_id: number
+  order_type?: string
 }
 
 type AddressEntry = {
@@ -77,6 +79,9 @@ type AddressEntry = {
   city: string
   pin_code: string
   is_default: boolean
+  latitude?: number | null
+  longitude?: number | null
+  route_assignment?: string | null
 }
 
 const MEALS: MealType[] = ["breakfast", "lunch", "dinner", "condiments"]
@@ -109,14 +114,39 @@ export default function NewOrderPage() {
   const [storedCartLoaded, setStoredCartLoaded] = useState(false)
 
   const [quantities, setQuantities] = useState<Record<number, number>>({})
-  const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null)
-  const [popupQuantities, setPopupQuantities] = useState<Record<number, number>>({})
-  const [quantityChanged, setQuantityChanged] = useState(false)
   const [activeCategory, setActiveCategory] = useState<MealType | null>(null)
-  const [shouldWarnOnExit, setShouldWarnOnExit] = useState(true)
+  const [exitWarningSuppressed, setExitWarningSuppressed] = useState(false)
   const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false)
   const pendingNavigationRef = useRef<null | (() => void)>(null)
 
+  const menuItemsMap = useMemo(() => createMenuItemMap(menuByMeal), [menuByMeal])
+
+  const cartSelection: CartLine[] = useMemo(() => {
+    const lines: CartLine[] = []
+    Object.entries(quantities).forEach(([key, rawValue]) => {
+      const quantity = Number(rawValue) || 0
+      if (quantity <= 0) return
+      const menuItemId = Number(key)
+      const menuItem = menuItemsMap[menuItemId]
+      if (!menuItem) return
+      lines.push({
+        menu_item_id: menuItemId,
+        item_id: menuItem.item_id,
+        meal: menuItem.meal,
+        item_name: menuItem.item_name,
+        price: menuItem.rate,
+        quantity: Math.min(quantity, menuItem.available_qty),
+        available_qty: menuItem.available_qty,
+      })
+    })
+    return lines
+  }, [quantities, menuItemsMap])
+
+  const cartTotals = useMemo(() => {
+    const totalQuantity = cartSelection.reduce((sum, line) => sum + line.quantity, 0)
+    const totalPrice = cartSelection.reduce((sum, line) => sum + line.quantity * line.price, 0)
+    return { totalQuantity, totalPrice }
+  }, [cartSelection])
   useEffect(() => {
     if (user) return
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null
@@ -171,17 +201,17 @@ export default function NewOrderPage() {
   }, [])
 
   useEffect(() => {
-    if (!shouldWarnOnExit || cartSelection.length === 0) return
+    if (exitWarningSuppressed || cartSelection.length === 0) return
     const handler = (event: BeforeUnloadEvent) => {
       event.preventDefault()
       event.returnValue = "Leaving this page will clear the cart."
     }
     window.addEventListener("beforeunload", handler)
     return () => window.removeEventListener("beforeunload", handler)
-  }, [shouldWarnOnExit, cartSelection.length])
+  }, [exitWarningSuppressed, cartSelection.length])
 
   useEffect(() => {
-    if (!shouldWarnOnExit || cartSelection.length === 0) return
+    if (exitWarningSuppressed || cartSelection.length === 0) return
 
     const handleNavigationAttempt = (event: MouseEvent) => {
       const target = event.target as HTMLElement
@@ -196,7 +226,7 @@ export default function NewOrderPage() {
       event.stopPropagation()
 
       pendingNavigationRef.current = () => {
-        setShouldWarnOnExit(false)
+        setExitWarningSuppressed(true)
         router.push(href)
       }
       setConfirmLeaveOpen(true)
@@ -204,7 +234,7 @@ export default function NewOrderPage() {
 
     document.addEventListener("click", handleNavigationAttempt, true)
     return () => document.removeEventListener("click", handleNavigationAttempt, true)
-  }, [shouldWarnOnExit, cartSelection.length, router])
+  }, [exitWarningSuppressed, cartSelection.length, router])
 
   useEffect(() => {
     return () => {
@@ -331,34 +361,11 @@ export default function NewOrderPage() {
     reloadMenu()
   }, [orderDate, reloadMenu])
 
-  const menuItemsMap = useMemo(() => createMenuItemMap(menuByMeal), [menuByMeal])
-
-  const cartSelection: CartLine[] = useMemo(() => {
-    const lines: CartLine[] = []
-    Object.entries(quantities).forEach(([key, rawValue]) => {
-      const quantity = Number(rawValue) || 0
-      if (quantity <= 0) return
-      const menuItemId = Number(key)
-      const menuItem = menuItemsMap[menuItemId]
-      if (!menuItem) return
-      lines.push({
-        menu_item_id: menuItemId,
-        item_id: menuItem.item_id,
-        meal: menuItem.meal,
-        item_name: menuItem.item_name,
-        price: menuItem.rate,
-        quantity: Math.min(quantity, menuItem.available_qty),
-        available_qty: menuItem.available_qty,
-      })
-    })
-    return lines
-  }, [quantities, menuItemsMap])
-
-  const cartTotals = useMemo(() => {
-    const totalQuantity = cartSelection.reduce((sum, line) => sum + line.quantity, 0)
-    const totalPrice = cartSelection.reduce((sum, line) => sum + line.quantity * line.price, 0)
-    return { totalQuantity, totalPrice }
-  }, [cartSelection])
+  useEffect(() => {
+    if (cartSelection.length === 0 && exitWarningSuppressed) {
+      setExitWarningSuppressed(false)
+    }
+  }, [cartSelection.length, exitWarningSuppressed])
 
   useEffect(() => {
     if (!storedCartLoaded) return
@@ -375,8 +382,10 @@ export default function NewOrderPage() {
     const context: CartContext = {
       order_date: orderDate,
       address_id: selectedAddress?.address_id ?? addresses[0].address_id,
+      order_type: storedContextRef.current?.order_type ?? "one_time",
     }
     localStorage.setItem(CART_CONTEXT_KEY, JSON.stringify(context))
+    storedContextRef.current = context
   }, [cartSelection, orderDate, selectedAddressId, addresses, storedCartLoaded])
 
   const setQuantityForItem = (menuItem: MenuItem, value: number) => {
@@ -403,42 +412,16 @@ export default function NewOrderPage() {
     setQuantityForItem(menuItem, current - 1)
   }
 
-  const openPopup = (menuItem: MenuItem) => {
-    setSelectedItem(menuItem)
-    setPopupQuantities((prev) => ({
-      ...prev,
-      [menuItem.menu_item_id]: quantities[menuItem.menu_item_id] ?? 0,
-    }))
-    setQuantityChanged(false)
-  }
-
-  const handlePopupQuantityChange = (menuItem: MenuItem, delta: number) => {
-    setPopupQuantities((prev) => {
-      const current = prev[menuItem.menu_item_id] ?? quantities[menuItem.menu_item_id] ?? 0
-      const next = Math.min(Math.max(0, current + delta), menuItem.available_qty)
-      return { ...prev, [menuItem.menu_item_id]: next }
-    })
-    setQuantityChanged(true)
-  }
-
-  const handleConfirmPopup = () => {
-    if (!selectedItem) return
-    const nextValue = popupQuantities[selectedItem.menu_item_id] ?? 0
-    setQuantityForItem(selectedItem, nextValue)
-    handleClosePopup(true)
-  }
-
-  const handleClosePopup = (force = false) => {
-    if (!force && quantityChanged) {
-      alert("Please confirm your changes before closing.")
-      return
-    }
-    setSelectedItem(null)
-    setQuantityChanged(false)
-  }
-
   const cycleAddress = () => {
     if (!addresses.length) return
+    const additionalAddresses = addresses.filter((address) => !address.is_default)
+    if (!additionalAddresses.length) {
+      toast({
+        title: "Only default address available",
+        description: "Add another delivery address from Account › Other saved addresses.",
+      })
+      return
+    }
     if (selectedAddressId == null) {
       setSelectedAddressId(addresses[0].address_id)
       return
@@ -455,7 +438,7 @@ export default function NewOrderPage() {
   const handleReviewCart = () => {
     if (!cartSelection.length) return
     sessionStorage.setItem(CART_KEEP_KEY, "1")
-    setShouldWarnOnExit(false)
+    setExitWarningSuppressed(true)
     router.push("/customer/cart")
   }
 
@@ -559,64 +542,71 @@ export default function NewOrderPage() {
                           return (
                             <div
                               key={item.menu_item_id}
-                              className={`flex bg-[#faf7f2] border-2 border-[#e6dfd0] rounded-lg overflow-hidden h-[120px] shadow-sm transition-shadow duration-200 cursor-pointer ${
-                                isSoldOut ? "opacity-60" : "hover:shadow-md"
-                              }`}
-                              onClick={() => !isSoldOut && openPopup(item)}
+                              className={`flex h-[120px] overflow-hidden rounded-lg border-2 transition-shadow duration-200 ${
+                                isSoldOut
+                                  ? "border-dashed border-[#d9c7be] bg-[#f1ebe6] text-[#9a857b]"
+                                  : "border-[#e6dfd0] bg-[#faf7f2] hover:shadow-md"
+                              } ${isSoldOut ? "pointer-events-none" : ""}`}
+                              aria-disabled={isSoldOut}
                             >
-                              <div className="w-[120px] h-[120px] flex-shrink-0 bg-muted">
+                              <div className={`w-[120px] h-[120px] flex-shrink-0 ${isSoldOut ? "bg-muted/70" : "bg-muted"}`}>
                                 <Image
                                   src={item.picture_url || PLACEHOLDER_IMAGE}
                                   alt={item.item_name}
                                   width={120}
                                   height={120}
-                                  className="object-cover h-full w-full"
+                                  className={`h-full w-full object-cover ${isSoldOut ? "grayscale" : ""}`}
                                 />
                               </div>
-                              <div className="flex-1 p-3 relative">
-                                <h3 className="font-medium text-[#463028] text-sm">{item.item_name}</h3>
-                                <p className="text-xs text-[#8d6e63] mt-1 line-clamp-2">
+                              <div className="relative flex-1 p-3">
+                                <h3 className={`text-sm font-medium ${isSoldOut ? "text-[#8d6e63]" : "text-[#463028]"}`}>
+                                  {item.item_name}
+                                </h3>
+                                <p className={`mt-1 line-clamp-2 text-xs ${isSoldOut ? "text-[#b59f93]" : "text-[#8d6e63]"}`}>
                                   {item.description || "Delicious kitchen special"}
                                 </p>
-                                <div className="mt-2 text-sm font-semibold text-[#463028]">
+                                <div className={`mt-2 text-sm font-semibold ${isSoldOut ? "text-[#9a857b]" : "text-[#463028]"}`}>
                                   {currency(item.rate)}
                                 </div>
+
                                 <div className="absolute bottom-3 right-3 flex items-center gap-2">
                                   <Button
                                     variant="outline"
                                     size="icon"
-                                    className="h-6 w-6 border-primary text-primary hover:bg-primary hover:text-white"
+                                    className={`h-6 w-6 border-primary text-primary hover:bg-primary hover:text-white ${isSoldOut ? "opacity-50" : ""}`}
                                     onClick={(event) => {
                                       event.stopPropagation()
                                       decrementItem(item)
                                     }}
-                                    disabled={currentQty === 0}
+                                    disabled={isSoldOut || currentQty === 0}
+                                    aria-label="decrease quantity"
                                   >
                                     <Minus className="h-3 w-3" />
                                   </Button>
-                                  <span className="text-sm text-primary font-medium min-w-[20px] text-center">
+                                  <span className={`min-w-[20px] text-center text-sm ${isSoldOut ? "text-[#9a857b]" : "text-primary"}`}>
                                     {currentQty}
                                   </span>
                                   <Button
                                     variant="outline"
                                     size="icon"
-                                    className="h-6 w-6 border-primary text-primary hover:bg-primary hover:text-white"
+                                    className={`h-6 w-6 border-primary text-primary hover:bg-primary hover:text-white ${isSoldOut ? "opacity-50" : ""}`}
                                     onClick={(event) => {
                                       event.stopPropagation()
                                       incrementItem(item)
                                     }}
                                     disabled={isSoldOut || reachedLimit}
+                                    aria-label="increase quantity"
                                   >
                                     <Plus className="h-3 w-3" />
                                   </Button>
                                 </div>
-                                {reachedLimit && (
+                                {reachedLimit && !isSoldOut && (
                                   <span className="absolute top-3 right-3 text-[0.65rem] font-medium text-[#c75b39]">
                                     Max {item.available_qty}
                                   </span>
                                 )}
                                 {isSoldOut && (
-                                  <span className="absolute top-3 right-3 text-[0.65rem] font-medium text-[#c75b39]">
+                                  <span className="absolute top-3 right-3 rounded-full bg-[#ffe2e2] px-2 py-0.5 text-[0.65rem] font-semibold text-[#c75b39] shadow-sm">
                                     Sold out
                                   </span>
                                 )}
@@ -672,64 +662,6 @@ export default function NewOrderPage() {
         </div>
       </div>
 
-      <Dialog open={!!selectedItem} onOpenChange={(open) => !open && handleClosePopup()}>
-        <DialogContent
-          onInteractOutside={(event) => {
-            event.preventDefault()
-            handleClosePopup()
-          }}
-          className="max-w-md"
-        >
-          <DialogHeader>
-            <DialogTitle>{selectedItem?.item_name}</DialogTitle>
-          </DialogHeader>
-          {selectedItem && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between rounded-md border border-dashed border-primary/30 bg-primary/10 px-4 py-3 text-sm">
-                <div>
-                  <p className="font-medium text-[#463028]">{selectedItem.meal}</p>
-                  <p className="text-xs text-[#8d6e63]">Available: {selectedItem.available_qty}</p>
-                </div>
-                <span className="font-semibold text-primary">{currency(selectedItem.rate)}</span>
-              </div>
-
-              <div className="flex items-center justify-center gap-4">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => handlePopupQuantityChange(selectedItem, -1)}
-                >
-                  <Minus className="h-4 w-4" />
-                </Button>
-                <span className="text-xl font-semibold text-[#463028]">
-                  {popupQuantities[selectedItem.menu_item_id] ?? quantities[selectedItem.menu_item_id] ?? 0}
-                </span>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => handlePopupQuantityChange(selectedItem, 1)}
-                  disabled={
-                    (popupQuantities[selectedItem.menu_item_id] ?? quantities[selectedItem.menu_item_id] ?? 0) >=
-                    selectedItem.available_qty
-                  }
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
-
-              <div className="flex gap-2">
-                <Button variant="outline" className="flex-1" onClick={() => handleClosePopup(true)}>
-                  Cancel
-                </Button>
-                <Button className="flex-1" onClick={handleConfirmPopup}>
-                  Confirm
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
       <Dialog
         open={confirmLeaveOpen}
         onOpenChange={(open) => {
@@ -760,7 +692,7 @@ export default function NewOrderPage() {
               onClick={() => {
                 const action = pendingNavigationRef.current
                 setConfirmLeaveOpen(false)
-                setShouldWarnOnExit(false)
+                setExitWarningSuppressed(true)
                 pendingNavigationRef.current = null
                 localStorage.removeItem(CART_STORAGE_KEY)
                 localStorage.removeItem(CART_CONTEXT_KEY)
@@ -773,48 +705,6 @@ export default function NewOrderPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={confirmLeaveOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            setConfirmLeaveOpen(false)
-            pendingNavigationRef.current = null
-          }
-        }}
-      >
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Leave this page?</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-[#8d6e63]">
-            Leaving will clear your current cart selections. Continue?
-          </p>
-          <DialogFooter className="mt-4">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setConfirmLeaveOpen(false)
-                pendingNavigationRef.current = null
-              }}
-            >
-              Stay here
-            </Button>
-            <Button
-              onClick={() => {
-                const action = pendingNavigationRef.current
-                setConfirmLeaveOpen(false)
-                setShouldWarnOnExit(false)
-                pendingNavigationRef.current = null
-                localStorage.removeItem(CART_STORAGE_KEY)
-                localStorage.removeItem(CART_CONTEXT_KEY)
-                action?.()
-              }}
-            >
-              Leave page
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

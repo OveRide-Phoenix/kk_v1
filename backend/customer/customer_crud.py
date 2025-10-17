@@ -149,6 +149,13 @@ def update_customer(db, customer_id, customer_data):
     #THIS IS NOT WORKING, PLEASE FIX ME
     try:
         cursor = db.cursor()
+
+        cursor.execute(
+            "SELECT address_id FROM addresses WHERE customer_id=%s AND is_default=TRUE LIMIT 1",
+            (customer_id,),
+        )
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Customer or default address not found")
         
         # Update customer information
         customer_query = """
@@ -191,9 +198,6 @@ def update_customer(db, customer_id, customer_data):
         
         cursor.execute(address_query, address_values)
         db.commit()
-
-        if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Customer or default address not found")
             
         return {"message": "Customer and address updated successfully"}
         

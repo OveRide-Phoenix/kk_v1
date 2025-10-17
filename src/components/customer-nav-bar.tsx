@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
-import { LogOut } from "lucide-react"
+import { LogOut, Crown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuthStore } from "@/store/store"
 
@@ -11,20 +11,26 @@ export default function CustomerNavBar() {
   const [isScrolled, setIsScrolled] = useState(false)
   const user = useAuthStore((state) => state.user)
   const setUser = useAuthStore((state) => state.setUser)
+  const setAdmin = useAuthStore((state) => state.setAdmin)
   const logout = useAuthStore((state) => state.logout)
+  const isAdmin = useAuthStore((state) => state.isAdmin)
   const router = useRouter()
   const pathname = usePathname()
 
   const navLinkClass = (href: string, options?: { disabled?: boolean }) => {
     const disabled = options?.disabled
     let isActive = false
-    if (href === "/customer" || href === "/customer/home") {
-      isActive = pathname === "/customer" || pathname === "/customer/" || pathname === "/customer/home"
+    const normalize = (value: string) => (value.length > 1 ? value.replace(/\/+$/, "") : value)
+    if (href === "/customer/home") {
+      const homeVariants = ["/customer", "/customer/", "/customer/home"]
+      isActive = homeVariants.includes(pathname)
     } else {
-      isActive = pathname === href || pathname.startsWith(`${href}/`)
+      const current = normalize(pathname)
+      const target = normalize(href)
+      isActive = current === target || current.startsWith(`${target}/`)
     }
 
-    const base = "relative px-3 py-2 text-sm font-medium transition-transform duration-200 transform group-hover:scale-105 group-hover:z-10"
+    const base = "relative px-3 py-2 text-sm font-medium transition-all duration-200"
     if (disabled) {
       return `${base} text-[#8d6e63] opacity-60 cursor-not-allowed`
     }
@@ -49,11 +55,12 @@ export default function CustomerNavBar() {
         if (!meResponse.ok) return
         const me = await meResponse.json()
         setUser(me)
+        setAdmin(Boolean(me?.role === "admin" || me?.is_admin))
       } catch (error) {
         console.error("Failed to fetch user context", error)
       }
     })()
-  }, [user, setUser])
+  }, [user, setUser, setAdmin])
 
   return (
     <nav
@@ -65,14 +72,14 @@ export default function CustomerNavBar() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <div className="flex-shrink-0">
-            <Link href="/customer" className="text-xl font-bold text-[#463028]">
+            <Link href="/customer/home" className="text-xl font-bold text-[#463028]">
               Kuteera Kitchen
             </Link>
           </div>
 
-          <div className="hidden md:flex items-center space-x-4">
+          <div className="hidden md:flex items-center gap-6">
             <div className="relative group">
-              <Link href="/customer" className={navLinkClass("/customer")}>Home</Link>
+              <Link href="/customer/home" className={navLinkClass("/customer/home")}>Home</Link>
             </div>
             <div className="relative group">
               <Link href="/customer/new-order" className={navLinkClass("/customer/new-order")}>
@@ -82,9 +89,10 @@ export default function CustomerNavBar() {
             <div className="relative group">
               <span className={navLinkClass("/customer/subscription", { disabled: true })}>Subscription</span>
             </div>
-            <div className="pl-4 text-sm text-[#463028]">
+            <div className="pl-6 text-sm text-[#463028]">
               {user ? (
                 <div className="flex items-center gap-2">
+                  {isAdmin && <Crown className="h-4 w-4 text-amber-500" />}
                   <Link href="/customer/account" className="font-medium text-primary hover:underline">
                     {user.name || user.phone || "Customer"}
                   </Link>

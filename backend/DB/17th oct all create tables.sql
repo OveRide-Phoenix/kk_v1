@@ -215,6 +215,7 @@ CREATE TABLE `orders` (
   `total_price` decimal(10,2) NOT NULL,
   `status` varchar(50) DEFAULT 'Pending',
   `payment_method` varchar(50) NOT NULL,
+  `order_type` varchar(50) DEFAULT 'one_time',
   `discount` decimal(10,2) DEFAULT '0.00',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`order_id`),

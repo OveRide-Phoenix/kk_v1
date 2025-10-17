@@ -154,7 +154,7 @@ export default function CustomerHomePage() {
       <main className="container mx-auto px-4 pt-24 pb-20">
         <section className="grid gap-6 rounded-3xl border border-[#e6dfd0] bg-white/70 p-6 md:grid-cols-[1.3fr_1fr]">
           <div className="flex flex-col justify-center gap-4">
-            <p className="text-sm uppercase tracking-wide text-[#8d6e63]">Today's Menu</p>
+            <p className="text-sm uppercase tracking-wide text-[#8d6e63]">Today&apos;s Menu</p>
             <h1 className="text-3xl font-serif font-semibold text-[#463028]">
               Crafted fresh, delivered warm.
             </h1>

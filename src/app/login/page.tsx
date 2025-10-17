@@ -13,21 +13,22 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Menu, X, Coffee, Eye, EyeOff } from "lucide-react";
+import { Coffee, Eye, EyeOff } from "lucide-react";
 import { useAuthStore } from "@/store/store";
 
 export default function LoginPage() {
   const router = useRouter();
   const [phoneNumber, setPhoneNumber] = useState("");
   const [city, setCity] = useState("");
-  const { isAdmin, setAdmin } = useAuthStore();
+  const { setAdmin } = useAuthStore();
   const [adminPassword, setAdminPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showRegisterHighlight, setShowRegisterHighlight] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [canLoginAsAdmin, setCanLoginAsAdmin] = useState(false);
+  const [loginAttempt, setLoginAttempt] = useState<"customer" | "admin" | null>(null);
 
   // When phone number changes, fetch city and is_admin flag when 10 digits are present.
   const handlePhoneChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -56,19 +57,19 @@ export default function LoginPage() {
       setErrorMessage("");
       setIsLoading(true);
       try {
-        console.log("Numeric Value:", numericValue);
         const response = await fetch(
           `/api/backend/api/get-city?phone=${numericValue}`,
           { credentials: "include" }
         );
         const data = await response.json();
-        console.log("Response:", data);
         if (response.ok) {
-          console.log("Response Data:", data);
           setCity(data.city);
-          setAdmin(data.is_admin);
-          console.log("Is Admin:", data.is_admin);
-
+          const adminEnabled = Boolean(data.is_admin);
+          setCanLoginAsAdmin(adminEnabled);
+          setAdmin(adminEnabled);
+          if (!adminEnabled) {
+            setAdminPassword("");
+          }
           setShowRegisterHighlight(false);
         } else {
           setErrorMessage(
@@ -76,12 +77,16 @@ export default function LoginPage() {
           );
           setCity("");
           setAdmin(false);
+          setCanLoginAsAdmin(false);
+          setAdminPassword("");
           setShowRegisterHighlight(true);
         }
       } catch {
         setErrorMessage("Error fetching city data.");
         setCity("");
         setAdmin(false);
+        setCanLoginAsAdmin(false);
+        setShowAdminFields(false);
         setShowRegisterHighlight(false);
       } finally {
         setIsLoading(false);
@@ -91,80 +96,91 @@ export default function LoginPage() {
       setErrorMessage("");
       setCity("");
       setAdmin(false);
+      setCanLoginAsAdmin(false);
+      setAdminPassword("");
+      setAdminPassword("");
     }
   };
 
-const handleLogin = async () => {
-  // basic validation
-  if (phoneNumber.replace(/\D/g, "").length !== 12) {
-    setErrorMessage("Please enter a valid 10-digit phone number");
-    return;
-  }
-
-  setErrorMessage("");
-  setIsLoading(true);
-
-  try {
-    const formattedPhone = phoneNumber.startsWith("+91")
-      ? phoneNumber.replace("+91", "").replace(/\D/g, "")
-      : phoneNumber.replace(/\D/g, "");
-
-    const payload = {
-      phone: formattedPhone,
-      admin_password: isAdmin ? (adminPassword || null) : null,
-    };
-
-    const response = await fetch("/api/backend/api/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      // cookies no longer needed; tokens come in JSON
-      body: JSON.stringify(payload),
-    });
-
-    const data = await response.json();
-
-    if (response.ok) {
-      // 1) Save tokens to localStorage (admin only will receive them)
-      if (data.access_token) localStorage.setItem("access_token", data.access_token);
-      if (data.refresh_token) localStorage.setItem("refresh_token", data.refresh_token);
-
-      // (optional) remember me flag; TTL still enforced by backend
-      localStorage.setItem("remember_me", JSON.stringify(rememberMe));
-
-      // 2) Get the user from /auth/me using Authorization header
-      let user = null;
-      if (data.access_token) {
-        const meRes = await fetch("/api/backend/auth/me", {
-          headers: { Authorization: `Bearer ${data.access_token}` },
-        });
-        if (meRes.ok) {
-          user = await meRes.json(); // { admin_id, customer_id, phone, role }
-        }
-      }
-
-      // 3) Update store using user (preferred) or fallback to login response
-      const role = user?.role ?? (data.is_admin ? "admin" : "customer");
-      useAuthStore.getState().setAdmin(role === "admin");
-      useAuthStore.getState().setUser(user ?? data.user ?? null);
-
-      // 4) Route
-      router.push(role === "admin" ? "/admin" : "/customer");
-    } else {
-      const errorDetail = data.detail || data.msg || "Login failed. Try again.";
-      setErrorMessage(errorDetail);
+  const handleLogin = async (mode: "customer" | "admin") => {
+    const digitsOnly = phoneNumber.replace(/\D/g, "");
+    if (digitsOnly.length !== 12) {
+      setErrorMessage("Please enter a valid 10-digit phone number");
+      return;
     }
-  } catch (error) {
-    console.error("Login error:", error);
-    setErrorMessage(
-      !navigator.onLine
-        ? "No internet connection. Please check your network."
-        : "Something went wrong. Please try again."
-    );
-  } finally {
-    setIsLoading(false);
-  }
-};
 
+    const isAdminAttempt = mode === "admin";
+    if (isAdminAttempt) {
+      if (!canLoginAsAdmin) {
+        setErrorMessage("This number is not enabled for admin access.");
+        return;
+      }
+      if (!adminPassword.trim()) {
+        setErrorMessage("Please enter your admin password.");
+        return;
+      }
+    }
+
+    setErrorMessage("");
+    setIsLoading(true);
+    setLoginAttempt(mode);
+
+    try {
+      const formattedPhone = digitsOnly.replace(/^91/, "");
+
+      const payload = {
+        phone: formattedPhone,
+        admin_password: isAdminAttempt ? adminPassword : null,
+      };
+
+      const response = await fetch("/api/backend/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        if (data.access_token) localStorage.setItem("access_token", data.access_token);
+        if (data.refresh_token) localStorage.setItem("refresh_token", data.refresh_token);
+        localStorage.setItem("remember_me", JSON.stringify(rememberMe));
+
+        let user = null;
+        if (data.access_token) {
+          const meRes = await fetch("/api/backend/auth/me", {
+            headers: { Authorization: `Bearer ${data.access_token}` },
+          });
+          if (meRes.ok) {
+            user = await meRes.json();
+          }
+        }
+
+        const role = user?.role ?? (data.is_admin ? "admin" : "customer");
+        const resolvedUser = user ?? data.user ?? null;
+        useAuthStore.getState().setAdmin(Boolean(data.is_admin_account || role === "admin"));
+        useAuthStore.getState().setUser(
+          resolvedUser
+            ? { ...resolvedUser, is_admin: resolvedUser?.is_admin ?? data.is_admin_account ?? false }
+            : resolvedUser
+        );
+        router.push(role === "admin" ? "/admin" : "/customer/home");
+      } else {
+        const errorDetail = data.detail || data.msg || "Login failed. Try again.";
+        setErrorMessage(errorDetail);
+      }
+    } catch (error) {
+      console.error("Login error:", error);
+      setErrorMessage(
+        !navigator.onLine
+          ? "No internet connection. Please check your network."
+          : "Something went wrong. Please try again."
+      );
+    } finally {
+      setIsLoading(false);
+      setLoginAttempt(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -240,7 +256,7 @@ const handleLogin = async () => {
               <Label htmlFor="city">City</Label>
               <Input id="city" type="text" value={city} readOnly />
             </div>
-            {isAdmin && (
+              {canLoginAsAdmin && (
               <div className="space-y-2 pt-4">
                 <Label htmlFor="adminPassword">Admin Password</Label>
                 <div className="relative">
@@ -250,7 +266,6 @@ const handleLogin = async () => {
                     placeholder="Enter admin password"
                     value={adminPassword}
                     onChange={(e) => setAdminPassword(e.target.value)}
-                    required
                   />
                   <Button
                     type="button"
@@ -284,20 +299,38 @@ const handleLogin = async () => {
             </div>
           </CardContent>
           <CardFooter className="flex flex-col space-y-2">
+            <div className="flex w-full flex-col gap-2 sm:flex-row">
+              <Button
+                className="w-full bg-primary"
+                onClick={() => handleLogin("customer")}
+                disabled={!phoneNumber || isLoading}
+              >
+                {isLoading && loginAttempt === "customer" ? (
+                  <div className="flex items-center gap-2">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    <span>Logging in...</span>
+                  </div>
+                ) : (
+                  canLoginAsAdmin ? "Login as Customer" : "Login"
+                )}
+              </Button>
+          {canLoginAsAdmin && (
             <Button
-              className="w-full bg-primary"
-              onClick={handleLogin}
-              disabled={!phoneNumber || isLoading}
+              className="w-full bg-[#463028] text-white hover:bg-[#342118]"
+              onClick={() => handleLogin("admin")}
+              disabled={!canLoginAsAdmin || isLoading}
             >
-              {isLoading ? (
+              {isLoading && loginAttempt === "admin" ? (
                 <div className="flex items-center gap-2">
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                   <span>Logging in...</span>
                 </div>
               ) : (
-                "Login"
+                "Login as Admin"
               )}
             </Button>
+          )}
+        </div>
             <Button
               className={`w-full transition-all ${
                 showRegisterHighlight

@@ -1,9 +1,10 @@
 from calendar import month
 import mysql.connector
+from mysql.connector import errorcode
 from fastapi import FastAPI, HTTPException, Query, Depends
 from pydantic import BaseModel, Field
 from decimal import Decimal
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from fastapi.middleware.cors import CORSMiddleware
 from .customer.customer_crud import (
     create_customer,
@@ -316,35 +317,37 @@ def login(data: LoginRequest, response: Response):
         if not result:
             raise HTTPException(status_code=404, detail="User not found. Please register.")
 
-        is_admin = bool(result["admin_id"])
+        is_admin_account = bool(result["admin_id"])
+        admin_password_provided = bool(data.admin_password)
 
-        # If admin, validate password and build tokens
         access = None
         refresh = None
         user_payload = None
+        admin_login = False
 
-        if is_admin:
-            if not data.admin_password:
-                raise HTTPException(status_code=400, detail="Admin password is required")
+        if is_admin_account and admin_password_provided:
             if not result["is_active"]:
                 raise HTTPException(status_code=403, detail="Admin account disabled")
             if not verify_password(data.admin_password, result["password_hash"]):
                 raise HTTPException(status_code=401, detail="Invalid admin password")
 
+            admin_login = True
             user_payload = {
                 "admin_id": result["admin_id"],
                 "customer_id": result["customer_id"],
                 "phone": result["phone_number"],
-                "role": result["role"],
+                "role": result["role"] or "admin",
+                "is_admin": True,
                 "name": result.get("customer_name"),
             }
-            access  = create_access_token(user_payload)
+            access = create_access_token(user_payload)
             refresh = create_refresh_token(user_payload, str(uuid.uuid4()))
         else:
             user_payload = {
                 "customer_id": result["customer_id"],
                 "phone": result["phone_number"],
                 "role": "customer",
+                "is_admin": False,
                 "name": result.get("customer_name"),
             }
             access = create_access_token(user_payload)
@@ -356,7 +359,8 @@ def login(data: LoginRequest, response: Response):
 
         return {
             "message": "Login successful",
-            "is_admin": is_admin,
+            "is_admin": admin_login,
+            "is_admin_account": is_admin_account,
             "user": user_payload,
             "access_token": access,
             "refresh_token": refresh,
@@ -906,6 +910,19 @@ class CreateOrderPayload(BaseModel):
     payment_method: str
     items: List[OrderItemPayload]
     order_date: Optional[str] = None
+    order_type: Optional[str] = None
+
+
+class AddressPayload(BaseModel):
+    address_type: Optional[str] = None
+    house_apartment_no: Optional[str] = None
+    written_address: str
+    city: str
+    pin_code: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    route_assignment: Optional[str] = None
+    is_default: bool = False
 
 @app.get("/api/customers/{customer_id}/addresses", tags=["Customers"])
 def get_customer_addresses(customer_id: int):
@@ -921,7 +938,10 @@ def get_customer_addresses(customer_id: int):
                 written_address,
                 city,
                 pin_code,
-                is_default
+                is_default,
+                latitude,
+                longitude,
+                route_assignment
             FROM addresses
             WHERE customer_id = %s
             ORDER BY is_default DESC, address_id ASC
@@ -938,9 +958,183 @@ def get_customer_addresses(customer_id: int):
                 "city": row.get("city") or "",
                 "pin_code": row.get("pin_code") or "",
                 "is_default": bool(row.get("is_default")),
+                "latitude": float(row["latitude"]) if row.get("latitude") is not None else None,
+                "longitude": float(row["longitude"]) if row.get("longitude") is not None else None,
+                "route_assignment": row.get("route_assignment"),
             }
             for row in rows
         ]
+    finally:
+        cursor.close()
+        db.close()
+
+
+def _resolve_coordinates(cursor, customer_id: int, latitude: Optional[float], longitude: Optional[float]) -> Tuple[float, float]:
+    lat = latitude
+    lng = longitude
+    if lat is not None and lng is not None:
+        return float(lat), float(lng)
+
+    cursor.execute(
+        """
+        SELECT latitude, longitude
+          FROM addresses
+         WHERE customer_id=%s AND is_default=1
+         LIMIT 1
+        """,
+        (customer_id,),
+    )
+    fallback = cursor.fetchone()
+    if fallback:
+        fallback_lat = fallback.get("latitude")
+        fallback_lng = fallback.get("longitude")
+        return (
+            float(fallback_lat) if fallback_lat is not None else 0.0,
+            float(fallback_lng) if fallback_lng is not None else 0.0,
+        )
+    return float(lat or 0.0), float(lng or 0.0)
+
+
+@app.post("/api/customers/{customer_id}/addresses", tags=["Customers"])
+def create_customer_address(customer_id: int, payload: AddressPayload):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT customer_id FROM customers WHERE customer_id=%s LIMIT 1", (customer_id,))
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Customer not found")
+
+        lat, lng = _resolve_coordinates(cursor, customer_id, payload.latitude, payload.longitude)
+
+        if payload.is_default:
+            cursor.execute("UPDATE addresses SET is_default=0 WHERE customer_id=%s", (customer_id,))
+
+        cursor.execute(
+            """
+            INSERT INTO addresses (
+                customer_id,
+                house_apartment_no,
+                written_address,
+                city,
+                pin_code,
+                latitude,
+                longitude,
+                address_type,
+                route_assignment,
+                is_default
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                customer_id,
+                payload.house_apartment_no,
+                payload.written_address.strip(),
+                payload.city.strip(),
+                payload.pin_code.strip(),
+                lat,
+                lng,
+                payload.address_type.strip() if payload.address_type else "Address",
+                payload.route_assignment,
+                1 if payload.is_default else 0,
+            ),
+        )
+        address_id = cursor.lastrowid
+        db.commit()
+
+        return {"address_id": address_id, "message": "Address added successfully"}
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(err)}")
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.put("/api/customers/{customer_id}/addresses/{address_id}", tags=["Customers"])
+def update_customer_address(customer_id: int, address_id: int, payload: AddressPayload):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT latitude, longitude FROM addresses WHERE address_id=%s AND customer_id=%s LIMIT 1",
+            (address_id, customer_id),
+        )
+        existing = cursor.fetchone()
+        if existing is None:
+            raise HTTPException(status_code=404, detail="Address not found")
+
+        lat_input = payload.latitude if payload.latitude is not None else existing.get("latitude")
+        lng_input = payload.longitude if payload.longitude is not None else existing.get("longitude")
+        lat, lng = _resolve_coordinates(cursor, customer_id, lat_input, lng_input)
+
+        if payload.is_default:
+            cursor.execute(
+                "UPDATE addresses SET is_default=0 WHERE customer_id=%s AND address_id<>%s",
+                (customer_id, address_id),
+            )
+
+        cursor.execute(
+            """
+            UPDATE addresses
+               SET house_apartment_no=%s,
+                   written_address=%s,
+                   city=%s,
+                   pin_code=%s,
+                   latitude=%s,
+                   longitude=%s,
+                   address_type=%s,
+                   route_assignment=%s,
+                   is_default=%s
+             WHERE address_id=%s AND customer_id=%s
+            """,
+            (
+                payload.house_apartment_no,
+                payload.written_address.strip(),
+                payload.city.strip(),
+                payload.pin_code.strip(),
+                lat,
+                lng,
+                payload.address_type.strip() if payload.address_type else "Address",
+                payload.route_assignment,
+                1 if payload.is_default else 0,
+                address_id,
+                customer_id,
+            ),
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Address not found")
+
+        db.commit()
+        return {"message": "Address updated successfully"}
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(err)}")
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.post("/api/customers/{customer_id}/addresses/{address_id}/default", tags=["Customers"])
+def set_default_customer_address(customer_id: int, address_id: int):
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute(
+            "SELECT address_id FROM addresses WHERE address_id=%s AND customer_id=%s LIMIT 1",
+            (address_id, customer_id),
+        )
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Address not found")
+
+        cursor.execute("UPDATE addresses SET is_default=0 WHERE customer_id=%s", (customer_id,))
+        cursor.execute(
+            "UPDATE addresses SET is_default=1 WHERE address_id=%s AND customer_id=%s",
+            (address_id, customer_id),
+        )
+        db.commit()
+        return {"message": "Default address updated"}
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(err)}")
     finally:
         cursor.close()
         db.close()
@@ -1114,8 +1308,8 @@ def create_order(payload: CreateOrderPayload):
 
         cursor.execute(
             """
-            INSERT INTO orders (customer_id, address_id, total_price, payment_method, status)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO orders (customer_id, address_id, total_price, payment_method, status, order_type)
+            VALUES (%s, %s, %s, %s, %s, %s)
             """,
             (
                 payload.customer_id,
@@ -1123,6 +1317,7 @@ def create_order(payload: CreateOrderPayload):
                 float(total_price),
                 payload.payment_method,
                 "Pending",
+                payload.order_type or "one_time",
             ),
         )
         order_id = cursor.lastrowid
@@ -1156,6 +1351,116 @@ def create_order(payload: CreateOrderPayload):
     except mysql.connector.Error as err:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.get("/api/customers/{customer_id}/orders", tags=["Customers"])
+def list_customer_orders(customer_id: int, limit: int = Query(50, ge=1, le=200)):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        try:
+            cursor.execute(
+                """
+                SELECT o.order_id,
+                       o.created_at,
+                       o.total_price,
+                       o.status,
+                       o.payment_method,
+                       o.order_type,
+                       a.address_type,
+                       a.written_address,
+                       a.city,
+                       a.pin_code
+                  FROM orders o
+                  JOIN addresses a ON o.address_id = a.address_id
+                 WHERE o.customer_id = %s
+                 ORDER BY o.created_at DESC, o.order_id DESC
+                 LIMIT %s
+                """,
+                (customer_id, limit),
+            )
+        except mysql.connector.Error as err:
+            if err.errno == errorcode.ER_BAD_FIELD_ERROR:
+                cursor.execute(
+                    """
+                    SELECT o.order_id,
+                           o.created_at,
+                           o.total_price,
+                           o.status,
+                           o.payment_method,
+                           NULL AS order_type,
+                           a.address_type,
+                           a.written_address,
+                           a.city,
+                           a.pin_code
+                      FROM orders o
+                      JOIN addresses a ON o.address_id = a.address_id
+                     WHERE o.customer_id = %s
+                     ORDER BY o.created_at DESC, o.order_id DESC
+                     LIMIT %s
+                    """,
+                    (customer_id, limit),
+                )
+            else:
+                raise
+        orders = cursor.fetchall()
+        if not orders:
+            return []
+
+        order_ids = [row["order_id"] for row in orders]
+        placeholders = ",".join(["%s"] * len(order_ids))
+
+        cursor.execute(
+            f"""
+            SELECT oi.order_id,
+                   oi.quantity,
+                   oi.price,
+                   i.name AS item_name
+              FROM order_items oi
+              JOIN items i ON oi.item_id = i.item_id
+             WHERE oi.order_id IN ({placeholders})
+             ORDER BY oi.order_id ASC, oi.order_item_id ASC
+            """,
+            order_ids,
+        )
+        item_rows = cursor.fetchall()
+        items_by_order: Dict[int, List[Dict[str, object]]] = {}
+        for row in item_rows:
+            order_id = row["order_id"]
+            items_by_order.setdefault(order_id, []).append(
+                {
+                    "item_name": row.get("item_name") or "Item",
+                    "quantity": int(row.get("quantity") or 0),
+                    "price": float(row.get("price") or 0),
+                }
+            )
+
+        result = []
+        for order in orders:
+            order_id = order["order_id"]
+            created = order.get("created_at")
+            result.append(
+                {
+                    "order_id": order_id,
+                    "created_at": created.isoformat() if created else None,
+                    "total_price": float(order.get("total_price") or 0),
+                    "status": order.get("status") or "Pending",
+                    "payment_method": order.get("payment_method") or "Cash",
+                    "address": {
+                        "label": order.get("address_type") or "Address",
+                        "line": order.get("written_address") or "",
+                        "city": order.get("city") or "",
+                        "pin_code": order.get("pin_code") or "",
+                    },
+                    "items": items_by_order.get(order_id, []),
+                    "order_type": order.get("order_type") or "one_time",
+                }
+            )
+
+        return result
     finally:
         cursor.close()
         db.close()

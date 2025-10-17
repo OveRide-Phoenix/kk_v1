@@ -66,6 +66,7 @@ class Order(Base):
     total_price = Column(DECIMAL(10, 2), nullable=False)
     status = Column(String(50), nullable=True, default="Pending")
     payment_method = Column(String(50), nullable=False)
+    order_type = Column(String(50), nullable=True, default="one_time")
     discount = Column(DECIMAL(10, 2), nullable=True, default=0.00)
     created_at = Column(TIMESTAMP, nullable=True)
 

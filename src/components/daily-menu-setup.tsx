@@ -42,6 +42,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "@/hooks/use-toast";
 
 interface MenuItem {
   menu_item_id?: number;
@@ -252,7 +253,26 @@ export function DailyMenuSetup() {
   // 3) Add selected items into the correct section
   // ───────────────────────────────────────────────────────────────────────
   const handleItemSelection = () => {
-    const newRows: MenuItem[] = selectedItems.map((id) => {
+    const existingIds = new Set(
+      itemsByMeal[currentSection].map((row) => row.item_id)
+    );
+
+    const uniqueSelections = selectedItems.filter((id) => !existingIds.has(id));
+    const duplicates = selectedItems.length - uniqueSelections.length;
+
+    if (duplicates > 0) {
+      toast({
+        title: "Already added",
+        description: "Duplicate items were skipped. Each menu item can appear only once per meal.",
+      });
+    }
+
+    if (uniqueSelections.length === 0) {
+      setSelectedItems([]);
+      return;
+    }
+
+    const newRows: MenuItem[] = uniqueSelections.map((id, index) => {
       const found = availableItems.find((i) => i.item_id === id)!;
       return {
         item_id: found.item_id,
@@ -262,7 +282,7 @@ export function DailyMenuSetup() {
         available_qty: 1,
         rate: found.net_price ?? 0,
         is_default: false,
-        sort_order: itemsByMeal[currentSection].length + 1,
+        sort_order: itemsByMeal[currentSection].length + index + 1,
       };
     });
 
