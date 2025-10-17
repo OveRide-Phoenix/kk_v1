@@ -33,7 +33,22 @@ interface MenuSectionResponse {
 const MEALS: MealType[] = ["breakfast", "lunch", "dinner", "condiments"];
 const DINNER_CUTOFF_HOUR = 18; // 6 PM local time
 
-export default function CustomerDailyMenu() {
+type CartContext = {
+  confirmedDate: Date | null;
+  confirmedDateISO: string | null;
+};
+
+type CustomerDailyMenuProps = {
+  onCartChange?: (cart: CartLine[], context: CartContext) => void;
+  refreshSignal?: number;
+  resetCartSignal?: number;
+};
+
+export default function CustomerDailyMenu({
+  onCartChange,
+  refreshSignal,
+  resetCartSignal,
+}: CustomerDailyMenuProps = {}) {
   const router = useRouter();
 
   // Date state
@@ -61,6 +76,7 @@ export default function CustomerDailyMenu() {
   type CartLine = {
     meal: MealType;
     item_id: number;
+    menu_item_id?: number;
     item_name: string;
     qty: number;
     rate: number;
@@ -162,7 +178,24 @@ export default function CustomerDailyMenu() {
       }
     };
     run();
-  }, [confirmedDate]);
+  }, [confirmedDate, refreshSignal]);
+
+  useEffect(() => {
+    if (resetCartSignal === undefined) return;
+    setCart([]);
+  }, [resetCartSignal]);
+
+  useEffect(() => {
+    if (!onCartChange) return;
+    const context: CartContext = {
+      confirmedDate,
+      confirmedDateISO: confirmedDate ? formatISODate(confirmedDate) : null,
+    };
+    onCartChange(
+      cart.map((line) => ({ ...line })),
+      context,
+    );
+  }, [cart, confirmedDate, onCartChange]);
 
   // Cart ops
   const qtyInCart = (meal: MealType, item_id: number) =>
@@ -188,6 +221,7 @@ export default function CustomerDailyMenu() {
           {
             meal,
             item_id: item.item_id,
+            menu_item_id: item.menu_item_id,
             item_name: item.item_name,
             qty: 1,
             rate: item.rate,

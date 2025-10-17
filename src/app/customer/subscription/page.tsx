@@ -1,14 +1,14 @@
 "use client"
 
-import { useState } from "react";
+import { useState } from "react"
 import CustomerNavBar from "@/components/customer-nav-bar"
 import { ShoppingBag, ClipboardList } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import CalendarRAC from "@/components/ui/calendar-rac"; // For default export
+import { Calendar } from "@/components/ui/calendar"
 
 export default function Subscription() {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date())
 
   const toggleModal = () => {
     setIsModalOpen(!isModalOpen);
@@ -72,10 +72,11 @@ export default function Subscription() {
           <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center mt-16">
             <div className="bg-white p-6 rounded-lg shadow-lg">
               <h2 className="text-xl font-bold mb-4">Select a Date</h2>
-              <CalendarRAC
-                selectedDate={selectedDate}
-                onDateChange={setSelectedDate}
-                minDate={new Date()} // Disable past dates
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={(date) => date && setSelectedDate(date)}
+                disabled={{ before: new Date() }}
               />
               <Button className="mt-4" onClick={toggleModal}>Close</Button>
             </div>

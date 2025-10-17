@@ -340,6 +340,15 @@ def login(data: LoginRequest, response: Response):
             }
             access  = create_access_token(user_payload)
             refresh = create_refresh_token(user_payload, str(uuid.uuid4()))
+        else:
+            user_payload = {
+                "customer_id": result["customer_id"],
+                "phone": result["phone_number"],
+                "role": "customer",
+                "name": result.get("customer_name"),
+            }
+            access = create_access_token(user_payload)
+            refresh = create_refresh_token(user_payload, str(uuid.uuid4()))
 
         # IMPORTANT: do NOT set cookies — tokens are returned in JSON
         # set_cookie(response, "access_token",  access,  60 * 15)
@@ -348,9 +357,9 @@ def login(data: LoginRequest, response: Response):
         return {
             "message": "Login successful",
             "is_admin": is_admin,
-            "user": user_payload,           # null if not admin
-            "access_token": access,         # null if not admin
-            "refresh_token": refresh        # null if not admin
+            "user": user_payload,
+            "access_token": access,
+            "refresh_token": refresh,
         }
     finally:
         cursor.close()
@@ -884,6 +893,58 @@ class UpdatePlannedRequest(BaseModel):
     menu_type: str
     updates: List[PlannedQtyUpdate]
 
+class OrderItemPayload(BaseModel):
+    item_id: int
+    quantity: int
+    price: float
+    menu_item_id: Optional[int] = None
+    meal_type: Optional[str] = None
+
+class CreateOrderPayload(BaseModel):
+    customer_id: int
+    address_id: Optional[int] = None
+    payment_method: str
+    items: List[OrderItemPayload]
+    order_date: Optional[str] = None
+
+@app.get("/api/customers/{customer_id}/addresses", tags=["Customers"])
+def get_customer_addresses(customer_id: int):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            SELECT
+                address_id,
+                address_type,
+                house_apartment_no,
+                written_address,
+                city,
+                pin_code,
+                is_default
+            FROM addresses
+            WHERE customer_id = %s
+            ORDER BY is_default DESC, address_id ASC
+            """,
+            (customer_id,),
+        )
+        rows = cursor.fetchall()
+        return [
+            {
+                "address_id": row["address_id"],
+                "address_type": row.get("address_type") or "Address",
+                "house_apartment_no": row.get("house_apartment_no"),
+                "written_address": row.get("written_address") or "",
+                "city": row.get("city") or "",
+                "pin_code": row.get("pin_code") or "",
+                "is_default": bool(row.get("is_default")),
+            }
+            for row in rows
+        ]
+    finally:
+        cursor.close()
+        db.close()
+
 @app.post("/api/production/generate", tags=["Production"])
 def generate_production_plan(payload: ProductionPlanRequest):
     db = get_db()
@@ -1018,6 +1079,79 @@ def update_planned_quantities(payload: UpdatePlannedRequest):
             "success": True,
             "message": "Planned quantities updated successfully",
             "updated_items": updated_items,
+        }
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+@app.post("/api/orders/create", tags=["Orders"])
+def create_order(payload: CreateOrderPayload):
+    if not payload.items:
+        raise HTTPException(status_code=400, detail="Order must include at least one item")
+
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        address_id = payload.address_id if payload.address_id is not None else 0
+        cursor.execute(
+            "SELECT address_id FROM addresses WHERE address_id=%s AND customer_id=%s LIMIT 1",
+            (address_id, payload.customer_id),
+        )
+        if cursor.fetchone() is None:
+            cursor.execute(
+                "SELECT address_id FROM addresses WHERE customer_id=%s AND is_default=1 LIMIT 1",
+                (payload.customer_id,),
+            )
+            fallback = cursor.fetchone()
+            if fallback is None:
+                raise HTTPException(status_code=400, detail="No valid address found for customer")
+            address_id = fallback[0]
+
+        total_price = sum(item.price * item.quantity for item in payload.items)
+
+        cursor.execute(
+            """
+            INSERT INTO orders (customer_id, address_id, total_price, payment_method, status)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (
+                payload.customer_id,
+                address_id,
+                float(total_price),
+                payload.payment_method,
+                "Pending",
+            ),
+        )
+        order_id = cursor.lastrowid
+
+        cursor.executemany(
+            """
+            INSERT INTO order_items (order_id, item_id, quantity, price)
+            VALUES (%s, %s, %s, %s)
+            """,
+            [
+            (order_id, item.item_id, item.quantity, float(item.price))
+            for item in payload.items
+        ],
+        )
+
+        for item in payload.items:
+            if item.menu_item_id is not None:
+                cursor.execute(
+                    "UPDATE menu_items SET available_qty = GREATEST(available_qty - %s, 0) WHERE menu_item_id = %s",
+                    (item.quantity, item.menu_item_id),
+                )
+
+        db.commit()
+
+        return {
+            "message": "Order placed successfully",
+            "order_id": order_id,
+            "total_price": float(total_price),
+            "status": "Pending",
         }
     except mysql.connector.Error as err:
         db.rollback()

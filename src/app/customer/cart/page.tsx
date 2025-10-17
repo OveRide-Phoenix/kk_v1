@@ -1,271 +1,460 @@
 "use client"
 
-import { useState } from "react"
-import Link from "next/link"
-import { Home, ShoppingBag, ShoppingCart, User, MapPin, Minus, Plus, Trash2 } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
+import { CheckCircle2, ShoppingCart, ArrowLeft, Loader2 } from "lucide-react"
+import { format as formatDate } from "date-fns"
+
+import CustomerNavBar from "@/components/customer-nav-bar"
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { useAuthStore } from "@/store/store"
 
-export default function Cart() {
-  const [location, setLocation] = useState("WORK No. 3, St. Mark's Road, Bengaluru - 04......")
-  const [selectedAddress, setSelectedAddress] = useState("work")
-  const [dialogOpen, setDialogOpen] = useState(false)
+const CART_STORAGE_KEY = "customer_cart_items"
+const CART_CONTEXT_KEY = "customer_cart_context"
+const CART_REFRESH_KEY = "customer_cart_refresh"
+const CART_KEEP_KEY = "kk_keep_cart"
+
+const PAYMENT_METHODS = [
+  { id: "Cash", label: "Cash on Delivery" },
+  { id: "UPI", label: "UPI" },
+  { id: "Card", label: "Card" },
+]
+
+const currency = (value: number) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(value)
+
+type MealType = "breakfast" | "lunch" | "dinner" | "condiments"
+
+type CartLine = {
+  menu_item_id: number
+  item_id: number
+  meal: MealType
+  item_name: string
+  price: number
+  quantity: number
+  available_qty: number
+}
+
+type CartContext = {
+  order_date: string
+  address_id: number
+}
+
+type AddressEntry = {
+  address_id: number
+  address_type: string
+  house_apartment_no: string | null
+  written_address: string
+  city: string
+  pin_code: string
+  is_default: boolean
+}
+
+type OrderResponse = {
+  message: string
+  order_id: number
+  total_price: number
+  status: string
+}
+
+export default function CartPage() {
+  const router = useRouter()
+  const user = useAuthStore((state) => state.user)
+  const setUser = useAuthStore((state) => state.setUser)
+
+  const [cartItems, setCartItems] = useState<CartLine[]>([])
+  const [cartContext, setCartContext] = useState<CartContext | null>(null)
+
+  const [addresses, setAddresses] = useState<AddressEntry[]>([])
+  const [addressesLoading, setAddressesLoading] = useState(false)
+  const [addressesError, setAddressesError] = useState<string | null>(null)
+  const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null)
+
+  const [paymentMethod, setPaymentMethod] = useState("Cash")
   const [couponCode, setCouponCode] = useState("")
-  const [cartItems, setCartItems] = useState([
-    { id: 1, name: "Masala Dosa", price: 120, quantity: 1, image: "/dosa.jpg" },
-    { id: 2, name: "Idli Sambar", price: 80, quantity: 2, image: "/idli.jpg" },
-  ])
-  const [addresses] = useState([
-    { type: "HOME", address: "123 Home Street, Bengaluru - 01" },
-    { type: "WORK", address: "WORK No. 3, St. Mark's Road, Bengaluru - 04" },
-    { type: "FRIEND", address: "456 Friend Avenue, Bengaluru - 02" },
-  ])
+  const [placingOrder, setPlacingOrder] = useState(false)
+  const [orderResult, setOrderResult] = useState<OrderResponse | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  const deliveryCharge = 40
-  const subtotal = cartItems.reduce((acc, item) => acc + (item.price * item.quantity), 0)
-  const total = subtotal + deliveryCharge
+  useEffect(() => {
+    try {
+      const rawItems = localStorage.getItem(CART_STORAGE_KEY)
+      if (rawItems) {
+        setCartItems(JSON.parse(rawItems) as CartLine[])
+      }
+      const rawContext = localStorage.getItem(CART_CONTEXT_KEY)
+      if (rawContext) {
+        setCartContext(JSON.parse(rawContext) as CartContext)
+      }
+    } catch (error) {
+      console.error("Failed to restore cart", error)
+    }
+  }, [])
 
-  const updateQuantity = (id: number, change: number) => {
-    setCartItems(items =>
-      items.map(item =>
-        item.id === id
-          ? { ...item, quantity: Math.max(1, item.quantity + change) }
-          : item
-      )
+  useEffect(() => {
+    if (user) return
+    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null
+    if (!token) return
+    ;(async () => {
+      try {
+        const response = await fetch("/api/backend/auth/me", {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!response.ok) return
+        const me = await response.json()
+        setUser(me)
+      } catch (error) {
+        console.error("Unable to restore user", error)
+      }
+    })()
+  }, [user, setUser])
+
+  useEffect(() => {
+    const customerId = user?.customer_id
+    if (!customerId) return
+
+    const fetchAddresses = async () => {
+      setAddressesLoading(true)
+      setAddressesError(null)
+      try {
+        const response = await fetch(`http://localhost:8000/api/customers/${customerId}/addresses`)
+        if (!response.ok) {
+          throw new Error("Unable to fetch addresses")
+        }
+        const data = (await response.json()) as AddressEntry[]
+        setAddresses(data)
+      } catch (error) {
+        console.error(error)
+        setAddressesError("Unable to load addresses.")
+      } finally {
+        setAddressesLoading(false)
+      }
+    }
+
+    fetchAddresses()
+  }, [user])
+
+  useEffect(() => {
+    if (!addresses.length) return
+    if (cartContext?.address_id) {
+      const match = addresses.find((address) => address.address_id === cartContext.address_id)
+      if (match) {
+        setSelectedAddressId(match.address_id)
+        return
+      }
+    }
+    const defaultAddress = addresses.find((address) => address.is_default)
+    if (defaultAddress) {
+      setSelectedAddressId(defaultAddress.address_id)
+    } else {
+      setSelectedAddressId(addresses[0].address_id)
+    }
+  }, [addresses, cartContext])
+
+  const totals = useMemo(() => {
+    const totalQuantity = cartItems.reduce((sum, line) => sum + line.quantity, 0)
+    const totalPrice = cartItems.reduce((sum, line) => sum + line.quantity * line.price, 0)
+    return { totalQuantity, totalPrice }
+  }, [cartItems])
+
+  const selectedAddress = selectedAddressId
+    ? addresses.find((address) => address.address_id === selectedAddressId)
+    : null
+
+  const handlePlaceOrder = async () => {
+    if (!cartItems.length) return
+    if (!user?.customer_id) {
+      setErrorMessage("Please sign in to place an order.")
+      return
+    }
+    if (!selectedAddress) {
+      setErrorMessage("Please select a delivery address.")
+      return
+    }
+
+    setPlacingOrder(true)
+    setErrorMessage(null)
+    setOrderResult(null)
+
+    const payload = {
+      customer_id: user?.customer_id ?? 0,
+      address_id: selectedAddress.address_id,
+      payment_method: paymentMethod,
+      order_date: cartContext?.order_date,
+      items: cartItems.map((item) => ({
+        item_id: item.item_id,
+        quantity: item.quantity,
+        price: item.price,
+        menu_item_id: item.menu_item_id,
+        meal_type: item.meal,
+      })),
+    }
+
+    try {
+      const response = await fetch("http://localhost:8000/api/orders/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data?.detail || "Failed to place order")
+      }
+
+      setOrderResult(data as OrderResponse)
+      setCartItems([])
+      setCartContext(null)
+      localStorage.removeItem(CART_STORAGE_KEY)
+      localStorage.removeItem(CART_CONTEXT_KEY)
+      localStorage.setItem(CART_REFRESH_KEY, "1")
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Unexpected error")
+    } finally {
+      setPlacingOrder(false)
+    }
+  }
+
+  const handleContinueShopping = () => {
+    sessionStorage.setItem(CART_KEEP_KEY, "1")
+    router.push("/customer/new-order")
+  }
+
+  useEffect(() => {
+    if (!cartItems.length || !selectedAddress) return
+    const context: CartContext = {
+      order_date: cartContext?.order_date ?? formatDate(new Date(), "yyyy-MM-dd"),
+      address_id: selectedAddress.address_id,
+    }
+    localStorage.setItem(CART_CONTEXT_KEY, JSON.stringify(context))
+  }, [cartItems, selectedAddress, cartContext])
+
+  if (cartItems.length === 0 && !orderResult) {
+    return (
+      <div className="min-h-screen bg-[#faf7f2]">
+        <CustomerNavBar />
+        <div className="container mx-auto flex flex-col items-center justify-center gap-6 px-4 pt-32 text-center">
+          <ShoppingCart className="h-12 w-12 text-primary" />
+          <div>
+            <h1 className="text-2xl font-serif text-[#463028]">Your cart is empty</h1>
+            <p className="text-sm text-[#8d6e63]">
+              Browse the menu and add your favourites to get started.
+            </p>
+          </div>
+          <Button onClick={handleContinueShopping}>Back to menu</Button>
+        </div>
+      </div>
     )
   }
 
-  const removeItem = (id: number) => {
-    setCartItems(items => items.filter(item => item.id !== id))
-  }
-
   return (
-    <div className="min-h-screen bg-[#f9f3e8]">
-      {/* Navigation Bar - Same as other pages */}
-      <header className="border-b border-[#e6dfd0] bg-[#f9f3e8] py-4 px-4 md:px-6">
-        <div className="flex items-center justify-between">
-          <div className="font-bold text-[#5d4037] text-lg">KUTEERA KITCHEN</div>
+    <div className="min-h-screen bg-[#faf7f2] pb-20">
+      <CustomerNavBar />
 
-          <div className="hidden md:flex items-center gap-2 text-[#5d4037] w-[400px] justify-center">
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="ghost" className="flex items-center gap-2 px-2 w-full justify-center">
-                  <MapPin className="h-4 w-4 flex-shrink-0" />
-                  <span className="text-sm flex-shrink-0">Deliver to:</span>
-                  <span className="text-sm font-medium truncate max-w-[200px]">{location}</span>
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="bg-white sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle className="text-xl font-semibold text-[#5d4037]">Select Delivery Address</DialogTitle>
-                </DialogHeader>
-                <div className="mt-4">
-                  <RadioGroup 
-                    value={selectedAddress}
-                    className="gap-4" 
-                    onValueChange={(value) => {
-                      setSelectedAddress(value)
-                    }}
-                  >
-                    {addresses.map((addr) => (
-                      <div key={addr.type} className="flex items-center space-x-2 border rounded-lg p-4">
-                        <RadioGroupItem value={addr.type.toLowerCase()} id={addr.type.toLowerCase()} />
-                        <label htmlFor={addr.type.toLowerCase()} className="flex-1 cursor-pointer">
-                          <div className="font-medium text-[#5d4037]">{addr.type}</div>
-                          <div className="text-sm text-[#8d6e63]">{addr.address}</div>
-                        </label>
-                      </div>
-                    ))}
-                  </RadioGroup>
-                  <Button 
-                    className="w-full mt-6 bg-black text-white hover:bg-[#5d4037] flex items-center gap-2"
-                    onClick={() => {
-                      const selected = addresses.find(addr => addr.type.toLowerCase() === selectedAddress)
-                      if (selected) {
-                        setLocation(selected.address)
-                        setDialogOpen(false)
-                      }
-                    }}
-                  >
-                    <MapPin className="h-4 w-4" />
-                    Deliver to this Address
-                  </Button>
-                  <Button variant="outline" className="w-full mt-3 border-dashed">
-                    + Add New Address
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-
-          <div className="flex items-center gap-6">
-            <Link href="/customer">
-              <Button variant="ghost" className="text-[#5d4037] p-2 flex items-center group hover:bg-[#8d6e63] hover:text-white w-[40px] hover:w-[100px] transition-all duration-200">
-                <Home className="h-5 w-5" />
-                <span className="hidden group-hover:inline text-sm ml-2 whitespace-nowrap overflow-hidden">Home</span>
-              </Button>
-            </Link>
-            <Link href="/customer/new-order">
-              <Button variant="ghost" className="text-[#5d4037] p-2 flex items-center group hover:bg-[#8d6e63] hover:text-white w-[40px] hover:w-[100px] transition-all duration-200">
-                <ShoppingBag className="h-5 w-5" />
-                <span className="hidden group-hover:inline text-sm ml-2 whitespace-nowrap overflow-hidden">Order</span>
-              </Button>
-            </Link>
-            <Link href="/customer/cart">
-              <Button variant="ghost" className="text-[#5d4037] p-2 flex items-center group hover:bg-[#8d6e63] hover:text-white w-[40px] hover:w-[100px] transition-all duration-200">
-                <ShoppingCart className="h-5 w-5" />
-                <span className="hidden group-hover:inline text-sm ml-2 whitespace-nowrap overflow-hidden">Cart</span>
-              </Button>
-            </Link>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="text-[#5d4037] p-2 flex items-center group hover:bg-[#8d6e63] hover:text-white w-[40px] hover:w-[120px] transition-all duration-200">
-                  <User className="h-5 w-5" />
-                  <span className="hidden group-hover:inline text-sm ml-2 whitespace-nowrap overflow-hidden">Tim Cook</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="bg-[#f9f3e8] border border-[#e6dfd0] shadow-md">
-                <DropdownMenuItem className="hover:bg-[#8d6e63] hover:text-white focus:bg-[#8d6e63] focus:text-white">
-                  Profile
-                </DropdownMenuItem>
-                <DropdownMenuItem className="hover:bg-[#8d6e63] hover:text-white focus:bg-[#8d6e63] focus:text-white">
-                  Settings
-                </DropdownMenuItem>
-                <DropdownMenuItem className="hover:bg-[#8d6e63] hover:text-white focus:bg-[#8d6e63] focus:text-white">
-                  Logout
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+      <main className="container mx-auto px-4 pt-24">
+        <div className="mb-6 flex items-center gap-3 text-[#463028]">
+          <Button variant="ghost" size="sm" onClick={handleContinueShopping}>
+            <ArrowLeft className="mr-2 h-4 w-4" /> Back to menu
+          </Button>
         </div>
 
-        <div className="md:hidden flex items-center gap-2 text-[#5d4037] mt-2">
-          <MapPin className="h-4 w-4" />
-          <span className="text-xs">Deliver to:</span>
-          <span className="text-xs font-medium truncate">{location}</span>
-        </div>
-      </header>
-
-      <main className="container mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold text-[#5d4037] text-center mb-8">Your Cart</h1>
-
-        <div className="max-w-4xl mx-auto grid md:grid-cols-3 gap-8">
-          {/* Cart Items */}
-          <div className="md:col-span-2">
-            <div className="bg-white rounded-xl p-6 border-2 border-[#e6dfd0]">
-              <h2 className="text-xl font-semibold text-[#5d4037] mb-4">Items</h2>
-              <div className="space-y-4">
+        <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-xl font-serif text-[#463028]">Items in your cart</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
                 {cartItems.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between py-2 border-b border-[#e6dfd0] last:border-0">
-                    <div className="flex-1">
-                      <h3 className="text-[#5d4037] font-medium">{item.name}</h3>
-                      <p className="text-sm text-[#8d6e63]">₹{item.price}</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => updateQuantity(item.id, -1)}
-                      >
-                        <Minus className="h-3 w-3" />
-                      </Button>
-                      <span className="w-6 text-center text-[#5d4037]">{item.quantity}</span>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => updateQuantity(item.id, 1)}
-                      >
-                        <Plus className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-red-500 hover:text-red-700"
-                        onClick={() => removeItem(item.id)}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
+                  <div
+                    key={`${item.meal}-${item.menu_item_id}`}
+                    className="rounded-lg border border-[#e6dfd0] bg-white p-3 shadow-sm"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-[#463028]">{item.item_name}</p>
+                        <p className="text-xs text-[#8d6e63] capitalize">{item.meal}</p>
+                      </div>
+                      <div className="text-right text-sm font-semibold text-[#463028]">
+                        <span className="text-[#8d6e63] text-xs">
+                          {currency(item.price)} × {item.quantity}
+                        </span>
+                        <div>{currency(item.price * item.quantity)}</div>
+                      </div>
                     </div>
                   </div>
                 ))}
-              </div>
-            </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-xl font-serif text-[#463028]">Delivery Address</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {addressesLoading ? (
+                  <p className="text-sm text-[#8d6e63]">Loading addresses…</p>
+                ) : addressesError ? (
+                  <p className="text-sm text-[#c75b39]">{addressesError}</p>
+                ) : (
+                  <Select
+                    value={selectedAddressId?.toString() ?? ""}
+                    onValueChange={(value) => setSelectedAddressId(Number(value))}
+                  >
+                    <SelectTrigger className="w-full bg-white">
+                      <SelectValue placeholder="Select delivery address" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {addresses.map((address) => (
+                        <SelectItem key={address.address_id} value={address.address_id.toString()}>
+                          <div className="text-left">
+                            <p className="text-sm font-semibold text-[#463028]">
+                              {address.address_type}
+                              {address.is_default && " (Default)"}
+                            </p>
+                            <p className="text-xs text-[#8d6e63]">
+                              {[address.house_apartment_no, address.written_address, address.city, address.pin_code]
+                                .filter(Boolean)
+                                .join(", ")}
+                            </p>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </CardContent>
+            </Card>
           </div>
 
-          {/* Order Summary */}
           <div className="space-y-6">
-            <div className="bg-white rounded-xl p-6 border-2 border-[#e6dfd0]">
-              <h2 className="text-xl font-semibold text-[#5d4037] mb-4">Order Summary</h2>
-              <div className="space-y-2 text-[#5d4037]">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-xl font-serif text-[#463028]">Order Summary</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm text-[#8d6e63]">
+                {cartContext?.order_date && (
+                  <div className="flex justify-between">
+                    <span>Delivery date</span>
+                    <span>{cartContext.order_date}</span>
+                  </div>
+                )}
+                {selectedAddress && (
+                  <div className="border-b border-dashed border-primary/20 pb-3 text-right text-sm text-[#463028]">
+                    <p className="font-semibold">
+                      Delivering to {selectedAddress.address_type}
+                    </p>
+                    <p className="text-xs text-[#8d6e63]">
+                      {[selectedAddress.house_apartment_no, selectedAddress.written_address, selectedAddress.city, selectedAddress.pin_code]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </p>
+                  </div>
+                )}
                 <div className="flex justify-between">
-                  <span>Subtotal</span>
-                  <span>₹{subtotal}</span>
+                  <span>Items ({totals.totalQuantity})</span>
+                  <span>{currency(totals.totalPrice)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Delivery Charge</span>
-                  <span>₹{deliveryCharge}</span>
+                  <span>Delivery</span>
+                  <span>Free</span>
                 </div>
-                <div className="h-px bg-[#e6dfd0] my-2"></div>
-                <div className="flex justify-between font-semibold">
-                  <span>Total</span>
-                  <span>₹{total}</span>
+                <div className="rounded-lg border border-dashed border-primary/20 bg-primary/5 p-3">
+                  <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-[#8d6e63]">
+                    Apply coupon
+                  </label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={couponCode}
+                      onChange={(event) => setCouponCode(event.target.value)}
+                      placeholder="Enter code"
+                      className="bg-white"
+                    />
+                    <Button type="button" variant="outline" disabled>
+                      Apply
+                    </Button>
+                  </div>
+                  <p className="mt-2 text-[0.7rem] text-[#c75b39]">
+                    Coupons will be available soon.
+                  </p>
                 </div>
-              </div>
-            </div>
+                <div className="flex justify-between border-t border-dashed border-primary/20 pt-3 text-base font-semibold text-[#463028]">
+                  <span>Grand total</span>
+                  <span>{currency(totals.totalPrice)}</span>
+                </div>
+              </CardContent>
+              <CardFooter className="flex flex-col gap-3">
+                {errorMessage && (
+                  <div className="w-full rounded-md border border-destructive/20 bg-destructive/10 p-3 text-xs text-destructive">
+                    {errorMessage}
+                  </div>
+                )}
 
-            {/* Coupon Code */}
-            <div className="bg-white rounded-xl p-6 border-2 border-[#e6dfd0]">
-              <h2 className="text-lg font-semibold text-[#5d4037] mb-4">Apply Coupon</h2>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Enter coupon code"
-                  value={couponCode}
-                  onChange={(e) => setCouponCode(e.target.value)}
-                  className="border-[#e6dfd0]"
-                />
-                <Button variant="outline">Apply</Button>
-              </div>
-            </div>
+                {orderResult ? (
+                  <div className="w-full rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-700">
+                    <div className="flex items-center gap-2 font-semibold">
+                      <CheckCircle2 className="h-4 w-4" /> Order placed successfully!
+                    </div>
+                    <p className="mt-2 text-xs text-green-700/80">
+                      Order #{orderResult.order_id} for {currency(orderResult.total_price)} is {orderResult.status}.
+                    </p>
+                    <div className="mt-3 flex gap-2">
+                      <Button variant="outline" onClick={handleContinueShopping}>
+                        Back to menu
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button
+                    className="w-full"
+                    onClick={handlePlaceOrder}
+                    disabled={placingOrder || cartItems.length === 0}
+                  >
+                    {placingOrder ? (
+                      <span className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" /> Placing order…
+                      </span>
+                    ) : (
+                      "Place Order"
+                    )}
+                  </Button>
+                )}
+              </CardFooter>
+            </Card>
 
-            {/* Delivery Address */}
-            <div className="bg-white rounded-xl p-6 border-2 border-[#e6dfd0]">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-[#5d4037]">Delivery Address</h2>
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" size="sm">Change</Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Select Delivery Address</DialogTitle>
-                    </DialogHeader>
-                    {/* Add address selection content */}
-                  </DialogContent>
-                </Dialog>
-              </div>
-              <p className="text-[#5d4037]">{location}</p>
-            </div>
-
-            {/* Place Order Button */}
-            <Button className="w-full bg-[#5d4037] text-white hover:bg-[#8d6e63] py-6 text-lg font-semibold rounded-xl">
-              Place Order
-            </Button>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg font-serif text-[#463028]">Payment Method</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod} className="space-y-2">
+                  {PAYMENT_METHODS.map((method) => (
+                    <label
+                      key={method.id}
+                      className="flex cursor-pointer items-center gap-3 rounded-lg border border-transparent bg-white p-3 transition hover:border-primary/40"
+                    >
+                      <RadioGroupItem value={method.id} />
+                      <span className="text-sm text-[#463028]">{method.label}</span>
+                    </label>
+                  ))}
+                </RadioGroup>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </main>

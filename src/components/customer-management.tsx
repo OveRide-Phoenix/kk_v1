@@ -33,6 +33,8 @@ type CustomerStatus = "Active" | "Pending" | "Inactive"
 // Update the Customer interface to match the API response
 interface Customer {
   customer_id: number
+  referred_by: string | null
+  alternative_mobile: string | null
   name: string
   primary_mobile: string
   email: string
@@ -46,6 +48,10 @@ interface Customer {
   longitude: number
   address_type: string | null
   route_assignment: string | null
+  recipient_name: string
+  payment_frequency: string | null
+  completed_orders: number
+  pending_orders: number
   is_admin?: number | boolean
 }
 
@@ -530,9 +536,17 @@ export default function CustomerManagement() {
                             )
                           }
                           if (column.key === "orders") {
+                            const pending = customer.pending_orders ?? 0
                             return (
                               <TableCell key={column.key} className={`text-center ${isMobile ? 'text-xs' : ''}`}>
-                                -
+                                <span className="relative inline-flex items-center justify-center text-base">
+                                  {customer.completed_orders ?? 0}
+                                  {pending > 0 && (
+                                    <span className="absolute -top-2 -right-3 text-[0.55rem] font-medium text-muted-foreground">
+                                      +{pending}
+                                    </span>
+                                  )}
+                                </span>
                               </TableCell>
                             )
                           }

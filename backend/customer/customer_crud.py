@@ -119,10 +119,24 @@ def get_all_customers(db):
             c.name, c.recipient_name, c.payment_frequency, c.email, c.created_at,
             a.address_id, a.house_apartment_no, a.written_address, a.city, 
             a.pin_code, a.latitude, a.longitude, a.address_type, a.route_assignment,
+            COALESCE(o.completed_orders, 0) AS completed_orders,
+            COALESCE(p.pending_orders, 0) AS pending_orders,
             CASE WHEN au.admin_id IS NOT NULL THEN 1 ELSE 0 END AS is_admin
         FROM customers c
         INNER JOIN addresses a ON c.customer_id = a.customer_id
         LEFT JOIN admin_users au ON au.customer_id = c.customer_id AND au.is_active = 1
+        LEFT JOIN (
+            SELECT customer_id, COUNT(*) AS completed_orders
+            FROM orders
+            WHERE status = 'Completed'
+            GROUP BY customer_id
+        ) o ON o.customer_id = c.customer_id
+        LEFT JOIN (
+            SELECT customer_id, COUNT(*) AS pending_orders
+            FROM orders
+            WHERE status = 'Pending'
+            GROUP BY customer_id
+        ) p ON p.customer_id = c.customer_id
         WHERE a.is_default = 1
         ORDER BY c.created_at ASC
         """
