@@ -74,7 +74,11 @@ export function DailyMenuSetup() {
     today.setHours(0, 0, 0, 0);
     return today;
   });
-  const [confirmedDate, setConfirmedDate] = useState<Date | null>(null);
+  const [confirmedDate, setConfirmedDate] = useState<Date | null>(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  });
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   // Controls for “Add Menu Item” dialog
@@ -413,6 +417,19 @@ export function DailyMenuSetup() {
     );
 
   const displayDate = confirmedDate ?? draftDate;
+  const computeMidnightTimestamp = (offsetDays = 0) => {
+    const base = new Date();
+    base.setHours(0, 0, 0, 0);
+    if (offsetDays !== 0) {
+      base.setDate(base.getDate() + offsetDays);
+    }
+    return base.getTime();
+  };
+  const todayTimestamp = computeMidnightTimestamp();
+  const tomorrowTimestamp = computeMidnightTimestamp(1);
+  const selectedTimestamp = confirmedDate ? confirmedDate.getTime() : null;
+  const isTodaySelected = selectedTimestamp === todayTimestamp;
+  const isTomorrowSelected = selectedTimestamp === tomorrowTimestamp;
 
   // ───────────────────────────────────────────────────────────────────────
   // JSX
@@ -433,24 +450,25 @@ export function DailyMenuSetup() {
             <div className="flex flex-wrap items-center gap-3">
               {/* Quick actions */}
               <Button
-                variant="outline"
+                variant={isTodaySelected ? "default" : "outline"}
                 onClick={() => {
-                  const today = normalizeToMidnight(new Date());
-                  setDraftDate(today);
-                  setConfirmedDate(today);
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  setDraftDate(new Date(today));
+                  setConfirmedDate(new Date(today));
                 }}
               >
                 Today
               </Button>
 
               <Button
-                variant="outline"
+                variant={isTomorrowSelected ? "default" : "outline"}
                 onClick={() => {
                   const tomorrow = new Date();
+                  tomorrow.setHours(0, 0, 0, 0);
                   tomorrow.setDate(tomorrow.getDate() + 1);
-                  const normalizedTomorrow = normalizeToMidnight(tomorrow);
-                  setDraftDate(normalizedTomorrow);
-                  setConfirmedDate(normalizedTomorrow);
+                  setDraftDate(new Date(tomorrow));
+                  setConfirmedDate(new Date(tomorrow));
                 }}
               >
                 Tomorrow

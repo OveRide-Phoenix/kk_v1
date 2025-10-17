@@ -217,7 +217,7 @@ export default function CustomerDailyMenu() {
   const tomorrowD = tomorrow();
 
   return (
-    <div className="relative mx-auto max-w-6xl p-4 sm:p-6 pb-40">
+    <div className="relative w-full max-w-6xl p-4 sm:p-6 pb-40">
       {/* Date controls (no calendar) with dates shown on the buttons */}
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <Button

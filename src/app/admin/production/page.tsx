@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { addDays, format, isSameDay } from "date-fns";
 import type {
   ProductionItem,
@@ -24,6 +24,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -46,12 +56,15 @@ type SubscriptionReplacement = {
 };
 
 type MenuApiItem = {
+
   item_name?: string;
   name?: string;
   planned_qty?: number;
   available_qty?: number;
   quantity?: number;
   planned_quantity?: number;
+  buffer_qty: number;
+  final_qty: number;
   uom?: string;
   unit?: string;
   unit_name?: string;
@@ -61,6 +74,7 @@ type MenuApiItem = {
 
 type MenuApiResponse = {
   items?: MenuApiItem[];
+  is_released?: boolean;
 };
 
 
@@ -96,10 +110,12 @@ function mapMenuItems(menuItems: PublishedMenuItem[]): PlanItem[] {
   return menuItems.map((menuItem) => {
     const plannedQuantity = Number(menuItem.planned_quantity.toFixed(2));
     const availableQuantity = Number(menuItem.available_quantity.toFixed(2));
-    const bufferQuantity = Number(menuItem.buffer_quantity ?? 0);
-    const finalQuantity = Number(
-      menuItem.final_quantity ?? plannedQuantity + bufferQuantity
-    );
+    const rawBufferQuantity = Number(menuItem.buffer_quantity ?? 0);
+    const bufferQuantity = Math.round(rawBufferQuantity);
+    const finalQuantity =
+      menuItem.final_quantity != null
+        ? Number(Number(menuItem.final_quantity).toFixed(2))
+        : Number((plannedQuantity + bufferQuantity).toFixed(2));
     const customerOrders = Math.max(plannedQuantity - availableQuantity, 0);
     const roundedCustomerOrders = Number(customerOrders.toFixed(2));
 
@@ -114,6 +130,10 @@ function mapMenuItems(menuItems: PublishedMenuItem[]): PlanItem[] {
       final_quantity: finalQuantity,
     };
   });
+}
+
+function clonePlanItems(items: PlanItem[]): PlanItem[] {
+  return items.map((item) => ({ ...item }));
 }
 
 
@@ -470,8 +490,8 @@ function PlanItemCard({
           ) : (
             <Input
               type="number"
-              inputMode="decimal"
-              step="0.1"
+              inputMode="numeric"
+              step="1"
               className="mt-1 h-9"
               value={
                 Number.isNaN(item.buffer_quantity)
@@ -487,11 +507,22 @@ function PlanItemCard({
   );
 }
 
+type PublishedMenuLookup = {
+  itemsByCategory: Record<Category, PublishedMenuItem[]>;
+  releaseStatus: Record<Category, boolean>;
+};
+
 async function fetchPublishedMenu(
   date: string,
-  setPlanGeneratedState: React.Dispatch<React.SetStateAction<Record<Category, boolean>>>
-): Promise<PublishedMenuItem[]> {
-  const collected: PublishedMenuItem[] = [];
+  setPlanGeneratedState: React.Dispatch<React.SetStateAction<Record<Category, boolean>>>,
+): Promise<PublishedMenuLookup> {
+  const itemsByCategory: Record<Category, PublishedMenuItem[]> = {
+    Breakfast: [],
+    Lunch: [],
+    Dinner: [],
+    Condiments: [],
+  };
+  const releaseStatus = createCategoryBooleanState(false);
 
   await Promise.all(
     categories.map(async (category) => {
@@ -509,6 +540,8 @@ async function fetchPublishedMenu(
             ...prev,
             [category]: false,
           }));
+          releaseStatus[category] = false;
+          itemsByCategory[category] = [];
           return;
         }
 
@@ -520,6 +553,8 @@ async function fetchPublishedMenu(
           is_production_generated?: boolean;
         };
 
+        releaseStatus[category] = !!data?.is_released;
+
         // ✅ Always set the planGenerated flag (true/false)
         setPlanGeneratedState((prev) => ({
           ...prev,
@@ -527,16 +562,28 @@ async function fetchPublishedMenu(
         }));
 
         // ✅ If no items, just return
-        if (!data?.items?.length) return;
+        if (!data?.items?.length) {
+          itemsByCategory[category] = [];
+          return;
+        }
 
-        // ✅ Collect items normally
-        data.items.forEach((item) => {
+        // ✅ Collect items per category
+        itemsByCategory[category] = data.items.map((item) => {
           const plannedQtyRaw =
             item.planned_qty ?? item.planned_quantity ?? item.quantity ?? 0;
           const availableQtyRaw =
             item.available_qty ?? item.available_qty ?? item.quantity ?? 0;
+          const bufferQtyRaw =
+            item.buffer_qty ?? item.buffer_qty ?? 0;
+          const finalQtyRaw =
+            item.final_qty ?? item.final_qty ?? null;
           const plannedQuantity = Number(plannedQtyRaw) || 0;
           const availableQuantity = Math.max(Number(availableQtyRaw) || 0, 0);
+          const bufferQuantity = Math.max(Math.round(Number(bufferQtyRaw) || 0), 0);
+          const finalQuantity =
+            finalQtyRaw != null
+              ? Number(finalQtyRaw) || 0
+              : plannedQuantity + bufferQuantity;
           const unit =
             item.uom ??
             item.unit ??
@@ -546,14 +593,16 @@ async function fetchPublishedMenu(
             "Nos";
           const itemName = item.item_name ?? item.name ?? "Unnamed Item";
 
-          collected.push({
+          return {
             date,
             item_name: itemName,
             unit,
             planned_quantity: plannedQuantity,
             available_quantity: availableQuantity,
+            buffer_quantity: bufferQuantity,
+            final_quantity: Number(finalQuantity.toFixed(2)),
             category,
-          });
+          };
         });
       } catch (error) {
         console.error(`Error fetching menu for ${category}:`, error);
@@ -563,11 +612,13 @@ async function fetchPublishedMenu(
           ...prev,
           [category]: false,
         }));
+        releaseStatus[category] = false;
+        itemsByCategory[category] = [];
       }
-    })
+    }),
   );
 
-  return collected;
+  return { itemsByCategory, releaseStatus };
 }
 
 
@@ -596,6 +647,9 @@ function KitchenProductionPlanningContent() {
   const [editingState, setEditingState] = useState<Record<Category, boolean>>(
     () => createCategoryBooleanState(false),
   );
+  const [unsavedChanges, setUnsavedChanges] = useState<Record<Category, boolean>>(
+    () => createCategoryBooleanState(false),
+  );
   const [menuAvailability, setMenuAvailability] = useState<
     Record<Category, boolean>
   >(() => createCategoryBooleanState(false));
@@ -615,8 +669,15 @@ function KitchenProductionPlanningContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [globalBufferDialogOpen, setGlobalBufferDialogOpen] = useState(false);
-  const [bufferPercentInput, setBufferPercentInput] = useState("5");
+  const [bufferPercentInput, setBufferPercentInput] = useState("10");
   const [planPreviewOpen, setPlanPreviewOpen] = useState(false);
+  const [lastMinuteDialogOpen, setLastMinuteDialogOpen] = useState(false);
+  const [lastMinuteAdjustments, setLastMinuteAdjustments] = useState<Record<string, string>>({});
+  const [isApplyingLastMinute, setIsApplyingLastMinute] = useState(false);
+  const [lastMinuteError, setLastMinuteError] = useState<string | null>(null);
+  const [confirmExitOpen, setConfirmExitOpen] = useState(false);
+  const pendingExitCategoryRef = useRef<Category | null>(null);
+  const editBaselines = useRef<Record<Category, PlanItem[]>>(createEmptyPlanState());
 
   const selectedDateISO = useMemo(
     () => format(selectedDate, "yyyy-MM-dd"),
@@ -637,31 +698,19 @@ useEffect(() => {
 
     try {
       // ✅ Fetch all menus for the date, and auto-update planGeneratedState
-      const publishedMenu = await fetchPublishedMenu(
+      const { itemsByCategory, releaseStatus } = await fetchPublishedMenu(
         selectedDateISO,
         setPlanGeneratedState
       );
 
       const replacements = await fetchSubscriptionReplacements();
 
-      // Group items by category
-      const menuByCategory: Record<Category, PublishedMenuItem[]> = {
-        Breakfast: [],
-        Lunch: [],
-        Dinner: [],
-        Condiments: [],
-      };
-      publishedMenu.forEach((item) => {
-        menuByCategory[item.category].push(item);
-      });
-
-      const availability = createCategoryBooleanState(false);
+      const availability = { ...releaseStatus };
       const nextState = createEmptyPlanState();
 
       categories.forEach((category) => {
-        const menuItems = menuByCategory[category];
+        const menuItems = itemsByCategory[category];
         if (menuItems.length > 0) {
-          availability[category] = true;
           const mappedItems = mapMenuItems(menuItems);
           const replacedItems = applyReplacementsToPlan(
             mappedItems,
@@ -669,7 +718,6 @@ useEffect(() => {
           );
           nextState[category] = replacedItems;
         } else {
-          availability[category] = false;
           nextState[category] = [];
         }
       });
@@ -677,6 +725,16 @@ useEffect(() => {
       if (!cancelled) {
         setMenuAvailability(availability);
         setPlanData(nextState);
+        setEditingState(createCategoryBooleanState(false));
+        setUnsavedChanges(createCategoryBooleanState(false));
+        const baseline = createEmptyPlanState();
+        categories.forEach((category) => {
+          baseline[category] = clonePlanItems(nextState[category]);
+        });
+        editBaselines.current = baseline;
+        setLastMinuteAdjustments({});
+        setLastMinuteDialogOpen(false);
+        setLastMinuteError(null);
       }
     } catch (error) {
       console.error(error);
@@ -698,6 +756,20 @@ useEffect(() => {
     [planData],
   );
 
+  useEffect(() => {
+    if (!lastMinuteDialogOpen) {
+      setLastMinuteAdjustments({});
+      setLastMinuteError(null);
+      return;
+    }
+    const base: Record<string, string> = {};
+    planData[selectedCategory].forEach((item) => {
+      base[item.item_name] = "";
+    });
+    setLastMinuteAdjustments(base);
+    setLastMinuteError(null);
+  }, [lastMinuteDialogOpen, planData, selectedCategory]);
+
   const categorySummaries = useMemo(
     () =>
       categories.map((category) => ({
@@ -705,8 +777,9 @@ useEffect(() => {
         items: planData[category].length,
         menuPublished: menuAvailability[category],
         planGenerated: planGeneratedState[category],
+        editing: editingState[category],
       })),
-    [planData, menuAvailability, planGeneratedState],
+    [planData, menuAvailability, planGeneratedState, editingState],
   );
 
   const quickDateOptions = useMemo(() => {
@@ -732,7 +805,7 @@ useEffect(() => {
     value: string,
   ) => {
     const numericValue = Number.parseFloat(value);
-    const buffer = Number.isNaN(numericValue) ? 0 : numericValue;
+    const buffer = Number.isNaN(numericValue) ? 0 : Math.round(numericValue);
 
     setPlanData((prev) => {
       const updatedCategory = prev[category].map((item, itemIndex) => {
@@ -740,7 +813,7 @@ useEffect(() => {
         const finalQuantity = Number((item.planned_quantity + buffer).toFixed(2));
         return {
           ...item,
-          buffer_quantity: Number(buffer.toFixed(2)),
+          buffer_quantity: buffer,
           final_quantity: finalQuantity,
         };
       });
@@ -750,41 +823,175 @@ useEffect(() => {
         [category]: updatedCategory,
       };
     });
+    setUnsavedChanges((prev) => ({ ...prev, [category]: true }));
   };
 
   const applyGlobalBuffer = () => {
     const percentValue = Number.parseFloat(bufferPercentInput);
     if (Number.isNaN(percentValue)) return;
 
+    let applied = false;
     setPlanData((prev) => {
-      const nextState = createEmptyPlanState();
-
-      categories.forEach((category) => {
-        nextState[category] = prev[category].map((item) => {
-          const bufferQuantity = Number(
-            ((item.planned_quantity * percentValue) / 100).toFixed(2),
-          );
-          const finalQuantity = Number(
-            (item.planned_quantity + bufferQuantity).toFixed(2),
-          );
-          return {
-            ...item,
-            buffer_quantity: bufferQuantity,
-            final_quantity: finalQuantity,
-          };
-        });
+      const items = prev[selectedCategory];
+      if (!items.length) return prev;
+      applied = true;
+      const updated = items.map((item) => {
+        const bufferQuantity = Math.round(
+          (item.planned_quantity * percentValue) / 100,
+        );
+        const finalQuantity = Number(
+          (item.planned_quantity + bufferQuantity).toFixed(2),
+        );
+        return {
+          ...item,
+          buffer_quantity: bufferQuantity,
+          final_quantity: finalQuantity,
+        };
       });
-
-      return nextState;
+      return {
+        ...prev,
+        [selectedCategory]: updated,
+      };
     });
+    if (applied) {
+      setUnsavedChanges((prev) => ({ ...prev, [selectedCategory]: true }));
+    }
     setGlobalBufferDialogOpen(false);
   };
 
-  const toggleCategoryEdit = (category: Category) => {
-    setEditingState((prev) => ({
+  const handleOpenLastMinuteDialog = () => {
+    if (
+      !planGeneratedState[selectedCategory] ||
+      !editingState[selectedCategory]
+    ) {
+      return;
+    }
+    setLastMinuteDialogOpen(true);
+  };
+
+  const handleLastMinuteInputChange = (itemName: string, value: string) => {
+    setLastMinuteAdjustments((prev) => ({
       ...prev,
-      [category]: !prev[category],
+      [itemName]: value,
     }));
+  };
+
+  const handleApplyLastMinuteAdjustments = async () => {
+    const updates: { item_name: string; additional_qty: number }[] = [];
+    let invalid = false;
+
+    planData[selectedCategory].forEach((item) => {
+      if (invalid) return;
+      const raw = lastMinuteAdjustments[item.item_name];
+      if (!raw || raw.trim() === "") {
+        return;
+      }
+      const parsed = Number.parseFloat(raw);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        invalid = true;
+        return;
+      }
+      updates.push({
+        item_name: item.item_name,
+        additional_qty: Number(parsed.toFixed(2)),
+      });
+    });
+
+    if (invalid) {
+      setLastMinuteError("Additional quantities must be greater than zero.");
+      return;
+    }
+
+    if (!updates.length) {
+      setLastMinuteError("Enter a quantity greater than zero for at least one item.");
+      return;
+    }
+
+    setIsApplyingLastMinute(true);
+    setLastMinuteError(null);
+    try {
+      const response = await fetch("http://localhost:8000/api/production/update-planned", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: selectedDateISO,
+          menu_type: selectedCategory,
+          updates,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || "Failed to update planned quantities");
+      }
+
+      const data = await response.json();
+      const updatedItems = (data?.updated_items ?? []) as Array<{
+        item_name: string;
+        new_planned_qty: number;
+      }>;
+
+      if (!updatedItems.length) {
+        setLastMinuteError("No menu items were updated.");
+        return;
+      }
+
+      setPlanData((prev) => {
+        const nextState = { ...prev };
+        nextState[selectedCategory] = prev[selectedCategory].map((item) => {
+          const updated = updatedItems.find(
+            (entry) => entry.item_name.toLowerCase() === item.item_name.toLowerCase(),
+          );
+          if (!updated) return item;
+          const newPlanned = Number(updated.new_planned_qty);
+          const finalQuantity = Number((newPlanned + item.buffer_quantity).toFixed(2));
+          return {
+            ...item,
+            planned_quantity: Number(newPlanned.toFixed(2)),
+            final_quantity: finalQuantity,
+          };
+        });
+        return nextState;
+      });
+
+      setLastMinuteDialogOpen(false);
+      setLastMinuteAdjustments({});
+      setUnsavedChanges((prev) => ({ ...prev, [selectedCategory]: true }));
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to update planned quantities";
+      setLastMinuteError(message);
+    } finally {
+      setIsApplyingLastMinute(false);
+    }
+  };
+
+  const toggleCategoryEdit = (category: Category) => {
+    if (editingState[category]) {
+      if (unsavedChanges[category]) {
+        pendingExitCategoryRef.current = category;
+        setConfirmExitOpen(true);
+        return;
+      }
+      const baselineItems = editBaselines.current[category] ?? [];
+      setPlanData((prev) => ({
+        ...prev,
+        [category]: clonePlanItems(baselineItems),
+      }));
+      setUnsavedChanges((prev) => ({ ...prev, [category]: false }));
+      setLastMinuteDialogOpen(false);
+      setLastMinuteAdjustments({});
+      setLastMinuteError(null);
+      setEditingState((prev) => ({ ...prev, [category]: false }));
+      pendingExitCategoryRef.current = null;
+    } else {
+      editBaselines.current[category] = clonePlanItems(planData[category]);
+      setUnsavedChanges((prev) => ({ ...prev, [category]: false }));
+      setEditingState((prev) => ({ ...prev, [category]: true }));
+      pendingExitCategoryRef.current = null;
+    }
   };
 
   const handleExportCSV = () => {
@@ -808,15 +1015,17 @@ useEffect(() => {
         }),
       });
 
-      if (!response.ok) throw new Error("Failed to save production plan");
+    if (!response.ok) throw new Error("Failed to save production plan");
 
-      const data = await response.json();
-      console.log("✅ Production plan saved:", data);
+    const data = await response.json();
+    console.log("✅ Production plan saved:", data);
 
-      setLastSavedAt((prev) => ({ ...prev, [category]: Date.now() }));
-      setPlanGeneratedState((prev) => ({ ...prev, [category]: true }));
-      setEditingState((prev) => ({ ...prev, [category]: false }));
-    } catch (err) {
+    setLastSavedAt((prev) => ({ ...prev, [category]: Date.now() }));
+    setPlanGeneratedState((prev) => ({ ...prev, [category]: true }));
+    setUnsavedChanges((prev) => ({ ...prev, [category]: false }));
+    editBaselines.current[category] = clonePlanItems(planData[category]);
+    setEditingState((prev) => ({ ...prev, [category]: false }));
+  } catch (err) {
       console.error(err);
       alert("Error saving production plan");
     } finally {
@@ -831,10 +1040,17 @@ useEffect(() => {
   const lastSavedTimestamp = lastSavedAt[selectedCategory];
   const isCurrentCategoryEditable =
     !planGenerated || editingState[selectedCategory];
+  const categoryStatusLabel = planGenerated
+    ? editingState[selectedCategory]
+      ? `Plan generated · Editing${
+          unsavedChanges[selectedCategory] ? " (unsaved changes)" : ""
+        }`
+      : "Plan generated"
+    : "Plan pending";
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="rounded-lg border border-border bg-card/50 p-4 shadow-sm">
+      <div className="w-full rounded-lg border border-border bg-card/50 p-4 shadow-sm">
         <div className="space-y-2">
           <h2 className="text-xl font-semibold text-foreground">
             Kitchen Production Planning
@@ -903,8 +1119,20 @@ useEffect(() => {
                 />
                 <SummaryRow
                   label="Plan generated"
-                  value={summary.planGenerated ? "Yes" : "Not yet"}
-                  highlight={summary.planGenerated ? "info" : "muted"}
+                  value={
+                    summary.planGenerated
+                      ? summary.editing
+                        ? "Editing…"
+                        : "Yes"
+                      : "Not yet"
+                  }
+                  highlight={
+                    summary.planGenerated
+                      ? summary.editing
+                        ? "info"
+                        : "success"
+                      : "muted"
+                  }
                 />
               </CardContent>
             </Card>
@@ -913,14 +1141,14 @@ useEffect(() => {
       </div>
 
       <div className="space-y-3">
-        <div className="rounded-lg border border-border bg-transparent">
+        <div className="w-full rounded-lg border border-border bg-transparent">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
             <div className="flex flex-wrap items-center gap-3">
               <Badge variant="outline" className="px-4 py-1 text-base font-semibold">
                 {selectedCategory}
               </Badge>
               <span className="text-sm text-muted-foreground">
-                {currentItems.length} items · {planGenerated ? "Plan generated" : "Plan pending"}
+                {currentItems.length} items · {categoryStatusLabel}
               </span>
               {lastSavedTimestamp && (
                 <span className="text-xs text-muted-foreground">
@@ -944,6 +1172,16 @@ useEffect(() => {
                 <Button
                   variant="outline"
                   size="sm"
+                  onClick={handleOpenLastMinuteDialog}
+                  disabled={!isCurrentCategoryEditable}
+                >
+                  Adjust Planned Qty
+                </Button>
+              )}
+              {planGenerated && (
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => toggleCategoryEdit(selectedCategory)}
                 >
                   {editingState[selectedCategory] ? "Stop Editing" : "Edit"}
@@ -963,7 +1201,7 @@ useEffect(() => {
           {loadError ? (
             <div className="px-4 py-6 text-sm text-red-600">{loadError}</div>
           ) : currentItems.length === 0 ? (
-            <div className="px-4 py-6 text-sm text-muted-foreground">
+            <div className="w-full px-4 py-6 text-sm text-left text-muted-foreground">
               No menu published for {selectedCategory.toLowerCase()} on this date.
             </div>
           ) : (
@@ -976,7 +1214,7 @@ useEffect(() => {
                     handleBufferChange(selectedCategory, index, value)
                   }
                   readOnly={!isCurrentCategoryEditable}
-                  planGenerated={planGenerated}
+                  planGenerated={planGenerated && !editingState[selectedCategory]}
                 />
               ))}
             </div>
@@ -1031,6 +1269,113 @@ useEffect(() => {
         </DialogContent>
       </Dialog>
 
+      <AlertDialog open={confirmExitOpen} onOpenChange={setConfirmExitOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unsaved changes</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved edits for {pendingExitCategoryRef.current}. Save your
+              changes before leaving, or discard them to continue.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => {
+                pendingExitCategoryRef.current = null;
+              }}
+            >
+              Continue editing
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const pendingCategory = pendingExitCategoryRef.current;
+                if (!pendingCategory) return;
+                const baselineItems = editBaselines.current[pendingCategory] ?? [];
+                setPlanData((prev) => ({
+                  ...prev,
+                  [pendingCategory]: clonePlanItems(baselineItems),
+                }));
+                setUnsavedChanges((prev) => ({ ...prev, [pendingCategory]: false }));
+                setEditingState((prev) => ({ ...prev, [pendingCategory]: false }));
+                if (pendingCategory === selectedCategory) {
+                  setLastMinuteDialogOpen(false);
+                  setLastMinuteAdjustments({});
+                  setLastMinuteError(null);
+                }
+                pendingExitCategoryRef.current = null;
+              }}
+            >
+              Discard changes
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={lastMinuteDialogOpen} onOpenChange={setLastMinuteDialogOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>
+              Adjust Planned Quantities · {selectedCategory}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Increase planned quantities for items to cover last-minute orders. Buffer values remain unchanged.
+            </p>
+            {currentItems.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No items available for this category.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {currentItems.map((item) => (
+                  <div
+                    key={item.item_name}
+                    className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_150px] sm:items-center"
+                  >
+                    <div>
+                      <p className="font-medium text-foreground">{item.item_name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Planned: {formatQuantity(item.planned_quantity)} {item.unit}
+                      </p>
+                    </div>
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      step="0.1"
+                      min="0"
+                      placeholder="+ qty"
+                      value={lastMinuteAdjustments[item.item_name] ?? ""}
+                      onChange={(event) =>
+                        handleLastMinuteInputChange(item.item_name, event.target.value)
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+            {lastMinuteError && (
+              <p className="text-sm text-red-600">{lastMinuteError}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setLastMinuteDialogOpen(false)}
+              disabled={isApplyingLastMinute}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleApplyLastMinuteAdjustments}
+              disabled={isApplyingLastMinute || currentItems.length === 0}
+            >
+              {isApplyingLastMinute ? "Updating…" : "Apply Increases"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={planPreviewOpen} onOpenChange={setPlanPreviewOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -1054,7 +1399,13 @@ useEffect(() => {
                       </Badge>
                       <span className="text-muted-foreground">
                         {items.length} items ·{" "}
-                        {planGeneratedState[category] ? "Plan generated" : "Plan pending"}
+                        {planGeneratedState[category]
+                          ? editingState[category]
+                            ? `Plan generated · Editing${
+                                unsavedChanges[category] ? " (unsaved changes)" : ""
+                              }`
+                            : "Plan generated"
+                          : "Plan pending"}
                       </span>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -1063,7 +1414,9 @@ useEffect(() => {
                           key={`${item.item_name}-${index}-preview`}
                           item={item}
                           readOnly
-                          planGenerated={planGeneratedState[category]}
+                          planGenerated={
+                            planGeneratedState[category] && !editingState[category]
+                          }
                         />
                       ))}
                     </div>

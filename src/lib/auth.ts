@@ -5,6 +5,7 @@ export type Me = {
   customer_id: number;
   phone: string;
   role: 'admin' | 'manager';
+  name?: string | null;
 };
 
 export async function login(phone: string, adminPassword?: string) {

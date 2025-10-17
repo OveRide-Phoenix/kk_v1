@@ -93,9 +93,11 @@ def get_customer_by_id(db, customer_id):
             c.customer_id, c.referred_by, c.primary_mobile, c.alternative_mobile, 
             c.name, c.recipient_name, c.payment_frequency, c.email, c.created_at,
             a.address_id, a.house_apartment_no, a.written_address, a.city, 
-            a.pin_code, a.latitude, a.longitude, a.address_type, a.route_assignment
+            a.pin_code, a.latitude, a.longitude, a.address_type, a.route_assignment,
+            CASE WHEN au.admin_id IS NOT NULL THEN 1 ELSE 0 END AS is_admin
         FROM customers c
         INNER JOIN addresses a ON c.customer_id = a.customer_id
+        LEFT JOIN admin_users au ON au.customer_id = c.customer_id AND au.is_active = 1
         WHERE c.customer_id = %s AND a.is_default = 1
         """
         cursor.execute(query, (customer_id,))
@@ -116,9 +118,11 @@ def get_all_customers(db):
             c.customer_id, c.referred_by, c.primary_mobile, c.alternative_mobile, 
             c.name, c.recipient_name, c.payment_frequency, c.email, c.created_at,
             a.address_id, a.house_apartment_no, a.written_address, a.city, 
-            a.pin_code, a.latitude, a.longitude, a.address_type, a.route_assignment
+            a.pin_code, a.latitude, a.longitude, a.address_type, a.route_assignment,
+            CASE WHEN au.admin_id IS NOT NULL THEN 1 ELSE 0 END AS is_admin
         FROM customers c
         INNER JOIN addresses a ON c.customer_id = a.customer_id
+        LEFT JOIN admin_users au ON au.customer_id = c.customer_id AND au.is_active = 1
         WHERE a.is_default = 1
         ORDER BY c.created_at ASC
         """

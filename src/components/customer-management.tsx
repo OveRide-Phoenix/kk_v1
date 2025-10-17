@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Pencil, Trash2, Plus, Search, Eye, ChevronUp, MoreHorizontal } from "lucide-react"
+import { Pencil, Trash2, Plus, Search, Eye, ChevronUp, MoreHorizontal, Crown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -46,15 +46,21 @@ interface Customer {
   longitude: number
   address_type: string | null
   route_assignment: string | null
+  is_admin?: number | boolean
 }
 
 export default function CustomerManagement() {
   // Remove the destructuring
   const { toast } = useToast()
   const [open, setOpen] = useState(false)
+  const [dialogMode, setDialogMode] = useState<"create" | "edit">("create")
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
   const [viewCustomer, setViewCustomer] = useState<Customer | null>(null)
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
   const isMobile = useIsMobile()
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
+  const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
   
   // Initialize with empty array
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -136,50 +142,56 @@ export default function CustomerManagement() {
   }
 
   const handleEditCustomer = (customerId: number) => {
-    // TODO: Implement edit dialog
-    console.log('Edit customer:', customerId)
+    const customer = customers.find((c) => c.customer_id === customerId)
+    if (!customer) return
+    setEditingCustomer(customer)
+    setDialogMode("edit")
+    setOpen(true)
   }
 
-  const handleDeleteCustomer = async (customerId: number) => {
-    if (confirm('Are you sure you want to delete this customer?')) {
-      try {
-        const response = await fetch(`http://localhost:8000/delete-customer/${customerId}`, {
-          method: 'DELETE'
-        });
+  const requestDeleteCustomer = (customer: Customer) => {
+    setCustomerToDelete(customer)
+    setConfirmDeleteOpen(true)
+  }
 
-        const data = await response.json();
+  const handleDeleteCustomer = async () => {
+    if (!customerToDelete) return
+    setIsDeleting(true)
+    try {
+      const response = await fetch(`http://localhost:8000/delete-customer/${customerToDelete.customer_id}`, {
+        method: "DELETE",
+      })
 
-        if (!response.ok) {
-          if (data.detail && data.detail.includes('foreign key constraint fails (`kk_v1`.`orders`')) {
-            // Use toast directly
-            toast({
-              variant: "destructive",
-              description: "Cannot delete customer because they have orders linked to them",
-              duration: 3000,
-            });
-            return;
-          }
-          throw new Error(data.detail || 'Failed to delete customer');
+      const data = await response.json()
+
+      if (!response.ok) {
+        if (data.detail && data.detail.includes("foreign key constraint fails (`kk_v1`.`orders`")) {
+          toast({
+            variant: "destructive",
+            description: "Cannot delete customer because they have orders linked to them",
+            duration: 3000,
+          })
+          return
         }
-        
-        // Use toast directly
-        toast({
-          description: "Customer deleted successfully",
-          duration: 3000,
-        });
-
-        setTimeout(() => {
-          window.location.reload();
-        }, 3000);
-
-      } catch (error: any) {
-        // Use toast directly
-        toast({
-          variant: "destructive",
-          description: error.message || "An unexpected error occurred",
-          duration: 3000,
-        });
+        throw new Error(data.detail || "Failed to delete customer")
       }
+
+      toast({
+        description: "Customer deleted successfully",
+        duration: 3000,
+      })
+
+      await refreshCustomers()
+      setConfirmDeleteOpen(false)
+      setCustomerToDelete(null)
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        description: error.message || "Failed to delete customer",
+        duration: 3000,
+      })
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -191,20 +203,61 @@ export default function CustomerManagement() {
           <CardHeader className="pb-2">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <CardTitle className="text-xl font-semibold">All Customers</CardTitle>
-              <Dialog open={open} onOpenChange={setOpen}>
+              <Dialog
+                open={open}
+                onOpenChange={(value) => {
+                  setOpen(value)
+                  if (!value) {
+                    setDialogMode("create")
+                    setEditingCustomer(null)
+                  }
+                }}
+              >
                 <DialogTrigger asChild>
-                  <Button>
+                  <Button
+                    onClick={() => {
+                      setDialogMode("create")
+                      setEditingCustomer(null)
+                    }}
+                  >
                     <Plus className="mr-2 h-4 w-4" />
                     Add New Customer
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[900px]">
                   <DialogHeader>
-                    <DialogTitle>Add New Customer</DialogTitle>
-                    <DialogDescription>Enter the details of the new customer below.</DialogDescription>
+                    <DialogTitle>
+                      {dialogMode === "edit" ? "Edit Customer" : "Add New Customer"}
+                    </DialogTitle>
+                    <DialogDescription>
+                      {dialogMode === "edit"
+                        ? "Update the details of the customer below."
+                        : "Enter the details of the new customer below."}
+                    </DialogDescription>
                   </DialogHeader>
                   <CustomerForm 
-                    customer={null} 
+                    customer={
+                      editingCustomer
+                        ? {
+                            customer_id: editingCustomer.customer_id,
+                            name: editingCustomer.name,
+                            referredBy: editingCustomer.referred_by,
+                            primaryMobile: editingCustomer.primary_mobile,
+                            alternativeMobile: editingCustomer.alternative_mobile ?? "",
+                            email: editingCustomer.email ?? "",
+                            recipientName: editingCustomer.recipient_name,
+                            paymentFrequency: editingCustomer.payment_frequency ?? "Daily",
+                            addressType: editingCustomer.address_type ?? "Home",
+                            houseApartmentNo: editingCustomer.house_apartment_no ?? "",
+                            writtenAddress: editingCustomer.written_address,
+                            city: editingCustomer.city,
+                            pinCode: editingCustomer.pin_code,
+                            latitude: editingCustomer.latitude,
+                            longitude: editingCustomer.longitude,
+                            routeAssignment: editingCustomer.route_assignment ?? "",
+                          }
+                        : null
+                    }
                     onSave={async (customerData) => {
                       try {
                         const formattedData = {
@@ -225,29 +278,53 @@ export default function CustomerManagement() {
                           route_assignment: customerData.routeAssignment || null,
                           is_default: true
                         };
-                        
-                        const response = await fetch('http://localhost:8000/api/register', {
-                          method: 'POST',
-                          headers: {
-                            'Content-Type': 'application/json',
-                          },
-                          body: JSON.stringify(formattedData),
-                        });
-                        
-                        const responseData = await response.json();
-                        
-                        if (!response.ok) {
-                          throw new Error(responseData.detail || 'Failed to add customer');
+                        let response: Response
+                        let responseData: any
+
+                        if (dialogMode === "edit" && editingCustomer) {
+                          response = await fetch(
+                            `http://localhost:8000/update-customer/${editingCustomer.customer_id}`,
+                            {
+                              method: "PUT",
+                              headers: {
+                                "Content-Type": "application/json",
+                              },
+                              body: JSON.stringify(formattedData),
+                            }
+                          )
+                          responseData = await response.json()
+                        } else {
+                          response = await fetch("http://localhost:8000/api/register", {
+                            method: "POST",
+                            headers: {
+                              "Content-Type": "application/json",
+                            },
+                            body: JSON.stringify(formattedData),
+                          })
+                          responseData = await response.json()
                         }
-                        
+
+                        if (!response.ok) {
+                          throw new Error(
+                            responseData.detail ||
+                              (dialogMode === "edit"
+                                ? "Failed to update customer"
+                                : "Failed to add customer"),
+                          );
+                        }
                         // Close dialog first
                         setOpen(false);
+                        setDialogMode("create")
+                        setEditingCustomer(null)
                         // Refresh customers
                         await refreshCustomers();
                         
                         // Show success toast - this is where we call it
                         toast({
-                          description: "Customer added successfully",
+                          description:
+                            dialogMode === "edit"
+                              ? "Customer updated successfully"
+                              : "Customer added successfully",
                         });
                         
                         return { success: true, data: responseData };
@@ -255,15 +332,27 @@ export default function CustomerManagement() {
                         // Show error toast
                         toast({
                           variant: "destructive",
-                          description: error.message || 'Failed to add customer',
+                          description:
+                            error.message ||
+                            (dialogMode === "edit"
+                              ? "Failed to update customer"
+                              : "Failed to add customer"),
                         });
                         return {
                           success: false,
-                          message: error.message || 'Failed to add customer'
+                          message:
+                            error.message ||
+                            (dialogMode === "edit"
+                              ? "Failed to update customer"
+                              : "Failed to add customer"),
                         };
                       }
                     }}
-                    onCancel={() => setOpen(false)} 
+                    onCancel={() => {
+                      setOpen(false)
+                      setDialogMode("create")
+                      setEditingCustomer(null)
+                    }}
                   />
                 </DialogContent>
               </Dialog>
@@ -369,7 +458,7 @@ export default function CustomerManagement() {
                                         <Pencil className="h-4 w-4 mr-2" />
                                         Edit
                                       </DropdownMenuItem>
-                                      <DropdownMenuItem onClick={() => handleDeleteCustomer(customer.customer_id)}>
+                                      <DropdownMenuItem onClick={() => requestDeleteCustomer(customer)}>
                                         <Trash2 className="h-4 w-4 mr-2 text-destructive" />
                                         Delete
                                       </DropdownMenuItem>
@@ -383,10 +472,10 @@ export default function CustomerManagement() {
                                     <Button variant="ghost" size="sm" onClick={() => handleEditCustomer(customer.customer_id)}>
                                       <Pencil className="h-4 w-4" />
                                     </Button>
-                                    <Button 
-                                      variant="ghost" 
-                                      size="sm" 
-                                      onClick={() => handleDeleteCustomer(customer.customer_id)}
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => requestDeleteCustomer(customer)}
                                       className="text-destructive"
                                     >
                                       <Trash2 className="h-4 w-4" />
@@ -404,9 +493,18 @@ export default function CustomerManagement() {
                             )
                           }
                           if (column.key === "name") {
+                            const isAdmin = Boolean(customer.is_admin)
                             return (
                               <TableCell key={column.key} className={`${isMobile ? 'text-xs' : ''}`}>
-                                <span className="font-medium">{customer.name}</span>
+                                <span className="inline-flex items-center gap-1 font-medium">
+                                  {customer.name}
+                                  {isAdmin && (
+                                    <Crown
+                                      className="h-4 w-4 text-amber-500"
+                                      aria-label="Admin user"
+                                    />
+                                  )}
+                                </span>
                               </TableCell>
                             )
                           }
@@ -487,7 +585,46 @@ export default function CustomerManagement() {
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={confirmDeleteOpen}
+        onOpenChange={(open) => {
+          if (!open && !isDeleting) {
+            setCustomerToDelete(null)
+          }
+          setConfirmDeleteOpen(open)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete customer</AlertDialogTitle>
+            <AlertDialogDescription>
+              {customerToDelete
+                ? `Are you sure you want to remove ${customerToDelete.name}? This action cannot be undone.`
+                : "Are you sure you want to delete this customer? This action cannot be undone."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => {
+                if (!isDeleting) {
+                  setCustomerToDelete(null)
+                }
+              }}
+              disabled={isDeleting}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteCustomer}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AdminLayout>
   )
 }
-

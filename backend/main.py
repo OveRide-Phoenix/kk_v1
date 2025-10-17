@@ -300,6 +300,7 @@ def login(data: LoginRequest, response: Response):
         cursor.execute("""
             SELECT
                 c.customer_id,
+                c.name AS customer_name,
                 c.primary_mobile AS phone_number,
                 au.admin_id,
                 au.password_hash,
@@ -335,6 +336,7 @@ def login(data: LoginRequest, response: Response):
                 "customer_id": result["customer_id"],
                 "phone": result["phone_number"],
                 "role": result["role"],
+                "name": result.get("customer_name"),
             }
             access  = create_access_token(user_payload)
             refresh = create_refresh_token(user_payload, str(uuid.uuid4()))
@@ -873,6 +875,15 @@ class ProductionPlanRequest(BaseModel):
     menu_type: str
     plans: List[ProductionPlanItem]
 
+class PlannedQtyUpdate(BaseModel):
+    item_name: str
+    additional_qty: float = Field(..., gt=0)
+
+class UpdatePlannedRequest(BaseModel):
+    date: str
+    menu_type: str
+    updates: List[PlannedQtyUpdate]
+
 @app.post("/api/production/generate", tags=["Production"])
 def generate_production_plan(payload: ProductionPlanRequest):
     db = get_db()
@@ -901,6 +912,8 @@ def generate_production_plan(payload: ProductionPlanRequest):
 
         # Update buffer and final quantities for each menu item
         for plan in payload.plans:
+            buffer_value = int(round(plan.buffer_quantity))
+            final_value = float(plan.final_quantity)
             cursor.execute(
                 """
                 UPDATE menu_items mi
@@ -910,7 +923,7 @@ def generate_production_plan(payload: ProductionPlanRequest):
                 WHERE mi.menu_id = %s
                 AND LOWER(i.name) = LOWER(%s)
                 """,
-                (plan.buffer_quantity, plan.final_quantity, menu_id, plan.item_name)
+                (buffer_value, final_value, menu_id, plan.item_name)
             )
             updated += cursor.rowcount
 
@@ -934,6 +947,84 @@ def generate_production_plan(payload: ProductionPlanRequest):
         cursor.close()
         db.close()
 
+@app.patch("/api/production/update-planned", tags=["Production"])
+def update_planned_quantities(payload: UpdatePlannedRequest):
+    if not payload.updates:
+        raise HTTPException(status_code=400, detail="No updates provided")
+
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    updated_items: List[Dict[str, float]] = []
+
+    try:
+        cursor.execute(
+            "SELECT bld_id FROM bld WHERE LOWER(bld_type)=LOWER(%s) LIMIT 1",
+            (payload.menu_type,),
+        )
+        bld_row = cursor.fetchone()
+        if not bld_row:
+            raise HTTPException(status_code=404, detail="Invalid menu_type")
+        bld_id = bld_row["bld_id"]
+
+        cursor.execute(
+            "SELECT menu_id FROM menu WHERE date=%s AND bld_id=%s LIMIT 1",
+            (payload.date, bld_id),
+        )
+        menu_row = cursor.fetchone()
+        if not menu_row:
+            raise HTTPException(status_code=404, detail="Menu not found for that date/type")
+        menu_id = menu_row["menu_id"]
+
+        for adjustment in payload.updates:
+            cursor.execute(
+                """
+                UPDATE menu_items mi
+                JOIN items i ON mi.item_id = i.item_id
+                   SET mi.planned_qty = mi.planned_qty + %s
+                 WHERE mi.menu_id = %s
+                   AND LOWER(i.name) = LOWER(%s)
+                """,
+                (adjustment.additional_qty, menu_id, adjustment.item_name),
+            )
+            if cursor.rowcount == 0:
+                continue
+
+            cursor.execute(
+                """
+                SELECT mi.planned_qty
+                  FROM menu_items mi
+                  JOIN items i ON mi.item_id = i.item_id
+                 WHERE mi.menu_id = %s
+                   AND LOWER(i.name) = LOWER(%s)
+                 LIMIT 1
+                """,
+                (menu_id, adjustment.item_name),
+            )
+            planned_row = cursor.fetchone()
+            if planned_row:
+                updated_items.append(
+                    {
+                        "item_name": adjustment.item_name,
+                        "new_planned_qty": float(planned_row["planned_qty"]),
+                    }
+                )
+
+        if not updated_items:
+            raise HTTPException(status_code=404, detail="No matching menu items were updated")
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": "Planned quantities updated successfully",
+            "updated_items": updated_items,
+        }
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
 
 @app.get("/api/production/status", tags=["Production"])
 def get_production_plan_status(date: str):

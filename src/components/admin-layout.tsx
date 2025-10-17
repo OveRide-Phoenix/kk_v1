@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Bell, User, ChevronDown, Menu } from "lucide-react"
@@ -13,7 +14,18 @@ interface AdminLayoutProps {
 }
 
 export function AdminLayout({ children, activePage }: AdminLayoutProps) {
-  const { logout } = useAuthStore()
+  const logout = useAuthStore((state) => state.logout)
+  const user = useAuthStore((state) => state.user)
+  const displayName =
+    (typeof user?.name === "string" && user.name.trim().length > 0
+      ? user.name.trim()
+      : undefined) ?? "Admin"
+  const router = useRouter()
+
+  const handleLogout = () => {
+    logout()
+    router.push("/login")
+  }
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   
@@ -43,12 +55,14 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
         return "Product Management"
       case "customermgmt":
         return "Customer Management"
-      case "menu":
+      case "dailymenusetup":
         return "Daily Menu Setup"
       case "production":
         return "Kitchen Production Planning"
       case "reports":
         return "Reports & Analytics"
+      case "ordertest":
+        return "Developer · Order Test"
       default:
         return "Dashboard"
     }
@@ -90,14 +104,14 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
                     <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
                       <User className="h-5 w-5" />
                     </div>
-                    <span className="hidden md:inline-block">Admin User</span>
+                    <span className="hidden md:inline-block">{displayName}</span>
                     <ChevronDown className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuLabel>My Account</DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={logout}>Logout</DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleLogout}>Logout</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </nav>
