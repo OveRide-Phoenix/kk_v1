@@ -42,7 +42,7 @@ const MEAL_LABELS: Record<MealType, string> = {
   condiments: "Condiments",
 }
 
-const PLACEHOLDER_IMAGE = "/images/menu/placeholder.jpg"
+const PLACEHOLDER_IMAGE = "/images/menu/idli-sambar.jpg"
 
 const currency = (value: number) =>
   new Intl.NumberFormat("en-IN", {

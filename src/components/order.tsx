@@ -359,18 +359,12 @@ export default function CustomerDailyMenu({
                           ].join(" ")}
                         >
                           {/* Left thumbnail */}
-                          {it.picture_url ? (
-                            <img
-                              src={it.picture_url}
-                              alt={it.item_name}
-                              className="h-16 w-16 rounded-lg object-cover flex-shrink-0"
-                              loading="lazy"
-                            />
-                          ) : (
-                            <div className="h-16 w-16 rounded-lg bg-muted grid place-items-center text-muted-foreground text-sm flex-shrink-0">
-                              {it.item_name?.charAt(0) ?? "🍽"}
-                            </div>
-                          )}
+            <img
+              src={it.picture_url || "/images/menu/idli-sambar.jpg"}
+              alt={it.item_name}
+              className="h-16 w-16 rounded-lg object-cover flex-shrink-0"
+              loading="lazy"
+            />
 
                           {/* Middle info */}
                           <div className="min-w-0 flex-1 self-start">

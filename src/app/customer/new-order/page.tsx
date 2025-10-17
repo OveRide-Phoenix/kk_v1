@@ -86,7 +86,7 @@ type AddressEntry = {
 
 const MEALS: MealType[] = ["breakfast", "lunch", "dinner", "condiments"]
 
-const PLACEHOLDER_IMAGE = "/images/menu/placeholder.jpg"
+const PLACEHOLDER_IMAGE = "/images/menu/idli-sambar.jpg"
 
 export default function NewOrderPage() {
   const router = useRouter()
