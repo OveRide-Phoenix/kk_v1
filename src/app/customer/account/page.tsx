@@ -181,7 +181,6 @@ export default function AccountPage() {
       <main className="container mx-auto px-4 pt-24">
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <p className="text-sm uppercase tracking-wide text-[#8d6e63]">Account</p>
             <h1 className="text-3xl font-serif font-semibold text-[#463028]">Profile overview</h1>
             <p className="text-xs text-[#8d6e63]">
               Member since {profile.created_at ? formatDate(new Date(profile.created_at), "PPP") : "recently"}
