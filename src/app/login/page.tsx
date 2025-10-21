@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,7 +33,7 @@ export default function LoginPage() {
 
   // When phone number changes, fetch city and is_admin flag when 10 digits are present.
   const handlePhoneChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    let value = e.target.value;
+    const value = e.target.value;
 
     // Remove all non-digit characters including +91
     const digitsOnly = value.replace(/\D/g, "");
@@ -82,11 +83,10 @@ export default function LoginPage() {
           setShowRegisterHighlight(true);
         }
       } catch {
-        setErrorMessage("Error fetching city data.");
+        setErrorMessage("Unable to reach the server. Please ensure the backend is running.");
         setCity("");
         setAdmin(false);
         setCanLoginAsAdmin(false);
-        setShowAdminFields(false);
         setShowRegisterHighlight(false);
       } finally {
         setIsLoading(false);
@@ -189,14 +189,14 @@ export default function LoginPage() {
           <div className="flex h-16 items-center justify-between">
             <div className="flex items-center space-x-2">
               <Coffee className="h-6 w-6 text-primary" />
-              <a href="/" className="text-xl font-bold text-cream">
+              <Link href="/" className="text-xl font-bold text-cream">
                 Kuteera Kitchen
-              </a>
+              </Link>
             </div>
             <nav className="hidden md:flex items-center space-x-8">
-              <a href="/" className="text-sm font-medium hover:text-primary">
+              <Link href="/" className="text-sm font-medium hover:text-primary">
                 Home
-              </a>
+              </Link>
               <a
                 href="/menu"
                 className="text-sm font-medium hover:text-primary"

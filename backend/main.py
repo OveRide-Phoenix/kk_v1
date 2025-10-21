@@ -9,6 +9,7 @@ from typing import List, Dict, Optional, Tuple
 from fastapi.middleware.cors import CORSMiddleware
 import csv
 import io
+from .routers import admin_logs
 from .customer.customer_crud import (
     create_customer,
     get_customer_by_id,
@@ -22,6 +23,7 @@ import os, time, uuid, jwt, bcrypt
 from fastapi import Response, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import os
+from .utils.logger import log_admin_action
 
 app = FastAPI()
 
@@ -36,6 +38,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(admin_logs.router)
 
 # Database connection function
 def get_db():
@@ -811,6 +815,15 @@ def upsert_daily_menu(payload: DailyMenuPayload):
             )
 
         db.commit()
+        action = "ADD" if existing is None else "UPDATE"
+        log_admin_action(
+            db,
+            admin_id=1,
+            action_type=action,
+            entity_type="ITEM",
+            entity_id=menu_id,
+            description=f"Upserted menu for {payload.date} ({payload.bld_type}) with {len(payload.items)} items",
+        )
         return get_daily_menu(date=payload.date, bld_type=payload.bld_type, period_type=payload.period_type)
     except mysql.connector.Error as err:
         db.rollback()
@@ -835,6 +848,14 @@ def release_menu(menu_id: int):
         update_query = "UPDATE menu SET is_released = 1 WHERE menu_id = %s"
         cursor.execute(update_query, (menu_id,))
         db.commit()
+        log_admin_action(
+            db,
+            admin_id=1,
+            action_type="UPDATE",
+            entity_type="ITEM",
+            entity_id=menu_id,
+            description="Menu released",
+        )
         return {"status": "released", "menu_id": menu_id}
     except mysql.connector.Error as err:
         db.rollback()
@@ -858,6 +879,14 @@ def unrelease_menu(menu_id: int):
         update_query = "UPDATE menu SET is_released = 0 WHERE menu_id = %s"
         cursor.execute(update_query, (menu_id,))
         db.commit()
+        log_admin_action(
+            db,
+            admin_id=1,
+            action_type="UPDATE",
+            entity_type="ITEM",
+            entity_id=menu_id,
+            description="Menu unreleased",
+        )
         return {"status": "unreleased", "menu_id": menu_id}
     except mysql.connector.Error as err:
         db.rollback()
@@ -1701,6 +1730,15 @@ def generate_production_plan(payload: ProductionPlanRequest):
         )
         db.commit()
 
+        log_admin_action(
+            db,
+            admin_id=None,
+            action_type="UPDATE",
+            entity_type="ITEM",
+            entity_id=menu_id,
+            description=f"Generated production plan for {payload.date} ({payload.menu_type})",
+        )
+
         return {
             "success": True,
             "updated_items": updated,
@@ -1780,6 +1818,15 @@ def update_planned_quantities(payload: UpdatePlannedRequest):
             raise HTTPException(status_code=404, detail="No matching menu items were updated")
 
         db.commit()
+
+        log_admin_action(
+            db,
+            admin_id=None,
+            action_type="UPDATE",
+            entity_type="ITEM",
+            entity_id=menu_id,
+            description=f"Adjusted planned quantities for {payload.date} ({payload.menu_type})",
+        )
 
         return {
             "success": True,
