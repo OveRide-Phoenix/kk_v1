@@ -258,6 +258,7 @@ const buildInvoiceHtml = (invoice: InvoiceResponse) => {
 const normalizePaymentMethod = (method: string) => {
   const normalized = method.trim().toLowerCase();
   if (!normalized) return "Unknown";
+  if (normalized === "upi") return "UPI";
   return normalized.replace(/(^|\s)\S/g, (char) => char.toUpperCase());
 };
 
