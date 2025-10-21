@@ -9,7 +9,7 @@ from typing import List, Dict, Optional, Tuple
 from fastapi.middleware.cors import CORSMiddleware
 import csv
 import io
-from .routers import admin_logs
+from .routers import admin_logs, reports
 from .customer.customer_crud import (
     create_customer,
     get_customer_by_id,
@@ -24,6 +24,9 @@ from fastapi import Response, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import os
 from .utils.logger import log_admin_action
+
+class OrderStatusUpdate(BaseModel):
+    status: str = Field(..., min_length=1, max_length=50)
 
 app = FastAPI()
 
@@ -40,6 +43,7 @@ app.add_middleware(
 )
 
 app.include_router(admin_logs.router)
+app.include_router(reports.router)
 
 # Database connection function
 def get_db():
@@ -1002,7 +1006,7 @@ def get_dashboard_metrics():
         checklist = [
             {
                 "key": "daily_menu",
-                "label": "Daily Menu Setup",
+                "label": "Daily Menu Creation",
                 "completed": daily_menu_completed,
                 "status": daily_menu_status,
                 "detail": f"{menu_count}/{total_blds} menus ready" if total_blds else None,
@@ -1127,7 +1131,7 @@ def admin_order_history(
     status: Optional[str] = None,
     customer: Optional[str] = None,
     product: Optional[str] = None,
-    limit: int = Query(25, ge=1, le=200),
+    limit: int = Query(10, ge=1, le=200),
     offset: int = Query(0, ge=0),
     export: Optional[str] = None,
 ):
@@ -1317,6 +1321,31 @@ def admin_order_history(
             )
 
         return {"orders": result, "total": total_orders}
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.post("/api/admin/orders/{order_id}/status")
+def admin_update_order_status(order_id: int, payload: OrderStatusUpdate):
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        new_status = payload.status.strip()
+        cursor.execute(
+            "UPDATE orders SET status = %s WHERE order_id = %s",
+            (new_status, order_id),
+        )
+        if cursor.rowcount == 0:
+            db.rollback()
+            raise HTTPException(status_code=404, detail="Order not found")
+        db.commit()
+        return {"order_id": order_id, "status": new_status}
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(
+            status_code=500, detail=f"Failed to update order status: {err.msg}"
+        )
     finally:
         cursor.close()
         db.close()

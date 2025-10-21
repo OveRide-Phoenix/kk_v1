@@ -22,6 +22,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Dialog,
   DialogContent,
   DialogFooter,
@@ -60,6 +67,8 @@ import {
   CreditCard,
   Wallet,
   CalendarIcon,
+  MoreHorizontal,
+  Check,
 } from "lucide-react";
 import { http } from "@/lib/http";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -137,7 +146,7 @@ type Filters = {
   productQuery: string;
 };
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 10;
 
 const statusOptions = [
   { label: "All", value: "all" },
@@ -286,6 +295,7 @@ export default function OrderHistoryPage() {
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [totalOrders, setTotalOrders] = useState(0);
   const [page, setPage] = useState(0);
+  const [updatingOrderId, setUpdatingOrderId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [initialLoad, setInitialLoad] = useState(true);
   const [isFetching, setIsFetching] = useState(false);
@@ -317,6 +327,8 @@ export default function OrderHistoryPage() {
     }
     return params.toString();
   }, [filters, page]);
+
+  const statusUpdateOptions = statusOptions.filter((option) => option.value !== "all");
 
   const fetchOrders = useCallback(async () => {
     setError(null);
@@ -389,6 +401,45 @@ export default function OrderHistoryPage() {
       console.error(err);
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handleStatusUpdate = async (orderId: number, nextStatus: string) => {
+    const trimmedStatus = nextStatus.trim();
+    if (!trimmedStatus) return;
+
+    const targetOrder = orders.find((order) => order.order_id === orderId);
+    if (targetOrder && targetOrder.status.toLowerCase() === trimmedStatus.toLowerCase()) {
+      return;
+    }
+
+    setUpdatingOrderId(orderId);
+    try {
+      const res = await http.post(`/api/admin/orders/${orderId}/status`, {
+        status: trimmedStatus,
+      });
+      if (!res.ok) {
+        const message =
+          res.status === 404
+            ? "Order not found. It may have been removed."
+            : "Failed to update order status.";
+        throw new Error(message);
+      }
+      const body = (await res.json()) as { order_id: number; status: string };
+      const updatedStatus = body.status ?? trimmedStatus;
+      setOrders((prev) =>
+        prev.map((order) =>
+          order.order_id === orderId ? { ...order, status: updatedStatus } : order,
+        ),
+      );
+      setSelectedOrder((prev) =>
+        prev && prev.order_id === orderId ? { ...prev, status: updatedStatus } : prev,
+      );
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unexpected error updating status.");
+    } finally {
+      setUpdatingOrderId(null);
     }
   };
 
@@ -644,14 +695,51 @@ export default function OrderHistoryPage() {
                           {formatCurrency(order.total_price)}
                         </TableCell>
                         <TableCell className="text-center">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleViewOrder(order)}
-                            aria-label={`View order ${formatOrderId(order.order_id)}`}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center justify-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleViewOrder(order)}
+                              aria-label={`View order ${formatOrderId(order.order_id)}`}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  aria-label={`Update status for ${formatOrderId(order.order_id)}`}
+                                  disabled={updatingOrderId === order.order_id}
+                                >
+                                  {updatingOrderId === order.order_id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-48">
+                                <DropdownMenuLabel>Update status</DropdownMenuLabel>
+                                {statusUpdateOptions.map((option) => {
+                                  const isActive =
+                                    order.status.toLowerCase() === option.label.toLowerCase();
+                                  return (
+                                    <DropdownMenuItem
+                                      key={option.value}
+                                      disabled={isActive || updatingOrderId === order.order_id}
+                                      onClick={() => handleStatusUpdate(order.order_id, option.label)}
+                                    >
+                                      <span className="flex w-full items-center justify-between">
+                                        {option.label}
+                                        {isActive && <Check className="h-3.5 w-3.5" />}
+                                      </span>
+                                    </DropdownMenuItem>
+                                  );
+                                })}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
