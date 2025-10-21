@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { http } from "@/lib/http";
 
 type Category = ProductionItem["category"];
 
@@ -526,13 +527,14 @@ async function fetchPublishedMenu(
 
   await Promise.all(
     categories.map(async (category) => {
-      const url = new URL("http://localhost:8000/api/menu");
-      url.searchParams.set("date", date);
-      url.searchParams.set("bld_type", category.toLowerCase());
-      url.searchParams.set("period_type", "one_day");
+      const params = new URLSearchParams({
+        date,
+        bld_type: category.toLowerCase(),
+        period_type: "one_day",
+      });
 
       try {
-        const response = await fetch(url.toString());
+        const response = await http.get(`/api/menu?${params.toString()}`);
 
         // ✅ If menu doesn't exist, explicitly set false
         if (response.status === 404) {
@@ -580,10 +582,13 @@ async function fetchPublishedMenu(
           const plannedQuantity = Number(plannedQtyRaw) || 0;
           const availableQuantity = Math.max(Number(availableQtyRaw) || 0, 0);
           const bufferQuantity = Math.max(Math.round(Number(bufferQtyRaw) || 0), 0);
-          const finalQuantity =
-            finalQtyRaw != null
-              ? Number(finalQtyRaw) || 0
-              : plannedQuantity + bufferQuantity;
+          const parsedFinalQty =
+            finalQtyRaw != null ? Number(finalQtyRaw) : Number.NaN;
+          const hasMeaningfulFinalQty =
+            Number.isFinite(parsedFinalQty) && parsedFinalQty > 0;
+          const finalQuantity = hasMeaningfulFinalQty
+            ? parsedFinalQty
+            : plannedQuantity + bufferQuantity;
           const unit =
             item.uom ??
             item.unit ??
@@ -626,13 +631,23 @@ async function fetchPublishedMenu(
 async function fetchSubscriptionReplacements(): Promise<
   SubscriptionReplacement[]
 > {
-  const response = await fetch("/api/subscriptions/replacements");
-  if (!response.ok) {
-    console.warn("Subscription replacements unavailable, continuing without them");
+  try {
+    const response = await http.get("/api/subscriptions/replacements");
+    if (!response.ok) {
+      console.warn(
+        "Subscription replacements unavailable, continuing without them",
+      );
+      return [];
+    }
+    const data = (await response.json()) as SubscriptionReplacement[];
+    return data;
+  } catch (error) {
+    console.warn(
+      "Failed to load subscription replacements, continuing without them",
+      error,
+    );
     return [];
   }
-  const data = (await response.json()) as SubscriptionReplacement[];
-  return data;
 }
 
 

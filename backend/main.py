@@ -1,4 +1,5 @@
 from calendar import month
+from datetime import date, datetime
 import mysql.connector
 from mysql.connector import errorcode
 from fastapi import FastAPI, HTTPException, Query, Depends
@@ -6,6 +7,8 @@ from pydantic import BaseModel, Field
 from decimal import Decimal
 from typing import List, Dict, Optional, Tuple
 from fastapi.middleware.cors import CORSMiddleware
+import csv
+import io
 from .customer.customer_crud import (
     create_customer,
     get_customer_by_id,
@@ -42,6 +45,24 @@ def get_db():
         password="password",
         database="kk_v1"
     )
+
+
+def _format_datetime(dt: Optional[datetime]) -> Optional[str]:
+    if dt is None:
+        return None
+    return dt.isoformat()
+
+
+def _parse_optional_date(value: Optional[str]) -> Optional[date]:
+    if value is None:
+        return None
+    stripped = value.strip()
+    if not stripped:
+        return None
+    try:
+        return datetime.strptime(stripped, "%Y-%m-%d").date()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.") from exc
 
 from .config import (
     SECRET_KEY, ALGORITHM,
@@ -848,33 +869,524 @@ def unrelease_menu(menu_id: int):
 @app.get("/api/dashboard/metrics")
 def get_dashboard_metrics():
     db = get_db()
+    cursor = db.cursor(dictionary=True)
     try:
+        today = date.today()
+        today_str = today.isoformat()
+
         total_customers = get_customer_count(db)
-        total_orders = 128
+
+        cursor.execute("SELECT COUNT(*) AS total_orders FROM orders")
+        total_orders_record = cursor.fetchone() or {"total_orders": 0}
+        total_orders = int(total_orders_record.get("total_orders") or 0)
+
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS pending_orders
+              FROM orders
+             WHERE LOWER(COALESCE(status, '')) IN ('pending', 'in progress', 'processing')
+            """
+        )
+        pending_record = cursor.fetchone() or {"pending_orders": 0}
+        pending_orders = int(pending_record.get("pending_orders") or 0)
+        completed_orders = max(total_orders - pending_orders, 0)
+
+        cursor.execute("SELECT COUNT(*) AS total_blds FROM bld")
+        bld_record = cursor.fetchone() or {"total_blds": 0}
+        total_blds = int(bld_record.get("total_blds") or 0)
+
+        cursor.execute(
+            """
+            SELECT 
+                COUNT(*) AS menu_count,
+                SUM(CASE WHEN m.is_released = 1 THEN 1 ELSE 0 END) AS released_count,
+                SUM(CASE WHEN m.is_production_generated = 1 THEN 1 ELSE 0 END) AS production_count
+            FROM menu m
+            WHERE m.date = %s
+            """,
+            (today_str,),
+        )
+        menu_stats = cursor.fetchone() or {
+            "menu_count": 0,
+            "released_count": 0,
+            "production_count": 0,
+        }
+        menu_count = int(menu_stats.get("menu_count") or 0)
+        released_count = int(menu_stats.get("released_count") or 0)
+        production_count = int(menu_stats.get("production_count") or 0)
+
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS menu_items_count
+              FROM menu_items mi
+              JOIN menu m ON mi.menu_id = m.menu_id
+             WHERE m.date = %s
+            """,
+            (today_str,),
+        )
+        menu_items_record = cursor.fetchone() or {"menu_items_count": 0}
+        menu_items_count = int(menu_items_record.get("menu_items_count") or 0)
+
+        cursor.execute(
+            """
+            SELECT 
+                COUNT(*) AS total_today,
+                SUM(CASE WHEN LOWER(COALESCE(status, '')) IN ('delivered', 'completed') THEN 1 ELSE 0 END) AS delivered_today,
+                SUM(CASE WHEN LOWER(COALESCE(status, '')) IN ('pending', 'in progress', 'processing') THEN 1 ELSE 0 END) AS pending_today
+            FROM orders
+            WHERE DATE(created_at) = %s
+            """,
+            (today_str,),
+        )
+        daily_orders_record = cursor.fetchone() or {
+            "total_today": 0,
+            "delivered_today": 0,
+            "pending_today": 0,
+        }
+        daily_orders_total = int(daily_orders_record.get("total_today") or 0)
+        daily_orders_pending = int(daily_orders_record.get("pending_today") or 0)
+        daily_orders_delivered = int(daily_orders_record.get("delivered_today") or 0)
+
+        daily_menu_completed = (
+            total_blds > 0 and menu_count >= total_blds and menu_items_count > 0
+        )
+        release_completed = total_blds > 0 and released_count >= total_blds
+        production_completed = total_blds > 0 and production_count >= total_blds
+        deliveries_completed = (
+            daily_orders_total > 0 and daily_orders_pending == 0
+        )
+
+        deliveries_status = "Done" if deliveries_completed else (
+            "In Progress" if daily_orders_delivered > 0 else "Pending"
+        )
+
+        daily_menu_status = "Done" if daily_menu_completed else (
+            "In Progress" if total_blds > 0 and menu_count > 0 else "Pending"
+        )
+        menu_release_status = "Done" if release_completed else (
+            "In Progress" if total_blds > 0 and released_count > 0 else "Pending"
+        )
+        production_status = "Done" if production_completed else (
+            "In Progress" if total_blds > 0 and production_count > 0 else "Pending"
+        )
+
+        checklist = [
+            {
+                "key": "daily_menu",
+                "label": "Daily Menu Setup",
+                "completed": daily_menu_completed,
+                "status": daily_menu_status,
+                "detail": f"{menu_count}/{total_blds} menus ready" if total_blds else None,
+            },
+            {
+                "key": "menu_release",
+                "label": "Menu Release",
+                "completed": release_completed,
+                "status": menu_release_status,
+                "detail": f"{released_count}/{total_blds} released" if total_blds else None,
+            },
+            {
+                "key": "production_plan",
+                "label": "Kitchen Production Planning",
+                "completed": production_completed,
+                "status": production_status,
+                "detail": f"{production_count}/{total_blds} planned" if total_blds else None,
+            },
+            {
+                "key": "trip_sheet",
+                "label": "Trip Sheet Generation",
+                "completed": False,
+                "status": "Pending",
+                "detail": None,
+            },
+            {
+                "key": "deliveries",
+                "label": "Deliveries Completed",
+                "completed": deliveries_completed,
+                "status": deliveries_status,
+                "detail": (
+                    f"{daily_orders_delivered}/{daily_orders_total} delivered"
+                    if daily_orders_total
+                    else "No orders yet"
+                ),
+            },
+        ]
+
+        cursor.execute(
+            """
+            SELECT 
+                o.order_id,
+                o.created_at,
+                o.total_price,
+                o.status,
+                c.name AS customer_name,
+                COALESCE(SUM(oi.quantity), 0) AS item_count
+            FROM orders o
+            JOIN customers c ON o.customer_id = c.customer_id
+            LEFT JOIN order_items oi ON o.order_id = oi.order_id
+            GROUP BY o.order_id, o.created_at, o.total_price, o.status, c.name
+            ORDER BY o.created_at DESC, o.order_id DESC
+            LIMIT 5
+            """
+        )
+        recent_rows = cursor.fetchall() or []
+        recent_orders = []
+        for row in recent_rows:
+            order_id = int(row.get("order_id") or 0)
+            created_at = row.get("created_at")
+            status_raw = (row.get("status") or "Pending").strip()
+            status_formatted = " ".join(
+                word.capitalize() for word in status_raw.split()
+            ) or "Pending"
+            recent_orders.append(
+                {
+                    "id": f"ORD-{order_id:05d}" if order_id else str(row.get("order_id") or ""),
+                    "orderId": order_id,
+                    "customer": row.get("customer_name") or "Unknown Customer",
+                    "items": int(row.get("item_count") or 0),
+                    "total": float(row.get("total_price") or 0),
+                    "status": status_formatted,
+                    "createdAt": created_at.isoformat() if created_at else None,
+                }
+            )
+
         todays_revenue = 24850
         monthly_revenue = 345200
-        popularItems = [
-            {"name": "Anna 350 gms", "orders": 42},
-            {"name": "Masala Dosa", "orders": 38},
-            {"name": "South Indian Thali", "orders": 31},
-            {"name": "Mysore Pak", "orders": 27},
-        ]
-        recentOrders = [
-            {"id": "ORD-1234", "customer": "Rahul Sharma", "items": 3, "total": 450, "status": "Delivered"},
-            {"id": "ORD-1235", "customer": "Priya Patel", "items": 2, "total": 320, "status": "In Progress"},
-            {"id": "ORD-1236", "customer": "Amit Kumar", "items": 5, "total": 780, "status": "Pending"},
-            {"id": "ORD-1237", "customer": "Sneha Reddy", "items": 1, "total": 150, "status": "Delivered"},
-        ]
-        
+
         return {
             "totalCustomers": total_customers,
             "totalOrders": total_orders,
+            "ordersCompleted": completed_orders,
+            "pendingOrders": pending_orders,
             "todaysRevenue": todays_revenue,
             "monthlyRevenue": monthly_revenue,
-            "popularItems": popularItems,
-            "recentOrders": recentOrders,
+            "recentOrders": recent_orders,
+            "checklist": checklist,
+            "activeSubscriptions": 0,
         }
     finally:
+        cursor.close()
+        db.close()
+
+
+def _apply_order_filters(
+    base_where: List[str],
+    params: List,
+    status: Optional[str],
+    customer: Optional[str],
+    product: Optional[str],
+) -> None:
+    if status:
+        normalized = status.strip().lower()
+        if normalized and normalized != "all":
+            base_where.append("LOWER(COALESCE(o.status, '')) = %s")
+            params.append(normalized)
+    if customer:
+        term = f"%{customer.strip()}%"
+        base_where.append("(c.name LIKE %s OR c.primary_mobile LIKE %s)")
+        params.extend([term, term])
+    if product:
+        term = f"%{product.strip()}%"
+        base_where.append("i.name LIKE %s")
+        params.append(term)
+
+
+@app.get("/api/admin/orders/history")
+def admin_order_history(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    status: Optional[str] = None,
+    customer: Optional[str] = None,
+    product: Optional[str] = None,
+    limit: int = Query(25, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    export: Optional[str] = None,
+):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        where_clauses: List[str] = []
+        params: List = []
+
+        start_date_obj = _parse_optional_date(start_date)
+        end_date_obj = _parse_optional_date(end_date)
+        if start_date_obj and end_date_obj and start_date_obj > end_date_obj:
+            start_date_obj, end_date_obj = end_date_obj, start_date_obj
+
+        if start_date_obj:
+            where_clauses.append("o.created_at >= %s")
+            params.append(datetime.combine(start_date_obj, datetime.min.time()))
+        if end_date_obj:
+            where_clauses.append("o.created_at <= %s")
+            params.append(datetime.combine(end_date_obj, datetime.max.time()))
+
+        _apply_order_filters(where_clauses, params, status, customer, product)
+        where_sql = " AND ".join(where_clauses)
+        where_fragment = f"WHERE {where_sql}" if where_sql else ""
+
+        count_query = f"""
+            SELECT COUNT(DISTINCT o.order_id) AS total
+              FROM orders o
+              JOIN customers c ON o.customer_id = c.customer_id
+              LEFT JOIN order_items oi ON o.order_id = oi.order_id
+              LEFT JOIN items i ON oi.item_id = i.item_id
+             {where_fragment}
+        """
+        cursor.execute(count_query, tuple(params))
+        total_row = cursor.fetchone() or {"total": 0}
+        total_orders = int(total_row.get("total") or 0)
+
+        data_query = f"""
+            SELECT 
+                o.order_id,
+                o.created_at,
+                o.total_price,
+                o.status,
+                o.payment_method,
+                o.customer_id,
+                c.name AS customer_name,
+                c.primary_mobile,
+                c.email,
+                o.address_id,
+                a.written_address,
+                a.city,
+                a.pin_code,
+                COALESCE(SUM(oi.quantity), 0) AS item_count
+            FROM orders o
+            JOIN customers c ON o.customer_id = c.customer_id
+            LEFT JOIN addresses a ON o.address_id = a.address_id
+            LEFT JOIN order_items oi ON o.order_id = oi.order_id
+            LEFT JOIN items i ON oi.item_id = i.item_id
+            {where_fragment}
+            GROUP BY
+                o.order_id,
+                o.created_at,
+                o.total_price,
+                o.status,
+                o.payment_method,
+                o.customer_id,
+                c.name,
+                c.primary_mobile,
+                c.email,
+                o.address_id,
+                a.written_address,
+                a.city,
+                a.pin_code
+            ORDER BY o.created_at DESC, o.order_id DESC
+        """
+
+        data_params = list(params)
+        if export != "csv":
+            data_query += " LIMIT %s OFFSET %s"
+            data_params.extend([limit, offset])
+
+        cursor.execute(data_query, tuple(data_params))
+        orders = cursor.fetchall() or []
+
+        order_ids = [row["order_id"] for row in orders]
+        items_by_order: Dict[int, List[Dict[str, object]]] = {}
+        if order_ids:
+            placeholders = ",".join(["%s"] * len(order_ids))
+            cursor.execute(
+                f"""
+                SELECT 
+                    oi.order_id,
+                    oi.quantity,
+                    oi.price,
+                    i.name AS item_name
+                FROM order_items oi
+                JOIN items i ON oi.item_id = i.item_id
+                WHERE oi.order_id IN ({placeholders})
+                ORDER BY oi.order_id ASC, i.name ASC
+                """,
+                tuple(order_ids),
+            )
+            for row in cursor.fetchall():
+                order_id = row["order_id"]
+                items_by_order.setdefault(order_id, []).append(
+                    {
+                        "name": row.get("item_name") or "Item",
+                        "quantity": int(row.get("quantity") or 0),
+                        "price": float(row.get("price") or 0),
+                        "line_total": float(row.get("quantity") or 0) * float(row.get("price") or 0),
+                    }
+                )
+
+        if export == "csv":
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow(
+                [
+                    "Order ID",
+                    "Placed At",
+                    "Customer",
+                    "Phone",
+                    "Status",
+                    "Payment Method",
+                    "Item",
+                    "Quantity",
+                    "Price",
+                    "Line Total",
+                    "Order Total",
+                ]
+            )
+
+            for record in orders:
+                order_items = items_by_order.get(record["order_id"], []) or [
+                    {"name": "", "quantity": 0, "price": 0.0, "line_total": 0.0}
+                ]
+                for item in order_items:
+                    writer.writerow(
+                        [
+                            record["order_id"],
+                            record["created_at"].strftime("%Y-%m-%d %H:%M:%S") if record.get("created_at") else "",
+                            record.get("customer_name") or "",
+                            record.get("primary_mobile") or "",
+                            record.get("status") or "",
+                            record.get("payment_method") or "",
+                            item["name"],
+                            item["quantity"],
+                            item["price"],
+                            item["line_total"],
+                            float(record.get("total_price") or 0),
+                        ]
+                    )
+
+            output.seek(0)
+            response = Response(
+                content=output.getvalue(),
+                media_type="text/csv",
+                headers={
+                    "Content-Disposition": "attachment; filename=order-history.csv",
+                },
+            )
+            return response
+
+        result = []
+        for record in orders:
+            order_id = record["order_id"]
+            result.append(
+                {
+                    "order_id": order_id,
+                    "created_at": _format_datetime(record.get("created_at")),
+                    "status": record.get("status") or "Pending",
+                    "payment_method": record.get("payment_method") or "Unknown",
+                    "total_price": float(record.get("total_price") or 0),
+                    "customer_id": int(record.get("customer_id") or 0),
+                    "customer_name": record.get("customer_name") or "Customer",
+                    "customer_phone": record.get("primary_mobile"),
+                    "customer_email": record.get("email"),
+                    "address": {
+                        "address_id": record.get("address_id"),
+                        "line1": record.get("written_address"),
+                        "city": record.get("city"),
+                        "pin_code": record.get("pin_code"),
+                    },
+                    "item_count": int(record.get("item_count") or 0),
+                    "items": items_by_order.get(order_id, []),
+                }
+            )
+
+        return {"orders": result, "total": total_orders}
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.get("/api/admin/orders/{order_id}/invoice")
+def admin_order_invoice(order_id: int):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            SELECT 
+                o.order_id,
+                o.created_at,
+                o.total_price,
+                o.status,
+                o.payment_method,
+                c.customer_id,
+                c.name AS customer_name,
+                c.primary_mobile,
+                c.email,
+                a.address_id,
+                a.written_address,
+                a.city,
+                a.pin_code
+            FROM orders o
+            JOIN customers c ON o.customer_id = c.customer_id
+            LEFT JOIN addresses a ON o.address_id = a.address_id
+            WHERE o.order_id = %s
+            """,
+            (order_id,),
+        )
+        order_row = cursor.fetchone()
+        if not order_row:
+            raise HTTPException(status_code=404, detail="Order not found")
+
+        cursor.execute(
+            """
+            SELECT 
+                oi.quantity,
+                oi.price,
+                i.name AS item_name
+            FROM order_items oi
+            JOIN items i ON oi.item_id = i.item_id
+            WHERE oi.order_id = %s
+            ORDER BY i.name ASC
+            """,
+            (order_id,),
+        )
+        item_rows = cursor.fetchall() or []
+
+        items: List[Dict[str, object]] = []
+        subtotal = 0.0
+        for row in item_rows:
+            quantity = int(row.get("quantity") or 0)
+            price = float(row.get("price") or 0)
+            line_total = quantity * price
+            subtotal += line_total
+            items.append(
+                {
+                    "name": row.get("item_name") or "Item",
+                    "quantity": quantity,
+                    "price": price,
+                    "line_total": line_total,
+                }
+            )
+
+        invoice_response = {
+            "invoice_number": f"INV-{order_id:05d}",
+            "issued_at": _format_datetime(datetime.now()),
+            "due_date": None,
+            "order": {
+                "order_id": order_id,
+                "created_at": _format_datetime(order_row.get("created_at")),
+                "status": order_row.get("status") or "Pending",
+                "total_price": float(order_row.get("total_price") or 0),
+                "payment_method": order_row.get("payment_method") or "Unknown",
+            },
+            "customer": {
+                "customer_id": int(order_row.get("customer_id") or 0),
+                "name": order_row.get("customer_name") or "Customer",
+                "phone": order_row.get("primary_mobile"),
+                "email": order_row.get("email"),
+            },
+            "address": {
+                "address_id": order_row.get("address_id"),
+                "line1": order_row.get("written_address"),
+                "city": order_row.get("city"),
+                "pin_code": order_row.get("pin_code"),
+            },
+            "items": items,
+            "subtotal": subtotal,
+            "total": float(order_row.get("total_price") or subtotal),
+        }
+
+        return invoice_response
+    finally:
+        cursor.close()
         db.close()
 
 

@@ -1,3 +1,5 @@
+import { http } from "@/lib/http";
+
 export async function getCityByPhone(phone: string): Promise<string | null> {
     const res = await fetch(`/api/get-city?phone=${phone}`);
     const data = await res.json();
@@ -20,7 +22,7 @@ export async function getCityByPhone(phone: string): Promise<string | null> {
   }
   
 export async function getDashboardMetrics() {
-  const res = await fetch("http://localhost:8000/api/dashboard/metrics")  // 🔁 use your FastAPI base URL here
+  const res = await http.get("/api/dashboard/metrics");
 
   if (!res.ok) {
     throw new Error("Failed to fetch dashboard metrics")

@@ -32,7 +32,7 @@ const primaryNavigationItems = [
     { name: "Customer Management", icon: Users, href: "/admin/customermgmt", id: "customermgmt" },
     { name: "Daily Menu Setup", icon: Calendar, href: "/admin/dailymenusetup", id: "dailymenusetup" },
     { name: "Kitchen Production", icon: Utensils, href: "/admin/production", id: "production" },
-    { name: "Order History", icon: ShoppingCart, href: "/admin/orders", id: "orders" },
+    { name: "Order History", icon: ShoppingCart, href: "/admin/order-history", id: "orders" },
     { name: "Logs & Audit", icon: FileText, href: "/admin/logs", id: "logs" },
     { name: "Reports & Analytics", icon: BarChart3, href: "/admin/reports", id: "reports" },
 ];

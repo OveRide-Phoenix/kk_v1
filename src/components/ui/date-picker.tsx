@@ -24,12 +24,16 @@ interface DatePickerWithPresetsProps {
   selectedDate?: Date;
   onSelectDate: (date: Date) => void;
   showQuickSelect?: boolean;
+  disablePast?: boolean;
+  triggerClassName?: string;
 }
 
 export function DatePickerWithPresets({
   selectedDate,
   onSelectDate,
   showQuickSelect = true,
+  disablePast = true,
+  triggerClassName,
 }: DatePickerWithPresetsProps) {
   const [open, setOpen] = React.useState(false);
   const [draftDate, setDraftDate] = React.useState<Date | undefined>(
@@ -53,6 +57,7 @@ export function DatePickerWithPresets({
           variant="outline"
           className={cn(
             "w-[240px] justify-start text-left font-normal",
+            triggerClassName,
             !draftDate && "text-muted-foreground"
           )}
         >
@@ -90,6 +95,7 @@ export function DatePickerWithPresets({
               setDraftDate(date);
             }}
             disabled={(date) => {
+              if (!disablePast) return false;
               const today = new Date();
               today.setHours(0, 0, 0, 0);
               return date < today;
