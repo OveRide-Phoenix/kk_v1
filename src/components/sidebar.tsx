@@ -1,7 +1,19 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Home, Package, Users, Calendar, Utensils, Menu, ShoppingCart, FileText, BarChart3, LogOut } from "lucide-react";
+import {
+  Home,
+  Package,
+  Users,
+  Calendar,
+  Utensils,
+  Menu,
+  ShoppingCart,
+  FileText,
+  BarChart3,
+  LogOut,
+  Code2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 
@@ -14,15 +26,19 @@ interface SidebarProps {
     setCollapsed?: (collapsed: boolean) => void;
 }
 
-const navigationItems = [
+const primaryNavigationItems = [
     { name: "Dashboard", icon: Home, href: "/admin", id: "dashboard" },
     { name: "Product Management", icon: Package, href: "/admin/productmgmt", id: "productmgmt" },
     { name: "Customer Management", icon: Users, href: "/admin/customermgmt", id: "customermgmt" },
     { name: "Daily Menu Setup", icon: Calendar, href: "/admin/dailymenusetup", id: "dailymenusetup" },
     { name: "Kitchen Production", icon: Utensils, href: "/admin/production", id: "production" },
-    { name: "Order History", icon: ShoppingCart, href: "/admin/orders", id: "orders" },
+    { name: "Order History", icon: ShoppingCart, href: "/admin/order-history", id: "orders" },
     { name: "Logs & Audit", icon: FileText, href: "/admin/logs", id: "logs" },
     { name: "Reports & Analytics", icon: BarChart3, href: "/admin/reports", id: "reports" },
+];
+
+const developerNavigationItems = [
+  { name: "Order Test", icon: Code2, href: "/admin/ordertest", id: "ordertest" },
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ 
@@ -88,7 +104,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
                 <nav className="flex-1 overflow-y-auto py-4 px-2">
                     <ul className="space-y-1">
-                        {navigationItems.map((item) => (
+                        {primaryNavigationItems.map((item) => (
                             <li key={item.name}>
                                 <Button
                                     variant={activePage === item.id ? "default" : "ghost"}
@@ -106,6 +122,34 @@ const Sidebar: React.FC<SidebarProps> = ({
                             </li>
                         ))}
                     </ul>
+                    {developerNavigationItems.length > 0 && (
+                      <div className={`mt-6 space-y-1 ${collapsed ? "flex flex-col items-center" : ""}`}>
+                        {!collapsed && (
+                          <p className="px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Developer Tools
+                          </p>
+                        )}
+                        <ul className="space-y-1 w-full">
+                          {developerNavigationItems.map((item) => (
+                            <li key={item.name}>
+                              <Button
+                                variant={activePage === item.id ? "default" : "ghost"}
+                                className={`w-full ${collapsed ? "justify-center p-2" : "justify-start"}`}
+                                onClick={() => {
+                                  setActivePage(item.id);
+                                  router.push(item.href);
+                                  setSidebarOpen(false);
+                                }}
+                                title={collapsed ? item.name : undefined}
+                              >
+                                <item.icon className={collapsed ? "h-5 w-5" : "mr-2 h-5 w-5"} />
+                                {!collapsed && <span>{item.name}</span>}
+                              </Button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                 </nav>
             </div>
         </aside>

@@ -1,9 +1,15 @@
 from calendar import month
+from datetime import date, datetime
 import mysql.connector
+from mysql.connector import errorcode
 from fastapi import FastAPI, HTTPException, Query, Depends
-from pydantic import BaseModel
-from typing import List, Dict, Optional
+from pydantic import BaseModel, Field
+from decimal import Decimal
+from typing import List, Dict, Optional, Tuple
 from fastapi.middleware.cors import CORSMiddleware
+import csv
+import io
+from .routers import admin_logs, reports
 from .customer.customer_crud import (
     create_customer,
     get_customer_by_id,
@@ -17,6 +23,10 @@ import os, time, uuid, jwt, bcrypt
 from fastapi import Response, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import os
+from .utils.logger import log_admin_action
+
+class OrderStatusUpdate(BaseModel):
+    status: str = Field(..., min_length=1, max_length=50)
 
 app = FastAPI()
 
@@ -32,6 +42,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(admin_logs.router)
+app.include_router(reports.router)
+
 # Database connection function
 def get_db():
     return mysql.connector.connect(
@@ -40,6 +53,24 @@ def get_db():
         password="password",
         database="kk_v1"
     )
+
+
+def _format_datetime(dt: Optional[datetime]) -> Optional[str]:
+    if dt is None:
+        return None
+    return dt.isoformat()
+
+
+def _parse_optional_date(value: Optional[str]) -> Optional[date]:
+    if value is None:
+        return None
+    stripped = value.strip()
+    if not stripped:
+        return None
+    try:
+        return datetime.strptime(stripped, "%Y-%m-%d").date()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.") from exc
 
 from .config import (
     SECRET_KEY, ALGORITHM,
@@ -299,6 +330,7 @@ def login(data: LoginRequest, response: Response):
         cursor.execute("""
             SELECT
                 c.customer_id,
+                c.name AS customer_name,
                 c.primary_mobile AS phone_number,
                 au.admin_id,
                 au.password_hash,
@@ -314,28 +346,40 @@ def login(data: LoginRequest, response: Response):
         if not result:
             raise HTTPException(status_code=404, detail="User not found. Please register.")
 
-        is_admin = bool(result["admin_id"])
+        is_admin_account = bool(result["admin_id"])
+        admin_password_provided = bool(data.admin_password)
 
-        # If admin, validate password and build tokens
         access = None
         refresh = None
         user_payload = None
+        admin_login = False
 
-        if is_admin:
-            if not data.admin_password:
-                raise HTTPException(status_code=400, detail="Admin password is required")
+        if is_admin_account and admin_password_provided:
             if not result["is_active"]:
                 raise HTTPException(status_code=403, detail="Admin account disabled")
             if not verify_password(data.admin_password, result["password_hash"]):
                 raise HTTPException(status_code=401, detail="Invalid admin password")
 
+            admin_login = True
             user_payload = {
                 "admin_id": result["admin_id"],
                 "customer_id": result["customer_id"],
                 "phone": result["phone_number"],
-                "role": result["role"],
+                "role": result["role"] or "admin",
+                "is_admin": True,
+                "name": result.get("customer_name"),
             }
-            access  = create_access_token(user_payload)
+            access = create_access_token(user_payload)
+            refresh = create_refresh_token(user_payload, str(uuid.uuid4()))
+        else:
+            user_payload = {
+                "customer_id": result["customer_id"],
+                "phone": result["phone_number"],
+                "role": "customer",
+                "is_admin": False,
+                "name": result.get("customer_name"),
+            }
+            access = create_access_token(user_payload)
             refresh = create_refresh_token(user_payload, str(uuid.uuid4()))
 
         # IMPORTANT: do NOT set cookies — tokens are returned in JSON
@@ -344,10 +388,11 @@ def login(data: LoginRequest, response: Response):
 
         return {
             "message": "Login successful",
-            "is_admin": is_admin,
-            "user": user_payload,           # null if not admin
-            "access_token": access,         # null if not admin
-            "refresh_token": refresh        # null if not admin
+            "is_admin": admin_login,
+            "is_admin_account": is_admin_account,
+            "user": user_payload,
+            "access_token": access,
+            "refresh_token": refresh,
         }
     finally:
         cursor.close()
@@ -619,6 +664,7 @@ def get_daily_menu(
                 date,
                 is_festival,
                 is_released,
+                is_production_generated,
                 period_type,
                 bld_id
             FROM menu
@@ -645,9 +691,13 @@ def get_daily_menu(
                 mi.menu_item_id,
                 mi.item_id,
                 i.name AS item_name,
+                i.uom,
+                i.buffer_percentage,
                 mi.category_id,
                 mi.planned_qty,
                 mi.available_qty,
+                mi.buffer_qty,
+                mi.final_qty,
                 mi.rate,
                 mi.is_default,
                 mi.sort_order
@@ -664,6 +714,7 @@ def get_daily_menu(
             "date": menu_row["date"],
             "is_festival": bool(menu_row["is_festival"]),
             "is_released": bool(menu_row["is_released"]),
+            "is_production_generated": bool(menu_row["is_production_generated"]),
             "period_type": menu_row["period_type"],
             "bld_id": menu_row["bld_id"],
             "bld_type": bld_type,
@@ -672,9 +723,13 @@ def get_daily_menu(
                     "menu_item_id": it["menu_item_id"],
                     "item_id": it["item_id"],
                     "item_name": it["item_name"],
+                    "uom": it.get("uom"),
+                    "buffer_percentage": float(it["buffer_percentage"] or 0),
                     "category_id": it["category_id"],
                     "planned_qty": it["planned_qty"],
                     "available_qty": it["available_qty"],
+                    "buffer_qty": float(it["buffer_qty"] or 0),
+                    "final_qty": float(it["final_qty"] or 0),
                     "rate": float(it["rate"]),
                     "is_default": bool(it["is_default"]),
                     "sort_order": it["sort_order"],
@@ -768,6 +823,15 @@ def upsert_daily_menu(payload: DailyMenuPayload):
             )
 
         db.commit()
+        action = "ADD" if existing is None else "UPDATE"
+        log_admin_action(
+            db,
+            admin_id=1,
+            action_type=action,
+            entity_type="ITEM",
+            entity_id=menu_id,
+            description=f"Upserted menu for {payload.date} ({payload.bld_type}) with {len(payload.items)} items",
+        )
         return get_daily_menu(date=payload.date, bld_type=payload.bld_type, period_type=payload.period_type)
     except mysql.connector.Error as err:
         db.rollback()
@@ -792,6 +856,14 @@ def release_menu(menu_id: int):
         update_query = "UPDATE menu SET is_released = 1 WHERE menu_id = %s"
         cursor.execute(update_query, (menu_id,))
         db.commit()
+        log_admin_action(
+            db,
+            admin_id=1,
+            action_type="UPDATE",
+            entity_type="ITEM",
+            entity_id=menu_id,
+            description="Menu released",
+        )
         return {"status": "released", "menu_id": menu_id}
     except mysql.connector.Error as err:
         db.rollback()
@@ -815,6 +887,14 @@ def unrelease_menu(menu_id: int):
         update_query = "UPDATE menu SET is_released = 0 WHERE menu_id = %s"
         cursor.execute(update_query, (menu_id,))
         db.commit()
+        log_admin_action(
+            db,
+            admin_id=1,
+            action_type="UPDATE",
+            entity_type="ITEM",
+            entity_id=menu_id,
+            description="Menu unreleased",
+        )
         return {"status": "unreleased", "menu_id": menu_id}
     except mysql.connector.Error as err:
         db.rollback()
@@ -826,31 +906,1186 @@ def unrelease_menu(menu_id: int):
 @app.get("/api/dashboard/metrics")
 def get_dashboard_metrics():
     db = get_db()
+    cursor = db.cursor(dictionary=True)
     try:
+        today = date.today()
+        today_str = today.isoformat()
+
         total_customers = get_customer_count(db)
-        total_orders = 128
+
+        cursor.execute("SELECT COUNT(*) AS total_orders FROM orders")
+        total_orders_record = cursor.fetchone() or {"total_orders": 0}
+        total_orders = int(total_orders_record.get("total_orders") or 0)
+
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS pending_orders
+              FROM orders
+             WHERE LOWER(COALESCE(status, '')) IN ('pending', 'in progress', 'processing')
+            """
+        )
+        pending_record = cursor.fetchone() or {"pending_orders": 0}
+        pending_orders = int(pending_record.get("pending_orders") or 0)
+        completed_orders = max(total_orders - pending_orders, 0)
+
+        cursor.execute("SELECT COUNT(*) AS total_blds FROM bld")
+        bld_record = cursor.fetchone() or {"total_blds": 0}
+        total_blds = int(bld_record.get("total_blds") or 0)
+
+        cursor.execute(
+            """
+            SELECT 
+                COUNT(*) AS menu_count,
+                SUM(CASE WHEN m.is_released = 1 THEN 1 ELSE 0 END) AS released_count,
+                SUM(CASE WHEN m.is_production_generated = 1 THEN 1 ELSE 0 END) AS production_count
+            FROM menu m
+            WHERE m.date = %s
+            """,
+            (today_str,),
+        )
+        menu_stats = cursor.fetchone() or {
+            "menu_count": 0,
+            "released_count": 0,
+            "production_count": 0,
+        }
+        menu_count = int(menu_stats.get("menu_count") or 0)
+        released_count = int(menu_stats.get("released_count") or 0)
+        production_count = int(menu_stats.get("production_count") or 0)
+
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS menu_items_count
+              FROM menu_items mi
+              JOIN menu m ON mi.menu_id = m.menu_id
+             WHERE m.date = %s
+            """,
+            (today_str,),
+        )
+        menu_items_record = cursor.fetchone() or {"menu_items_count": 0}
+        menu_items_count = int(menu_items_record.get("menu_items_count") or 0)
+
+        cursor.execute(
+            """
+            SELECT 
+                COUNT(*) AS total_today,
+                SUM(CASE WHEN LOWER(COALESCE(status, '')) IN ('delivered', 'completed') THEN 1 ELSE 0 END) AS delivered_today,
+                SUM(CASE WHEN LOWER(COALESCE(status, '')) IN ('pending', 'in progress', 'processing') THEN 1 ELSE 0 END) AS pending_today
+            FROM orders
+            WHERE DATE(created_at) = %s
+            """,
+            (today_str,),
+        )
+        daily_orders_record = cursor.fetchone() or {
+            "total_today": 0,
+            "delivered_today": 0,
+            "pending_today": 0,
+        }
+        daily_orders_total = int(daily_orders_record.get("total_today") or 0)
+        daily_orders_pending = int(daily_orders_record.get("pending_today") or 0)
+        daily_orders_delivered = int(daily_orders_record.get("delivered_today") or 0)
+
+        daily_menu_completed = (
+            total_blds > 0 and menu_count >= total_blds and menu_items_count > 0
+        )
+        release_completed = total_blds > 0 and released_count >= total_blds
+        production_completed = total_blds > 0 and production_count >= total_blds
+        deliveries_completed = (
+            daily_orders_total > 0 and daily_orders_pending == 0
+        )
+
+        deliveries_status = "Done" if deliveries_completed else (
+            "In Progress" if daily_orders_delivered > 0 else "Pending"
+        )
+
+        daily_menu_status = "Done" if daily_menu_completed else (
+            "In Progress" if total_blds > 0 and menu_count > 0 else "Pending"
+        )
+        menu_release_status = "Done" if release_completed else (
+            "In Progress" if total_blds > 0 and released_count > 0 else "Pending"
+        )
+        production_status = "Done" if production_completed else (
+            "In Progress" if total_blds > 0 and production_count > 0 else "Pending"
+        )
+
+        checklist = [
+            {
+                "key": "daily_menu",
+                "label": "Daily Menu Creation",
+                "completed": daily_menu_completed,
+                "status": daily_menu_status,
+                "detail": f"{menu_count}/{total_blds} menus ready" if total_blds else None,
+            },
+            {
+                "key": "menu_release",
+                "label": "Menu Release",
+                "completed": release_completed,
+                "status": menu_release_status,
+                "detail": f"{released_count}/{total_blds} released" if total_blds else None,
+            },
+            {
+                "key": "production_plan",
+                "label": "Kitchen Production Planning",
+                "completed": production_completed,
+                "status": production_status,
+                "detail": f"{production_count}/{total_blds} planned" if total_blds else None,
+            },
+            {
+                "key": "trip_sheet",
+                "label": "Trip Sheet Generation",
+                "completed": False,
+                "status": "Pending",
+                "detail": None,
+            },
+            {
+                "key": "deliveries",
+                "label": "Deliveries Completed",
+                "completed": deliveries_completed,
+                "status": deliveries_status,
+                "detail": (
+                    f"{daily_orders_delivered}/{daily_orders_total} delivered"
+                    if daily_orders_total
+                    else "No orders yet"
+                ),
+            },
+        ]
+
+        cursor.execute(
+            """
+            SELECT 
+                o.order_id,
+                o.created_at,
+                o.total_price,
+                o.status,
+                c.name AS customer_name,
+                COALESCE(SUM(oi.quantity), 0) AS item_count
+            FROM orders o
+            JOIN customers c ON o.customer_id = c.customer_id
+            LEFT JOIN order_items oi ON o.order_id = oi.order_id
+            GROUP BY o.order_id, o.created_at, o.total_price, o.status, c.name
+            ORDER BY o.created_at DESC, o.order_id DESC
+            LIMIT 5
+            """
+        )
+        recent_rows = cursor.fetchall() or []
+        recent_orders = []
+        for row in recent_rows:
+            order_id = int(row.get("order_id") or 0)
+            created_at = row.get("created_at")
+            status_raw = (row.get("status") or "Pending").strip()
+            status_formatted = " ".join(
+                word.capitalize() for word in status_raw.split()
+            ) or "Pending"
+            recent_orders.append(
+                {
+                    "id": f"ORD-{order_id:05d}" if order_id else str(row.get("order_id") or ""),
+                    "orderId": order_id,
+                    "customer": row.get("customer_name") or "Unknown Customer",
+                    "items": int(row.get("item_count") or 0),
+                    "total": float(row.get("total_price") or 0),
+                    "status": status_formatted,
+                    "createdAt": created_at.isoformat() if created_at else None,
+                }
+            )
+
         todays_revenue = 24850
         monthly_revenue = 345200
-        popularItems = [
-            {"name": "Anna 350 gms", "orders": 42},
-            {"name": "Masala Dosa", "orders": 38},
-            {"name": "South Indian Thali", "orders": 31},
-            {"name": "Mysore Pak", "orders": 27},
-        ]
-        recentOrders = [
-            {"id": "ORD-1234", "customer": "Rahul Sharma", "items": 3, "total": 450, "status": "Delivered"},
-            {"id": "ORD-1235", "customer": "Priya Patel", "items": 2, "total": 320, "status": "In Progress"},
-            {"id": "ORD-1236", "customer": "Amit Kumar", "items": 5, "total": 780, "status": "Pending"},
-            {"id": "ORD-1237", "customer": "Sneha Reddy", "items": 1, "total": 150, "status": "Delivered"},
-        ]
-        
+
         return {
             "totalCustomers": total_customers,
             "totalOrders": total_orders,
+            "ordersCompleted": completed_orders,
+            "pendingOrders": pending_orders,
             "todaysRevenue": todays_revenue,
             "monthlyRevenue": monthly_revenue,
-            "popularItems": popularItems,
-            "recentOrders": recentOrders,
+            "recentOrders": recent_orders,
+            "checklist": checklist,
+            "activeSubscriptions": 0,
         }
     finally:
+        cursor.close()
+        db.close()
+
+
+def _apply_order_filters(
+    base_where: List[str],
+    params: List,
+    status: Optional[str],
+    customer: Optional[str],
+    product: Optional[str],
+) -> None:
+    if status:
+        normalized = status.strip().lower()
+        if normalized and normalized != "all":
+            base_where.append("LOWER(COALESCE(o.status, '')) = %s")
+            params.append(normalized)
+    if customer:
+        term = f"%{customer.strip()}%"
+        base_where.append("(c.name LIKE %s OR c.primary_mobile LIKE %s)")
+        params.extend([term, term])
+    if product:
+        term = f"%{product.strip()}%"
+        base_where.append("i.name LIKE %s")
+        params.append(term)
+
+
+@app.get("/api/admin/orders/history")
+def admin_order_history(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    status: Optional[str] = None,
+    customer: Optional[str] = None,
+    product: Optional[str] = None,
+    limit: int = Query(10, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    export: Optional[str] = None,
+):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        where_clauses: List[str] = []
+        params: List = []
+
+        start_date_obj = _parse_optional_date(start_date)
+        end_date_obj = _parse_optional_date(end_date)
+        if start_date_obj and end_date_obj and start_date_obj > end_date_obj:
+            start_date_obj, end_date_obj = end_date_obj, start_date_obj
+
+        if start_date_obj:
+            where_clauses.append("o.created_at >= %s")
+            params.append(datetime.combine(start_date_obj, datetime.min.time()))
+        if end_date_obj:
+            where_clauses.append("o.created_at <= %s")
+            params.append(datetime.combine(end_date_obj, datetime.max.time()))
+
+        _apply_order_filters(where_clauses, params, status, customer, product)
+        where_sql = " AND ".join(where_clauses)
+        where_fragment = f"WHERE {where_sql}" if where_sql else ""
+
+        count_query = f"""
+            SELECT COUNT(DISTINCT o.order_id) AS total
+              FROM orders o
+              JOIN customers c ON o.customer_id = c.customer_id
+              LEFT JOIN order_items oi ON o.order_id = oi.order_id
+              LEFT JOIN items i ON oi.item_id = i.item_id
+             {where_fragment}
+        """
+        cursor.execute(count_query, tuple(params))
+        total_row = cursor.fetchone() or {"total": 0}
+        total_orders = int(total_row.get("total") or 0)
+
+        data_query = f"""
+            SELECT 
+                o.order_id,
+                o.created_at,
+                o.total_price,
+                o.status,
+                o.payment_method,
+                o.customer_id,
+                c.name AS customer_name,
+                c.primary_mobile,
+                c.email,
+                o.address_id,
+                a.written_address,
+                a.city,
+                a.pin_code,
+                COALESCE(SUM(oi.quantity), 0) AS item_count
+            FROM orders o
+            JOIN customers c ON o.customer_id = c.customer_id
+            LEFT JOIN addresses a ON o.address_id = a.address_id
+            LEFT JOIN order_items oi ON o.order_id = oi.order_id
+            LEFT JOIN items i ON oi.item_id = i.item_id
+            {where_fragment}
+            GROUP BY
+                o.order_id,
+                o.created_at,
+                o.total_price,
+                o.status,
+                o.payment_method,
+                o.customer_id,
+                c.name,
+                c.primary_mobile,
+                c.email,
+                o.address_id,
+                a.written_address,
+                a.city,
+                a.pin_code
+            ORDER BY o.created_at DESC, o.order_id DESC
+        """
+
+        data_params = list(params)
+        if export != "csv":
+            data_query += " LIMIT %s OFFSET %s"
+            data_params.extend([limit, offset])
+
+        cursor.execute(data_query, tuple(data_params))
+        orders = cursor.fetchall() or []
+
+        order_ids = [row["order_id"] for row in orders]
+        items_by_order: Dict[int, List[Dict[str, object]]] = {}
+        if order_ids:
+            placeholders = ",".join(["%s"] * len(order_ids))
+            cursor.execute(
+                f"""
+                SELECT 
+                    oi.order_id,
+                    oi.quantity,
+                    oi.price,
+                    i.name AS item_name
+                FROM order_items oi
+                JOIN items i ON oi.item_id = i.item_id
+                WHERE oi.order_id IN ({placeholders})
+                ORDER BY oi.order_id ASC, i.name ASC
+                """,
+                tuple(order_ids),
+            )
+            for row in cursor.fetchall():
+                order_id = row["order_id"]
+                items_by_order.setdefault(order_id, []).append(
+                    {
+                        "name": row.get("item_name") or "Item",
+                        "quantity": int(row.get("quantity") or 0),
+                        "price": float(row.get("price") or 0),
+                        "line_total": float(row.get("quantity") or 0) * float(row.get("price") or 0),
+                    }
+                )
+
+        if export == "csv":
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow(
+                [
+                    "Order ID",
+                    "Placed At",
+                    "Customer",
+                    "Phone",
+                    "Status",
+                    "Payment Method",
+                    "Item",
+                    "Quantity",
+                    "Price",
+                    "Line Total",
+                    "Order Total",
+                ]
+            )
+
+            for record in orders:
+                order_items = items_by_order.get(record["order_id"], []) or [
+                    {"name": "", "quantity": 0, "price": 0.0, "line_total": 0.0}
+                ]
+                for item in order_items:
+                    writer.writerow(
+                        [
+                            record["order_id"],
+                            record["created_at"].strftime("%Y-%m-%d %H:%M:%S") if record.get("created_at") else "",
+                            record.get("customer_name") or "",
+                            record.get("primary_mobile") or "",
+                            record.get("status") or "",
+                            record.get("payment_method") or "",
+                            item["name"],
+                            item["quantity"],
+                            item["price"],
+                            item["line_total"],
+                            float(record.get("total_price") or 0),
+                        ]
+                    )
+
+            output.seek(0)
+            response = Response(
+                content=output.getvalue(),
+                media_type="text/csv",
+                headers={
+                    "Content-Disposition": "attachment; filename=order-history.csv",
+                },
+            )
+            return response
+
+        result = []
+        for record in orders:
+            order_id = record["order_id"]
+            result.append(
+                {
+                    "order_id": order_id,
+                    "created_at": _format_datetime(record.get("created_at")),
+                    "status": record.get("status") or "Pending",
+                    "payment_method": record.get("payment_method") or "Unknown",
+                    "total_price": float(record.get("total_price") or 0),
+                    "customer_id": int(record.get("customer_id") or 0),
+                    "customer_name": record.get("customer_name") or "Customer",
+                    "customer_phone": record.get("primary_mobile"),
+                    "customer_email": record.get("email"),
+                    "address": {
+                        "address_id": record.get("address_id"),
+                        "line1": record.get("written_address"),
+                        "city": record.get("city"),
+                        "pin_code": record.get("pin_code"),
+                    },
+                    "item_count": int(record.get("item_count") or 0),
+                    "items": items_by_order.get(order_id, []),
+                }
+            )
+
+        return {"orders": result, "total": total_orders}
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.post("/api/admin/orders/{order_id}/status")
+def admin_update_order_status(order_id: int, payload: OrderStatusUpdate):
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        new_status = payload.status.strip()
+        cursor.execute(
+            "UPDATE orders SET status = %s WHERE order_id = %s",
+            (new_status, order_id),
+        )
+        if cursor.rowcount == 0:
+            db.rollback()
+            raise HTTPException(status_code=404, detail="Order not found")
+        db.commit()
+        return {"order_id": order_id, "status": new_status}
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(
+            status_code=500, detail=f"Failed to update order status: {err.msg}"
+        )
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.get("/api/admin/orders/{order_id}/invoice")
+def admin_order_invoice(order_id: int):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            SELECT 
+                o.order_id,
+                o.created_at,
+                o.total_price,
+                o.status,
+                o.payment_method,
+                c.customer_id,
+                c.name AS customer_name,
+                c.primary_mobile,
+                c.email,
+                a.address_id,
+                a.written_address,
+                a.city,
+                a.pin_code
+            FROM orders o
+            JOIN customers c ON o.customer_id = c.customer_id
+            LEFT JOIN addresses a ON o.address_id = a.address_id
+            WHERE o.order_id = %s
+            """,
+            (order_id,),
+        )
+        order_row = cursor.fetchone()
+        if not order_row:
+            raise HTTPException(status_code=404, detail="Order not found")
+
+        cursor.execute(
+            """
+            SELECT 
+                oi.quantity,
+                oi.price,
+                i.name AS item_name
+            FROM order_items oi
+            JOIN items i ON oi.item_id = i.item_id
+            WHERE oi.order_id = %s
+            ORDER BY i.name ASC
+            """,
+            (order_id,),
+        )
+        item_rows = cursor.fetchall() or []
+
+        items: List[Dict[str, object]] = []
+        subtotal = 0.0
+        for row in item_rows:
+            quantity = int(row.get("quantity") or 0)
+            price = float(row.get("price") or 0)
+            line_total = quantity * price
+            subtotal += line_total
+            items.append(
+                {
+                    "name": row.get("item_name") or "Item",
+                    "quantity": quantity,
+                    "price": price,
+                    "line_total": line_total,
+                }
+            )
+
+        invoice_response = {
+            "invoice_number": f"INV-{order_id:05d}",
+            "issued_at": _format_datetime(datetime.now()),
+            "due_date": None,
+            "order": {
+                "order_id": order_id,
+                "created_at": _format_datetime(order_row.get("created_at")),
+                "status": order_row.get("status") or "Pending",
+                "total_price": float(order_row.get("total_price") or 0),
+                "payment_method": order_row.get("payment_method") or "Unknown",
+            },
+            "customer": {
+                "customer_id": int(order_row.get("customer_id") or 0),
+                "name": order_row.get("customer_name") or "Customer",
+                "phone": order_row.get("primary_mobile"),
+                "email": order_row.get("email"),
+            },
+            "address": {
+                "address_id": order_row.get("address_id"),
+                "line1": order_row.get("written_address"),
+                "city": order_row.get("city"),
+                "pin_code": order_row.get("pin_code"),
+            },
+            "items": items,
+            "subtotal": subtotal,
+            "total": float(order_row.get("total_price") or subtotal),
+        }
+
+        return invoice_response
+    finally:
+        cursor.close()
+        db.close()
+
+
+class ProductionPlanItem(BaseModel):
+    item_name: str
+    buffer_quantity: float
+    final_quantity: float
+
+class ProductionPlanRequest(BaseModel):
+    date: str
+    menu_type: str
+    plans: List[ProductionPlanItem]
+
+class PlannedQtyUpdate(BaseModel):
+    item_name: str
+    additional_qty: float = Field(..., gt=0)
+
+class UpdatePlannedRequest(BaseModel):
+    date: str
+    menu_type: str
+    updates: List[PlannedQtyUpdate]
+
+class OrderItemPayload(BaseModel):
+    item_id: int
+    quantity: int
+    price: float
+    menu_item_id: Optional[int] = None
+    meal_type: Optional[str] = None
+
+class CreateOrderPayload(BaseModel):
+    customer_id: int
+    address_id: Optional[int] = None
+    payment_method: str
+    items: List[OrderItemPayload]
+    order_date: Optional[str] = None
+    order_type: Optional[str] = None
+
+
+class AddressPayload(BaseModel):
+    address_type: Optional[str] = None
+    house_apartment_no: Optional[str] = None
+    written_address: str
+    city: str
+    pin_code: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    route_assignment: Optional[str] = None
+    is_default: bool = False
+
+@app.get("/api/customers/{customer_id}/addresses", tags=["Customers"])
+def get_customer_addresses(customer_id: int):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            SELECT
+                address_id,
+                address_type,
+                house_apartment_no,
+                written_address,
+                city,
+                pin_code,
+                is_default,
+                latitude,
+                longitude,
+                route_assignment
+            FROM addresses
+            WHERE customer_id = %s
+            ORDER BY is_default DESC, address_id ASC
+            """,
+            (customer_id,),
+        )
+        rows = cursor.fetchall()
+        return [
+            {
+                "address_id": row["address_id"],
+                "address_type": row.get("address_type") or "Address",
+                "house_apartment_no": row.get("house_apartment_no"),
+                "written_address": row.get("written_address") or "",
+                "city": row.get("city") or "",
+                "pin_code": row.get("pin_code") or "",
+                "is_default": bool(row.get("is_default")),
+                "latitude": float(row["latitude"]) if row.get("latitude") is not None else None,
+                "longitude": float(row["longitude"]) if row.get("longitude") is not None else None,
+                "route_assignment": row.get("route_assignment"),
+            }
+            for row in rows
+        ]
+    finally:
+        cursor.close()
+        db.close()
+
+
+def _resolve_coordinates(cursor, customer_id: int, latitude: Optional[float], longitude: Optional[float]) -> Tuple[float, float]:
+    lat = latitude
+    lng = longitude
+    if lat is not None and lng is not None:
+        return float(lat), float(lng)
+
+    cursor.execute(
+        """
+        SELECT latitude, longitude
+          FROM addresses
+         WHERE customer_id=%s AND is_default=1
+         LIMIT 1
+        """,
+        (customer_id,),
+    )
+    fallback = cursor.fetchone()
+    if fallback:
+        fallback_lat = fallback.get("latitude")
+        fallback_lng = fallback.get("longitude")
+        return (
+            float(fallback_lat) if fallback_lat is not None else 0.0,
+            float(fallback_lng) if fallback_lng is not None else 0.0,
+        )
+    return float(lat or 0.0), float(lng or 0.0)
+
+
+@app.post("/api/customers/{customer_id}/addresses", tags=["Customers"])
+def create_customer_address(customer_id: int, payload: AddressPayload):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT customer_id FROM customers WHERE customer_id=%s LIMIT 1", (customer_id,))
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Customer not found")
+
+        lat, lng = _resolve_coordinates(cursor, customer_id, payload.latitude, payload.longitude)
+
+        if payload.is_default:
+            cursor.execute("UPDATE addresses SET is_default=0 WHERE customer_id=%s", (customer_id,))
+
+        cursor.execute(
+            """
+            INSERT INTO addresses (
+                customer_id,
+                house_apartment_no,
+                written_address,
+                city,
+                pin_code,
+                latitude,
+                longitude,
+                address_type,
+                route_assignment,
+                is_default
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                customer_id,
+                payload.house_apartment_no,
+                payload.written_address.strip(),
+                payload.city.strip(),
+                payload.pin_code.strip(),
+                lat,
+                lng,
+                payload.address_type.strip() if payload.address_type else "Address",
+                payload.route_assignment,
+                1 if payload.is_default else 0,
+            ),
+        )
+        address_id = cursor.lastrowid
+        db.commit()
+
+        return {"address_id": address_id, "message": "Address added successfully"}
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(err)}")
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.put("/api/customers/{customer_id}/addresses/{address_id}", tags=["Customers"])
+def update_customer_address(customer_id: int, address_id: int, payload: AddressPayload):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT latitude, longitude FROM addresses WHERE address_id=%s AND customer_id=%s LIMIT 1",
+            (address_id, customer_id),
+        )
+        existing = cursor.fetchone()
+        if existing is None:
+            raise HTTPException(status_code=404, detail="Address not found")
+
+        lat_input = payload.latitude if payload.latitude is not None else existing.get("latitude")
+        lng_input = payload.longitude if payload.longitude is not None else existing.get("longitude")
+        lat, lng = _resolve_coordinates(cursor, customer_id, lat_input, lng_input)
+
+        if payload.is_default:
+            cursor.execute(
+                "UPDATE addresses SET is_default=0 WHERE customer_id=%s AND address_id<>%s",
+                (customer_id, address_id),
+            )
+
+        cursor.execute(
+            """
+            UPDATE addresses
+               SET house_apartment_no=%s,
+                   written_address=%s,
+                   city=%s,
+                   pin_code=%s,
+                   latitude=%s,
+                   longitude=%s,
+                   address_type=%s,
+                   route_assignment=%s,
+                   is_default=%s
+             WHERE address_id=%s AND customer_id=%s
+            """,
+            (
+                payload.house_apartment_no,
+                payload.written_address.strip(),
+                payload.city.strip(),
+                payload.pin_code.strip(),
+                lat,
+                lng,
+                payload.address_type.strip() if payload.address_type else "Address",
+                payload.route_assignment,
+                1 if payload.is_default else 0,
+                address_id,
+                customer_id,
+            ),
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Address not found")
+
+        db.commit()
+        return {"message": "Address updated successfully"}
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(err)}")
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.post("/api/customers/{customer_id}/addresses/{address_id}/default", tags=["Customers"])
+def set_default_customer_address(customer_id: int, address_id: int):
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute(
+            "SELECT address_id FROM addresses WHERE address_id=%s AND customer_id=%s LIMIT 1",
+            (address_id, customer_id),
+        )
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Address not found")
+
+        cursor.execute("UPDATE addresses SET is_default=0 WHERE customer_id=%s", (customer_id,))
+        cursor.execute(
+            "UPDATE addresses SET is_default=1 WHERE address_id=%s AND customer_id=%s",
+            (address_id, customer_id),
+        )
+        db.commit()
+        return {"message": "Default address updated"}
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(err)}")
+    finally:
+        cursor.close()
+        db.close()
+
+@app.post("/api/production/generate", tags=["Production"])
+def generate_production_plan(payload: ProductionPlanRequest):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    updated = 0
+    try:
+        # Get bld_id from menu_type
+        cursor.execute(
+            "SELECT bld_id FROM bld WHERE LOWER(bld_type)=LOWER(%s) LIMIT 1",
+            (payload.menu_type,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Invalid menu_type")
+        bld_id = row["bld_id"]
+
+        # Find menu_id for that date + bld_id
+        cursor.execute(
+            "SELECT menu_id FROM menu WHERE date=%s AND bld_id=%s LIMIT 1",
+            (payload.date, bld_id)
+        )
+        menu = cursor.fetchone()
+        if not menu:
+            raise HTTPException(status_code=404, detail="Menu not found for that date/type")
+        menu_id = menu["menu_id"]
+
+        # Update buffer and final quantities for each menu item
+        for plan in payload.plans:
+            buffer_input = plan.buffer_quantity if plan.buffer_quantity is not None else 0
+            final_input = plan.final_quantity if plan.final_quantity is not None else 0
+            buffer_value = max(int(round(buffer_input)), 0)
+            final_value = max(float(final_input), 0.0)
+            cursor.execute(
+                """
+                UPDATE menu_items mi
+                JOIN items i ON mi.item_id = i.item_id
+                SET mi.buffer_qty = %s,
+                    mi.planned_qty = %s,
+                    mi.final_qty = %s
+                WHERE mi.menu_id = %s
+                AND LOWER(i.name) = LOWER(%s)
+                """,
+                (buffer_value, final_value, final_value, menu_id, plan.item_name)
+            )
+            updated += cursor.rowcount
+
+
+        # Mark plan as generated
+        cursor.execute(
+            "UPDATE menu SET is_production_generated = 1 WHERE menu_id=%s", (menu_id,)
+        )
+        db.commit()
+
+        log_admin_action(
+            db,
+            admin_id=None,
+            action_type="UPDATE",
+            entity_type="ITEM",
+            entity_id=menu_id,
+            description=f"Generated production plan for {payload.date} ({payload.menu_type})",
+        )
+
+        return {
+            "success": True,
+            "updated_items": updated,
+            "menu_type": payload.menu_type,
+            "message": "Production plan saved successfully"
+        }
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+@app.patch("/api/production/update-planned", tags=["Production"])
+def update_planned_quantities(payload: UpdatePlannedRequest):
+    if not payload.updates:
+        raise HTTPException(status_code=400, detail="No updates provided")
+
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    updated_items: List[Dict[str, float]] = []
+
+    try:
+        cursor.execute(
+            "SELECT bld_id FROM bld WHERE LOWER(bld_type)=LOWER(%s) LIMIT 1",
+            (payload.menu_type,),
+        )
+        bld_row = cursor.fetchone()
+        if not bld_row:
+            raise HTTPException(status_code=404, detail="Invalid menu_type")
+        bld_id = bld_row["bld_id"]
+
+        cursor.execute(
+            "SELECT menu_id FROM menu WHERE date=%s AND bld_id=%s LIMIT 1",
+            (payload.date, bld_id),
+        )
+        menu_row = cursor.fetchone()
+        if not menu_row:
+            raise HTTPException(status_code=404, detail="Menu not found for that date/type")
+        menu_id = menu_row["menu_id"]
+
+        for adjustment in payload.updates:
+            cursor.execute(
+                """
+                UPDATE menu_items mi
+                JOIN items i ON mi.item_id = i.item_id
+                   SET mi.planned_qty = COALESCE(mi.planned_qty, 0) + %s,
+                       mi.final_qty = COALESCE(mi.final_qty, 0) + %s
+                 WHERE mi.menu_id = %s
+                   AND LOWER(i.name) = LOWER(%s)
+                """,
+                (adjustment.additional_qty, adjustment.additional_qty, menu_id, adjustment.item_name),
+            )
+            if cursor.rowcount == 0:
+                continue
+
+            cursor.execute(
+                """
+                SELECT mi.planned_qty
+                  FROM menu_items mi
+                  JOIN items i ON mi.item_id = i.item_id
+                 WHERE mi.menu_id = %s
+                   AND LOWER(i.name) = LOWER(%s)
+                 LIMIT 1
+                """,
+                (menu_id, adjustment.item_name),
+            )
+            planned_row = cursor.fetchone()
+            if planned_row:
+                updated_items.append(
+                    {
+                        "item_name": adjustment.item_name,
+                        "new_planned_qty": float(planned_row["planned_qty"]),
+                    }
+                )
+
+        if not updated_items:
+            raise HTTPException(status_code=404, detail="No matching menu items were updated")
+
+        db.commit()
+
+        log_admin_action(
+            db,
+            admin_id=None,
+            action_type="UPDATE",
+            entity_type="ITEM",
+            entity_id=menu_id,
+            description=f"Adjusted planned quantities for {payload.date} ({payload.menu_type})",
+        )
+
+        return {
+            "success": True,
+            "message": "Planned quantities updated successfully",
+            "updated_items": updated_items,
+        }
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+@app.post("/api/orders/create", tags=["Orders"])
+def create_order(payload: CreateOrderPayload):
+    if not payload.items:
+        raise HTTPException(status_code=400, detail="Order must include at least one item")
+
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        address_id = payload.address_id if payload.address_id is not None else 0
+        cursor.execute(
+            "SELECT address_id FROM addresses WHERE address_id=%s AND customer_id=%s LIMIT 1",
+            (address_id, payload.customer_id),
+        )
+        if cursor.fetchone() is None:
+            cursor.execute(
+                "SELECT address_id FROM addresses WHERE customer_id=%s AND is_default=1 LIMIT 1",
+                (payload.customer_id,),
+            )
+            fallback = cursor.fetchone()
+            if fallback is None:
+                raise HTTPException(status_code=400, detail="No valid address found for customer")
+            address_id = fallback[0]
+
+        total_price = sum(item.price * item.quantity for item in payload.items)
+
+        cursor.execute(
+            """
+            INSERT INTO orders (customer_id, address_id, total_price, payment_method, status, order_type)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            (
+                payload.customer_id,
+                address_id,
+                float(total_price),
+                payload.payment_method,
+                "Pending",
+                payload.order_type or "one_time",
+            ),
+        )
+        order_id = cursor.lastrowid
+
+        cursor.executemany(
+            """
+            INSERT INTO order_items (order_id, item_id, quantity, price)
+            VALUES (%s, %s, %s, %s)
+            """,
+            [
+            (order_id, item.item_id, item.quantity, float(item.price))
+            for item in payload.items
+        ],
+        )
+
+        for item in payload.items:
+            if item.menu_item_id is not None:
+                cursor.execute(
+                    "UPDATE menu_items SET available_qty = GREATEST(available_qty - %s, 0) WHERE menu_item_id = %s",
+                    (item.quantity, item.menu_item_id),
+                )
+
+        db.commit()
+
+        return {
+            "message": "Order placed successfully",
+            "order_id": order_id,
+            "total_price": float(total_price),
+            "status": "Pending",
+        }
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.get("/api/customers/{customer_id}/orders", tags=["Customers"])
+def list_customer_orders(customer_id: int, limit: int = Query(50, ge=1, le=200)):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        try:
+            cursor.execute(
+                """
+                SELECT o.order_id,
+                       o.created_at,
+                       o.total_price,
+                       o.status,
+                       o.payment_method,
+                       o.order_type,
+                       a.address_type,
+                       a.written_address,
+                       a.city,
+                       a.pin_code
+                  FROM orders o
+                  JOIN addresses a ON o.address_id = a.address_id
+                 WHERE o.customer_id = %s
+                 ORDER BY o.created_at DESC, o.order_id DESC
+                 LIMIT %s
+                """,
+                (customer_id, limit),
+            )
+        except mysql.connector.Error as err:
+            if err.errno == errorcode.ER_BAD_FIELD_ERROR:
+                cursor.execute(
+                    """
+                    SELECT o.order_id,
+                           o.created_at,
+                           o.total_price,
+                           o.status,
+                           o.payment_method,
+                           NULL AS order_type,
+                           a.address_type,
+                           a.written_address,
+                           a.city,
+                           a.pin_code
+                      FROM orders o
+                      JOIN addresses a ON o.address_id = a.address_id
+                     WHERE o.customer_id = %s
+                     ORDER BY o.created_at DESC, o.order_id DESC
+                     LIMIT %s
+                    """,
+                    (customer_id, limit),
+                )
+            else:
+                raise
+        orders = cursor.fetchall()
+        if not orders:
+            return []
+
+        order_ids = [row["order_id"] for row in orders]
+        placeholders = ",".join(["%s"] * len(order_ids))
+
+        cursor.execute(
+            f"""
+            SELECT oi.order_id,
+                   oi.quantity,
+                   oi.price,
+                   i.name AS item_name
+              FROM order_items oi
+              JOIN items i ON oi.item_id = i.item_id
+             WHERE oi.order_id IN ({placeholders})
+             ORDER BY oi.order_id ASC, oi.order_item_id ASC
+            """,
+            order_ids,
+        )
+        item_rows = cursor.fetchall()
+        items_by_order: Dict[int, List[Dict[str, object]]] = {}
+        for row in item_rows:
+            order_id = row["order_id"]
+            items_by_order.setdefault(order_id, []).append(
+                {
+                    "item_name": row.get("item_name") or "Item",
+                    "quantity": int(row.get("quantity") or 0),
+                    "price": float(row.get("price") or 0),
+                }
+            )
+
+        result = []
+        for order in orders:
+            order_id = order["order_id"]
+            created = order.get("created_at")
+            result.append(
+                {
+                    "order_id": order_id,
+                    "created_at": created.isoformat() if created else None,
+                    "total_price": float(order.get("total_price") or 0),
+                    "status": order.get("status") or "Pending",
+                    "payment_method": order.get("payment_method") or "Cash",
+                    "address": {
+                        "label": order.get("address_type") or "Address",
+                        "line": order.get("written_address") or "",
+                        "city": order.get("city") or "",
+                        "pin_code": order.get("pin_code") or "",
+                    },
+                    "items": items_by_order.get(order_id, []),
+                    "order_type": order.get("order_type") or "one_time",
+                }
+            )
+
+        return result
+    finally:
+        cursor.close()
+        db.close()
+
+@app.get("/api/production/status", tags=["Production"])
+def get_production_plan_status(date: str):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            SELECT m.bld_id, b.bld_type,
+                   MAX(mi.is_production_generated) AS is_generated
+              FROM menu m
+              JOIN menu_items mi ON m.menu_id = mi.menu_id
+              JOIN bld b ON m.bld_id = b.bld_id
+             WHERE m.date = %s
+          GROUP BY m.bld_id, b.bld_type
+            """,
+            (date,),
+        )
+        rows = cursor.fetchall()
+        return {
+            "date": date,
+            "status": [
+                {"bld_id": r["bld_id"], "menu_type": r["bld_type"], "is_generated": bool(r["is_generated"])}
+                for r in rows
+            ],
+        }
+    finally:
+        cursor.close()
         db.close()

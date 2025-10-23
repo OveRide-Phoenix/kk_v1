@@ -164,7 +164,7 @@ export default function NewSubscription() {
                         >
                           <div className="w-[120px] h-[120px] flex-shrink-0">
                             <Image
-                              src={item.image}
+                              src={item.image || "/images/menu/idli-sambar.jpg"}
                               alt={item.name}
                               width={120}
                               height={120}
