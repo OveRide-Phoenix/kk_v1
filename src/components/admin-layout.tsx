@@ -4,11 +4,12 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Bell, User, ChevronDown, Menu } from "lucide-react"
+import { Bell, User, ChevronDown, Menu, Search } from "lucide-react"
 import Sidebar from "@/components/sidebar"
 import { useAuthStore } from "@/store/store"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
+import { AskDialog } from "@/components/nl/ask-dialog"
 
 interface AdminLayoutProps {
   children: React.ReactNode
@@ -34,6 +35,7 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
   const sessionWarningTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sessionExpiryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [tokenVersion, setTokenVersion] = useState(0)
+  const [askOpen, setAskOpen] = useState(false)
 
   const clearSessionTimers = useCallback(() => {
     if (sessionWarningTimeoutRef.current) {
@@ -249,6 +251,14 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
             </div>
 
             <nav className="flex items-center space-x-4">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setAskOpen(true)}
+                aria-label="Search across Kuteera Kitchen"
+              >
+                <Search className="h-5 w-5" />
+              </Button>
               <Button variant="ghost" size="icon">
                 <Bell className="h-5 w-5" />
               </Button>
@@ -277,6 +287,8 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
         </main>
       </div>
       </div>
+
+      <AskDialog open={askOpen} onOpenChange={setAskOpen} />
 
       <Dialog open={sessionDialogOpen} onOpenChange={() => {}}>
         <DialogContent>

@@ -1,0 +1,33 @@
+id: GET_TOP_ITEMS
+patterns:
+  - keywords:
+      any: ["top items", "best sellers", "popular items"]
+slots:
+  - name: range
+    type: range
+    default: this_month
+  - name: limit
+    type: int
+    extractor: limit
+    default: 10
+    validators:
+      - gte:1
+sql:
+  query: |
+    SELECT
+      i.item_id,
+      i.name AS item_name,
+      SUM(oi.quantity) AS qty_sold,
+      SUM(oi.quantity * oi.price) AS revenue
+    FROM orders o
+    JOIN order_items oi ON oi.order_id = o.order_id
+    JOIN items i ON i.item_id = oi.item_id
+    WHERE DATE(o.created_at) BETWEEN :start_date AND :end_date
+    GROUP BY i.item_id, i.name
+    ORDER BY revenue DESC, qty_sold DESC
+    LIMIT :limit
+responses:
+  success_note: Top items ranked.
+examples:
+  - top items this month
+  - best sellers this week 5

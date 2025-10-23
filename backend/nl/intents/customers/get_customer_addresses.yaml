@@ -1,0 +1,33 @@
+id: GET_CUSTOMER_ADDRESSES
+patterns:
+  - keywords:
+      all: ["customer", "address"]
+  - keywords:
+      all: ["addresses", "for"]
+slots:
+  - name: customer_query
+    type: string
+    extractor: customer_query
+    required: true
+    validators:
+      - required
+sql:
+  query: |
+    SELECT
+      a.address_id,
+      a.written_address,
+      a.city,
+      a.pin_code,
+      a.latitude,
+      a.longitude,
+      a.address_type,
+      a.route_assignment,
+      a.is_default
+    FROM addresses a
+    WHERE a.customer_id = :customer_id
+    ORDER BY a.is_default DESC, a.address_id
+responses:
+  not_found_message: Customer not found.
+examples:
+  - addresses for customer shashank
+  - customer 9876543210 address

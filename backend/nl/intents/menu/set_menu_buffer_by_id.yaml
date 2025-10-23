@@ -1,0 +1,45 @@
+id: SET_MENU_BUFFER_BY_ID
+patterns:
+  - keywords:
+      all: ["buffer", "id"]
+slots:
+  - name: menu_item_id
+    type: int
+    extractor: menu_item_id
+    required: true
+    validators:
+      - required
+  - name: buffer_qty
+    type: int
+    extractor: buffer_qty
+    required: true
+    validators:
+      - required
+      - gte:0
+sql:
+  query: |
+    UPDATE menu_items
+    SET buffer_qty = :buffer_qty
+    WHERE menu_item_id = :menu_item_id
+  follow_up: |
+    SELECT
+      mi.menu_item_id,
+      m.date,
+      b.bld_type,
+      i.item_id,
+      i.name AS item_name,
+      mi.buffer_qty,
+      mi.final_qty,
+      mi.planned_qty,
+      mi.available_qty
+    FROM menu_items mi
+    JOIN menu m ON m.menu_id = mi.menu_id
+    JOIN bld b ON b.bld_id = m.bld_id
+    JOIN items i ON i.item_id = mi.item_id
+    WHERE mi.menu_item_id = :menu_item_id
+responses:
+  success_note: Buffer updated.
+  not_found_message: Menu item not found.
+examples:
+  - update buffer id 42 to 8
+  - set menu item 12 buffer 5

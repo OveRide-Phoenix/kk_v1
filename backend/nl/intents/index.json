@@ -1,0 +1,104 @@
+{
+  "intents": [
+    {
+      "id": "GET_MENU",
+      "path": "menu/get_menu.yaml",
+      "enabled": true,
+      "priority": 1,
+      "examples": [
+        "what's today's menu?",
+        "show me lunch menu"
+      ]
+    },
+    {
+      "id": "GET_MENU_BUFFER",
+      "path": "menu/get_menu_buffer.yaml",
+      "enabled": true,
+      "priority": 2,
+      "examples": [
+        "show buffer for today's dinner",
+        "menu buffer for lunch"
+      ]
+    },
+    {
+      "id": "SET_MENU_BUFFER_BY_ID",
+      "path": "menu/set_menu_buffer_by_id.yaml",
+      "enabled": true,
+      "priority": 3,
+      "examples": [
+        "update buffer id 45 to 10",
+        "set menu item 23 buffer 5"
+      ]
+    },
+    {
+      "id": "SET_MENU_BUFFER_BY_NAME",
+      "path": "menu/set_menu_buffer_by_name.yaml",
+      "enabled": true,
+      "priority": 4,
+      "examples": [
+        "update buffer for rasam to 20",
+        "set dinner buffer for curd rice 15"
+      ]
+    },
+    {
+      "id": "GET_ORDER_COUNT",
+      "path": "orders/get_order_count.yaml",
+      "enabled": true,
+      "priority": 5,
+      "examples": [
+        "how many orders today?",
+        "order count this week"
+      ]
+    },
+    {
+      "id": "GET_ORDER_TOTALS",
+      "path": "orders/get_order_totals.yaml",
+      "enabled": true,
+      "priority": 6,
+      "examples": [
+        "total sales today",
+        "revenue this month"
+      ]
+    },
+    {
+      "id": "GET_TOP_ITEMS",
+      "path": "orders/get_top_items.yaml",
+      "enabled": true,
+      "priority": 7,
+      "examples": [
+        "top items this month",
+        "best sellers this week 5"
+      ]
+    },
+    {
+      "id": "GET_CUSTOMER_ORDERS",
+      "path": "customers/get_customer_orders.yaml",
+      "enabled": true,
+      "priority": 8,
+      "examples": [
+        "orders for customer 9876543210 this month",
+        "show shashank orders this week"
+      ]
+    },
+    {
+      "id": "GET_CUSTOMER_ADDRESSES",
+      "path": "customers/get_customer_addresses.yaml",
+      "enabled": true,
+      "priority": 9,
+      "examples": [
+        "addresses for customer shashank",
+        "customer 9876543210 address"
+      ]
+    },
+    {
+      "id": "GET_ADMIN_LOGS_RECENT",
+      "path": "admin/get_admin_logs_recent.yaml",
+      "enabled": true,
+      "priority": 10,
+      "examples": [
+        "show recent admin logs",
+        "latest updates"
+      ]
+    }
+  ]
+}

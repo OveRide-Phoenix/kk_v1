@@ -1,0 +1,29 @@
+id: GET_ADMIN_LOGS_RECENT
+patterns:
+  - keywords:
+      any: ["admin logs", "recent changes", "audit log"]
+slots:
+  - name: limit
+    type: int
+    extractor: limit
+    default: 10
+    validators:
+      - gte:1
+sql:
+  query: |
+    SELECT
+      log_id,
+      admin_id,
+      action_type,
+      entity_type,
+      entity_id,
+      description,
+      timestamp
+    FROM admin_logs
+    ORDER BY timestamp DESC
+    LIMIT :limit
+responses:
+  success_note: Recent admin actions.
+examples:
+  - show recent admin logs
+  - latest updates

@@ -1,0 +1,23 @@
+id: GET_ORDER_TOTALS
+patterns:
+  - keywords:
+      any: ["sales", "revenue", "total sales", "total revenue"]
+      all: ["total"]
+slots:
+  - name: range
+    type: range
+    default: today
+    validators:
+      - required
+sql:
+  query: |
+    SELECT
+      COALESCE(SUM(o.total_price), 0) AS total_sales,
+      COUNT(*) AS total_orders
+    FROM orders o
+    WHERE DATE(o.created_at) BETWEEN :start_date AND :end_date
+responses:
+  success_note: Gross sales calculated.
+examples:
+  - total sales today
+  - revenue this month
