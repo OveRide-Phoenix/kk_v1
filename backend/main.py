@@ -691,6 +691,8 @@ def get_daily_menu(
                 mi.menu_item_id,
                 mi.item_id,
                 i.name AS item_name,
+                i.uom,
+                i.buffer_percentage,
                 mi.category_id,
                 mi.planned_qty,
                 mi.available_qty,
@@ -721,6 +723,8 @@ def get_daily_menu(
                     "menu_item_id": it["menu_item_id"],
                     "item_id": it["item_id"],
                     "item_name": it["item_name"],
+                    "uom": it.get("uom"),
+                    "buffer_percentage": float(it["buffer_percentage"] or 0),
                     "category_id": it["category_id"],
                     "planned_qty": it["planned_qty"],
                     "available_qty": it["available_qty"],
@@ -1737,18 +1741,21 @@ def generate_production_plan(payload: ProductionPlanRequest):
 
         # Update buffer and final quantities for each menu item
         for plan in payload.plans:
-            buffer_value = int(round(plan.buffer_quantity))
-            final_value = float(plan.final_quantity)
+            buffer_input = plan.buffer_quantity if plan.buffer_quantity is not None else 0
+            final_input = plan.final_quantity if plan.final_quantity is not None else 0
+            buffer_value = max(int(round(buffer_input)), 0)
+            final_value = max(float(final_input), 0.0)
             cursor.execute(
                 """
                 UPDATE menu_items mi
                 JOIN items i ON mi.item_id = i.item_id
                 SET mi.buffer_qty = %s,
+                    mi.planned_qty = %s,
                     mi.final_qty = %s
                 WHERE mi.menu_id = %s
                 AND LOWER(i.name) = LOWER(%s)
                 """,
-                (buffer_value, final_value, menu_id, plan.item_name)
+                (buffer_value, final_value, final_value, menu_id, plan.item_name)
             )
             updated += cursor.rowcount
 
@@ -1814,11 +1821,12 @@ def update_planned_quantities(payload: UpdatePlannedRequest):
                 """
                 UPDATE menu_items mi
                 JOIN items i ON mi.item_id = i.item_id
-                   SET mi.planned_qty = mi.planned_qty + %s
+                   SET mi.planned_qty = COALESCE(mi.planned_qty, 0) + %s,
+                       mi.final_qty = COALESCE(mi.final_qty, 0) + %s
                  WHERE mi.menu_id = %s
                    AND LOWER(i.name) = LOWER(%s)
                 """,
-                (adjustment.additional_qty, menu_id, adjustment.item_name),
+                (adjustment.additional_qty, adjustment.additional_qty, menu_id, adjustment.item_name),
             )
             if cursor.rowcount == 0:
                 continue

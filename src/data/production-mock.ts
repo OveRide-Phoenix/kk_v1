@@ -15,6 +15,7 @@ export interface PublishedMenuItem {
   available_quantity: number;
   buffer_quantity?: number;
   final_quantity?: number;
+  buffer_percentage?: number;
   category: 'Breakfast' | 'Lunch' | 'Dinner' | 'Condiments';
 }
 

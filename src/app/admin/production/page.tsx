@@ -71,6 +71,7 @@ type MenuApiItem = {
   unit_name?: string;
   measure_unit?: string;
   quantity_uom?: string;
+  buffer_percentage?: number;
 };
 
 type MenuApiResponse = {
@@ -109,24 +110,35 @@ function mapMenuItems(menuItems: PublishedMenuItem[]): PlanItem[] {
   if (menuItems.length === 0) return [];
 
   return menuItems.map((menuItem) => {
-    const plannedQuantity = Number(menuItem.planned_quantity.toFixed(2));
-    const availableQuantity = Number(menuItem.available_quantity.toFixed(2));
+    const demandQuantityRaw =
+      menuItem.available_quantity != null ? menuItem.available_quantity : 0;
+    const demandQuantityNumeric = Number(demandQuantityRaw);
+    const demandQuantity = Number.isFinite(demandQuantityNumeric)
+      ? demandQuantityNumeric
+      : 0;
+    const normalizedDemand = Number(demandQuantity.toFixed(2));
+
     const rawBufferQuantity = Number(menuItem.buffer_quantity ?? 0);
-    const bufferQuantity = Math.round(rawBufferQuantity);
-    const finalQuantity =
-      menuItem.final_quantity != null
-        ? Number(Number(menuItem.final_quantity).toFixed(2))
-        : Number((plannedQuantity + bufferQuantity).toFixed(2));
-    const customerOrders = Math.max(plannedQuantity - availableQuantity, 0);
-    const roundedCustomerOrders = Number(customerOrders.toFixed(2));
+    const bufferQuantity = Number.isFinite(rawBufferQuantity)
+      ? Math.max(Math.round(rawBufferQuantity), 0)
+      : 0;
+
+    const finalRaw =
+      menuItem.final_quantity ??
+      menuItem.planned_quantity ??
+      normalizedDemand + bufferQuantity;
+    const finalNumeric = Number(finalRaw);
+    const finalQuantity = Number.isFinite(finalNumeric)
+      ? Number(finalNumeric.toFixed(2))
+      : Number((normalizedDemand + bufferQuantity).toFixed(2));
 
     return {
       item_name: menuItem.item_name,
       unit: menuItem.unit,
       category: menuItem.category,
-      planned_quantity: plannedQuantity,
-      available_quantity: availableQuantity,
-      customer_orders: roundedCustomerOrders,
+      planned_quantity: normalizedDemand,
+      available_quantity: normalizedDemand,
+      customer_orders: normalizedDemand,
       buffer_quantity: bufferQuantity,
       final_quantity: finalQuantity,
     };
@@ -563,6 +575,8 @@ async function fetchPublishedMenu(
           [category]: !!data?.is_production_generated,
         }));
 
+        const planGenerated = !!data?.is_production_generated;
+
         // ✅ If no items, just return
         if (!data?.items?.length) {
           itemsByCategory[category] = [];
@@ -571,24 +585,7 @@ async function fetchPublishedMenu(
 
         // ✅ Collect items per category
         itemsByCategory[category] = data.items.map((item) => {
-          const plannedQtyRaw =
-            item.planned_qty ?? item.planned_quantity ?? item.quantity ?? 0;
-          const availableQtyRaw =
-            item.available_qty ?? item.available_qty ?? item.quantity ?? 0;
-          const bufferQtyRaw =
-            item.buffer_qty ?? item.buffer_qty ?? 0;
-          const finalQtyRaw =
-            item.final_qty ?? item.final_qty ?? null;
-          const plannedQuantity = Number(plannedQtyRaw) || 0;
-          const availableQuantity = Math.max(Number(availableQtyRaw) || 0, 0);
-          const bufferQuantity = Math.max(Math.round(Number(bufferQtyRaw) || 0), 0);
-          const parsedFinalQty =
-            finalQtyRaw != null ? Number(finalQtyRaw) : Number.NaN;
-          const hasMeaningfulFinalQty =
-            Number.isFinite(parsedFinalQty) && parsedFinalQty > 0;
-          const finalQuantity = hasMeaningfulFinalQty
-            ? parsedFinalQty
-            : plannedQuantity + bufferQuantity;
+          const itemName = item.item_name ?? item.name ?? "Unnamed Item";
           const unit =
             item.uom ??
             item.unit ??
@@ -596,16 +593,80 @@ async function fetchPublishedMenu(
             item.measure_unit ??
             item.quantity_uom ??
             "Nos";
-          const itemName = item.item_name ?? item.name ?? "Unnamed Item";
+
+          const plannedRaw =
+            item.planned_qty ??
+            item.planned_quantity ??
+            item.final_qty ??
+            item.final_quantity ??
+            item.quantity ??
+            0;
+          const availableRaw =
+            item.available_qty ??
+            item.available_quantity ??
+            item.quantity ??
+            null;
+
+          const bufferPercentage = Number(item.buffer_percentage ?? 0) || 0;
+          const storedBufferRaw =
+            item.buffer_qty ??
+            item.buffer_quantity ??
+            0;
+
+          let bufferQuantity = Math.max(
+            Math.round(Number(storedBufferRaw) || 0),
+            0,
+          );
+
+          let demandQuantity = Number.isFinite(Number(availableRaw))
+            ? Math.max(Number(availableRaw), 0)
+            : Math.max(Number(plannedRaw) || 0, 0);
+
+          if (!planGenerated && bufferQuantity === 0 && bufferPercentage > 0) {
+            bufferQuantity = Math.max(
+              Math.round((demandQuantity * bufferPercentage) / 100),
+              0,
+            );
+          }
+
+          if (availableRaw == null && planGenerated) {
+            demandQuantity = Math.max(
+              (Number(plannedRaw) || 0) - bufferQuantity,
+              0,
+            );
+          }
+
+          const storedFinalRaw =
+            item.final_qty ??
+            item.final_quantity ??
+            plannedRaw;
+
+          let finalQuantity = Number(storedFinalRaw);
+          if (!Number.isFinite(finalQuantity) || finalQuantity <= 0) {
+            finalQuantity = demandQuantity + bufferQuantity;
+          }
+
+          if (!planGenerated) {
+            finalQuantity = demandQuantity + bufferQuantity;
+          }
+
+          const plannedQuantity = planGenerated
+            ? finalQuantity
+            : demandQuantity + bufferQuantity;
+
+          const normalizedDemand = Number(demandQuantity.toFixed(2));
+          const normalizedPlanned = Number(plannedQuantity.toFixed(2));
+          const normalizedFinal = Number(finalQuantity.toFixed(2));
 
           return {
             date,
             item_name: itemName,
             unit,
-            planned_quantity: plannedQuantity,
-            available_quantity: availableQuantity,
+            planned_quantity: normalizedPlanned,
+            available_quantity: normalizedDemand,
             buffer_quantity: bufferQuantity,
-            final_quantity: Number(finalQuantity.toFixed(2)),
+            final_quantity: normalizedFinal,
+            buffer_percentage: bufferPercentage,
             category,
           };
         });
@@ -958,11 +1019,17 @@ useEffect(() => {
             (entry) => entry.item_name.toLowerCase() === item.item_name.toLowerCase(),
           );
           if (!updated) return item;
-          const newPlanned = Number(updated.new_planned_qty);
-          const finalQuantity = Number((newPlanned + item.buffer_quantity).toFixed(2));
+          const newFinalRaw = Number(updated.new_planned_qty);
+          const finalQuantity = Number.isFinite(newFinalRaw)
+            ? Number(newFinalRaw.toFixed(2))
+            : Number((item.planned_quantity + item.buffer_quantity).toFixed(2));
+          const demandQuantity = Math.max(finalQuantity - item.buffer_quantity, 0);
+          const normalizedDemand = Number(demandQuantity.toFixed(2));
           return {
             ...item,
-            planned_quantity: Number(newPlanned.toFixed(2)),
+            planned_quantity: normalizedDemand,
+            available_quantity: normalizedDemand,
+            customer_orders: normalizedDemand,
             final_quantity: finalQuantity,
           };
         });
@@ -1392,7 +1459,7 @@ useEffect(() => {
       </Dialog>
 
       <Dialog open={planPreviewOpen} onOpenChange={setPlanPreviewOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl w-full max-h-[85vh] overflow-y-auto sm:max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>
               Production Plan Preview · {selectedDateLabel}
@@ -1407,12 +1474,12 @@ useEffect(() => {
               previewCategories.map((category) => {
                 const items = planData[category];
                 return (
-                  <div key={category} className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <Badge variant="outline" className="px-3 py-1">
+                  <div key={category} className="space-y-3">
+                    <div className="flex flex-wrap items-baseline justify-between gap-3">
+                      <h3 className="text-lg font-semibold text-foreground">
                         {category}
-                      </Badge>
-                      <span className="text-muted-foreground">
+                      </h3>
+                      <span className="text-muted-foreground text-sm">
                         {items.length} items ·{" "}
                         {planGeneratedState[category]
                           ? editingState[category]
