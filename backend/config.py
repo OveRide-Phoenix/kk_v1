@@ -18,7 +18,7 @@ if not SECRET_KEY:
     raise RuntimeError("SECRET_KEY is empty after cleaning")
 
 ALGORITHM = "HS256"
-ACCESS_TOKEN_TTL_SEC  = int(_clean(os.getenv("ACCESS_TOKEN_TTL_SEC",  "900")))      # 15m
+ACCESS_TOKEN_TTL_SEC  = int(_clean(os.getenv("ACCESS_TOKEN_TTL_SEC",  "86400")))    # 24h
 REFRESH_TOKEN_TTL_SEC = int(_clean(os.getenv("REFRESH_TOKEN_TTL_SEC", "604800")))   # 7d
 
 COOKIE_SECURE   = (_clean(os.getenv("COOKIE_SECURE", "false")) or "").lower() == "true"

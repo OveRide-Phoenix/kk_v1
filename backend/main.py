@@ -1,5 +1,6 @@
 from calendar import month
 from datetime import date, datetime
+import re
 import mysql.connector
 from mysql.connector import errorcode
 from fastapi import FastAPI, HTTPException, Query, Depends
@@ -151,6 +152,8 @@ def admin_required(user = Depends(get_current_user)):
     if user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
     return user
+
+SCHEMA_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_]+$")
 
 # Get city by phone number
 @app.get("/api/get-city")
@@ -465,6 +468,132 @@ def modify_customer(customer_id: int, customer: CustomerUpdate, db=Depends(get_d
 @app.delete("/delete-customer/{customer_id}", response_model=dict)
 def remove_customer(customer_id: int, db=Depends(get_db)):
     return delete_customer(db, customer_id)
+
+# ---------------- Developer Tools ----------------
+@app.get("/api/dev/db-schema", tags=["Developer"])
+def get_dev_db_schema(
+    include_views: bool = Query(True, alias="includeViews"),
+    schema: Optional[str] = Query(None),
+    user = Depends(admin_required),
+):
+    """
+    Return read-only schema DDL metadata for developer tooling.
+    """
+    db = get_db()
+    metadata_cursor = db.cursor()
+    ddl_cursor = None
+    try:
+        try:
+            db.start_transaction(readonly=True)
+        except Exception:
+            pass
+
+        schema_name = (schema.strip() if schema else "kk_v1") or "kk_v1"
+        if not SCHEMA_NAME_PATTERN.fullmatch(schema_name):
+            raise HTTPException(status_code=400, detail="Invalid schema name")
+        metadata_cursor.execute(f"USE `{schema_name}`")
+        active_schema = schema_name
+
+        try:
+            metadata_cursor.execute("SET SESSION MAX_EXECUTION_TIME=5000")
+        except mysql.connector.Error:
+            pass
+
+        targets: List[Tuple[str, str]] = []
+
+        metadata_cursor.execute("SHOW FULL TABLES WHERE Table_type='BASE TABLE'")
+        base_rows = metadata_cursor.fetchall()
+        for row in base_rows:
+            if not row:
+                continue
+            table_name = row[0]
+            if table_name:
+                targets.append((table_name, "TABLE"))
+
+        if include_views:
+            metadata_cursor.execute("SHOW FULL TABLES WHERE Table_type='VIEW'")
+            view_rows = metadata_cursor.fetchall()
+            for row in view_rows:
+                if not row:
+                    continue
+                view_name = row[0]
+                if view_name:
+                    targets.append((view_name, "VIEW"))
+
+        seen = set()
+        ordered_targets: List[Tuple[str, str]] = []
+        for name, kind in targets:
+            if name in seen:
+                continue
+            seen.add(name)
+            ordered_targets.append((name, kind))
+
+        ordered_targets.sort(key=lambda item: item[0].lower())
+
+        ddl_cursor = db.cursor()
+        tables_payload: List[Dict[str, object]] = []
+        for name, kind in ordered_targets:
+            try:
+                if kind == "VIEW":
+                    ddl_cursor.execute(f"SHOW CREATE VIEW `{name}`")
+                else:
+                    ddl_cursor.execute(f"SHOW CREATE TABLE `{name}`")
+                ddl_row = ddl_cursor.fetchone()
+                if not ddl_row or len(ddl_row) < 2:
+                    continue
+                ddl_text = ddl_row[1]
+                columns_list: List[Dict[str, object]] = []
+                try:
+                    ddl_cursor.execute(f"SHOW FULL COLUMNS FROM `{name}`")
+                    column_rows = ddl_cursor.fetchall()
+                    column_fields = [desc[0] for desc in ddl_cursor.description]
+                    # Expected order: Field, Type, Collation, Null, Key, Default, Extra, Privileges, Comment
+                    for col in column_rows:
+                        record = dict(zip(column_fields, col))
+                        columns_list.append(
+                            {
+                                "name": record.get("Field"),
+                                "type": record.get("Type"),
+                                "nullable": record.get("Null"),
+                                "key": record.get("Key"),
+                                "default": record.get("Default"),
+                                "extra": record.get("Extra"),
+                                "comment": record.get("Comment"),
+                            }
+                        )
+                except mysql.connector.Error:
+                    columns_list = []
+                tables_payload.append(
+                    {
+                        "name": name,
+                        "kind": kind,
+                        "ddl": ddl_text,
+                        "columns": columns_list,
+                    }
+                )
+            except mysql.connector.Error:
+                continue
+
+        timestamp = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+
+        return {
+            "schema": active_schema,
+            "generated_at": timestamp,
+            "tables": tables_payload,
+        }
+    except HTTPException:
+        raise
+    except mysql.connector.Error:
+        raise HTTPException(status_code=500, detail="Failed to fetch schema metadata")
+    finally:
+        if ddl_cursor is not None:
+            ddl_cursor.close()
+        metadata_cursor.close()
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        db.close()
 
 # ---------------- Product Management ----------------
 @app.get("/api/products/items", tags=["Products"])
