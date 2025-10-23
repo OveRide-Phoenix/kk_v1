@@ -15,6 +15,16 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter as ConfirmFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -22,87 +32,115 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Loader2, Search, Compass } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { Loader2, Search, Compass, Wand2 } from "lucide-react";
 
-type NLResponse =
-  | {
-      intent: string;
-      slots?: Record<string, unknown>;
-      data?: unknown;
-      note?: string;
-      message?: string;
-      examples?: string[];
-    }
-  | {
-      intent: "UNKNOWN";
-      message: string;
-      examples?: string[];
-    };
+type NLSelectSuccess = {
+  intent: string;
+  sql: string;
+  rows: Array<Record<string, unknown>>;
+};
+
+type NLUpdateSuccess = {
+  intent: "SET_MENU_BUFFER";
+  sql: string;
+  affected: number;
+  row?: Record<string, unknown> | null;
+};
+
+type NLError = {
+  error: string;
+  sql?: string;
+  examples?: string[];
+};
+
+type NLResult = NLSelectSuccess | NLUpdateSuccess | NLError;
 
 interface AskDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
+type IntentMeta = {
+  title: string;
+  action: { label: string; href: string };
+  emptyMessage: string;
+};
+
 const FALLBACK_API_BASE = "http://127.0.0.1:8000";
 
-const intentMeta: Record<
-  string,
-  { title: string; action?: { label: string; href: string } }
-> = {
+const DEFAULT_ACTION = {
+  label: "Go to Admin Dashboard",
+  href: "/admin",
+};
+
+const DEFAULT_META: IntentMeta = {
+  title: "Dashboard",
+  action: DEFAULT_ACTION,
+  emptyMessage: "The request returned no data. Double-check the details and try again.",
+};
+
+const intentMeta: Record<string, IntentMeta> = {
   GET_MENU: {
     title: "Daily Menu",
     action: { label: "Open Daily Menu Setup", href: "/admin/dailymenusetup" },
+    emptyMessage: "Menu is not set up for that date.",
   },
   GET_MENU_BUFFER: {
     title: "Menu Buffer",
     action: { label: "Manage Daily Menu", href: "/admin/dailymenusetup" },
+    emptyMessage: "Buffer is not configured for that day.",
   },
-  SET_MENU_BUFFER_BY_ID: {
-    title: "Buffer Update",
+  SET_MENU_BUFFER: {
+    title: "Buffer Updated",
     action: { label: "Review Daily Menu", href: "/admin/dailymenusetup" },
-  },
-  SET_MENU_BUFFER_BY_NAME: {
-    title: "Buffer Update",
-    action: { label: "Review Daily Menu", href: "/admin/dailymenusetup" },
+    emptyMessage: "Buffer update did not return any details.",
   },
   GET_ORDER_COUNT: {
     title: "Order Count",
     action: { label: "Open Reports", href: "/admin/reports" },
+    emptyMessage: "No orders found for that window.",
   },
   GET_ORDER_TOTALS: {
     title: "Sales Overview",
     action: { label: "Open Reports", href: "/admin/reports" },
+    emptyMessage: "No sales recorded for that period.",
   },
   GET_TOP_ITEMS: {
     title: "Top Items",
     action: { label: "View Sales Reports", href: "/admin/reports" },
+    emptyMessage: "No items sold in that period.",
   },
   GET_CUSTOMER_ORDERS: {
     title: "Customer Orders",
     action: { label: "Order History", href: "/admin/order-history" },
+    emptyMessage: "No orders matched that customer and time range.",
   },
   GET_CUSTOMER_ADDRESSES: {
     title: "Customer Addresses",
     action: { label: "Customer Management", href: "/admin/customermgmt" },
+    emptyMessage: "No saved addresses for that customer yet.",
   },
   GET_ADMIN_LOGS_RECENT: {
     title: "Admin Activity",
     action: { label: "View Admin Logs", href: "/admin/logs" },
+    emptyMessage: "No recent admin activity to display.",
   },
 };
 
 export function AskDialog({ open, onOpenChange }: AskDialogProps) {
   const [query, setQuery] = useState("");
-  const [response, setResponse] = useState<NLResponse | null>(null);
+  const [result, setResult] = useState<NLResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingWriteQuery, setPendingWriteQuery] = useState<string | null>(null);
+  const [confirmWriteOpen, setConfirmWriteOpen] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     if (!open) {
       setQuery("");
-      setResponse(null);
+      setResult(null);
       setError(null);
       setLoading(false);
     }
@@ -110,39 +148,48 @@ export function AskDialog({ open, onOpenChange }: AskDialogProps) {
 
   const endpoint = useMemo(() => {
     const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? FALLBACK_API_BASE;
-    return `${base}/api/nl/route`;
+    return `${base}/api/nl/sql`;
   }, []);
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const trimmed = query.trim();
-    if (!trimmed) {
-      setError("Ask a question to continue.");
-      setResponse(null);
-      return;
-    }
+  async function executeQuery(requestQuery: string) {
     setLoading(true);
     setError(null);
     try {
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ q: trimmed }),
+        body: JSON.stringify({ q: requestQuery }),
       });
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}));
         throw new Error(payload?.detail || `Request failed (${res.status})`);
       }
-      const payload: NLResponse = await res.json();
-      setResponse(payload);
+      const payload: NLResult = await res.json();
+      setResult(payload);
     } catch (err) {
       const detail =
         err instanceof Error ? err.message : "Failed to contact NL router.";
       setError(detail);
-      setResponse(null);
+      setResult(null);
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const trimmed = query.trim();
+    if (!trimmed) {
+      setError("Ask a question to continue.");
+      setResult(null);
+      return;
+    }
+    if (isPotentialUpdate(trimmed)) {
+      setPendingWriteQuery(trimmed);
+      setConfirmWriteOpen(true);
+      return;
+    }
+    executeQuery(trimmed);
   }
 
   function handleNavigate(href: string) {
@@ -150,15 +197,12 @@ export function AskDialog({ open, onOpenChange }: AskDialogProps) {
     router.push(href);
   }
 
-  const meta = response ? intentMeta[response.intent] : null;
-  const hasData =
-    response &&
-    "data" in response &&
-    response.data !== null &&
-    response.data !== undefined;
+  const meta = getIntentMeta(result);
+  const examples = isError(result) ? result.examples ?? [] : [];
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl border border-border/60 shadow-xl">
         <DialogHeader>
           <DialogTitle>Ask Kuteera Kitchen</DialogTitle>
@@ -174,7 +218,7 @@ export function AskDialog({ open, onOpenChange }: AskDialogProps) {
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search menus, orders, addresses, buffers..."
+                placeholder="Search menus, orders, revenue, customers, buffers..."
                 disabled={loading}
                 className="pl-9"
                 autoFocus
@@ -197,60 +241,38 @@ export function AskDialog({ open, onOpenChange }: AskDialogProps) {
             {error}
           </p>
         ) : null}
-        <ScrollArea className="max-h-[22rem] rounded-md border border-dashed border-border/60 bg-muted/30 p-4">
-          {response ? (
+        <ScrollArea className="max-h-[26rem] rounded-md border border-dashed border-border/60 bg-muted/30 p-4">
+          {result ? (
             <div className="space-y-4 text-sm">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline" className="bg-background/70 text-xs">
-                  Intent · {response.intent}
-                </Badge>
-                {meta ? (
-                  <span className="text-sm font-medium text-foreground">
-                    {meta.title}
-                  </span>
-                ) : null}
-                {"note" in response && response.note ? (
-                  <Badge className="bg-emerald-100 text-emerald-700">
-                    {response.note}
-                  </Badge>
-                ) : null}
-              </div>
-
-              {"slots" in response && response.slots ? (
-                <div className="flex flex-wrap gap-2">
-                  {Object.entries(response.slots).map(([key, value]) => (
-                    <Badge
-                      key={key}
-                      variant="secondary"
-                      className="bg-background text-xs font-medium"
-                    >
-                      {formatKey(key)}: {formatValue(value)}
-                    </Badge>
-                  ))}
-                </div>
+              {renderIntentBadge(result, meta)}
+              {isError(result) ? (
+                <Card className="border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
+                  <p className="font-medium">{result.error}</p>
+                  {result.sql ? (
+                    <pre className="mt-2 rounded bg-white/70 p-2 text-xs text-destructive-foreground">
+                      {result.sql}
+                    </pre>
+                  ) : null}
+                </Card>
               ) : null}
-
-              {"message" in response && response.message ? (
-                <p className="rounded-md border border-border/70 bg-background px-3 py-2 text-sm">
-                  {response.message}
-                </p>
-              ) : null}
-
-              {hasData ? renderData(response.data) : null}
-
-              {response.intent === "UNKNOWN" && response.examples?.length ? (
-                <div className="space-y-1">
-                  <p className="text-muted-foreground">Try asking:</p>
-                  <ul className="list-disc pl-5">
-                    {response.examples.map((sample) => (
+              {isUpdate(result) ? renderUpdateSummary(result) : null}
+              {isSelect(result) ? renderRows(result, meta) : null}
+              {isSuccess(result) && result.sql ? renderSQLSnippet(result.sql) : null}
+              {examples.length ? (
+                <Card className="border border-border/50 bg-background p-3">
+                  <p className="font-medium text-muted-foreground">
+                    Try asking:
+                  </p>
+                  <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+                    {examples.map((sample) => (
                       <li key={sample}>{sample}</li>
                     ))}
                   </ul>
-                </div>
+                </Card>
               ) : null}
             </div>
           ) : (
-            <div className="flex h-40 flex-col items-center justify-center gap-2 text-muted-foreground">
+            <div className="flex h-44 flex-col items-center justify-center gap-2 text-muted-foreground">
               <Compass className="h-8 w-8" />
               <p className="text-sm font-medium">
                 Ask about menus, orders, revenue, customers, or buffers.
@@ -259,116 +281,205 @@ export function AskDialog({ open, onOpenChange }: AskDialogProps) {
           )}
         </ScrollArea>
         <DialogFooter className="flex items-center justify-between gap-3 sm:flex-row">
-          <p className="text-xs text-muted-foreground">
-            Tip: phrases like “top items this month 5” or “update buffer for
-            rasam to 20” work best.
+          <p className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Wand2 className="h-3.5 w-3.5" />
+            Tips: “top items this month 5” · “tomorrow dinner menu” · “update
+            buffer for rasam to 20”
           </p>
-          {meta?.action ? (
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => handleNavigate(meta.action!.href)}
-            >
-              {meta.action.label}
-            </Button>
-          ) : null}
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() =>
+              handleNavigate((meta ?? DEFAULT_META).action.href)
+            }
+          >
+            {(meta ?? DEFAULT_META).action.label}
+          </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+      </Dialog>
+      <AlertDialog open={confirmWriteOpen} onOpenChange={setConfirmWriteOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Confirm buffer update</AlertDialogTitle>
+          <AlertDialogDescription>
+            This question will update menu buffer quantities in the database.
+            Please confirm you want to apply this change.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <ConfirmFooter>
+          <AlertDialogCancel
+            onClick={() => {
+              setConfirmWriteOpen(false);
+              setPendingWriteQuery(null);
+            }}
+          >
+            Cancel
+          </AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => {
+              if (pendingWriteQuery) {
+                setConfirmWriteOpen(false);
+                executeQuery(pendingWriteQuery);
+                setPendingWriteQuery(null);
+              }
+            }}
+          >
+            Yes, update buffer
+          </AlertDialogAction>
+        </ConfirmFooter>
+      </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
-function renderData(data: unknown) {
-  if (Array.isArray(data)) {
-    if (data.length === 0) {
-      return (
-        <p className="rounded-md border border-border/70 bg-background px-3 py-2 text-sm text-muted-foreground">
-          No records found for this request.
-        </p>
-      );
-    }
-    if (data.every((item) => !isPlainObject(item))) {
-      return (
-        <ul className="list-disc space-y-1 pl-5">
-          {data.map((item, index) => (
-            <li key={index}>{formatValue(item)}</li>
-          ))}
-        </ul>
-      );
-    }
-    const rows = data.filter(isPlainObject) as Record<string, unknown>[];
-    const columns = Array.from(
-      rows.reduce((set, row) => {
-        Object.keys(row).forEach((key) => set.add(key));
-        return set;
-      }, new Set<string>())
-    );
-    return (
-      <div className="rounded-lg border border-border bg-background">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              {columns.map((column) => (
-                <TableHead key={column}>{formatKey(column)}</TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((row, rowIndex) => (
-              <TableRow key={rowIndex}>
-                {columns.map((column) => (
-                  <TableCell key={column}>
-                    {formatValue(row[column]) || "—"}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-    );
-  }
-
-  if (isPlainObject(data)) {
-    const entries = Object.entries(data);
-    if (entries.length === 0) {
-      return (
-        <p className="rounded-md border border-border/70 bg-background px-3 py-2 text-sm text-muted-foreground">
-          Nothing to display.
-        </p>
-      );
-    }
-    return (
-      <div className="overflow-hidden rounded-lg border border-border bg-background">
-        <Table>
-          <TableBody>
-            {entries.map(([key, value]) => (
-              <TableRow key={key}>
-                <TableCell className="w-48 font-medium text-muted-foreground">
-                  {formatKey(key)}
-                </TableCell>
-                <TableCell>{formatValue(value) || "—"}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-    );
-  }
-
-  if (data === null || data === undefined) {
+function getIntentMeta(result: NLResult | null) {
+  if (!result || isError(result)) {
     return null;
   }
+  const intentKey =
+    result.intent === "SET_MENU_BUFFER" ? "SET_MENU_BUFFER" : result.intent;
+  return intentMeta[intentKey] ?? null;
+}
 
+function renderIntentBadge(result: NLResult, meta: IntentMeta | null) {
+  if (isError(result)) {
+    return (
+      <Badge variant="outline" className="bg-background/70 text-xs text-destructive">
+        Something went wrong
+      </Badge>
+    );
+  }
+  const effectiveMeta = meta ?? DEFAULT_META;
   return (
-    <p className="rounded-md border border-border/70 bg-background px-3 py-2 text-sm">
-      {formatValue(data)}
-    </p>
+    <div className="flex flex-wrap items-center gap-2">
+      <Badge variant="outline" className="bg-background/70 text-xs">
+        Intent · {result.intent}
+      </Badge>
+      {meta ? (
+        <span className="text-sm font-medium text-foreground">
+          {meta.title}
+        </span>
+      ) : null}
+      {isUpdate(result) ? (
+        <Badge className="bg-emerald-100 text-emerald-700">
+          {result.affected} row{result.affected === 1 ? "" : "s"} updated
+        </Badge>
+      ) : null}
+      {isSelect(result) && result.rows.length === 0 ? (
+        <Badge className="bg-amber-100 text-amber-800">
+          {effectiveMeta.emptyMessage}
+        </Badge>
+      ) : null}
+    </div>
   );
 }
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+function renderUpdateSummary(result: NLUpdateSuccess) {
+  if (!result.row) {
+    return null;
+  }
+  return (
+    <Card className="space-y-3 border border-emerald-200 bg-emerald-50/60 p-4">
+      <p className="text-sm font-medium text-emerald-900">
+        Buffer updated successfully.
+      </p>
+      {renderSimpleTable([result.row])}
+    </Card>
+  );
+}
+
+function renderRows(result: NLSelectSuccess, meta: IntentMeta | null) {
+  const effectiveMeta = meta ?? DEFAULT_META;
+  if (!result.rows.length) {
+    return (
+      <Card className="border border-border/60 bg-background p-4 text-sm text-muted-foreground">
+        {effectiveMeta.emptyMessage}
+      </Card>
+    );
+  }
+  return renderSimpleTable(result.rows);
+}
+
+function renderSimpleTable(rows: Array<Record<string, unknown>>) {
+  const columns = deriveColumns(rows);
+  return (
+    <div className="rounded-lg border border-border bg-background shadow-sm">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            {columns.map((column) => (
+              <TableHead key={column}>{formatKey(column)}</TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((row, index) => (
+            <TableRow key={index}>
+              {columns.map((column) => (
+                <TableCell key={column}>{formatValue(row[column]) || "—"}</TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+function renderSQLSnippet(sql: string) {
+  return (
+    <details className="rounded-md border border-border/40 bg-background/80 p-3 text-xs text-muted-foreground">
+      <summary className="cursor-pointer text-sm font-medium text-foreground">
+        View generated SQL
+      </summary>
+      <pre className="mt-2 whitespace-pre-wrap rounded bg-muted/40 p-2">{sql}</pre>
+    </details>
+  );
+}
+
+function deriveColumns(rows: Array<Record<string, unknown>>) {
+  const columns = new Set<string>();
+  rows.forEach((row) => {
+    Object.keys(row).forEach((key) => {
+      if (!key.toLowerCase().endsWith("_id") && key.toLowerCase() !== "id") {
+        columns.add(key);
+      }
+    });
+  });
+  if (!columns.size && rows.length) {
+    return Object.keys(rows[0]);
+  }
+  return Array.from(columns);
+}
+
+function isError(result: NLResult | null): result is NLError {
+  return !!result && "error" in result;
+}
+
+function isUpdate(result: NLResult | null): result is NLUpdateSuccess {
+  return !!result && "intent" in result && result.intent === "SET_MENU_BUFFER";
+}
+
+function isSelect(result: NLResult | null): result is NLSelectSuccess {
+  return !!result && "rows" in result;
+}
+
+function isSuccess(result: NLResult | null): result is NLSelectSuccess | NLUpdateSuccess {
+  return isSelect(result) || isUpdate(result);
+}
+
+function isPotentialUpdate(text: string): boolean {
+  const value = text.toLowerCase();
+  if (!value) return false;
+  if (value.includes("update") && value.includes("buffer")) {
+    return true;
+  }
+  if (value.includes("set") && value.includes("buffer")) {
+    return true;
+  }
+  return false;
 }
 
 function formatKey(key: string): string {
@@ -387,18 +498,18 @@ function formatValue(value: unknown): string {
   }
   if (typeof value === "number") {
     return new Intl.NumberFormat("en-IN", {
-      maximumFractionDigits: 2,
+      maximumFractionDigits: Number.isInteger(value) ? 0 : 2,
     }).format(value);
   }
   if (value instanceof Date) {
-    return value.toISOString();
+    return value.toLocaleString();
   }
   if (typeof value === "string") {
     const trimmed = value.trim();
     if (/^\d{4}-\d{2}-\d{2}(T.*)?$/.test(trimmed)) {
-      const safeDate = new Date(trimmed);
-      if (!Number.isNaN(safeDate.valueOf())) {
-        return safeDate.toLocaleString();
+      const parsed = new Date(trimmed);
+      if (!Number.isNaN(parsed.valueOf())) {
+        return parsed.toLocaleString();
       }
     }
     return trimmed;
@@ -406,9 +517,9 @@ function formatValue(value: unknown): string {
   if (Array.isArray(value)) {
     return value.map((item) => formatValue(item)).join(", ");
   }
-  if (isPlainObject(value)) {
-    return Object.entries(value)
-      .map(([key, val]) => `${formatKey(key)}: ${formatValue(val)}`)
+  if (typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>)
+      .map(([innerKey, val]) => `${formatKey(innerKey)}: ${formatValue(val)}`)
       .join(", ");
   }
   return String(value);

@@ -5,3 +5,5 @@ SQLAlchemy
 alembic
 python-dotenv
 PyYAML
+google-generativeai
+sqlparse

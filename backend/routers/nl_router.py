@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..nl import get_service
+from ..nl.sql_service import SQLGenerationService
 
 router = APIRouter(prefix="/api/nl", tags=["Natural Language"])
 
@@ -18,9 +19,14 @@ class NLQuery(BaseModel):
     q: str = Field(..., min_length=1, max_length=500)
 
 
+class NLSQLQuery(BaseModel):
+    q: str = Field(..., min_length=1, max_length=500)
+
+
 RATE_LIMIT_WINDOW = 60.0
 RATE_LIMIT_MAX = 30
 _request_log: Dict[str, Deque[float]] = defaultdict(deque)
+_sql_service = SQLGenerationService()
 
 
 def _enforce_rate_limit(identifier: str) -> None:
@@ -55,3 +61,18 @@ def route_nl_query_get(
     _enforce_rate_limit(identifier)
     service = get_service()
     return service.interpret(q, db)
+
+
+@router.post("/sql")
+def route_nl_sql_query(
+    payload: NLSQLQuery,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    identifier = request.client.host if request.client else "anonymous"
+    _enforce_rate_limit(identifier)
+    try:
+        result = _sql_service.handle_query(query=payload.q, db=db)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return result
