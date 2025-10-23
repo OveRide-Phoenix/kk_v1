@@ -13,6 +13,7 @@ import {
   BarChart3,
   LogOut,
   Code2,
+  Database,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
@@ -38,7 +39,8 @@ const primaryNavigationItems = [
 ];
 
 const developerNavigationItems = [
-  { name: "Order Test", icon: Code2, href: "/admin/ordertest", id: "ordertest" },
+  { name: "Place Order", icon: Code2, href: "/admin/ordertest", id: "ordertest" },
+  { name: "DB Schema", icon: Database, href: "/developer/db-schema", id: "dbschema" },
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ 

@@ -118,7 +118,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   <Label htmlFor="description">Description</Label>
                   <Textarea
                     id="description"
-                    value={formData.description}
+                    value={formData.description ?? ""}
                     onChange={(e) => handleChange("description", e.target.value)}
                     rows={3}
                     className="w-full resize-none"
@@ -128,7 +128,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   <Label htmlFor="alias">Alias</Label>
                   <Input
                     id="alias"
-                    value={formData.alias}
+                    value={formData.alias ?? ""}
                     onChange={(e) => handleChange("alias", e.target.value)}
                   />
                 </div>
@@ -136,7 +136,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   <Label htmlFor="item_type">Item Type</Label>
                   <Input
                     id="item_type"
-                    value={formData.item_type}
+                    value={formData.item_type ?? ""}
                     onChange={(e) => handleChange("item_type", e.target.value)}
                   />
                 </div>
@@ -144,7 +144,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   <Label htmlFor="group">Group</Label>
                   <Input
                     id="group"
-                    value={formData.group || ""}
+                    value={formData.group ?? ""}
                     onChange={(e) => handleChange("group", e.target.value)}
                   />
                 </div>
@@ -152,7 +152,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   <Label htmlFor="uom">UOM (Unit of Measure) <span className="text-red-500">*</span></Label>
                   <Input
                     id="uom"
-                    value={formData.uom}
+                    value={formData.uom ?? ""}
                     onChange={(e) => handleChange("uom", e.target.value)}
                     required
                   />
@@ -162,7 +162,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   <Input
                     id="weight_factor"
                     type="number"
-                    value={formData.weight_factor}
+                    value={formData.weight_factor ?? ""}
                     onChange={(e) => handleChange("weight_factor", Number.parseFloat(e.target.value) || 0)}
                     step="0.001"
                     min={0}
@@ -172,7 +172,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   <Label htmlFor="weight_uom">Weight UOM</Label>
                   <Input
                     id="weight_uom"
-                    value={formData.weight_uom}
+                    value={formData.weight_uom ?? ""}
                     onChange={(e) => handleChange("weight_uom", e.target.value)}
                   />
                 </div>
@@ -180,7 +180,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   <Label htmlFor="hsn_code">HSN Code</Label>
                   <Input
                     id="hsn_code"
-                    value={formData.hsn_code}
+                    value={formData.hsn_code ?? ""}
                     onChange={(e) => handleChange("hsn_code", e.target.value)}
                   />
                 </div>
@@ -189,7 +189,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   <Input
                     id="factor"
                     type="number"
-                    value={formData.factor}
+                    value={formData.factor ?? ""}
                     onChange={(e) => handleChange("factor", Number.parseFloat(e.target.value) || 1)}
                     min={0.001}
                     step="0.001"
@@ -200,7 +200,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   <Input
                     id="quantity_portion"
                     type="number"
-                    value={formData.quantity_portion}
+                    value={formData.quantity_portion ?? ""}
                     onChange={(e) => handleChange("quantity_portion", Number.parseInt(e.target.value) || 0)}
                   />
                 </div>
@@ -209,7 +209,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   <Input
                     id="buffer_percentage"
                     type="number"
-                    value={formData.buffer_percentage}
+                    value={formData.buffer_percentage ?? ""}
                     onChange={(e) => handleChange("buffer_percentage", Number.parseFloat(e.target.value) || 0)}
                     min={0}
                     max={100}
@@ -239,7 +239,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   <Input
                     id="breakfast_price"
                     type="number"
-                    value={formData.breakfast_price}
+                    value={formData.breakfast_price ?? ""}
                     onChange={(e) => handleChange("breakfast_price", Number.parseFloat(e.target.value) || 0)}
                     min={0}
                     step="0.01"
@@ -250,7 +250,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   <Input
                     id="lunch_price"
                     type="number"
-                    value={formData.lunch_price}
+                    value={formData.lunch_price ?? ""}
                     onChange={(e) => handleChange("lunch_price", Number.parseFloat(e.target.value) || 0)}
                     min={0}
                     step="0.01"
@@ -261,7 +261,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   <Input
                     id="dinner_price"
                     type="number"
-                    value={formData.dinner_price}
+                    value={formData.dinner_price ?? ""}
                     onChange={(e) => handleChange("dinner_price", Number.parseFloat(e.target.value) || 0)}
                     min={0}
                     step="0.01"
@@ -272,7 +272,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   <Input
                     id="condiments_price"
                     type="number"
-                    value={formData.condiments_price}
+                    value={formData.condiments_price ?? ""}
                     onChange={(e) => handleChange("condiments_price", Number.parseFloat(e.target.value) || 0)}
                     min={0}
                     step="0.01"
@@ -283,7 +283,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   <Input
                     id="festival_price"
                     type="number"
-                    value={formData.festival_price}
+                    value={formData.festival_price ?? ""}
                     onChange={(e) => handleChange("festival_price", Number.parseFloat(e.target.value) || 0)}
                     min={0}
                     step="0.01"
@@ -294,7 +294,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   <Input
                     id="net_price"
                     type="number"
-                    value={formData.net_price}
+                    value={formData.net_price ?? ""}
                     onChange={(e) => handleChange("net_price", Number.parseFloat(e.target.value) || 0)}
                     min={0}
                     step="0.01"
@@ -311,7 +311,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   <Input
                     id="cgst"
                     type="number"
-                    value={formData.cgst}
+                    value={formData.cgst ?? ""}
                     onChange={(e) => handleChange("cgst", Number.parseFloat(e.target.value) || 0)}
                     min={0}
                     step="0.01"
@@ -322,7 +322,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   <Input
                     id="sgst"
                     type="number"
-                    value={formData.sgst}
+                    value={formData.sgst ?? ""}
                     onChange={(e) => handleChange("sgst", Number.parseFloat(e.target.value) || 0)}
                     min={0}
                     step="0.01"
@@ -333,7 +333,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   <Input
                     id="igst"
                     type="number"
-                    value={formData.igst}
+                    value={formData.igst ?? ""}
                     onChange={(e) => handleChange("igst", Number.parseFloat(e.target.value) || 0)}
                     min={0}
                     step="0.01"
@@ -353,4 +353,3 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     </Dialog>
   )
 }
-
