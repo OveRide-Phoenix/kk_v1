@@ -1,0 +1,38 @@
+id: SET_MENU_BUFFER_BY_NAME
+patterns:
+  - keywords:
+      all: ["buffer"]
+      none: ["id"]
+  - keywords:
+      all: ["update", "buffer"]
+slots:
+  - name: item_name
+    type: string
+    extractor: item_name
+    required: true
+    validators:
+      - required
+  - name: buffer_qty
+    type: int
+    extractor: buffer_qty
+    required: true
+    validators:
+      - required
+      - gte:0
+  - name: date
+    type: date
+    default: today
+    validators:
+      - required
+  - name: bld_type
+    type: enum
+    meta:
+      enum: meal
+sql: {}
+responses:
+  success_note: Buffer updated.
+  not_found_message: Item not found for that day.
+  disambiguation_message: Multiple items match, please specify meal.
+examples:
+  - update buffer for rasam to 20
+  - set dinner buffer for curd rice 15

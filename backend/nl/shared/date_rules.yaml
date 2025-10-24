@@ -1,0 +1,10 @@
+ranges:
+  today:
+    aliases: ["today", "todays"]
+    default: true
+  yesterday:
+    aliases: ["yesterday"]
+  this_week:
+    aliases: ["this week", "current week", "week"]
+  this_month:
+    aliases: ["this month", "current month", "month"]

@@ -10,7 +10,7 @@ from typing import List, Dict, Optional, Tuple, Any
 from fastapi.middleware.cors import CORSMiddleware
 import csv
 import io
-from .routers import admin_logs, reports
+from .routers import admin_logs, reports, nl_router
 from .customer.customer_crud import (
     create_customer,
     get_customer_by_id,
@@ -45,6 +45,7 @@ app.add_middleware(
 
 app.include_router(admin_logs.router)
 app.include_router(reports.router)
+app.include_router(nl_router.router)
 
 # Database connection function
 def get_db():

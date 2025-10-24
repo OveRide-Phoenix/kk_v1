@@ -1,0 +1,32 @@
+id: GET_CUSTOMER_ORDERS
+patterns:
+  - keywords:
+      all: ["customer", "orders"]
+  - keywords:
+      all: ["orders", "for"]
+slots:
+  - name: customer_query
+    type: string
+    extractor: customer_query
+    required: true
+    validators:
+      - required
+  - name: range
+    type: range
+    default: this_month
+sql:
+  query: |
+    SELECT
+      o.order_id,
+      o.created_at,
+      o.status,
+      o.total_price
+    FROM orders o
+    WHERE o.customer_id = :customer_id
+      AND DATE(o.created_at) BETWEEN :start_date AND :end_date
+    ORDER BY o.created_at DESC
+responses:
+  not_found_message: Customer not found.
+examples:
+  - orders for customer 9876543210 this month
+  - show shashank orders this week

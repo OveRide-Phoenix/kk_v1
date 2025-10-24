@@ -1,0 +1,21 @@
+id: GET_ORDER_COUNT
+patterns:
+  - keywords:
+      all: ["order"]
+      any: ["count", "many", "orders"]
+slots:
+  - name: range
+    type: range
+    default: today
+    validators:
+      - required
+sql:
+  query: |
+    SELECT COUNT(*) AS order_count
+    FROM orders o
+    WHERE DATE(o.created_at) BETWEEN :start_date AND :end_date
+responses:
+  success_note: Order count calculated.
+examples:
+  - how many orders today
+  - order count this week

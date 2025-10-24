@@ -1,0 +1,53 @@
+id: GET_MENU_BUFFER
+patterns:
+  - keywords:
+      all: ["buffer", "menu"]
+      none: ["update", "set"]
+  - keywords:
+      all: ["buffer"]
+slots:
+  - name: date
+    type: date
+    default: today
+    required: true
+    validators:
+      - required
+  - name: bld_type
+    type: enum
+    meta:
+      enum: meal
+sql:
+  query: |
+    SELECT
+      mi.menu_item_id,
+      m.date,
+      b.bld_type,
+      i.item_id,
+      i.name AS item_name,
+      mi.buffer_qty,
+      mi.final_qty,
+      mi.planned_qty,
+      mi.available_qty
+    FROM menu m
+    JOIN bld b ON b.bld_id = m.bld_id
+    JOIN menu_items mi ON mi.menu_id = m.menu_id
+    JOIN items i ON i.item_id = mi.item_id
+    WHERE m.date = :date
+      AND (:bld_type IS NULL OR b.bld_type = :bld_type)
+    ORDER BY b.bld_type, i.name
+projection:
+  - menu_item_id
+  - date
+  - bld_type
+  - item_id
+  - item_name
+  - buffer_qty
+  - final_qty
+  - planned_qty
+  - available_qty
+responses:
+  success_note: Buffer status retrieved.
+  not_found_message: No buffer records for that date.
+examples:
+  - show buffer for today's dinner
+  - menu buffer for lunch
