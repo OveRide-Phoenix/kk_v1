@@ -21,6 +21,7 @@ class NLQuery(BaseModel):
 
 class NLSQLQuery(BaseModel):
     q: str = Field(..., min_length=1, max_length=500)
+    confirm: bool = False
 
 
 RATE_LIMIT_WINDOW = 60.0
@@ -72,7 +73,7 @@ def route_nl_sql_query(
     identifier = request.client.host if request.client else "anonymous"
     _enforce_rate_limit(identifier)
     try:
-        result = _sql_service.handle_query(query=payload.q, db=db)
+        result = _sql_service.handle_query(query=payload.q, db=db, confirm=payload.confirm)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     return result

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -23,7 +24,7 @@ class SQLGenerationService:
             self._client = GeminiSQLClient()
         return self._client
 
-    def handle_query(self, *, query: str, db: Session) -> Dict[str, Any]:
+    def handle_query(self, *, query: str, db: Session, confirm: bool) -> Dict[str, Any]:
         query_lower = query.lower()
         allow_update = _should_allow_update(query_lower)
         try:
@@ -44,7 +45,12 @@ class SQLGenerationService:
             }
 
         if validation.is_update:
-            return self._execute_update(sql=validation.sql, db=db)
+            prepared = self._prepare_update(sql=validation.sql, db=db)
+            if isinstance(prepared, dict):
+                return prepared
+            if not confirm:
+                return self._preview_update(prepared)
+            return self._apply_update(prepared, db=db)
         return self._execute_select(sql=validation.sql, db=db, original_query=query)
 
     def _execute_select(self, *, sql: str, db: Session, original_query: str) -> Dict[str, Any]:
@@ -65,7 +71,7 @@ class SQLGenerationService:
                 "sql": sql,
             }
 
-    def _execute_update(self, *, sql: str, db: Session) -> Dict[str, Any]:
+    def _prepare_update(self, *, sql: str, db: Session) -> "PreparedUpdate | Dict[str, Any]":
         buffer_qty = _extract_buffer_qty(sql)
         if buffer_qty is None:
             return {
@@ -89,6 +95,36 @@ class SQLGenerationService:
                     "sql": sql,
                 }
 
+        current_rows = _fetch_menu_item(db, menu_item_id)
+        sanitized = _filter_row(current_rows[0]) if current_rows else None
+        return PreparedUpdate(
+            sql=sql,
+            buffer_qty=buffer_qty,
+            menu_item_id=menu_item_id,
+            current_row=sanitized,
+        )
+
+    def _preview_update(self, prepared: "PreparedUpdate") -> Dict[str, Any]:
+        previous_value = None
+        if prepared.current_row is not None:
+            previous_value = prepared.current_row.get("buffer_qty")
+        return {
+            "intent": "SET_MENU_BUFFER",
+            "sql": prepared.sql,
+            "confirm_required": True,
+            "preview": {
+                "target": prepared.current_row,
+                "changes": {
+                    "buffer_qty": {
+                        "current": previous_value,
+                        "new": _normalize_decimal(prepared.buffer_qty),
+                    }
+                },
+            },
+        }
+
+    def _apply_update(self, prepared: "PreparedUpdate", *, db: Session) -> Dict[str, Any]:
+        sql = prepared.sql
         try:
             result = db.execute(
                 text(
@@ -98,7 +134,10 @@ class SQLGenerationService:
                     WHERE menu_item_id = :menu_item_id
                     """
                 ),
-                {"buffer_qty": buffer_qty, "menu_item_id": menu_item_id},
+                {
+                    "buffer_qty": prepared.buffer_qty,
+                    "menu_item_id": prepared.menu_item_id,
+                },
             )
             db.commit()
             affected = result.rowcount
@@ -110,7 +149,7 @@ class SQLGenerationService:
                 "sql": sql,
             }
 
-        refreshed = _fetch_menu_item(db, menu_item_id)
+        refreshed = _fetch_menu_item(db, prepared.menu_item_id)
         display_rows = [_filter_row(row) for row in refreshed]
         row_payload: Optional[Dict[str, Any]] = display_rows[0] if display_rows else None
         return {
@@ -118,7 +157,16 @@ class SQLGenerationService:
             "sql": sql,
             "affected": affected,
             "row": row_payload,
+            "previous": prepared.current_row,
         }
+
+
+@dataclass
+class PreparedUpdate:
+    sql: str
+    buffer_qty: Decimal
+    menu_item_id: int
+    current_row: Optional[Dict[str, Any]]
 
 
 def strip_sql_fence(text: str) -> str:
@@ -159,7 +207,10 @@ def _filter_row(row: Dict[str, Any]) -> Dict[str, Any]:
     for key, value in row.items():
         if key.lower().endswith("_id") or key.lower() == "id":
             continue
-        filtered[key] = value
+        if isinstance(value, Decimal):
+            filtered[key] = _normalize_decimal(value)
+        else:
+            filtered[key] = value
     return filtered
 
 
@@ -224,6 +275,12 @@ def _resolve_menu_item_id(db: Session, subquery: str) -> Tuple[Optional[int], Op
         return int(value), None
     except (TypeError, ValueError):
         return None, "Buffer update target could not be resolved."
+
+
+def _normalize_decimal(value: Decimal) -> float | int:
+    if value == value.to_integral_value():
+        return int(value)
+    return float(value)
 
 
 def _fetch_menu_item(db: Session, menu_item_id: int) -> List[Dict[str, Any]]:

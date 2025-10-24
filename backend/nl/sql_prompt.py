@@ -340,7 +340,7 @@ def build_system_prompt(*, today: str, allow_update: bool) -> str:
 
         6) Customer orders this month by phone:
         ```sql
-        SELECT o.order_id, o.order_date, o.status, o.total_price
+        SELECT o.order_id, o.created_at, o.status, o.total_price
         FROM orders o
         JOIN customers c ON c.customer_id = o.customer_id
         WHERE c.primary_mobile = '9876543210'

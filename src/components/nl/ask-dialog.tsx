@@ -46,6 +46,7 @@ type NLUpdateSuccess = {
   sql: string;
   affected: number;
   row?: Record<string, unknown> | null;
+  previous?: Record<string, unknown> | null;
 };
 
 type NLError = {
@@ -54,7 +55,24 @@ type NLError = {
   examples?: string[];
 };
 
-type NLResult = NLSelectSuccess | NLUpdateSuccess | NLError;
+type NLUpdatePreview = {
+  intent: "SET_MENU_BUFFER";
+  sql: string;
+  confirm_required: true;
+  preview: {
+    target?: Record<string, unknown> | null;
+    changes: Record<string, { current: unknown; new: unknown }>;
+  };
+};
+
+type NLResult = NLSelectSuccess | NLUpdateSuccess | NLError | NLUpdatePreview;
+
+type PendingConfirmation = {
+  query: string;
+  intent: string;
+  sql: string;
+  preview: NLUpdatePreview["preview"];
+};
 
 interface AskDialogProps {
   open: boolean;
@@ -133,7 +151,7 @@ export function AskDialog({ open, onOpenChange }: AskDialogProps) {
   const [result, setResult] = useState<NLResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pendingWriteQuery, setPendingWriteQuery] = useState<string | null>(null);
+  const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmation | null>(null);
   const [confirmWriteOpen, setConfirmWriteOpen] = useState(false);
   const router = useRouter();
 
@@ -143,6 +161,8 @@ export function AskDialog({ open, onOpenChange }: AskDialogProps) {
       setResult(null);
       setError(null);
       setLoading(false);
+      setPendingConfirmation(null);
+      setConfirmWriteOpen(false);
     }
   }, [open]);
 
@@ -151,26 +171,41 @@ export function AskDialog({ open, onOpenChange }: AskDialogProps) {
     return `${base}/api/nl/sql`;
   }, []);
 
-  async function executeQuery(requestQuery: string) {
+  async function executeQuery(requestQuery: string, confirmed = false) {
     setLoading(true);
     setError(null);
     try {
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ q: requestQuery }),
+        body: JSON.stringify({ q: requestQuery, confirm: confirmed }),
       });
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}));
         throw new Error(payload?.detail || `Request failed (${res.status})`);
       }
       const payload: NLResult = await res.json();
+      if (isPreview(payload)) {
+        setResult(null);
+        setPendingConfirmation({
+          query: requestQuery,
+          intent: payload.intent,
+          sql: payload.sql,
+          preview: payload.preview,
+        });
+        setConfirmWriteOpen(true);
+        return;
+      }
+      setPendingConfirmation(null);
+      setConfirmWriteOpen(false);
       setResult(payload);
     } catch (err) {
       const detail =
         err instanceof Error ? err.message : "Failed to contact NL router.";
       setError(detail);
       setResult(null);
+      setPendingConfirmation(null);
+      setConfirmWriteOpen(false);
     } finally {
       setLoading(false);
     }
@@ -182,11 +217,6 @@ export function AskDialog({ open, onOpenChange }: AskDialogProps) {
     if (!trimmed) {
       setError("Ask a question to continue.");
       setResult(null);
-      return;
-    }
-    if (isPotentialUpdate(trimmed)) {
-      setPendingWriteQuery(trimmed);
-      setConfirmWriteOpen(true);
       return;
     }
     executeQuery(trimmed);
@@ -298,37 +328,49 @@ export function AskDialog({ open, onOpenChange }: AskDialogProps) {
         </DialogFooter>
       </DialogContent>
       </Dialog>
-      <AlertDialog open={confirmWriteOpen} onOpenChange={setConfirmWriteOpen}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Confirm buffer update</AlertDialogTitle>
-          <AlertDialogDescription>
-            This question will update menu buffer quantities in the database.
-            Please confirm you want to apply this change.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <ConfirmFooter>
-          <AlertDialogCancel
-            onClick={() => {
-              setConfirmWriteOpen(false);
-              setPendingWriteQuery(null);
-            }}
-          >
-            Cancel
-          </AlertDialogCancel>
-          <AlertDialogAction
-            onClick={() => {
-              if (pendingWriteQuery) {
+      <AlertDialog
+        open={confirmWriteOpen}
+        onOpenChange={(openState) => {
+          setConfirmWriteOpen(openState);
+          if (!openState) {
+            setPendingConfirmation(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Review data change</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm text-muted-foreground">
+                <p>
+                  This action will modify kitchen data. Double-check the details below before
+                  confirming.
+                </p>
+                {pendingConfirmation ? renderUpdatePreview(pendingConfirmation) : null}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <ConfirmFooter>
+            <AlertDialogCancel
+              onClick={() => {
                 setConfirmWriteOpen(false);
-                executeQuery(pendingWriteQuery);
-                setPendingWriteQuery(null);
-              }
-            }}
-          >
-            Yes, update buffer
-          </AlertDialogAction>
-        </ConfirmFooter>
-      </AlertDialogContent>
+                setPendingConfirmation(null);
+              }}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={loading || !pendingConfirmation}
+              onClick={() => {
+                if (pendingConfirmation) {
+                  executeQuery(pendingConfirmation.query, true);
+                }
+              }}
+            >
+              Apply changes
+            </AlertDialogAction>
+          </ConfirmFooter>
+        </AlertDialogContent>
       </AlertDialog>
     </>
   );
@@ -385,8 +427,69 @@ function renderUpdateSummary(result: NLUpdateSuccess) {
       <p className="text-sm font-medium text-emerald-900">
         Buffer updated successfully.
       </p>
-      {renderSimpleTable([result.row])}
+      {result.previous ? (
+        <div className="grid gap-3 md:grid-cols-2">
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+              Before
+            </p>
+            {renderSimpleTable([result.previous])}
+          </div>
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+              After
+            </p>
+            {renderSimpleTable([result.row])}
+          </div>
+        </div>
+      ) : (
+        renderSimpleTable([result.row])
+      )}
     </Card>
+  );
+}
+
+function renderUpdatePreview(pending: PendingConfirmation) {
+  const { preview } = pending;
+  const changeEntries = Object.entries(preview.changes);
+  return (
+    <div className="space-y-3">
+      {preview.target ? (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase text-muted-foreground">
+            Target row
+          </p>
+          {renderSimpleTable([preview.target])}
+        </div>
+      ) : (
+        <p className="text-xs text-amber-600">
+          Unable to preview the exact row. Confirm only if you trust the change.
+        </p>
+      )}
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase text-muted-foreground">
+          Proposed changes
+        </p>
+        {changeEntries.length ? (
+          <ul className="space-y-2 rounded-md border border-border bg-background/70 p-3">
+            {changeEntries.map(([field, diff]) => (
+              <li key={field} className="flex items-center justify-between gap-4 text-sm">
+                <span className="font-medium text-foreground">{formatKey(field)}</span>
+                <span className="text-right text-muted-foreground">
+                  {formatDiffValue(diff.current)}
+                  <span className="px-1">→</span>
+                  <span className="font-semibold text-foreground">{formatDiffValue(diff.new)}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="rounded-md border border-border bg-background/70 p-3 text-sm text-muted-foreground">
+            Unable to detect specific field changes.
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -458,28 +561,20 @@ function isError(result: NLResult | null): result is NLError {
   return !!result && "error" in result;
 }
 
+function isPreview(result: NLResult | null): result is NLUpdatePreview {
+  return !!result && "confirm_required" in result;
+}
+
 function isUpdate(result: NLResult | null): result is NLUpdateSuccess {
-  return !!result && "intent" in result && result.intent === "SET_MENU_BUFFER";
+  return !!result && "affected" in result;
 }
 
 function isSelect(result: NLResult | null): result is NLSelectSuccess {
-  return !!result && "rows" in result;
+  return !!result && "rows" in result && !("confirm_required" in result);
 }
 
 function isSuccess(result: NLResult | null): result is NLSelectSuccess | NLUpdateSuccess {
   return isSelect(result) || isUpdate(result);
-}
-
-function isPotentialUpdate(text: string): boolean {
-  const value = text.toLowerCase();
-  if (!value) return false;
-  if (value.includes("update") && value.includes("buffer")) {
-    return true;
-  }
-  if (value.includes("set") && value.includes("buffer")) {
-    return true;
-  }
-  return false;
 }
 
 function formatKey(key: string): string {
@@ -490,6 +585,11 @@ function formatKey(key: string): string {
       word ? word[0].toUpperCase() + word.slice(1).toLowerCase() : ""
     )
     .join(" ");
+}
+
+function formatDiffValue(value: unknown): string {
+  const formatted = formatValue(value);
+  return formatted || "—";
 }
 
 function formatValue(value: unknown): string {
