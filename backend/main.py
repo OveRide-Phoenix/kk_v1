@@ -6,7 +6,7 @@ from mysql.connector import errorcode
 from fastapi import FastAPI, HTTPException, Query, Depends
 from pydantic import BaseModel, Field
 from decimal import Decimal
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Any
 from fastapi.middleware.cors import CORSMiddleware
 import csv
 import io
@@ -890,6 +890,16 @@ class DailyMenuPayload(BaseModel):
     period_type: Optional[str] = None
     items: List[MenuItemPayload]
 
+
+class AutoMenuRequest(BaseModel):
+    date: Optional[str] = None
+    breakfast_planned_qty: int = Field(50, ge=0)
+    lunch_planned_qty: int = Field(80, ge=0)
+    dinner_planned_qty: int = Field(60, ge=0)
+
+
+MEAL_TYPES = ["Breakfast", "Lunch", "Dinner"]
+
 @app.post("/api/menu", tags=["Daily Menu"])
 def upsert_daily_menu(payload: DailyMenuPayload):
     db = get_db()
@@ -1001,6 +1011,124 @@ def release_menu(menu_id: int):
         cursor.close()
         db.close()
 
+
+@app.post("/api/dev/daily-menu/auto", tags=["Developer Tools"])
+def auto_generate_daily_menu(payload: AutoMenuRequest, _: Dict[str, Any] = Depends(admin_required)):
+    target_date = _normalize_menu_date(payload.date)
+    planned_lookup = {
+        "Breakfast": payload.breakfast_planned_qty,
+        "Lunch": payload.lunch_planned_qty,
+        "Dinner": payload.dinner_planned_qty,
+    }
+
+    summary: Dict[str, Any] = {}
+
+    for meal in MEAL_TYPES:
+        planned_qty = planned_lookup.get(meal, 0)
+        items = _fetch_items_for_meal(meal)
+        limited_items = items[:8]  # keep menus lightweight (≈5-10 items)
+        if not items:
+            summary[meal] = {
+                "status": "skipped",
+                "reason": "No items configured for this meal.",
+            }
+            continue
+
+        menu_items = [
+            MenuItemPayload(
+                item_id=item["item_id"],
+                category_id=item.get("category_id"),
+                planned_qty=planned_qty,
+                available_qty=planned_qty,
+                rate=_resolve_item_rate(meal, item),
+                is_default=True,
+                sort_order=index,
+            )
+            for index, item in enumerate(limited_items, start=1)
+        ]
+
+        menu_payload = DailyMenuPayload(
+            date=target_date,
+            bld_type=meal,
+            is_festival=False,
+            period_type="one_day",
+            items=menu_items,
+        )
+
+        menu_data = upsert_daily_menu(menu_payload)
+        menu_id = menu_data["menu_id"]
+        released = False
+
+        if meal in ("Breakfast", "Lunch"):
+            release_menu(menu_id)
+            released = True
+
+        summary[meal] = {
+            "status": "created",
+            "menu_id": menu_id,
+            "items": len(menu_items),
+            "released": released,
+        }
+
+    return {
+        "date": target_date,
+        "results": summary,
+    }
+
+
+@app.post("/api/dev/daily-menu/clear", tags=["Developer Tools"])
+def clear_daily_menu(payload: AutoMenuRequest, _: Dict[str, Any] = Depends(admin_required)):
+    target_date = _normalize_menu_date(payload.date)
+    summary: Dict[str, Any] = {}
+
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        for meal in MEAL_TYPES:
+            cursor.execute(
+                "SELECT bld_id FROM bld WHERE LOWER(bld_type) = LOWER(%s) LIMIT 1",
+                (meal,),
+            )
+            bld_row = cursor.fetchone()
+            if not bld_row:
+                summary[meal] = {
+                    "status": "skipped",
+                    "reason": "BLD configuration missing.",
+                }
+                continue
+
+            bld_id = bld_row["bld_id"]
+            cursor.execute(
+                "SELECT menu_id FROM menu WHERE date = %s AND bld_id = %s LIMIT 1",
+                (target_date, bld_id),
+            )
+            menu_row = cursor.fetchone()
+            if not menu_row:
+                summary[meal] = {"status": "absent"}
+                continue
+
+            menu_id = menu_row["menu_id"]
+            cursor.execute("DELETE FROM menu_items WHERE menu_id = %s", (menu_id,))
+            cursor.execute("DELETE FROM menu WHERE menu_id = %s", (menu_id,))
+            summary[meal] = {
+                "status": "deleted",
+                "menu_id": menu_id,
+            }
+
+        db.commit()
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+    return {
+        "date": target_date,
+        "results": summary,
+    }
+
+
 # 5. Un-Release a menu by menu_id
 @app.patch("/api/menu/{menu_id}/unrelease", tags=["Daily Menu"])
 def unrelease_menu(menu_id: int):
@@ -1031,6 +1159,71 @@ def unrelease_menu(menu_id: int):
     finally:
         cursor.close()
         db.close()
+
+
+def _normalize_menu_date(raw: Optional[str]) -> str:
+    if raw:
+        try:
+            return datetime.strptime(raw, "%Y-%m-%d").date().isoformat()
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.") from exc
+    return date.today().isoformat()
+
+
+def _fetch_items_for_meal(bld_type: str) -> List[Dict[str, Any]]:
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT bld_id FROM bld WHERE LOWER(bld_type) = LOWER(%s) LIMIT 1",
+            (bld_type,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return []
+        bld_id = row["bld_id"]
+        cursor.execute(
+            """
+            SELECT
+                item_id,
+                category_id,
+                breakfast_price,
+                lunch_price,
+                dinner_price,
+                condiments_price,
+                net_price,
+                name
+            FROM items
+            WHERE bld_id = %s
+            ORDER BY name
+            """,
+            (bld_id,),
+        )
+        return cursor.fetchall()
+    finally:
+        cursor.close()
+        db.close()
+
+
+def _resolve_item_rate(meal: str, item: Dict[str, Any]) -> float:
+    meal_key = {
+        "Breakfast": "breakfast_price",
+        "Lunch": "lunch_price",
+        "Dinner": "dinner_price",
+        "Condiments": "condiments_price",
+    }.get(meal)
+    candidates = []
+    if meal_key:
+        candidates.append(item.get(meal_key))
+    candidates.append(item.get("net_price"))
+    for value in candidates:
+        if value is not None:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                continue
+    return 0.0
+
 
 @app.get("/api/dashboard/metrics")
 def get_dashboard_metrics():
