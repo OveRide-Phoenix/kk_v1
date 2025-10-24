@@ -14,6 +14,7 @@ import {
   LogOut,
   Code2,
   Database,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
@@ -41,6 +42,7 @@ const primaryNavigationItems = [
 const developerNavigationItems = [
   { name: "Place Order", icon: Code2, href: "/admin/ordertest", id: "ordertest" },
   { name: "DB Schema", icon: Database, href: "/developer/db-schema", id: "dbschema" },
+  { name: "Auto Menu Builder", icon: Sparkles, href: "/developer/auto-menu", id: "dev-auto-menu" },
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ 
