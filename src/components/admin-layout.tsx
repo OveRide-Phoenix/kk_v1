@@ -218,6 +218,8 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
         return "Developer · Order Test"
       case "dbschema":
         return "Developer · DB Schema"
+      case "dev-auto-menu":
+        return "Developer · Auto Menu"
       default:
         return "Dashboard"
     }

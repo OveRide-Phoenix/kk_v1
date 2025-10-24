@@ -3,4 +3,3 @@
 
 #---------------------------------------------------------------------------------------------------------------
 
-add another developer tool - daily menu setup - one click menu setup with different planned quantities, for breakfast lunch and dinner, always release the breakfast and lunch and just keep dinner saved..i want just a screen where i can have a one click button to populate the daily menu for a specifiv day (default is today) - basically it should do automatically what we do in daily menu setup page.
