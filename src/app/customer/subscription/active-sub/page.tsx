@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card"
 
 export default function ActiveSubscription() {
   return (
-    <div className="min-h-screen bg-[#faf7f2]">
+    <div className="min-h-screen bg-brand-shell">
       <CustomerNavBar />
       
       <main className="container mx-auto px-4 pt-20">
@@ -17,7 +17,7 @@ export default function ActiveSubscription() {
           
           {/* Subscription Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card className="border-2 border-[#e6dfd0]">
+            <Card className="border-2 border-brand-subtle">
               <CardHeader className="bg-[#463028] text-white py-4 px-6 rounded-t-lg">
                 <h2 className="text-xl font-serif">Monthly Breakfast Plan</h2>
                 <p className="text-sm opacity-90">Active until Dec 31, 2023</p>
@@ -46,7 +46,7 @@ export default function ActiveSubscription() {
               </CardContent>
             </Card>
 
-            <Card className="border-2 border-[#e6dfd0]">
+            <Card className="border-2 border-brand-subtle">
               <CardHeader className="bg-[#463028] text-white py-4 px-6 rounded-t-lg">
                 <h2 className="text-xl font-serif">Weekly Lunch Pack</h2>
                 <p className="text-sm opacity-90">Active until Jan 15, 2024</p>

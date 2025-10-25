@@ -6,7 +6,7 @@ import { useAuthStore } from "@/store/store"
 
 function LoadingScreen() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[#faf7f2] text-[#463028]">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-brand-shell text-[#463028]">
       <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
       <p className="mt-4 text-sm text-[#8d6e63]">Checking your session…</p>
     </div>

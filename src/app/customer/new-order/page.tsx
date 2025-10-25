@@ -443,7 +443,7 @@ export default function NewOrderPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#faf7f2] pb-32">
+    <div className="min-h-screen bg-brand-shell pb-32">
       <CustomerNavBar />
 
       <main className="container mx-auto px-4 pt-20">
@@ -507,7 +507,7 @@ export default function NewOrderPage() {
                   className={`px-4 py-1.5 rounded-full border border-primary capitalize font-serif text-sm transition-colors shadow-md ${
                     activeCategory === meal
                       ? "bg-primary text-white"
-                      : "bg-[#faf7f2] text-primary hover:bg-primary hover:text-white"
+                      : "bg-brand-shell text-primary hover:bg-primary hover:text-white"
                   }`}
                 >
                   {meal}
@@ -545,7 +545,7 @@ export default function NewOrderPage() {
                               className={`flex h-[120px] overflow-hidden rounded-lg border-2 transition-shadow duration-200 ${
                                 isSoldOut
                                   ? "border-dashed border-[#d9c7be] bg-[#f1ebe6] text-[#9a857b]"
-                                  : "border-[#e6dfd0] bg-[#faf7f2] hover:shadow-md"
+                                  : "border-brand-subtle bg-brand-shell hover:shadow-md"
                               } ${isSoldOut ? "pointer-events-none" : ""}`}
                               aria-disabled={isSoldOut}
                             >
