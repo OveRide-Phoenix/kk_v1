@@ -15,7 +15,7 @@ export default function Subscription() {
   };
 
   return (
-    <div className="min-h-screen bg-[#faf7f2]">
+    <div className="min-h-screen bg-brand-shell">
       <CustomerNavBar />
       <main className="container mx-auto px-4 py-8 mt-8">
         {/* Removed the title and description from here */}
@@ -35,7 +35,7 @@ export default function Subscription() {
 
         <div className="flex justify-center gap-8">
           <div 
-            className="w-[500px] p-6 rounded-xl border border-[#e6dfd0] flex flex-col items-center"
+            className="w-[500px] p-6 rounded-xl border border-brand-subtle flex flex-col items-center"
           >
             <div className="flex items-center justify-center mb-3">
               <ShoppingBag className="h-8 w-8 text-primary" />
@@ -51,7 +51,7 @@ export default function Subscription() {
           </div>
 
           <div 
-            className="w-[500px] p-6 rounded-xl border border-[#e6dfd0] flex flex-col items-center"
+            className="w-[500px] p-6 rounded-xl border border-brand-subtle flex flex-col items-center"
           >
             <div className="flex items-center justify-center mb-3">
               <ClipboardList className="h-8 w-8 text-primary" />

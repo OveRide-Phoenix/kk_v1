@@ -252,7 +252,7 @@ export default function CartPage() {
 
   if (cartItems.length === 0 && !orderResult) {
     return (
-      <div className="min-h-screen bg-[#faf7f2]">
+      <div className="min-h-screen bg-brand-shell">
         <CustomerNavBar />
         <div className="container mx-auto flex flex-col items-center justify-center gap-6 px-4 pt-32 text-center">
           <ShoppingCart className="h-12 w-12 text-primary" />
@@ -269,7 +269,7 @@ export default function CartPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#faf7f2] pb-20">
+    <div className="min-h-screen bg-brand-shell pb-20">
       <CustomerNavBar />
 
       <main className="container mx-auto px-4 pt-24">
@@ -289,7 +289,7 @@ export default function CartPage() {
                 {cartItems.map((item) => (
                   <div
                     key={`${item.meal}-${item.menu_item_id}`}
-                    className="rounded-lg border border-[#e6dfd0] bg-white p-3 shadow-sm"
+                    className="rounded-lg border border-brand-subtle bg-white p-3 shadow-sm"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>

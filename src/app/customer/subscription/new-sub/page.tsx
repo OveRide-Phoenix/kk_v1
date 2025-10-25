@@ -106,7 +106,7 @@ export default function NewSubscription() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#faf7f2]">
+    <div className="min-h-screen bg-brand-shell">
       <CustomerNavBar />
       
       <main className="container mx-auto px-4 pt-20">
@@ -140,7 +140,7 @@ export default function NewSubscription() {
                   className={`px-4 py-1.5 rounded-full border border-primary capitalize font-serif text-sm transition-colors shadow-md
                     ${activeCategory === category 
                       ? 'bg-primary text-white' 
-                      : 'bg-[#faf7f2] text-primary hover:bg-primary hover:text-white'
+                      : 'bg-brand-shell text-primary hover:bg-primary hover:text-white'
                     }`}
                 >
                   {category}
@@ -159,7 +159,7 @@ export default function NewSubscription() {
                       .filter(item => item.category === category)
                       .map((item) => (
                         <div key={item.id} 
-                          className="flex bg-[#faf7f2] border-2 border-[#e6dfd0] rounded-lg overflow-hidden h-[120px] shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer"
+                          className="flex bg-brand-shell border-2 border-brand-subtle rounded-lg overflow-hidden h-[120px] shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer"
                           onClick={() => openPopup(item)}
                         >
                           <div className="w-[120px] h-[120px] flex-shrink-0">
@@ -224,7 +224,7 @@ export default function NewSubscription() {
       </div>
 
       <Dialog open={selectedItem !== null} onOpenChange={handleCloseDialog}>
-        <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden bg-[#faf7f2]">
+        <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden bg-brand-shell">
           <div className="relative w-full h-[250px]">
             <Image
               src={selectedItem?.image || '/placeholder.svg'}

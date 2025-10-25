@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { format as formatDate } from "date-fns"
 import {
+  ChevronRight,
   Crown,
   FileText,
   Loader2,
@@ -136,6 +137,7 @@ export default function AccountPage() {
 
   const [ordersLoading, setOrdersLoading] = useState(true)
   const [ordersError, setOrdersError] = useState<string | null>(null)
+  const [ordersDialogOpen, setOrdersDialogOpen] = useState(false)
 
   const [addressModalOpen, setAddressModalOpen] = useState(false)
   const [addressModalMode, setAddressModalMode] = useState<"create" | "edit">("create")
@@ -268,6 +270,139 @@ export default function AccountPage() {
   const billOrder = useMemo(
     () => orders.find((order) => order.order_id === billOrderId) ?? null,
     [orders, billOrderId]
+  )
+
+  const sortedOrders = useMemo(() => {
+    const getTimestamp = (order: OrderSummary) => {
+      if (order.created_at) {
+        const parsed = new Date(order.created_at).getTime()
+        if (!Number.isNaN(parsed)) {
+          return parsed
+        }
+      }
+      return order.order_id
+    }
+    return [...orders].sort((a, b) => getTimestamp(b) - getTimestamp(a))
+  }, [orders])
+
+  const latestOrders = useMemo(() => sortedOrders.slice(0, 2), [sortedOrders])
+
+  const renderOrderCard = useCallback(
+    (order: OrderSummary, options?: { variant?: "default" | "dialog" }) => {
+      const variant = options?.variant ?? "default"
+      const statusKey = order.status.toLowerCase()
+      const statusStyle =
+        statusKey === "delivered"
+          ? "border-emerald-200 bg-emerald-100 text-emerald-700"
+          : statusKey === "in progress"
+            ? "border-amber-200 bg-amber-100 text-amber-700"
+            : "border-brand-subtle bg-[#f3ebe2] text-[#705446]"
+
+      const isSubscriptionOrder = (order.order_type ?? "").toLowerCase() === "subscription"
+
+      const summaryHeader = (
+        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-[#463028]">Order #{order.order_id}</p>
+            <p className="text-xs text-[#8d6e63]">
+              {order.created_at ? formatDate(new Date(order.created_at), "PPP p") : "Scheduled"}
+            </p>
+            <p className="text-xs text-[#8d6e63]">
+              Deliver to {order.address.label} –{" "}
+              {[order.address.line, order.address.city].filter(Boolean).join(", ")}
+            </p>
+          </div>
+          <Badge variant="outline" className={`${statusStyle} uppercase`}>
+            {order.status}
+          </Badge>
+        </div>
+      )
+
+      const itemsList = (
+        <div className="mt-4 space-y-2 text-xs text-[#463028]">
+          {order.items.map((item, index) => (
+            <div
+              key={`${order.order_id}-${item.item_name}-${index}`}
+              className="flex justify-between"
+            >
+              <span>
+                {item.item_name} × {item.quantity}
+              </span>
+              <span>{formatCurrency(item.price * item.quantity)}</span>
+            </div>
+          ))}
+        </div>
+      )
+
+      const footerContent = (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-[#463028]">
+          <span className="font-semibold">
+            Total: {formatCurrency(order.total_price)} • {order.payment_method}
+          </span>
+          {variant === "default" ? (
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" onClick={() => setBillOrderId(order.order_id)}>
+                <FileText className="mr-2 h-4 w-4" />
+                Generate bill
+              </Button>
+              {isSubscriptionOrder && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled
+                    className="cursor-not-allowed border-dashed text-[#8d6e63]/70"
+                  >
+                    <PauseCircle className="mr-2 h-4 w-4" />
+                    Pause subscription
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled
+                    className="cursor-not-allowed border-dashed text-[#8d6e63]/70"
+                  >
+                    <SlidersHorizontal className="mr-2 h-4 w-4" />
+                    Update subscription
+                  </Button>
+                </>
+              )}
+            </div>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-xs text-[#8d6e63]">
+              View details
+              <ChevronRight className="h-3 w-3" />
+            </span>
+          )}
+        </div>
+      )
+
+      if (variant === "dialog") {
+        return (
+          <button
+            key={order.order_id}
+            type="button"
+            onClick={() => setBillOrderId(order.order_id)}
+            className="w-full rounded-lg border border-brand-subtle bg-white p-4 text-left shadow-sm transition-transform hover:-translate-y-0.5 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          >
+            {summaryHeader}
+            {footerContent}
+          </button>
+        )
+      }
+
+      return (
+        <div
+          key={order.order_id}
+          className="rounded-lg border border-brand-subtle bg-white p-4 shadow-sm"
+        >
+          {summaryHeader}
+          {itemsList}
+          {footerContent}
+        </div>
+      )
+    },
+    [setBillOrderId]
   )
 
   const profileIsAdmin = profile?.is_admin
@@ -592,7 +727,7 @@ export default function AccountPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#faf7f2]">
+      <div className="min-h-screen bg-brand-shell">
         <CustomerNavBar />
         <div className="flex min-h-[60vh] items-center justify-center text-[#8d6e63]">
           Loading your account…
@@ -603,7 +738,7 @@ export default function AccountPage() {
 
   if (!form || !profile) {
     return (
-      <div className="min-h-screen bg-[#faf7f2]">
+      <div className="min-h-screen bg-brand-shell">
         <CustomerNavBar />
         <div className="flex min-h-[60vh] items-center justify-center text-[#c75b39]">
           {error ?? "No customer information available."}
@@ -613,7 +748,7 @@ export default function AccountPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#faf7f2] pb-20">
+    <div className="min-h-screen bg-brand-shell pb-20">
       <CustomerNavBar />
       <main className="container mx-auto px-4 pt-24">
         <div className="mb-6 flex flex-col gap-2">
@@ -768,7 +903,7 @@ export default function AccountPage() {
               </p>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="rounded-lg border border-[#e6dfd0] bg-white p-4 text-sm">
+              <div className="rounded-lg border border-brand-subtle bg-white p-4 text-sm">
                 <p className="font-semibold text-[#463028]">{profile.address_type ?? "Home"}</p>
                 <p className="mt-1 text-[#8d6e63]">
                   {[profile.house_apartment_no, profile.written_address, profile.city, profile.pin_code]
@@ -777,7 +912,7 @@ export default function AccountPage() {
                 </p>
               </div>
               {mapEmbedUrl && (
-                <div className="overflow-hidden rounded-lg border border-[#e6dfd0] bg-white shadow-sm">
+                <div className="overflow-hidden rounded-lg border border-brand-subtle bg-white shadow-sm">
                   <iframe
                     title="Default delivery location"
                     src={mapEmbedUrl}
@@ -808,94 +943,24 @@ export default function AccountPage() {
               </div>
             ) : ordersError ? (
               <p className="text-sm text-[#c75b39]">{ordersError}</p>
-            ) : orders.length === 0 ? (
+            ) : sortedOrders.length === 0 ? (
               <p className="text-sm text-[#8d6e63]">You haven&apos;t placed any orders yet.</p>
             ) : (
-              orders.map((order) => {
-                const statusKey = order.status.toLowerCase()
-                const statusStyle =
-                  statusKey === "delivered"
-                    ? "border-emerald-200 bg-emerald-100 text-emerald-700"
-                    : statusKey === "in progress"
-                    ? "border-amber-200 bg-amber-100 text-amber-700"
-                    : "border-[#e6dfd0] bg-[#f3ebe2] text-[#705446]"
-
-                const isSubscriptionOrder = (order.order_type ?? "").toLowerCase() === "subscription"
-
-                return (
-                  <div
-                    key={order.order_id}
-                    className="rounded-lg border border-[#e6dfd0] bg-white p-4 shadow-sm"
-                  >
-                    <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                      <div>
-                        <p className="text-sm font-semibold text-[#463028]">
-                          Order #{order.order_id}
-                        </p>
-                        <p className="text-xs text-[#8d6e63]">
-                          {order.created_at
-                            ? formatDate(new Date(order.created_at), "PPP p")
-                            : "Scheduled"}
-                        </p>
-                        <p className="text-xs text-[#8d6e63]">
-                          Deliver to {order.address.label} –{" "}
-                          {[order.address.line, order.address.city]
-                            .filter(Boolean)
-                            .join(", ")}
-                        </p>
-                      </div>
-                      <Badge variant="outline" className={`${statusStyle} uppercase`}>
-                        {order.status}
-                      </Badge>
-                    </div>
-
-                    <div className="mt-4 space-y-2 text-xs text-[#463028]">
-                      {order.items.map((item, index) => (
-                        <div key={`${order.order_id}-${item.item_name}-${index}`} className="flex justify-between">
-                          <span>
-                            {item.item_name} × {item.quantity}
-                          </span>
-                          <span>{formatCurrency(item.price * item.quantity)}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-[#463028]">
-                      <span className="font-semibold">
-                        Total: {formatCurrency(order.total_price)} • {order.payment_method}
-                      </span>
-                      <div className="flex flex-wrap gap-2">
-                        <Button size="sm" onClick={() => setBillOrderId(order.order_id)}>
-                          <FileText className="mr-2 h-4 w-4" />
-                          Generate bill
-                        </Button>
-                        {isSubscriptionOrder && (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled
-                              className="cursor-not-allowed border-dashed text-[#8d6e63]/70"
-                            >
-                              <PauseCircle className="mr-2 h-4 w-4" />
-                              Pause subscription
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled
-                              className="cursor-not-allowed border-dashed text-[#8d6e63]/70"
-                            >
-                              <SlidersHorizontal className="mr-2 h-4 w-4" />
-                              Update subscription
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </div>
+              <>
+                {latestOrders.map((order) => renderOrderCard(order))}
+                {sortedOrders.length > 2 && (
+                  <div className="flex justify-end pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setOrdersDialogOpen(true)}
+                      className="group inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-[#5b3627] focus:outline-none"
+                    >
+                      <span>Show more</span>
+                      <ChevronRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+                    </button>
                   </div>
-                )
-              })
+                )}
+              </>
             )}
           </CardContent>
         </Card>
@@ -920,7 +985,7 @@ export default function AccountPage() {
               otherAddresses.map((address) => (
                 <div
                   key={address.address_id}
-                  className="flex flex-col gap-3 rounded-lg border border-[#e6dfd0] bg-white p-4 shadow-sm"
+                  className="flex flex-col gap-3 rounded-lg border border-brand-subtle bg-white p-4 shadow-sm"
                 >
                   <div>
                     <p className="text-sm font-semibold text-[#463028]">{address.address_type}</p>
@@ -952,6 +1017,33 @@ export default function AccountPage() {
           </CardContent>
         </Card>
       </main>
+
+      <Dialog open={ordersDialogOpen} onOpenChange={(open) => setOrdersDialogOpen(open)}>
+        <DialogContent className="w-full max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Order history</DialogTitle>
+          </DialogHeader>
+          {ordersLoading ? (
+            <div className="flex items-center gap-2 text-sm text-[#8d6e63]">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading order history…
+            </div>
+          ) : ordersError ? (
+            <p className="text-sm text-[#c75b39]">{ordersError}</p>
+          ) : sortedOrders.length === 0 ? (
+            <p className="text-sm text-[#8d6e63]">You haven&apos;t placed any orders yet.</p>
+          ) : (
+            <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
+              {sortedOrders.map((order) => renderOrderCard(order, { variant: "dialog" }))}
+            </div>
+          )}
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setOrdersDialogOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={addressModalOpen} onOpenChange={(open) => (open ? null : handleAddressModalClose())}>
         <DialogContent className="w-full max-w-4xl md:max-w-5xl max-h-[90vh] overflow-y-auto">
@@ -1088,7 +1180,7 @@ export default function AccountPage() {
                     : "Scheduled"}
                 </span>
               </div>
-              <div className="rounded-lg border border-[#e6dfd0] bg-white p-3 text-xs text-[#8d6e63]">
+              <div className="rounded-lg border border-brand-subtle bg-white p-3 text-xs text-[#8d6e63]">
                 <p className="font-medium text-[#463028]">Deliver to {billOrder.address.label}</p>
                 <p>
                   {[billOrder.address.line, billOrder.address.city, billOrder.address.pin_code]

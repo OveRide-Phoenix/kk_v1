@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
-import { LogOut, Crown } from "lucide-react"
+import { Crown, LogOut, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuthStore } from "@/store/store"
 
@@ -93,8 +93,12 @@ export default function CustomerNavBar() {
               {user ? (
                 <div className="flex items-center gap-2">
                   {isAdmin && <Crown className="h-4 w-4 text-amber-500" />}
-                  <Link href="/customer/account" className="font-medium text-primary hover:underline">
-                    {user.name || user.phone || "Customer"}
+                  <Link
+                    href="/customer/account"
+                    className="inline-flex items-center gap-1.5 font-medium text-primary hover:underline"
+                  >
+                    <User className="h-4 w-4 text-[#463028]" aria-hidden="true" />
+                    <span>{user.name || user.phone || "Customer"}</span>
                   </Link>
                   <Button
                     variant="ghost"
