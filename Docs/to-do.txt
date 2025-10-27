@@ -10,6 +10,10 @@
 
 THEN DO NOTES APP
 
+THEN MOVE Extension notes to here..
+
+then do team members page which implements 1. in this file
+
 
 2. use pagination component in the order history page
 
