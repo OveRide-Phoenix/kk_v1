@@ -4,6 +4,7 @@ import { GeistSans } from 'geist/font/sans'
 import "./globals.css"
 import { Toaster } from "@/components/ui/toaster"
 import Script from "next/script"
+import DevToolbarClient from "@/components/DevToolbarClient"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -28,7 +29,6 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  // Check if we're on the home page
   const isHomePage = typeof window !== 'undefined' && window.location.pathname === '/'
 
   return (
@@ -43,10 +43,11 @@ export default function RootLayout({
         `}
         style={{ backgroundColor: '#faf7f2', color: '#463028' }}
       >
+        {/* Dev-only toolbar for Stagewise/Cursor/etc. */}
+        <DevToolbarClient />
+
         {children}
         <Toaster />
-        
-        {/* ✅ Use Next.js `Script` component for better handling */}
         <Script
           src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCE0f3L2qXluZn96UVI-U_Bh8WIWX_e_kI&libraries=places"
           strategy="lazyOnload" 
