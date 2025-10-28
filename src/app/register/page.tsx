@@ -22,11 +22,10 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Coffee } from "lucide-react";
 import GoogleMapPicker from "@/components/gmap/GoogleMapPicker";
+import CustomerNavBar from "@/components/customer-nav-bar";
 
 export default function RegistrationPage() {
-    const [isScrolled, setIsScrolled] = useState(false);
     // Form state
     const [formData, setFormData] = useState({
         referredBy: "", // Matches referred_by
@@ -193,77 +192,12 @@ export default function RegistrationPage() {
         []
     );
 
-    // Add scroll detection
-    useEffect(() => {
-        const handleScroll = () => {
-            setIsScrolled(window.scrollY > 50);
-        };
-        window.addEventListener("scroll", handleScroll);
-        return () => window.removeEventListener("scroll", handleScroll);
-    }, []);
-
     return (
-        <div className="min-h-screen bg-background text-foreground">
-            <header 
-                className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-                    isScrolled ? "bg-background/95 backdrop-blur-sm shadow-md" : "bg-background"
-                }`}
-            >
-                <div className="container mx-auto px-4">
-                    <div className="flex h-16 items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                            <Coffee className="h-6 w-6 text-primary" />
-                            <a
-                                href="#"
-                                className="text-xl font-bold text-cream"
-                            >
-                                Kuteera Kitchen
-                            </a>
-                        </div>
-                        <nav className="hidden md:flex items-center space-x-8">
-                            <a
-                                href="/"
-                                className="text-sm font-medium text-foreground/80 hover:text-primary"
-                            >
-                                Home
-                            </a>
-                            <a
-                                href="#"
-                                className="text-sm font-medium text-foreground/80 hover:text-primary"
-                            >
-                                Menu
-                            </a>
-                            <a
-                                href="#"
-                                className="text-sm font-medium text-foreground/80 hover:text-primary"
-                            >
-                                About
-                            </a>
-                            <a
-                                href="#"
-                                className="text-sm font-medium text-foreground/80 hover:text-primary"
-                            >
-                                Contact
-                            </a>
-                            <a
-                                href="tel:+919876543210"
-                                className="text-sm font-medium hover:text-primary"
-                            >
-                                +91 98765 43210
-                            </a>
-                            <Button
-                                onClick={() => router.push("/login")}
-                                className="bg-primary hover:bg-primary/90 text-white text-sm"
-                            >
-                                Login
-                            </Button>
-                        </nav>
-                    </div>
-                </div>
-            </header>
+        <div className="flex min-h-screen flex-col bg-background text-foreground">
+            <CustomerNavBar unauthLinks={[{ href: "/login", label: "Sign in" }]} />
 
             {/* Registration Form */}
-            <div className="container mx-auto py-8 px-4 pt-24">
+            <main className="container mx-auto flex-1 px-4 pb-12 pt-24">
                 <Card className="border-primary/20 max-w-4xl mx-auto">
                     <CardHeader className="space-y-1">
                         <CardTitle className="text-2xl font-bold">
@@ -660,7 +594,7 @@ export default function RegistrationPage() {
                         </CardFooter>
                     </form>
                 </Card>
-            </div>
+            </main>
         </div>
     );
 }

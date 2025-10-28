@@ -1,13 +1,23 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, type ComponentProps } from "react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
 import { Crown, LogOut, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuthStore } from "@/store/store"
 
-export default function CustomerNavBar() {
+type ButtonVariant = ComponentProps<typeof Button>["variant"]
+
+type CustomerNavBarProps = {
+  unauthLinks?: Array<{
+    href: string
+    label: string
+    variant?: ButtonVariant
+  }>
+}
+
+export default function CustomerNavBar({ unauthLinks }: CustomerNavBarProps = {}) {
   const [isScrolled, setIsScrolled] = useState(false)
   const user = useAuthStore((state) => state.user)
   const setUser = useAuthStore((state) => state.setUser)
@@ -114,9 +124,16 @@ export default function CustomerNavBar() {
                   </Button>
                 </div>
               ) : (
-                <Link href="/login" className="text-sm font-medium text-primary">
-                  Sign in
-                </Link>
+                <div className="flex items-center gap-2">
+                  {(unauthLinks?.length ? unauthLinks : [
+                    { href: "/register", label: "Register" },
+                    { href: "/login", label: "Sign in", variant: "outline" as ButtonVariant },
+                  ]).map(({ href, label, variant }) => (
+                    <Button key={href} asChild variant={variant ?? "default"} size="sm">
+                      <Link href={href}>{label}</Link>
+                    </Button>
+                  ))}
+                </div>
               )}
             </div>
           </div>

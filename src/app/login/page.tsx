@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,8 +13,9 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Coffee, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import { useAuthStore } from "@/store/store";
+import CustomerNavBar from "@/components/customer-nav-bar";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -183,56 +183,10 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="border-b border-muted">
-        <div className="container mx-auto px-4">
-          <div className="flex h-16 items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Coffee className="h-6 w-6 text-primary" />
-              <Link href="/" className="text-xl font-bold text-cream">
-                Kuteera Kitchen
-              </Link>
-            </div>
-            <nav className="hidden md:flex items-center space-x-8">
-              <Link href="/" className="text-sm font-medium hover:text-primary">
-                Home
-              </Link>
-              <a
-                href="/menu"
-                className="text-sm font-medium hover:text-primary"
-              >
-                Menu
-              </a>
-              <a
-                href="/about"
-                className="text-sm font-medium hover:text-primary"
-              >
-                About
-              </a>
-              <a
-                href="/contact"
-                className="text-sm font-medium hover:text-primary"
-              >
-                Contact
-              </a>
-              <a
-                href="tel:+919876543210"
-                className="text-sm font-medium hover:text-primary"
-              >
-                +91 98765 43210
-              </a>
-              <Button
-                onClick={() => router.push("/register")}
-                className="bg-primary hover:bg-primary/90 text-white text-sm"
-              >
-                Register
-              </Button>
-            </nav>
-          </div>
-        </div>
-      </header>
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
+      <CustomerNavBar unauthLinks={[{ href: "/register", label: "Register" }]} />
 
-      <div className="flex flex-grow items-center justify-center p-4">
+      <main className="flex flex-1 items-center justify-center px-4 pb-12 pt-24">
         <Card className="w-full max-w-md border-primary/20">
           <CardHeader>
             <CardTitle className="text-2xl font-bold">Welcome back</CardTitle>
@@ -349,7 +303,7 @@ export default function LoginPage() {
             )}
           </CardFooter>
         </Card>
-      </div>
+      </main>
     </div>
   );
 }

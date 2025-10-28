@@ -2,18 +2,10 @@
 
 import Image from "next/image"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { format as formatDate, isSameDay, isSameMonth } from "date-fns"
-import {
-  Calendar,
-  Clock,
-  ChefHat,
-  Leaf,
-  Loader2,
-  Repeat,
-  Sparkles,
-  UtensilsCrossed,
-} from "lucide-react"
+import { Calendar, ChefHat, Info, Leaf, Loader2, Minus, Plus, Repeat, ShoppingCart, Sparkles, UtensilsCrossed } from "lucide-react"
 import Autoplay from "embla-carousel-autoplay"
 
 import CustomerNavBar from "@/components/customer-nav-bar"
@@ -23,12 +15,12 @@ import {
   CarouselApi,
   CarouselContent,
   CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
 } from "@/components/ui/carousel"
 import { useAuthStore } from "@/store/store"
 import Footer from "@/components/footer"
 import { cn } from "@/lib/utils"
+import { MealSwitcher } from "@/components/ui/meal-switcher"
+import { Skeleton } from "@/components/ui/skeleton"
 
 type MealType = "breakfast" | "lunch" | "dinner" | "condiments"
 
@@ -50,6 +42,7 @@ type MenuItem = {
   item_name: string
   meal: MealType
   rate: number
+  available_qty: number
   description: string
   picture_url: string | null
 }
@@ -74,6 +67,16 @@ type OrderSummary = {
     pin_code: string
   }
   items: OrderItem[]
+}
+
+type CartLine = {
+  menu_item_id: number
+  item_id: number
+  meal: MealType
+  item_name: string
+  price: number
+  quantity: number
+  available_qty: number
 }
 
 const MEALS: MealType[] = ["breakfast", "lunch", "dinner", "condiments"]
@@ -105,6 +108,9 @@ const GALLERY_IMAGES = [
   },
 ] as const
 
+const CART_STORAGE_KEY = "customer_cart_items"
+const CART_KEEP_KEY = "kk_keep_cart"
+
 const currency = (value: number) =>
   new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -113,6 +119,7 @@ const currency = (value: number) =>
   }).format(value)
 
 export default function CustomerHomePage() {
+  const router = useRouter()
   const user = useAuthStore((state) => state.user)
   const setUser = useAuthStore((state) => state.setUser)
   const setAdmin = useAuthStore((state) => state.setAdmin)
@@ -132,6 +139,9 @@ export default function CustomerHomePage() {
   const [ordersError, setOrdersError] = useState<string | null>(null)
   const [todayCarouselApi, setTodayCarouselApi] = useState<CarouselApi | null>(null)
   const [todayCarouselIndex, setTodayCarouselIndex] = useState(0)
+  const [quantities, setQuantities] = useState<Record<number, number>>({})
+  const [cartInitialized, setCartInitialized] = useState(false)
+  const storedCartRef = useRef<CartLine[]>([])
   const todayCarouselPlugin = useRef(
     Autoplay({
       delay: 4500,
@@ -159,6 +169,7 @@ export default function CustomerHomePage() {
   }, [user, setUser, setAdmin])
 
   const customerId = user?.customer_id
+  const isAuthenticated = Boolean(customerId)
 
   useEffect(() => {
     let cancelled = false
@@ -193,6 +204,7 @@ export default function CustomerHomePage() {
               item_name: item.item_name ?? item.name ?? "Item",
               meal,
               rate: item.rate ?? item.price ?? 0,
+              available_qty: item.available_qty ?? 0,
               description: item.description ?? "",
               picture_url: item.picture_url ?? null,
             }))
@@ -266,26 +278,95 @@ export default function CustomerHomePage() {
   }, [customerId])
 
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)
-        const top = visible[0]
-        if (top?.target.id && MEALS.includes(top.target.id as MealType)) {
-          setActiveMeal(top.target.id as MealType)
+    if (!isAuthenticated) {
+      setQuantities({})
+      storedCartRef.current = []
+      setCartInitialized(false)
+      return
+    }
+    if (typeof window === "undefined") return
+    let cancelled = false
+    try {
+      const rawItems = localStorage.getItem(CART_STORAGE_KEY)
+      if (rawItems) {
+        const parsed = JSON.parse(rawItems) as CartLine[]
+        if (!cancelled) {
+          storedCartRef.current = parsed
         }
-      },
-      { rootMargin: "-35% 0px -55% 0px", threshold: [0.1, 0.25, 0.4] }
-    )
+      } else if (!cancelled) {
+        storedCartRef.current = []
+      }
+    } catch (error) {
+      console.error("Failed to restore cart", error)
+      storedCartRef.current = []
+    } finally {
+      if (!cancelled) {
+        setCartInitialized(true)
+      }
+    }
+    return () => {
+      cancelled = true
+    }
+  }, [isAuthenticated])
 
-    MEALS.forEach((meal) => {
-      const section = document.getElementById(meal)
-      if (section) observer.observe(section)
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    let animationFrame: number | null = null
+
+    const calculateActiveMeal = () => {
+      const offset = 200
+      const scrollPosition = window.scrollY + offset
+      let nextActive: MealType = MEALS[0]
+
+      MEALS.forEach((meal) => {
+        const section = document.getElementById(meal)
+        if (!section) return
+        const top = section.offsetTop
+        if (scrollPosition >= top) {
+          nextActive = meal
+        }
+      })
+
+      setActiveMeal((prev) => (prev === nextActive ? prev : nextActive))
+    }
+
+    const handleScroll = () => {
+      if (animationFrame !== null) return
+      animationFrame = window.requestAnimationFrame(() => {
+        animationFrame = null
+        calculateActiveMeal()
+      })
+    }
+
+    calculateActiveMeal()
+    window.addEventListener("scroll", handleScroll, { passive: true })
+    window.addEventListener("resize", handleScroll)
+
+    return () => {
+      if (animationFrame !== null) {
+        window.cancelAnimationFrame(animationFrame)
+      }
+      window.removeEventListener("scroll", handleScroll)
+      window.removeEventListener("resize", handleScroll)
+    }
+  }, [menuByMeal])
+
+  useEffect(() => {
+    if (!isAuthenticated || !cartInitialized) return
+
+    const map = createMenuItemMap(menuByMeal)
+    const restored: Record<number, number> = {}
+
+    storedCartRef.current.forEach((line) => {
+      const item = map[line.menu_item_id]
+      if (!item) return
+      if (item.available_qty <= 0) return
+      restored[line.menu_item_id] = Math.min(line.quantity, item.available_qty)
     })
 
-    return () => observer.disconnect()
-  }, [])
+    setQuantities(restored)
+  }, [isAuthenticated, cartInitialized, menuByMeal])
 
   const scrollToMeal = (meal: MealType) => {
     const element = document.getElementById(meal)
@@ -296,13 +377,111 @@ export default function CustomerHomePage() {
     window.scrollTo({ top: offsetPosition, behavior: "smooth" })
   }
 
+  const menuItemsMap = useMemo(() => createMenuItemMap(menuByMeal), [menuByMeal])
+  const mealSwitcherOptions = useMemo(
+    () =>
+      MEALS.map((meal) => ({
+        value: meal,
+        label: MEAL_LABELS[meal],
+      })),
+    []
+  )
+
+  const cartSelection = useMemo<CartLine[]>(() => {
+    if (!isAuthenticated) return []
+    const lines: CartLine[] = []
+    Object.entries(quantities).forEach(([key, rawValue]) => {
+      const value = Number(rawValue) || 0
+      if (value <= 0) return
+      const menuItemId = Number(key)
+      const item = menuItemsMap[menuItemId]
+      if (!item) return
+      if (item.available_qty <= 0) return
+      lines.push({
+        menu_item_id: menuItemId,
+        item_id: item.item_id,
+        meal: item.meal,
+        item_name: item.item_name,
+        price: item.rate,
+        quantity: Math.min(value, item.available_qty),
+        available_qty: item.available_qty,
+      })
+    })
+    return lines
+  }, [quantities, menuItemsMap, isAuthenticated])
+
+  const cartTotals = useMemo(() => {
+    const totalQuantity = cartSelection.reduce((sum, line) => sum + line.quantity, 0)
+    const totalPrice = cartSelection.reduce((sum, line) => sum + line.quantity * line.price, 0)
+    return { totalQuantity, totalPrice }
+  }, [cartSelection])
+
+  useEffect(() => {
+    if (!isAuthenticated || !cartInitialized) return
+    if (typeof window === "undefined") return
+    storedCartRef.current = cartSelection
+    if (cartSelection.length) {
+      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartSelection))
+    } else {
+      localStorage.removeItem(CART_STORAGE_KEY)
+    }
+  }, [cartSelection, isAuthenticated, cartInitialized])
+
+  const setQuantityForItem = (menuItem: MenuItem, nextValue: number) => {
+    if (!isAuthenticated) return
+    const clamped = Math.max(0, Math.min(nextValue, menuItem.available_qty))
+    setQuantities((prev) => {
+      if (clamped <= 0) {
+        if (!(menuItem.menu_item_id in prev)) {
+          return prev
+        }
+        const next = { ...prev }
+        delete next[menuItem.menu_item_id]
+        return next
+      }
+      if (prev[menuItem.menu_item_id] === clamped) {
+        return prev
+      }
+      return { ...prev, [menuItem.menu_item_id]: clamped }
+    })
+  }
+
+  const incrementItem = (menuItem: MenuItem) => {
+    const current = quantities[menuItem.menu_item_id] ?? 0
+    if (current >= menuItem.available_qty) return
+    setQuantityForItem(menuItem, current + 1)
+  }
+
+  const decrementItem = (menuItem: MenuItem) => {
+    const current = quantities[menuItem.menu_item_id] ?? 0
+    if (current <= 0) return
+    setQuantityForItem(menuItem, current - 1)
+  }
+
+  const handleClearCart = () => {
+    if (!cartSelection.length) return
+    setQuantities({})
+  }
+
+  const handleReviewCart = () => {
+    if (!cartSelection.length) return
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(CART_KEEP_KEY, "1")
+    }
+    router.push("/customer/cart")
+  }
+
+  const handleMealSelect = (meal: MealType) => {
+    setActiveMeal(meal)
+    scrollToMeal(meal)
+  }
+
   const customerName = useMemo(() => {
     if (!user?.name) return null
     const trimmed = user.name.trim()
     if (!trimmed) return null
     return trimmed.split(" ")[0]
   }, [user])
-  const isAuthenticated = Boolean(customerId)
   const welcomeHeadline = isAuthenticated && customerName ? `Welcome back, ${customerName}` : "Welcome to Kuteera Kitchen"
 
   const todaysBookings = useMemo(() => {
@@ -404,7 +583,7 @@ export default function CustomerHomePage() {
               ) : (
                 <>
                   <Button asChild>
-                    <Link href="/register">Register today</Link>
+                    <Link href="/register">Register</Link>
                   </Button>
                   <Button variant="outline" asChild>
                     <Link href="/login">Sign in</Link>
@@ -714,43 +893,34 @@ export default function CustomerHomePage() {
                   Browse the chef&apos;s specials for breakfast, lunch, dinner, and our condiment bar.
                 </p>
               </div>
-              <div className="flex flex-col items-center gap-2 sm:flex-row sm:gap-3">
-                {isAuthenticated ? (
-                  <>
-                    <Button asChild>
-                      <Link href="/customer/new-order">Start an order</Link>
-                    </Button>
-                    <Button asChild variant="outline">
-                      <Link href="/customer/subscription">Build a plan</Link>
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button asChild>
-                      <Link href="/register">Register today</Link>
-                    </Button>
-                    <Button asChild variant="outline">
-                      <Link href="/login">Sign in</Link>
-                    </Button>
-                  </>
-                )}
-              </div>
+              {!isAuthenticated && (
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Button asChild size="sm">
+                    <Link href="/register">Register</Link>
+                  </Button>
+                  <Button asChild size="sm" variant="outline">
+                    <Link href="/login">Sign in</Link>
+                  </Button>
+                </div>
+              )}
             </div>
 
-            <div className="sticky top-24 z-10 mt-8 flex flex-wrap justify-center gap-2 rounded-full bg-brand-cream px-3 py-2 shadow-brand-soft backdrop-blur">
-              {MEALS.map((meal) => (
-                <button
-                  key={meal}
-                  onClick={() => scrollToMeal(meal)}
-                  className={`rounded-full px-4 py-1.5 text-sm font-serif capitalize transition-colors ${
-                    activeMeal === meal
-                      ? "bg-primary text-white shadow"
-                      : "bg-transparent text-primary hover:bg-primary/10"
-                  }`}
-                >
-                  {MEAL_LABELS[meal]}
-                </button>
-              ))}
+            <div className="mt-8 flex flex-col items-center gap-3">
+              <MealSwitcher options={mealSwitcherOptions} value={activeMeal} onValueChange={handleMealSelect} />
+              {!isAuthenticated && (
+                <div className="flex items-center gap-2 rounded-full bg-brand-toast/15 px-3 py-1 text-xs font-medium text-brand-toast">
+                  <Info className="h-3.5 w-3.5" />
+                  <span>
+                    <Link
+                      href="/login"
+                      className="inline-flex items-center text-primary underline underline-offset-4 transition-colors hover:text-primary/80"
+                    >
+                      Log in
+                    </Link>{" "}
+                    to see place an order or view order details.
+                  </span>
+                </div>
+              )}
             </div>
 
             {error && (
@@ -760,8 +930,28 @@ export default function CustomerHomePage() {
             )}
 
             {isLoading ? (
-              <div className="py-12 text-center text-sm text-brand-toast">
-                Loading today&apos;s menu…
+              <div className="mt-10 space-y-12">
+                <div>
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                    <Skeleton className="h-6 w-32" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-3">
+                    {Array.from({ length: 6 }).map((_, index) => (
+                      <div
+                        key={index}
+                        className="flex h-[120px] overflow-hidden rounded-lg border-2 border-brand-subtle bg-brand-shell/80"
+                      >
+                        <Skeleton className="h-full w-[120px] rounded-none" />
+                        <div className="flex flex-1 flex-col gap-3 p-3">
+                          <Skeleton className="h-4 w-3/5" />
+                          <Skeleton className="h-3 w-full" />
+                          <Skeleton className="mt-auto h-4 w-2/5" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="mt-10 space-y-12">
@@ -781,35 +971,119 @@ export default function CustomerHomePage() {
                     </div>
                     {menuByMeal[meal]?.length ? (
                       <div className="grid gap-4 md:grid-cols-3">
-                        {menuByMeal[meal].map((item) => (
-                          <article
-                            key={item.menu_item_id}
-                            className="group flex h-[140px] overflow-hidden rounded-xl border border-brand-subtle bg-brand-cream shadow-brand-soft transition-all duration-200 hover:-translate-y-1 hover:shadow-md"
-                          >
-                            <div className="relative h-full w-[130px] flex-shrink-0 bg-muted">
-                              <Image
-                                src={item.picture_url || PLACEHOLDER_IMAGE}
-                                alt={item.item_name}
-                                fill
-                                sizes="130px"
-                                className="object-cover transition-transform duration-300 group-hover:scale-105"
-                              />
-                            </div>
-                            <div className="flex flex-1 flex-col justify-between p-3">
-                              <div>
-                                <h4 className="text-sm font-semibold text-brand-cocoa">
-                                  {item.item_name}
-                                </h4>
-                                <p className="mt-1 line-clamp-3 text-xs text-brand-toast">
-                                  {item.description || "Our chefs prepare this fresh daily."}
-                                </p>
+                        {menuByMeal[meal].map((item) => {
+                          const currentQty = quantities[item.menu_item_id] ?? 0
+                          const isSoldOut = item.available_qty <= 0
+                          const reachedLimit =
+                            item.available_qty > 0 && currentQty >= item.available_qty
+
+                          return (
+                            <article
+                              key={item.menu_item_id}
+                              className={cn(
+                                "relative flex h-[120px] overflow-hidden rounded-lg border-2 transition-shadow duration-200",
+                                isSoldOut
+                                  ? "pointer-events-none border-dashed border-[#d9c7be] bg-[#f1ebe6] text-[#9a857b]"
+                                  : "border-brand-subtle bg-brand-shell shadow-brand-soft hover:shadow-md"
+                              )}
+                              aria-disabled={isSoldOut}
+                            >
+                              <div
+                                className={cn(
+                                  "h-[120px] w-[120px] flex-shrink-0",
+                                  isSoldOut ? "bg-muted/70" : "bg-muted"
+                                )}
+                              >
+                                <Image
+                                  src={item.picture_url || PLACEHOLDER_IMAGE}
+                                  alt={item.item_name}
+                                  width={120}
+                                  height={120}
+                                  className={cn("h-full w-full object-cover", isSoldOut && "grayscale")}
+                                />
                               </div>
-                              <p className="text-sm font-semibold text-brand-cocoa">
-                                {currency(item.rate)}
-                              </p>
-                            </div>
-                          </article>
-                        ))}
+                              <div className="relative flex flex-1 p-3">
+                                <div className="flex w-full flex-col">
+                                  <h4
+                                    className={cn(
+                                      "text-sm font-medium",
+                                      isSoldOut ? "text-[#8d6e63]" : "text-[#463028]"
+                                    )}
+                                  >
+                                    {item.item_name}
+                                  </h4>
+                                  <p
+                                    className={cn(
+                                      "mt-1 line-clamp-2 text-xs",
+                                      isSoldOut ? "text-[#b59f93]" : "text-[#8d6e63]"
+                                    )}
+                                  >
+                                    {item.description || "Delicious kitchen special"}
+                                  </p>
+                                </div>
+
+                                <p
+                                  className={cn(
+                                    "absolute bottom-3 left-3 text-base font-semibold",
+                                    isSoldOut ? "text-[#9a857b]" : "text-[#463028]"
+                                  )}
+                                >
+                                  {currency(item.rate)}
+                                </p>
+
+                                {isAuthenticated && (
+                                  <div className="absolute bottom-3 right-3 flex items-center gap-2">
+                                    <Button
+                                      variant="outline"
+                                      size="icon"
+                                      className={`h-6 w-6 border-primary text-primary hover:bg-primary hover:text-white ${isSoldOut || currentQty === 0 ? "opacity-50" : ""}`}
+                                      onClick={(event) => {
+                                        event.stopPropagation()
+                                        decrementItem(item)
+                                      }}
+                                      disabled={isSoldOut || currentQty === 0}
+                                      aria-label={`Decrease ${item.item_name}`}
+                                    >
+                                      <Minus className="h-3 w-3" />
+                                    </Button>
+                                    <span
+                                      className={cn(
+                                        "min-w-[20px] text-center text-sm",
+                                        isSoldOut ? "text-[#9a857b]" : "text-primary"
+                                      )}
+                                    >
+                                      {currentQty}
+                                    </span>
+                                    <Button
+                                      variant="outline"
+                                      size="icon"
+                                      className={`h-6 w-6 border-primary text-primary hover:bg-primary hover:text-white ${isSoldOut || reachedLimit ? "opacity-50" : ""}`}
+                                      onClick={(event) => {
+                                        event.stopPropagation()
+                                        incrementItem(item)
+                                      }}
+                                      disabled={isSoldOut || reachedLimit}
+                                      aria-label={`Increase ${item.item_name}`}
+                                    >
+                                      <Plus className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                )}
+
+                                {isAuthenticated && reachedLimit && !isSoldOut && (
+                                  <span className="absolute top-3 right-3 text-[0.65rem] font-medium text-[#c75b39]">
+                                    Max {item.available_qty}
+                                  </span>
+                                )}
+                                {isSoldOut && (
+                                  <span className="absolute top-3 right-3 rounded-full bg-[#ffe2e2] px-2 py-0.5 text-[0.65rem] font-semibold text-[#c75b39] shadow-sm">
+                                    Sold out
+                                  </span>
+                                )}
+                              </div>
+                            </article>
+                          )
+                        })}
                       </div>
                     ) : (
                       <p className="text-sm text-brand-toast">
@@ -823,7 +1097,51 @@ export default function CustomerHomePage() {
           </div>
         </section>
       </main>
+      {isAuthenticated && cartTotals.totalQuantity > 0 && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-6 flex justify-center px-4">
+          <div className="pointer-events-auto w-full max-w-3xl rounded-3xl border border-primary/30 bg-white/95 shadow-xl backdrop-blur-sm">
+            <div className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <ShoppingCart className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-brand-cocoa">
+                    {cartTotals.totalQuantity} item{cartTotals.totalQuantity === 1 ? "" : "s"}
+                  </p>
+                  <p className="text-xs text-brand-toast">
+                    Total {currency(cartTotals.totalPrice)}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  className="hidden md:inline-flex"
+                  onClick={handleClearCart}
+                  disabled={cartTotals.totalQuantity === 0}
+                >
+                  Clear
+                </Button>
+                <Button onClick={handleReviewCart} disabled={cartTotals.totalQuantity === 0}>
+                  Review Cart
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <Footer />
     </div>
   )
+}
+
+function createMenuItemMap(menuByMeal: Record<MealType, MenuItem[]>) {
+  const map: Record<number, MenuItem> = {}
+  MEALS.forEach((meal) => {
+    menuByMeal[meal]?.forEach((item) => {
+      map[item.menu_item_id] = item
+    })
+  })
+  return map
 }
