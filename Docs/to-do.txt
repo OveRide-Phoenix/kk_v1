@@ -28,6 +28,7 @@ then do team members page which implements 1. in this file
 
 7. use shad/cn charts in sales reports and stuff
 
+8.0. Saving stuff across application shows the toast
 8. i want you to use this instead of all the toast notification components in the admin dashboard, so whereever we have a toast notification coming, i want you to use this: You are given a task to integrate an existing React component in the codebase
 
 The codebase should support:
