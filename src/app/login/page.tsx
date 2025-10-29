@@ -21,7 +21,8 @@ export default function LoginPage() {
   const router = useRouter();
   const [phoneNumber, setPhoneNumber] = useState("");
   const [city, setCity] = useState("");
-  const { setAdmin } = useAuthStore();
+  const setUser = useAuthStore((state) => state.setUser);
+  const setRoleState = useAuthStore((state) => state.setRoleState);
   const [adminPassword, setAdminPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [showRegisterHighlight, setShowRegisterHighlight] = useState(false);
@@ -31,7 +32,7 @@ export default function LoginPage() {
   const [canLoginAsAdmin, setCanLoginAsAdmin] = useState(false);
   const [loginAttempt, setLoginAttempt] = useState<"customer" | "admin" | null>(null);
 
-  // When phone number changes, fetch city and is_admin flag when 10 digits are present.
+  // When phone number changes, fetch city and role information when 10 digits are present.
   const handlePhoneChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
 
@@ -65,9 +66,10 @@ export default function LoginPage() {
         const data = await response.json();
         if (response.ok) {
           setCity(data.city);
-          const adminEnabled = Boolean(data.is_admin);
+          const adminEnabled = Array.isArray(data.role_codes)
+            ? data.role_codes.includes("admin")
+            : Boolean(data.is_admin);
           setCanLoginAsAdmin(adminEnabled);
-          setAdmin(adminEnabled);
           if (!adminEnabled) {
             setAdminPassword("");
           }
@@ -77,7 +79,6 @@ export default function LoginPage() {
             data.detail || "User does not exist. Please register."
           );
           setCity("");
-          setAdmin(false);
           setCanLoginAsAdmin(false);
           setAdminPassword("");
           setShowRegisterHighlight(true);
@@ -85,7 +86,6 @@ export default function LoginPage() {
       } catch {
         setErrorMessage("Unable to reach the server. Please ensure the backend is running.");
         setCity("");
-        setAdmin(false);
         setCanLoginAsAdmin(false);
         setShowRegisterHighlight(false);
       } finally {
@@ -95,7 +95,6 @@ export default function LoginPage() {
       // Remove the validation message during typing
       setErrorMessage("");
       setCity("");
-      setAdmin(false);
       setCanLoginAsAdmin(false);
       setAdminPassword("");
       setAdminPassword("");
@@ -156,15 +155,19 @@ export default function LoginPage() {
           }
         }
 
-        const role = user?.role ?? (data.is_admin ? "admin" : "customer");
         const resolvedUser = user ?? data.user ?? null;
-        useAuthStore.getState().setAdmin(Boolean(data.is_admin_account || role === "admin"));
-        useAuthStore.getState().setUser(
-          resolvedUser
-            ? { ...resolvedUser, is_admin: resolvedUser?.is_admin ?? data.is_admin_account ?? false }
-            : resolvedUser
-        );
-        router.push(role === "admin" ? "/admin" : "/customer/home");
+
+        if (resolvedUser) {
+          setUser(resolvedUser);
+        } else {
+          const roles = Array.isArray(data.user?.roles) ? data.user.roles : [];
+          const roleCodes = Array.isArray(data.role_codes) ? data.role_codes : [];
+          setRoleState(roles, roleCodes);
+        }
+
+        const roleCodes = (resolvedUser?.role_codes ?? data.role_codes ?? []) as string[];
+        const destination = roleCodes.includes("admin") ? "/admin" : "/customer/home";
+        router.push(destination);
       } else {
         const errorDetail = data.detail || data.msg || "Login failed. Try again.";
         setErrorMessage(errorDetail);

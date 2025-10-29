@@ -4,7 +4,6 @@ CREATE TABLE categories (
     category_name VARCHAR(100) NOT NULL UNIQUE
 );
 
--- Customers Table
 CREATE TABLE customers (
     customer_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     referred_by VARCHAR(100) NULL,
@@ -14,17 +13,20 @@ CREATE TABLE customers (
     recipient_name VARCHAR(100) NOT NULL,
     payment_frequency VARCHAR(50) NULL DEFAULT 'Daily',
     email VARCHAR(100) NULL UNIQUE,
-    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP()
-    -- ALTER TABLE customers ADD COLUMN is_admin TINYINT(1) NOT NULL DEFAULT 0;
+    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP(),
+    roles JSON DEFAULT NULL,
+    admin_password_hash VARCHAR(255) NULL,
+    admin_is_active TINYINT(1) NOT NULL DEFAULT 1
 );
 
--- Admin Users Table
-CREATE TABLE admin_users (
-    admin_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    customer_id INT NOT NULL,
-    admin_password VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP(),
-    FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
+-- Roles Table
+CREATE TABLE roles (
+    role_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(50) NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL,
+    description VARCHAR(255) NULL,
+    is_system TINYINT(1) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP()
 );
 
 

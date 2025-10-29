@@ -49,6 +49,9 @@ interface CustomerProfile {
   route_assignment?: string | null
   created_at?: string | null
   is_admin?: boolean | number
+  roles?: number[] | null
+  role_codes?: string[] | null
+  admin_is_active?: boolean
 }
 
 interface AddressEntry {
@@ -123,7 +126,6 @@ export default function AccountPage() {
   const user = useAuthStore((state) => state.user)
   const isAdminStore = useAuthStore((state) => state.isAdmin)
   const setUser = useAuthStore((state) => state.setUser)
-  const setAdmin = useAuthStore((state) => state.setAdmin)
 
   const [profile, setProfile] = useState<CustomerProfile | null>(null)
   const [form, setForm] = useState<CustomerProfile | null>(null)
@@ -160,12 +162,12 @@ export default function AccountPage() {
         if (!response.ok) return
         const me = await response.json()
       setUser(me)
-      setAdmin(Boolean(me?.role === "admin" || me?.is_admin))
+      // roles handled via setUser
     } catch (err) {
       console.warn("Failed to load user", err)
     }
     })()
-  }, [user, setUser, setAdmin])
+  }, [user, setUser])
 
   const customerId = user?.customer_id
 
@@ -178,8 +180,12 @@ export default function AccountPage() {
     const data = (await response.json()) as CustomerProfile
     setProfile(data)
     setForm(data)
-    setAdmin(Boolean(data.is_admin))
-  }, [customerId, setAdmin])
+    setUser({
+      ...(user ?? {}),
+      roles: data.roles ?? [],
+      role_codes: data.role_codes ?? [],
+    })
+  }, [customerId, user, setUser])
 
   const fetchAddresses = useCallback(async () => {
     if (!customerId) return
@@ -286,6 +292,10 @@ export default function AccountPage() {
   }, [orders])
 
   const latestOrders = useMemo(() => sortedOrders.slice(0, 2), [sortedOrders])
+  const readOnlyFieldClasses =
+    "disabled:bg-[#f6f0e9] disabled:border-[#e4d6ca] disabled:text-[#463028] disabled:opacity-100 disabled:placeholder:text-[#9c8576]"
+  const readOnlySelectClasses =
+    "disabled:bg-[#f6f0e9] disabled:border-[#e4d6ca] disabled:text-[#463028] disabled:opacity-100 disabled:[&>span]:text-[#9c8576]"
 
   const renderOrderCard = useCallback(
     (order: OrderSummary, options?: { variant?: "default" | "dialog" }) => {
@@ -405,18 +415,18 @@ export default function AccountPage() {
     [setBillOrderId]
   )
 
-  const profileIsAdmin = profile?.is_admin
+  const profileHasAdminRole = Array.isArray(profile?.role_codes)
+    ? profile.role_codes.includes("admin")
+    : Boolean(profile?.is_admin)
 
-  const isAdmin = useMemo(
-    () =>
-      Boolean(
-        isAdminStore ||
-          profileIsAdmin ||
-          user?.role === "admin" ||
-          (user as any)?.is_admin
-      ),
-    [isAdminStore, profileIsAdmin, user]
-  )
+  const isAdmin = useMemo(() => {
+    const userRoleCodes = Array.isArray((user as any)?.role_codes)
+      ? (user as any).role_codes
+      : Array.isArray((user as any)?.roleCodes)
+        ? (user as any).roleCodes
+        : []
+    return Boolean(isAdminStore || profileHasAdminRole || userRoleCodes.includes("admin"))
+  }, [isAdminStore, profileHasAdminRole, user])
 
   const handleChange = (key: keyof CustomerProfile, value: string) => {
     if (!form) return
@@ -808,6 +818,7 @@ export default function AccountPage() {
                   value={form.name}
                   onChange={(e) => handleChange("name", e.target.value)}
                   disabled={!isEditing}
+                  className={readOnlyFieldClasses}
                 />
               </div>
               <div className="space-y-2">
@@ -817,12 +828,18 @@ export default function AccountPage() {
                   value={form.recipient_name}
                   onChange={(e) => handleChange("recipient_name", e.target.value)}
                   disabled={!isEditing}
+                  className={readOnlyFieldClasses}
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="phone">Primary mobile</Label>
                 <div className="relative">
-                  <Input id="phone" value={form.primary_mobile} disabled className="bg-muted" />
+                  <Input
+                    id="phone"
+                    value={form.primary_mobile}
+                    disabled
+                    className={readOnlyFieldClasses}
+                  />
                   <Phone className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8d6e63]" />
                 </div>
               </div>
@@ -833,6 +850,7 @@ export default function AccountPage() {
                   value={form.alternative_mobile ?? ""}
                   onChange={(e) => handleChange("alternative_mobile", e.target.value)}
                   disabled={!isEditing}
+                  className={readOnlyFieldClasses}
                 />
               </div>
               <div className="space-y-2">
@@ -844,6 +862,7 @@ export default function AccountPage() {
                     value={form.email ?? ""}
                     onChange={(e) => handleChange("email", e.target.value)}
                     disabled={!isEditing}
+                    className={readOnlyFieldClasses}
                   />
                   <Mail className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8d6e63]" />
                 </div>
@@ -855,6 +874,7 @@ export default function AccountPage() {
                   value={form.referred_by ?? ""}
                   onChange={(e) => handleChange("referred_by", e.target.value)}
                   disabled={!isEditing}
+                  className={readOnlyFieldClasses}
                 />
               </div>
               <div className="space-y-2">
@@ -864,7 +884,7 @@ export default function AccountPage() {
                   onValueChange={(value) => handleChange("payment_frequency", value)}
                   disabled={!isEditing}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className={readOnlySelectClasses}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

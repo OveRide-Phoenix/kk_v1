@@ -44,7 +44,7 @@ const DEFAULT_PLANNED = {
 
 export function AutoMenuGenerator() {
   const { toast: pushToast } = useToast();
-  const isAdmin = useAuthStore((state) => state.isAdmin);
+  const hasDeveloperAccess = useAuthStore((state) => state.hasRole("developer"));
   const [hydrated, setHydrated] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     const today = new Date();
@@ -73,7 +73,7 @@ export function AutoMenuGenerator() {
     return null;
   }
 
-  if (!isAdmin) {
+  if (!hasDeveloperAccess) {
     return (
       <div className="space-y-6">
         <Card>
@@ -81,7 +81,7 @@ export function AutoMenuGenerator() {
             <CardTitle>Developer Access Required</CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
-            You must be an administrator to run the one-click menu setup tool.
+            You need the developer role to run the one-click menu setup tool.
           </CardContent>
         </Card>
       </div>

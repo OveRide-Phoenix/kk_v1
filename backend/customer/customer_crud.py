@@ -4,6 +4,8 @@ from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel
 
+from ..utils.rbac import get_role_id, parse_role_ids
+
 # Add CustomerUpdate model that's used in main.py
 class CustomerUpdate(BaseModel):
     referred_by: Optional[str] = None
@@ -92,12 +94,11 @@ def get_customer_by_id(db, customer_id):
         SELECT 
             c.customer_id, c.referred_by, c.primary_mobile, c.alternative_mobile, 
             c.name, c.recipient_name, c.payment_frequency, c.email, c.created_at,
+            c.roles, c.admin_is_active,
             a.address_id, a.house_apartment_no, a.written_address, a.city, 
-            a.pin_code, a.latitude, a.longitude, a.address_type, a.route_assignment,
-            CASE WHEN au.admin_id IS NOT NULL THEN 1 ELSE 0 END AS is_admin
+            a.pin_code, a.latitude, a.longitude, a.address_type, a.route_assignment
         FROM customers c
         INNER JOIN addresses a ON c.customer_id = a.customer_id
-        LEFT JOIN admin_users au ON au.customer_id = c.customer_id AND au.is_active = 1
         WHERE c.customer_id = %s AND a.is_default = 1
         """
         cursor.execute(query, (customer_id,))
@@ -105,7 +106,13 @@ def get_customer_by_id(db, customer_id):
         
         if not result:
             raise HTTPException(status_code=404, detail="Customer not found")
-            
+        roles = parse_role_ids(result.get("roles"))
+        result["roles"] = roles
+
+        admin_role_id = get_role_id(cursor, "admin")
+        result["is_admin"] = 1 if admin_role_id and admin_role_id in roles else 0
+        result["admin_is_active"] = bool(result.get("admin_is_active", True))
+
         return result
     finally:
         cursor.close()
@@ -117,14 +124,13 @@ def get_all_customers(db):
         SELECT 
             c.customer_id, c.referred_by, c.primary_mobile, c.alternative_mobile, 
             c.name, c.recipient_name, c.payment_frequency, c.email, c.created_at,
+            c.roles, c.admin_is_active,
             a.address_id, a.house_apartment_no, a.written_address, a.city, 
             a.pin_code, a.latitude, a.longitude, a.address_type, a.route_assignment,
             COALESCE(o.completed_orders, 0) AS completed_orders,
-            COALESCE(p.pending_orders, 0) AS pending_orders,
-            CASE WHEN au.admin_id IS NOT NULL THEN 1 ELSE 0 END AS is_admin
+            COALESCE(p.pending_orders, 0) AS pending_orders
         FROM customers c
         INNER JOIN addresses a ON c.customer_id = a.customer_id
-        LEFT JOIN admin_users au ON au.customer_id = c.customer_id AND au.is_active = 1
         LEFT JOIN (
             SELECT customer_id, COUNT(*) AS completed_orders
             FROM orders
@@ -141,7 +147,15 @@ def get_all_customers(db):
         ORDER BY c.created_at ASC
         """
         cursor.execute(query)
-        return cursor.fetchall()
+        rows = cursor.fetchall()
+
+        admin_role_id = get_role_id(cursor, "admin")
+        for row in rows:
+            roles = parse_role_ids(row.get("roles"))
+            row["roles"] = roles
+            row["is_admin"] = 1 if admin_role_id and admin_role_id in roles else 0
+            row["admin_is_active"] = bool(row.get("admin_is_active", True))
+        return rows
     finally:
         cursor.close()
 

@@ -49,4 +49,7 @@ async function request(path: string, init?: RequestInit) {
 export const http = {
   get: (p: string) => request(p, { method: 'GET' }),
   post: <T extends Record<string, unknown>>(p: string, body?: T) => request(p, { method: 'POST', body: body ? JSON.stringify(body) : undefined }),
+  put: <T extends Record<string, unknown>>(p: string, body?: T) => request(p, { method: 'PUT', body: body ? JSON.stringify(body) : undefined }),
+  patch: <T extends Record<string, unknown>>(p: string, body?: T) => request(p, { method: 'PATCH', body: body ? JSON.stringify(body) : undefined }),
+  delete: (p: string) => request(p, { method: 'DELETE' }),
 };

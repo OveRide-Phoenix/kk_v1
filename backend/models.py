@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     Enum,
     TIMESTAMP,
+    JSON,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
@@ -26,9 +27,12 @@ class Customer(Base):
     alternative_mobile = Column(String(15), nullable=True)
     name = Column(String(100), nullable=False)
     recipient_name = Column(String(100), nullable=False)
-    payment_frequency = Column(String(50), nullable=True, default="Daily")
-    email = Column(String(100), unique=True, nullable=True)
-    created_at = Column(TIMESTAMP, nullable=True)
+   payment_frequency = Column(String(50), nullable=True, default="Daily")
+   email = Column(String(100), unique=True, nullable=True)
+   created_at = Column(TIMESTAMP, nullable=True)
+    roles = Column(JSON, nullable=True)
+    admin_password_hash = Column(String(255), nullable=True)
+    admin_is_active = Column(Boolean, nullable=False, default=True)
 
     addresses = relationship("Address", back_populates="customer")
     orders = relationship("Order", back_populates="customer")
@@ -172,6 +176,19 @@ class Item(Base):
     sgst = Column(DECIMAL(5, 2), nullable=True)
     igst = Column(DECIMAL(5, 2), nullable=True)
     net_price = Column(DECIMAL(10, 2), nullable=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ROLES
+# ─────────────────────────────────────────────────────────────────────────────
+class Role(Base):
+    __tablename__ = "roles"
+    role_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    code = Column(String(50), unique=True, nullable=False)
+    name = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+    is_system = Column(Boolean, nullable=False, default=False)
+    created_at = Column(TIMESTAMP, nullable=False)
     is_combo = Column(Boolean, nullable=False, default=False)
 
     bld_id = Column(Integer, ForeignKey("bld.bld_id"), nullable=True)

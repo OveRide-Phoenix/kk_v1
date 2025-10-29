@@ -25,6 +25,27 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
+const normaliseRoles = (value: unknown): number[] => {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => Number(item))
+      .filter((item) => Number.isInteger(item));
+  }
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((item) => Number(item))
+          .filter((item) => Number.isInteger(item));
+      }
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+
 // Define customer types
 type CustomerType = "Regular" | "Reseller" | "Agent"
 type PaymentFrequency = "Daily" | "Weekly" | "Monthly"
@@ -53,6 +74,9 @@ interface Customer {
   completed_orders: number
   pending_orders: number
   is_admin?: number | boolean
+  roles?: number[] | null
+  role_codes?: string[] | null
+  admin_is_active?: boolean
 }
 
 export default function CustomerManagement() {
@@ -72,19 +96,37 @@ export default function CustomerManagement() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+  const [roleCatalog, setRoleCatalog] = useState<Record<number, string>>({})
+  const [adminRoleId, setAdminRoleId] = useState<number | null>(null)
   
   const refreshCustomers = async () => {
     try {
-      setIsLoading(true);
-      const response = await fetch('http://localhost:8000/get-all-customers');
-      const data = await response.json();
-      setCustomers(Array.isArray(data) ? data : []);
+      setIsLoading(true)
+      const response = await fetch('http://localhost:8000/get-all-customers')
+      const raw = await response.json()
+      if (!Array.isArray(raw)) {
+        setCustomers([])
+        return
+      }
+      const enriched = raw.map((customer: Customer & { roles?: unknown; role_codes?: unknown }) => {
+        const roles = normaliseRoles(customer.roles)
+        const roleCodes = Array.isArray(customer.role_codes)
+          ? customer.role_codes.filter((code): code is string => typeof code === "string")
+          : []
+        return {
+          ...customer,
+          roles,
+          role_codes: roleCodes,
+        }
+      })
+      setCustomers(enriched)
     } catch (error) {
-      console.error('Error fetching customers:', error);
+      console.error('Error fetching customers:', error)
+      setCustomers([])
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
   const [filters, setFilters] = useState({
     orderCount: "all",
     address: "",
@@ -92,22 +134,35 @@ export default function CustomerManagement() {
 
   // Update the fetch and data handling
   useEffect(() => {
-    const fetchCustomers = async () => {
+    refreshCustomers()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    const loadRoles = async () => {
       try {
-        setIsLoading(true)
-        const response = await fetch('http://localhost:8000/get-all-customers')
-        const data = await response.json()
-        // Ensure we're setting an array
-        setCustomers(Array.isArray(data) ? data : [])
+        const res = await fetch("/api/backend/api/rbac/roles")
+        if (!res.ok) return
+        const payload = await res.json()
+        if (!payload?.roles || !Array.isArray(payload.roles)) return
+        const catalog: Record<number, string> = {}
+        let adminId: number | null = null
+        for (const role of payload.roles as Array<{ role_id: number; name: string; code?: string }>) {
+          if (Number.isInteger(role.role_id)) {
+            catalog[role.role_id] = role.name
+            if (role.code === "admin") {
+              adminId = role.role_id
+            }
+          }
+        }
+        setRoleCatalog(catalog)
+        setAdminRoleId(adminId)
       } catch (error) {
-        console.error('Error fetching customers:', error)
-        setCustomers([])
-      } finally {
-        setIsLoading(false)
+        console.error("Failed to load roles", error)
       }
     }
 
-    fetchCustomers()
+    loadRoles()
   }, [])
 
   // Update the filter function to use the correct field names
@@ -499,7 +554,11 @@ export default function CustomerManagement() {
                             )
                           }
                           if (column.key === "name") {
-                            const isAdmin = Boolean(customer.is_admin)
+                            const roles = Array.isArray(customer.roles) ? customer.roles : []
+                            const isAdmin = adminRoleId !== null && roles.includes(adminRoleId)
+                            const roleLabels = roles
+                              .map((roleId) => roleCatalog[roleId])
+                              .filter((label): label is string => Boolean(label))
                             return (
                               <TableCell key={column.key} className={`${isMobile ? 'text-xs' : ''}`}>
                                 <span className="inline-flex items-center gap-1 font-medium">
@@ -511,6 +570,15 @@ export default function CustomerManagement() {
                                     />
                                   )}
                                 </span>
+                                {roleLabels.length > 0 && (
+                                  <div className="mt-1 flex flex-wrap gap-1">
+                                    {roleLabels.map((label) => (
+                                      <Badge key={label} variant="secondary" className="text-xs">
+                                        {label}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                )}
                               </TableCell>
                             )
                           }

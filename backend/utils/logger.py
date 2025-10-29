@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
+from .rbac import get_role_id, parse_role_ids
+
 logger = logging.getLogger(__name__)
 
 
@@ -17,25 +19,50 @@ def log_admin_action(
 ) -> None:
     """Persist an admin action to the admin_logs table without impacting the main flow."""
     try:
-        cursor = db.cursor()
+        cursor = db.cursor(dictionary=True)
         try:
             effective_admin_id = admin_id
-            if effective_admin_id is not None:
-                cursor.execute(
-                    "SELECT admin_id FROM admin_users WHERE admin_id=%s LIMIT 1",
-                    (effective_admin_id,),
-                )
-                if cursor.fetchone() is None:
-                    effective_admin_id = None
+            admin_role_id = get_role_id(cursor, "admin")
 
-            if effective_admin_id is None:
+            def is_valid_admin(candidate: Optional[int]) -> bool:
+                if candidate is None or admin_role_id is None:
+                    return False
                 cursor.execute(
-                    "SELECT admin_id FROM admin_users ORDER BY admin_id LIMIT 1"
+                    """
+                    SELECT roles, admin_is_active
+                    FROM customers
+                    WHERE customer_id=%s
+                    LIMIT 1
+                    """,
+                    (candidate,),
                 )
                 row = cursor.fetchone()
                 if not row:
-                    return
-                effective_admin_id = row[0]
+                    return False
+                if not bool(row.get("admin_is_active", True)):
+                    return False
+                roles = parse_role_ids(row.get("roles"))
+                return admin_role_id in roles
+
+            if not is_valid_admin(effective_admin_id):
+                cursor.execute(
+                    """
+                    SELECT customer_id, roles
+                    FROM customers
+                    WHERE admin_is_active = 1
+                    ORDER BY customer_id ASC
+                    """
+                )
+                for row in cursor.fetchall():
+                    roles = parse_role_ids(row.get("roles"))
+                    if admin_role_id and admin_role_id in roles:
+                        effective_admin_id = row["customer_id"]
+                        break
+                else:
+                    effective_admin_id = None
+
+            if effective_admin_id is None:
+                return
             cursor.execute(
                 """
                 INSERT INTO admin_logs (admin_id, action_type, entity_type, entity_id, description)

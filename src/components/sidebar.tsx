@@ -5,6 +5,7 @@ import {
   Home,
   Package,
   Users,
+  UserCog,
   Calendar,
   Utensils,
   Menu,
@@ -15,9 +16,11 @@ import {
   Code2,
   Database,
   Sparkles,
+  ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
+import { useAuthStore } from "@/store/store";
 
 interface SidebarProps {
     sidebarOpen: boolean;
@@ -35,6 +38,8 @@ const primaryNavigationItems = [
     { name: "Daily Menu Setup", icon: Calendar, href: "/admin/dailymenusetup", id: "dailymenusetup" },
     { name: "Kitchen Production", icon: Utensils, href: "/admin/production", id: "production" },
     { name: "Order History", icon: ShoppingCart, href: "/admin/order-history", id: "orders" },
+    { name: "Roles", icon: ShieldCheck, href: "/admin/roles", id: "roles" },
+    { name: "Team Members", icon: UserCog, href: "/admin/team-members", id: "team-members" },
     { name: "Logs & Audit", icon: FileText, href: "/admin/logs", id: "logs" },
     { name: "Reports & Analytics", icon: BarChart3, href: "/admin/reports", id: "reports" },
 ];
@@ -55,6 +60,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 }) => {
     const router = useRouter();
     const [mounted, setMounted] = useState(false);
+    const hasDeveloperAccess = useAuthStore((state) => state.hasRole("developer"));
     
     // Only render the component after it's mounted on the client
     useEffect(() => {
@@ -126,7 +132,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                             </li>
                         ))}
                     </ul>
-                    {developerNavigationItems.length > 0 && (
+                    {hasDeveloperAccess && developerNavigationItems.length > 0 && (
                       <div className={`mt-6 space-y-1 ${collapsed ? "flex flex-col items-center" : ""}`}>
                         {!collapsed && (
                           <p className="px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">

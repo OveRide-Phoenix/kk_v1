@@ -25,6 +25,14 @@ from fastapi import Response, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import os
 from .utils.logger import log_admin_action
+from .utils.rbac import (
+    ensure_default_roles,
+    fetch_role_map,
+    get_role_id,
+    make_role_summary,
+    parse_role_ids,
+    roles_to_json,
+)
 
 class OrderStatusUpdate(BaseModel):
     status: str = Field(..., min_length=1, max_length=50)
@@ -42,6 +50,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+ADMIN_ROLE_CODE = "admin"
+DEVELOPER_ROLE_CODE = "developer"
 
 app.include_router(admin_logs.router)
 app.include_router(reports.router)
@@ -103,11 +114,211 @@ def decode_token(token: str) -> dict:
     )
 
 
+def hash_password(plain: str) -> str:
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(plain.encode(), salt).decode()
+
+
 def verify_password(plain: str, hashed: str) -> bool:
     try:
         return bcrypt.checkpw(plain.encode(), hashed.encode())
     except Exception:
         return False
+
+
+def _user_has_role(user: Dict[str, Any], role_code: str) -> bool:
+    role_codes = user.get("role_codes")
+    if isinstance(role_codes, list):
+        if role_code in role_codes:
+            return True
+    elif isinstance(role_codes, str):
+        if role_codes == role_code:
+            return True
+    legacy_role = user.get("role")
+    return legacy_role == role_code
+
+
+def get_admin_role_id(db) -> Optional[int]:
+    cursor = db.cursor()
+    try:
+        return get_role_id(cursor, ADMIN_ROLE_CODE)
+    finally:
+        cursor.close()
+
+
+def build_role_context(db, role_ids: Optional[List[int]] = None):
+    cursor = db.cursor()
+    try:
+        ensure_default_roles(cursor)
+        role_map = fetch_role_map(cursor, role_ids)
+    finally:
+        cursor.close()
+    effective_roles = role_ids[:] if role_ids else list(role_map.keys())
+    code_seen: set[str] = set()
+    role_codes: List[str] = []
+    for rid in effective_roles:
+        details = role_map.get(rid)
+        if not details:
+            continue
+        code = details.get("code")
+        if not code or code in code_seen:
+            continue
+        code_seen.add(code)
+        role_codes.append(code)
+    role_details = make_role_summary(effective_roles, role_map)
+    return role_map, role_codes, role_details
+
+
+def slugify_role_code(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", value.strip().lower())
+    return slug.strip("-")
+
+
+def validate_role_ids(db, role_ids: List[int]) -> Dict[int, Dict[str, Any]]:
+    normalised = sorted({int(rid) for rid in role_ids})
+    if not normalised:
+        return {}
+    cursor = db.cursor()
+    try:
+        ensure_default_roles(cursor)
+        role_map = fetch_role_map(cursor, normalised)
+    finally:
+        cursor.close()
+    missing = [rid for rid in normalised if rid not in role_map]
+    if missing:
+        raise HTTPException(status_code=400, detail=f"Unknown role ids: {missing}")
+    return role_map
+
+
+def hydrate_team_members(db, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    parsed_roles: List[List[int]] = []
+    role_ids: set[int] = set()
+    for row in rows:
+        roles = parse_role_ids(row.get("roles"))
+        parsed_roles.append(roles)
+        role_ids.update(roles)
+    if not role_ids:
+        return []
+    role_map, _, _ = build_role_context(db, sorted(role_ids))
+    members: List[Dict[str, Any]] = []
+    for row, roles in zip(rows, parsed_roles):
+        if not roles:
+            continue
+        role_details = make_role_summary(roles, role_map)
+        role_codes = [
+            detail.get("code") for detail in role_details if detail.get("code")
+        ]
+        members.append(
+            {
+                "customer_id": row["customer_id"],
+                "name": row.get("name"),
+                "phone": row.get("primary_mobile"),
+                "email": row.get("email"),
+                "roles": roles,
+                "role_codes": role_codes,
+                "role_details": role_details,
+                "admin_is_active": bool(row.get("admin_is_active", True)),
+                "has_admin_password": bool(row.get("admin_password_hash")),
+                "created_at": row.get("created_at"),
+            }
+        )
+    return members
+
+
+def apply_team_member_update(
+    db,
+    customer_id: int,
+    role_ids: Optional[List[int]],
+    admin_password: Optional[str],
+    admin_is_active: Optional[bool],
+    *,
+    require_role_ids: bool = False,
+):
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            SELECT customer_id, roles, admin_is_active
+            FROM customers
+            WHERE customer_id=%s
+            LIMIT 1
+            """,
+            (customer_id,),
+        )
+        existing = cursor.fetchone()
+        if not existing:
+            raise HTTPException(status_code=404, detail="Customer not found")
+
+        updates: List[str] = []
+        params: List[Any] = []
+
+        if role_ids is not None:
+            normalised_roles = sorted({int(rid) for rid in role_ids})
+            if require_role_ids and not normalised_roles:
+                raise HTTPException(status_code=400, detail="At least one role is required")
+            validate_role_ids(db, normalised_roles)
+            if normalised_roles:
+                updates.append("roles=%s")
+                params.append(roles_to_json(normalised_roles))
+            else:
+                updates.append("roles=NULL")
+        elif require_role_ids:
+            raise HTTPException(status_code=400, detail="Role ids are required")
+
+        if admin_is_active is not None:
+            updates.append("admin_is_active=%s")
+            params.append(int(bool(admin_is_active)))
+
+        if admin_password is not None:
+            password = admin_password.strip()
+            if password:
+                if len(password) < 6:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Admin password must be at least 6 characters",
+                    )
+                updates.append("admin_password_hash=%s")
+                params.append(hash_password(password))
+            else:
+                updates.append("admin_password_hash=NULL")
+
+        if updates:
+            cursor.execute(
+                f"UPDATE customers SET {', '.join(updates)} WHERE customer_id=%s",
+                (*params, customer_id),
+            )
+            db.commit()
+
+        cursor.execute(
+            """
+            SELECT customer_id, name, primary_mobile, email, roles, admin_is_active, admin_password_hash, created_at
+            FROM customers
+            WHERE customer_id=%s
+            """,
+            (customer_id,),
+        )
+        updated_row = cursor.fetchone()
+    finally:
+        cursor.close()
+
+    if not updated_row:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    members = hydrate_team_members(db, [updated_row])
+    return members[0] if members else None
+
+
+def role_usage_counts(db) -> Dict[int, int]:
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT roles FROM customers WHERE roles IS NOT NULL")
+        counts: Dict[int, int] = {}
+        for row in cursor.fetchall():
+            for rid in parse_role_ids(row.get("roles")):
+                counts[rid] = counts.get(rid, 0) + 1
+        return counts
+    finally:
+        cursor.close()
 
 def set_cookie(resp: Response, name: str, value: str, max_age: int):
     resp.set_cookie(
@@ -150,8 +361,14 @@ def get_current_user(request: Request, creds: HTTPAuthorizationCredentials | Non
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 def admin_required(user = Depends(get_current_user)):
-    if user.get("role") != "admin":
+    if not user or not _user_has_role(user, ADMIN_ROLE_CODE):
         raise HTTPException(status_code=403, detail="Admin only")
+    return user
+
+
+def developer_required(user = Depends(get_current_user)):
+    if not user or not _user_has_role(user, DEVELOPER_ROLE_CODE):
+        raise HTTPException(status_code=403, detail="Developer only")
     return user
 
 SCHEMA_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_]+$")
@@ -165,33 +382,28 @@ def get_city(phone: str):
     try:
         query = """
         SELECT 
-            a.city, 
-            CASE 
-                WHEN u.customer_id IS NOT NULL THEN 1 
-                ELSE 0 
-            END AS is_admin 
+            a.city,
+            c.roles
         FROM customers c
         INNER JOIN addresses a ON c.customer_id = a.customer_id
-        LEFT JOIN admin_users u ON c.customer_id = u.customer_id
-        WHERE c.primary_mobile = %s;
+        WHERE c.primary_mobile = %s
+          AND a.is_default = 1
+        LIMIT 1;
         """
-
         cursor.execute(query, (phone,))
         result = cursor.fetchone()
-
-        print("Raw DB Result:", result)  # Debugging Output
-
         if not result:
             raise HTTPException(status_code=404, detail="User does not exist. Please register.")
 
-        # ✅ Ensure conversion to int before bool conversion
-        is_admin = int(result["is_admin"]) if result["is_admin"] is not None else 0
-
-        print("Final Processed Result:", {"city": result["city"], "is_admin": bool(is_admin)})
-
+        roles = parse_role_ids(result.get("roles"))
+        _, role_codes, role_details = build_role_context(db, roles)
+        is_admin = ADMIN_ROLE_CODE in role_codes
         return {
             "city": result["city"],
-            "is_admin": bool(is_admin)  # Ensure True/False conversion
+            "is_admin": bool(is_admin),
+            "roles": roles,
+            "role_codes": role_codes,
+            "role_details": role_details,
         }
 
     finally:
@@ -325,70 +537,97 @@ class LoginRequest(BaseModel):
     phone: str
     admin_password: Optional[str]
 
+
+class RoleCreateRequest(BaseModel):
+    name: str
+    code: Optional[str] = None
+    description: Optional[str] = None
+
+
+class RoleUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+
+class TeamMemberCreateRequest(BaseModel):
+    customer_id: int
+    role_ids: List[int] = Field(default_factory=list)
+    admin_password: Optional[str] = None
+    admin_is_active: Optional[bool] = True
+
+
+class TeamMemberUpdateRequest(BaseModel):
+    role_ids: Optional[List[int]] = None
+    admin_password: Optional[str] = None
+    admin_is_active: Optional[bool] = None
+
 # --- LOGIN: return tokens in JSON for localStorage ---
 @app.post("/api/login")
 def login(data: LoginRequest, response: Response):
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
-        cursor.execute("""
+        ensure_default_roles(cursor)
+        cursor.execute(
+            """
             SELECT
                 c.customer_id,
                 c.name AS customer_name,
                 c.primary_mobile AS phone_number,
-                au.admin_id,
-                au.password_hash,
-                au.role,
-                au.is_active
+                c.roles,
+                c.admin_password_hash,
+                c.admin_is_active
             FROM customers c
-            LEFT JOIN admin_users au ON au.customer_id = c.customer_id
             WHERE c.primary_mobile = %s
             LIMIT 1
-        """, (data.phone,))
+            """,
+            (data.phone,),
+        )
         result = cursor.fetchone()
 
         if not result:
             raise HTTPException(status_code=404, detail="User not found. Please register.")
 
-        is_admin_account = bool(result["admin_id"])
+        roles = parse_role_ids(result.get("roles"))
+        role_map, role_codes, role_details = build_role_context(db, roles)
+        has_admin_role = ADMIN_ROLE_CODE in role_codes
+        is_admin_account = has_admin_role and bool(result.get("admin_password_hash"))
         admin_password_provided = bool(data.admin_password)
 
-        access = None
-        refresh = None
-        user_payload = None
         admin_login = False
-
-        if is_admin_account and admin_password_provided:
-            if not result["is_active"]:
+        admin_is_active = bool(result.get("admin_is_active", True))
+        if admin_password_provided:
+            if not has_admin_role:
+                raise HTTPException(status_code=403, detail="Admin access not enabled for this user.")
+            if not admin_is_active:
                 raise HTTPException(status_code=403, detail="Admin account disabled")
-            if not verify_password(data.admin_password, result["password_hash"]):
+            password_hash = result.get("admin_password_hash")
+            if not password_hash:
+                raise HTTPException(status_code=400, detail="Admin password not set")
+            if not verify_password(data.admin_password, password_hash):
                 raise HTTPException(status_code=401, detail="Invalid admin password")
-
             admin_login = True
-            user_payload = {
-                "admin_id": result["admin_id"],
-                "customer_id": result["customer_id"],
-                "phone": result["phone_number"],
-                "role": result["role"] or "admin",
-                "is_admin": True,
-                "name": result.get("customer_name"),
-            }
-            access = create_access_token(user_payload)
-            refresh = create_refresh_token(user_payload, str(uuid.uuid4()))
-        else:
-            user_payload = {
-                "customer_id": result["customer_id"],
-                "phone": result["phone_number"],
-                "role": "customer",
-                "is_admin": False,
-                "name": result.get("customer_name"),
-            }
-            access = create_access_token(user_payload)
-            refresh = create_refresh_token(user_payload, str(uuid.uuid4()))
 
-        # IMPORTANT: do NOT set cookies — tokens are returned in JSON
-        # set_cookie(response, "access_token",  access,  60 * 15)
-        # set_cookie(response, "refresh_token", refresh, 60 * 60 * 24 * 7)
+        base_payload = {
+            "customer_id": result["customer_id"],
+            "phone": result["phone_number"],
+            "name": result.get("customer_name"),
+            "roles": roles,
+            "role_codes": role_codes,
+            "is_admin": has_admin_role,
+            "admin_is_active": admin_is_active,
+        }
+        if has_admin_role:
+            base_payload["admin_id"] = result["customer_id"]
+            base_payload["role"] = ADMIN_ROLE_CODE
+        else:
+            base_payload["role"] = "customer"
+
+        access = create_access_token(base_payload)
+        refresh = create_refresh_token(base_payload, str(uuid.uuid4()))
+
+        user_payload = dict(base_payload)
+        user_payload["role_details"] = role_details
 
         return {
             "message": "Login successful",
@@ -397,9 +636,222 @@ def login(data: LoginRequest, response: Response):
             "user": user_payload,
             "access_token": access,
             "refresh_token": refresh,
+            "role_codes": role_codes,
+            "role_details": role_details,
         }
     finally:
         cursor.close()
+        db.close()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RBAC MANAGEMENT
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@app.get("/api/rbac/roles")
+def list_roles(user = Depends(admin_required)):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        ensure_default_roles(cursor)
+        cursor.execute(
+            """
+            SELECT role_id, code, name, description, is_system, created_at
+            FROM roles
+            ORDER BY name ASC
+            """
+        )
+        roles = cursor.fetchall()
+        usage = role_usage_counts(db)
+        for role in roles:
+            rid = int(role["role_id"])
+            role["is_system"] = bool(role["is_system"])
+            role["assigned_count"] = usage.get(rid, 0)
+        return {"roles": roles}
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.post("/api/rbac/roles")
+def create_role(payload: RoleCreateRequest, user = Depends(admin_required)):
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Role name is required")
+    code_source = payload.code or name
+    code = slugify_role_code(code_source)
+    if not code:
+        raise HTTPException(status_code=400, detail="Invalid role code")
+
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        ensure_default_roles(cursor)
+        cursor.execute("SELECT role_id FROM roles WHERE code=%s LIMIT 1", (code,))
+        if cursor.fetchone():
+            raise HTTPException(status_code=409, detail="Role code already exists")
+        cursor.execute(
+            """
+            INSERT INTO roles (code, name, description, is_system)
+            VALUES (%s, %s, %s, 0)
+            """,
+            (code, name, payload.description),
+        )
+        db.commit()
+        role_id = cursor.lastrowid
+        cursor.execute(
+            """
+            SELECT role_id, code, name, description, is_system, created_at
+            FROM roles
+            WHERE role_id=%s
+            """,
+            (role_id,),
+        )
+        role = cursor.fetchone()
+        role["is_system"] = bool(role["is_system"])
+        role["assigned_count"] = 0
+        return {"role": role}
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.put("/api/rbac/roles/{role_id}")
+def update_role(role_id: int, payload: RoleUpdateRequest, user = Depends(admin_required)):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT role_id, code, name, description, is_system FROM roles WHERE role_id=%s",
+            (role_id,),
+        )
+        role = cursor.fetchone()
+        if not role:
+            raise HTTPException(status_code=404, detail="Role not found")
+
+        updates: List[str] = []
+        params: List[Any] = []
+
+        if payload.name is not None:
+            new_name = payload.name.strip()
+            if not new_name:
+                raise HTTPException(status_code=400, detail="Role name is required")
+            if role["is_system"] and new_name != role["name"]:
+                raise HTTPException(status_code=400, detail="System roles cannot be renamed")
+            updates.append("name=%s")
+            params.append(new_name)
+
+        if payload.description is not None:
+            updates.append("description=%s")
+            params.append(payload.description)
+
+        if updates:
+            cursor.execute(
+                f"UPDATE roles SET {', '.join(updates)} WHERE role_id=%s",
+                (*params, role_id),
+            )
+            db.commit()
+
+        cursor.execute(
+            """
+            SELECT role_id, code, name, description, is_system, created_at
+            FROM roles
+            WHERE role_id=%s
+            """,
+            (role_id,),
+        )
+        updated = cursor.fetchone()
+        updated["is_system"] = bool(updated["is_system"])
+        usage = role_usage_counts(db)
+        updated["assigned_count"] = usage.get(role_id, 0)
+        return {"role": updated}
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.delete("/api/rbac/roles/{role_id}")
+def delete_role(role_id: int, user = Depends(admin_required)):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT role_id, is_system FROM roles WHERE role_id=%s", (role_id,))
+        role = cursor.fetchone()
+        if not role:
+            raise HTTPException(status_code=404, detail="Role not found")
+        if role["is_system"]:
+            raise HTTPException(status_code=400, detail="System roles cannot be deleted")
+
+        usage = role_usage_counts(db)
+        if usage.get(role_id, 0) > 0:
+            raise HTTPException(status_code=400, detail="Role is assigned to team members")
+
+        cursor.execute("DELETE FROM roles WHERE role_id=%s", (role_id,))
+        db.commit()
+        return {"deleted": True}
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.get("/api/rbac/team-members")
+def list_team_members(user = Depends(admin_required)):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            SELECT customer_id, name, primary_mobile, email, roles, admin_is_active, admin_password_hash, created_at
+            FROM customers
+            WHERE roles IS NOT NULL
+            ORDER BY name ASC
+            """
+        )
+        rows = cursor.fetchall()
+        members = hydrate_team_members(db, rows)
+        return {"team_members": members}
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.post("/api/rbac/team-members")
+def create_team_member(payload: TeamMemberCreateRequest, user = Depends(admin_required)):
+    if payload.customer_id <= 0:
+        raise HTTPException(status_code=400, detail="Valid customer_id is required")
+    db = get_db()
+    try:
+        member = apply_team_member_update(
+            db,
+            payload.customer_id,
+            payload.role_ids,
+            payload.admin_password,
+            payload.admin_is_active,
+            require_role_ids=True,
+        )
+        return {"team_member": member}
+    finally:
+        db.close()
+
+
+@app.put("/api/rbac/team-members/{customer_id}")
+def update_team_member(
+    customer_id: int,
+    payload: TeamMemberUpdateRequest,
+    user = Depends(admin_required),
+):
+    db = get_db()
+    try:
+        member = apply_team_member_update(
+            db,
+            customer_id,
+            payload.role_ids,
+            payload.admin_password,
+            payload.admin_is_active,
+        )
+        return {"team_member": member}
+    finally:
         db.close()
 
 
@@ -475,7 +927,7 @@ def remove_customer(customer_id: int, db=Depends(get_db)):
 def get_dev_db_schema(
     include_views: bool = Query(True, alias="includeViews"),
     schema: Optional[str] = Query(None),
-    user = Depends(admin_required),
+    user = Depends(developer_required),
 ):
     """
     Return read-only schema DDL metadata for developer tooling.
@@ -1014,7 +1466,7 @@ def release_menu(menu_id: int):
 
 
 @app.post("/api/dev/daily-menu/auto", tags=["Developer Tools"])
-def auto_generate_daily_menu(payload: AutoMenuRequest, _: Dict[str, Any] = Depends(admin_required)):
+def auto_generate_daily_menu(payload: AutoMenuRequest, _: Dict[str, Any] = Depends(developer_required)):
     target_date = _normalize_menu_date(payload.date)
     planned_lookup = {
         "Breakfast": payload.breakfast_planned_qty,
@@ -1078,7 +1530,7 @@ def auto_generate_daily_menu(payload: AutoMenuRequest, _: Dict[str, Any] = Depen
 
 
 @app.post("/api/dev/daily-menu/clear", tags=["Developer Tools"])
-def clear_daily_menu(payload: AutoMenuRequest, _: Dict[str, Any] = Depends(admin_required)):
+def clear_daily_menu(payload: AutoMenuRequest, _: Dict[str, Any] = Depends(developer_required)):
     target_date = _normalize_menu_date(payload.date)
     summary: Dict[str, Any] = {}
 
@@ -2195,6 +2647,81 @@ def update_planned_quantities(payload: UpdatePlannedRequest):
         }
     except mysql.connector.Error as err:
         db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.get("/api/production/orders-summary", tags=["Production"])
+def get_production_orders_summary(
+    date: str,
+    menu_type: Optional[str] = Query(None, description="BLD type to filter (Breakfast/Lunch/Dinner/Condiments)"),
+    period_type: Optional[str] = Query("one_day", description="Menu period to filter, e.g., one_day or subscription"),
+):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        normalized_period = None if period_type == "festivals" else period_type
+
+        where_clauses = [
+            "m.date = %s",
+            "((m.period_type IS NULL AND %s IS NULL) OR m.period_type = %s)",
+        ]
+        params: List = [date, normalized_period, normalized_period]
+
+        if menu_type:
+            where_clauses.append("LOWER(b.bld_type) = LOWER(%s)")
+            params.append(menu_type)
+
+        query = f"""
+            WITH order_totals AS (
+                SELECT
+                    oi.item_id,
+                    SUM(oi.quantity) AS quantity
+                FROM orders o
+                JOIN order_items oi ON oi.order_id = o.order_id
+                WHERE DATE(o.created_at) = %s
+                  AND LOWER(COALESCE(o.status, '')) NOT IN (
+                    'cancelled',
+                    'cancelled by customer',
+                    'cancelled by admin'
+                  )
+                GROUP BY oi.item_id
+            )
+            SELECT
+                b.bld_type AS menu_type,
+                i.item_id,
+                i.name AS item_name,
+                COALESCE(ot.quantity, 0) AS order_quantity
+            FROM menu m
+            JOIN bld b ON m.bld_id = b.bld_id
+            JOIN menu_items mi ON m.menu_id = mi.menu_id
+            JOIN items i ON mi.item_id = i.item_id
+            LEFT JOIN order_totals ot ON ot.item_id = mi.item_id
+            WHERE {" AND ".join(where_clauses)}
+            ORDER BY b.bld_type, i.name
+        """
+
+        summary_params = [date] + params
+        cursor.execute(query, summary_params)
+        rows = cursor.fetchall() or []
+
+        return {
+            "date": date,
+            "menu_type": menu_type,
+            "period_type": period_type,
+            "orders": [
+                {
+                    "menu_type": row.get("menu_type"),
+                    "item_id": row.get("item_id"),
+                    "item_name": row.get("item_name"),
+                    "order_quantity": float(row.get("order_quantity") or 0),
+                }
+                for row in rows
+            ],
+        }
+    except mysql.connector.Error as err:
         raise HTTPException(status_code=500, detail=str(err))
     finally:
         cursor.close()
