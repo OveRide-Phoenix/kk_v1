@@ -974,24 +974,25 @@ export default function CustomerHomePage() {
                         {menuByMeal[meal].map((item) => {
                           const currentQty = quantities[item.menu_item_id] ?? 0
                           const isSoldOut = item.available_qty <= 0
+                          const showSoldOutState = isAuthenticated && isSoldOut
                           const reachedLimit =
-                            item.available_qty > 0 && currentQty >= item.available_qty
+                            isAuthenticated && item.available_qty > 0 && currentQty >= item.available_qty
 
                           return (
                             <article
                               key={item.menu_item_id}
                               className={cn(
                                 "relative flex h-[120px] overflow-hidden rounded-lg border-2 transition-shadow duration-200",
-                                isSoldOut
+                                showSoldOutState
                                   ? "pointer-events-none border-dashed border-[#d9c7be] bg-[#f1ebe6] text-[#9a857b]"
                                   : "border-brand-subtle bg-brand-shell shadow-brand-soft hover:shadow-md"
                               )}
-                              aria-disabled={isSoldOut}
+                              aria-disabled={showSoldOutState}
                             >
                               <div
                                 className={cn(
                                   "h-[120px] w-[120px] flex-shrink-0",
-                                  isSoldOut ? "bg-muted/70" : "bg-muted"
+                                  showSoldOutState ? "bg-muted/70" : "bg-muted"
                                 )}
                               >
                                 <Image
@@ -999,7 +1000,7 @@ export default function CustomerHomePage() {
                                   alt={item.item_name}
                                   width={120}
                                   height={120}
-                                  className={cn("h-full w-full object-cover", isSoldOut && "grayscale")}
+                                  className={cn("h-full w-full object-cover", showSoldOutState && "grayscale")}
                                 />
                               </div>
                               <div className="relative flex flex-1 p-3">
@@ -1007,7 +1008,7 @@ export default function CustomerHomePage() {
                                   <h4
                                     className={cn(
                                       "text-sm font-medium",
-                                      isSoldOut ? "text-[#8d6e63]" : "text-[#463028]"
+                                      showSoldOutState ? "text-[#8d6e63]" : "text-[#463028]"
                                     )}
                                   >
                                     {item.item_name}
@@ -1015,7 +1016,7 @@ export default function CustomerHomePage() {
                                   <p
                                     className={cn(
                                       "mt-1 line-clamp-2 text-xs",
-                                      isSoldOut ? "text-[#b59f93]" : "text-[#8d6e63]"
+                                      showSoldOutState ? "text-[#b59f93]" : "text-[#8d6e63]"
                                     )}
                                   >
                                     {item.description || "Delicious kitchen special"}
@@ -1025,7 +1026,7 @@ export default function CustomerHomePage() {
                                 <p
                                   className={cn(
                                     "absolute bottom-3 left-3 text-base font-semibold",
-                                    isSoldOut ? "text-[#9a857b]" : "text-[#463028]"
+                                    showSoldOutState ? "text-[#9a857b]" : "text-[#463028]"
                                   )}
                                 >
                                   {currency(item.rate)}
@@ -1036,12 +1037,12 @@ export default function CustomerHomePage() {
                                     <Button
                                       variant="outline"
                                       size="icon"
-                                      className={`h-6 w-6 border-primary text-primary hover:bg-primary hover:text-white ${isSoldOut || currentQty === 0 ? "opacity-50" : ""}`}
+                                      className={`h-6 w-6 border-primary text-primary hover:bg-primary hover:text-white ${showSoldOutState || currentQty === 0 ? "opacity-50" : ""}`}
                                       onClick={(event) => {
                                         event.stopPropagation()
                                         decrementItem(item)
                                       }}
-                                      disabled={isSoldOut || currentQty === 0}
+                                      disabled={showSoldOutState || currentQty === 0}
                                       aria-label={`Decrease ${item.item_name}`}
                                     >
                                       <Minus className="h-3 w-3" />
@@ -1049,7 +1050,7 @@ export default function CustomerHomePage() {
                                     <span
                                       className={cn(
                                         "min-w-[20px] text-center text-sm",
-                                        isSoldOut ? "text-[#9a857b]" : "text-primary"
+                                        showSoldOutState ? "text-[#9a857b]" : "text-primary"
                                       )}
                                     >
                                       {currentQty}
@@ -1057,12 +1058,12 @@ export default function CustomerHomePage() {
                                     <Button
                                       variant="outline"
                                       size="icon"
-                                      className={`h-6 w-6 border-primary text-primary hover:bg-primary hover:text-white ${isSoldOut || reachedLimit ? "opacity-50" : ""}`}
+                                      className={`h-6 w-6 border-primary text-primary hover:bg-primary hover:text-white ${showSoldOutState || reachedLimit ? "opacity-50" : ""}`}
                                       onClick={(event) => {
                                         event.stopPropagation()
                                         incrementItem(item)
                                       }}
-                                      disabled={isSoldOut || reachedLimit}
+                                      disabled={showSoldOutState || reachedLimit}
                                       aria-label={`Increase ${item.item_name}`}
                                     >
                                       <Plus className="h-3 w-3" />
@@ -1070,12 +1071,12 @@ export default function CustomerHomePage() {
                                   </div>
                                 )}
 
-                                {isAuthenticated && reachedLimit && !isSoldOut && (
+                                {isAuthenticated && reachedLimit && !showSoldOutState && (
                                   <span className="absolute top-3 right-3 text-[0.65rem] font-medium text-[#c75b39]">
                                     Max {item.available_qty}
                                   </span>
                                 )}
-                                {isSoldOut && (
+                                {showSoldOutState && (
                                   <span className="absolute top-3 right-3 rounded-full bg-[#ffe2e2] px-2 py-0.5 text-[0.65rem] font-semibold text-[#c75b39] shadow-sm">
                                     Sold out
                                   </span>
