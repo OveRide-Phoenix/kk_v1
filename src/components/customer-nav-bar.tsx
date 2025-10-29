@@ -21,9 +21,8 @@ export default function CustomerNavBar({ unauthLinks }: CustomerNavBarProps = {}
   const [isScrolled, setIsScrolled] = useState(false)
   const user = useAuthStore((state) => state.user)
   const setUser = useAuthStore((state) => state.setUser)
-  const setAdmin = useAuthStore((state) => state.setAdmin)
   const logout = useAuthStore((state) => state.logout)
-  const isAdmin = useAuthStore((state) => state.isAdmin)
+  const isAdmin = useAuthStore((state) => state.roleCodes.includes("admin"))
   const router = useRouter()
   const pathname = usePathname()
 
@@ -65,12 +64,11 @@ export default function CustomerNavBar({ unauthLinks }: CustomerNavBarProps = {}
         if (!meResponse.ok) return
         const me = await meResponse.json()
         setUser(me)
-        setAdmin(Boolean(me?.role === "admin" || me?.is_admin))
       } catch (error) {
         console.error("Failed to fetch user context", error)
       }
     })()
-  }, [user, setUser, setAdmin])
+  }, [user, setUser])
 
   return (
     <nav
@@ -115,8 +113,6 @@ export default function CustomerNavBar({ unauthLinks }: CustomerNavBarProps = {}
                     size="icon"
                     onClick={() => {
                       logout()
-                      localStorage.removeItem("access_token")
-                      localStorage.removeItem("refresh_token")
                       router.push("/")
                     }}
                   >

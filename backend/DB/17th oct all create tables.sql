@@ -20,18 +20,17 @@ CREATE TABLE `addresses` (
 
 
 
-SHOW CREATE TABLE admin_users;
-CREATE TABLE `admin_users` (
-  `admin_id` int NOT NULL AUTO_INCREMENT,
-  `customer_id` int NOT NULL,
-  `password_hash` varchar(255) NOT NULL,
-  `role` enum('admin','manager') NOT NULL DEFAULT 'admin',
-  `is_active` tinyint(1) NOT NULL DEFAULT '1',
+SHOW CREATE TABLE roles;
+CREATE TABLE `roles` (
+  `role_id` int NOT NULL AUTO_INCREMENT,
+  `code` varchar(50) NOT NULL,
+  `name` varchar(100) NOT NULL,
+  `description` varchar(255) DEFAULT NULL,
+  `is_system` tinyint(1) NOT NULL DEFAULT '0',
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`admin_id`),
-  UNIQUE KEY `uq_admin_customer` (`customer_id`),
-  CONSTRAINT `fk_admin_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`customer_id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  PRIMARY KEY (`role_id`),
+  UNIQUE KEY `uq_roles_code` (`code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 
 SHOW CREATE TABLE bld;
 CREATE TABLE `bld` (
@@ -86,7 +85,9 @@ CREATE TABLE `customers` (
   `payment_frequency` varchar(50) DEFAULT 'Daily',
   `email` varchar(100) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  `is_admin` tinyint(1) NOT NULL DEFAULT '0',
+  `roles` json DEFAULT NULL,
+  `admin_password_hash` varchar(255) DEFAULT NULL,
+  `admin_is_active` tinyint(1) NOT NULL DEFAULT '1',
   PRIMARY KEY (`customer_id`),
   UNIQUE KEY `primary_mobile` (`primary_mobile`)
 ) ENGINE=InnoDB AUTO_INCREMENT=64 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci

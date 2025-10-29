@@ -122,7 +122,6 @@ export default function CustomerHomePage() {
   const router = useRouter()
   const user = useAuthStore((state) => state.user)
   const setUser = useAuthStore((state) => state.setUser)
-  const setAdmin = useAuthStore((state) => state.setAdmin)
 
   const todayISO = useMemo(() => formatDate(new Date(), "yyyy-MM-dd"), [])
   const [menuByMeal, setMenuByMeal] = useState<Record<MealType, MenuItem[]>>({
@@ -161,12 +160,11 @@ export default function CustomerHomePage() {
         if (!response.ok) return
         const me = await response.json()
         setUser(me)
-        setAdmin(Boolean(me?.role === "admin" || me?.is_admin))
       } catch (err) {
         console.warn("Unable to restore session", err)
       }
     })()
-  }, [user, setUser, setAdmin])
+  }, [user, setUser])
 
   const customerId = user?.customer_id
   const isAuthenticated = Boolean(customerId)

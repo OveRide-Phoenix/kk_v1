@@ -1,10 +1,10 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Bell, User, ChevronDown, Menu, Search } from "lucide-react"
+import { Bell, User, Menu, Search, LogOut } from "lucide-react"
 import Sidebar from "@/components/sidebar"
 import { useAuthStore } from "@/store/store"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -19,7 +19,6 @@ interface AdminLayoutProps {
 export function AdminLayout({ children, activePage }: AdminLayoutProps) {
   const logout = useAuthStore((state) => state.logout)
   const user = useAuthStore((state) => state.user)
-  const setAdmin = useAuthStore((state) => state.setAdmin)
   const setUser = useAuthStore((state) => state.setUser)
   const router = useRouter()
   const { toast } = useToast()
@@ -48,10 +47,13 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
     }
   }, [])
 
-  const handleLogout = useCallback(() => {
+  const handleLogout = useCallback(async () => {
     clearSessionTimers()
-    logout()
-    router.push("/login")
+    try {
+      await logout()
+    } finally {
+      router.push("/")
+    }
   }, [clearSessionTimers, logout, router])
 
   const handleSessionExpired = useCallback(() => {
@@ -108,7 +110,6 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
         if (meRes.ok) {
           const userInfo = await meRes.json()
           setUser(userInfo)
-          setAdmin(userInfo?.role === "admin")
         }
       } catch {
         /* ignore */
@@ -123,7 +124,7 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
       })
       handleSessionExpired()
     }
-  }, [clearSessionTimers, handleSessionExpired, setAdmin, setUser, toast])
+  }, [clearSessionTimers, handleSessionExpired, setUser, toast])
   
   // Check if we're on mobile and set initial collapsed state
   useEffect(() => {
@@ -220,6 +221,8 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
         return "Developer · DB Schema"
       case "dev-auto-menu":
         return "Developer · Auto Menu"
+      case "account":
+        return "My Account"
       default:
         return "Dashboard"
     }
@@ -264,22 +267,17 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
               <Button variant="ghost" size="icon">
                 <Bell className="h-5 w-5" />
               </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="flex items-center space-x-2">
-                    <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                      <User className="h-5 w-5" />
-                    </div>
-                    <span className="hidden md:inline-block">{displayName}</span>
-                    <ChevronDown className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleLogout}>Logout</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <Button variant="ghost" className="flex items-center space-x-2" asChild>
+                <Link href="/admin/account">
+                  <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+                    <User className="h-5 w-5" />
+                  </div>
+                  <span className="hidden md:inline-block">{displayName}</span>
+                </Link>
+              </Button>
+              <Button variant="ghost" size="icon" onClick={handleLogout} aria-label="Log out">
+                <LogOut className="h-5 w-5" />
+              </Button>
             </nav>
           </div>
         </header>

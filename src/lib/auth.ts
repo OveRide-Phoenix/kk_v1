@@ -1,17 +1,40 @@
 import { http } from './http';
 
-export type Me = {
-  admin_id: number;
-  customer_id: number;
-  phone: string;
-  role: 'admin' | 'manager';
-  name?: string | null;
+export type RoleSummary = {
+  role_id: number;
+  code: string;
+  name: string;
+  description?: string | null;
+  is_system?: boolean;
 };
 
-export async function login(phone: string, adminPassword?: string) {
+export type Me = {
+  customer_id: number;
+  phone: string;
+  name?: string | null;
+  roles: number[];
+  role_codes: string[];
+  role_details?: RoleSummary[];
+  admin_id?: number;
+  admin_is_active?: boolean;
+  is_admin?: boolean;
+};
+
+export interface LoginResponse {
+  message: string;
+  is_admin: boolean;
+  is_admin_account: boolean;
+  user: Me;
+  access_token: string;
+  refresh_token: string;
+  role_codes: string[];
+  role_details: RoleSummary[];
+}
+
+export async function login(phone: string, adminPassword?: string): Promise<LoginResponse> {
   const res = await http.post('/api/login', { phone, admin_password: adminPassword });
   if (!res.ok) throw new Error(await res.text());
-  return res.json(); // { message, is_admin }
+  return res.json();
 }
 
 export async function logout() {

@@ -9,7 +9,7 @@ async function fetchMe(access?: string) {
     headers: access ? { Authorization: `Bearer ${access}` } : {},
   });
   if (!res.ok) throw new Error("unauthorized");
-  return res.json(); // { admin_id, customer_id, phone, role }
+  return res.json(); // { customer_id, phone, roles, role_codes, ... }
 }
 
 async function refreshAccess(refresh?: string) {
@@ -28,7 +28,6 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [checking, setChecking] = useState(true);
-  const setAdmin = useAuthStore((s) => s.setAdmin);
   const setUser = useAuthStore((s) => s.setUser);
 
   useEffect(() => {
@@ -49,11 +48,13 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
         }
 
         if (cancelled) return;
-        setAdmin(me.role === "admin");
         setUser(me);
 
         // enforce admin-only
-        if (me.role !== "admin") {
+        const hasAdminRole = Array.isArray(me.role_codes)
+          ? me.role_codes.includes("admin")
+          : me.role === "admin";
+        if (!hasAdminRole) {
           router.replace("/");
           return;
         }
@@ -67,7 +68,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
     })();
 
     return () => { cancelled = true; };
-  }, [router, pathname, setAdmin, setUser]);
+  }, [router, pathname, setUser]);
 
   if (checking) {
     return (

@@ -38,7 +38,7 @@ const DEFAULT_SCHEMA = 'kk_v1';
 
 function DBSchemaContent() {
   const { toast } = useToast();
-  const isAdmin = useAuthStore((state) => state.isAdmin);
+  const hasDeveloperAccess = useAuthStore((state) => state.hasRole("developer"));
   const [searchTerm, setSearchTerm] = useState('');
   const [data, setData] = useState<DevSchemaResponse | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -68,7 +68,7 @@ function DBSchemaContent() {
             setData(null);
             setExpanded({});
             setErrorMessage(
-              'You are not authorized to view the database schema. Please check your permissions or log in as an admin.',
+              'You are not authorized to view the database schema. Please check your permissions or log in with the developer role.',
             );
             return;
           }
@@ -107,16 +107,16 @@ function DBSchemaContent() {
       return;
     }
 
-    if (!isAdmin) {
+    if (!hasDeveloperAccess) {
       setData(null);
       setExpanded({});
       setSqlVisible({});
-      setErrorMessage('Admin access required to view the database schema.');
+      setErrorMessage('Developer role required to view the database schema.');
       return;
     }
     setErrorMessage(null);
     void loadSchema();
-  }, [isAdmin, isHydrated, loadSchema]);
+  }, [hasDeveloperAccess, isHydrated, loadSchema]);
 
   const filteredTables = useMemo(() => {
     if (!data) return [];
@@ -128,9 +128,9 @@ function DBSchemaContent() {
   }, [data, searchTerm]);
 
   const handleRefresh = useCallback(() => {
-    if (!isAdmin) return;
+    if (!hasDeveloperAccess) return;
     void loadSchema();
-  }, [isAdmin, loadSchema]);
+  }, [hasDeveloperAccess, loadSchema]);
 
   const handleCopySingle = useCallback(
     async (table: DevSchemaTable) => {
@@ -251,11 +251,11 @@ function DBSchemaContent() {
             </div>
 
             <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={handleRefresh} disabled={isLoading || !isAdmin}>
+              <Button variant="outline" onClick={handleRefresh} disabled={isLoading || !hasDeveloperAccess}>
                 <RefreshCcw className={cn('mr-2 h-4 w-4', isLoading ? 'animate-spin' : undefined)} />
                 {isLoading ? 'Refreshing…' : 'Refresh'}
               </Button>
-              <Button onClick={handleCopyAll} disabled={!isAdmin || filteredTables.length === 0}>
+              <Button onClick={handleCopyAll} disabled={!hasDeveloperAccess || filteredTables.length === 0}>
                 Copy All
               </Button>
             </div>

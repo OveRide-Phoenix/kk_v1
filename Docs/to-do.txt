@@ -1,18 +1,31 @@
 #---------------------------------------------------------------------------------------------------------------
- ----------------------------------- DO THIS FIRST- can we make the todays menu section itself the ordering page, so if the customer is logged in it shows add to cart + - buttons just like the new order page...else it shows just the menu and the register now and sign in button also sticks with the breakfast, lunch, dinner, condiments selector
+ ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- DO THIS FIRST- can we make the todays menu section itself the ordering page, so if the customer is logged in it shows add to cart + - buttons just like the new order page...else it shows just the menu and the register now and sign in button also sticks with the breakfast, lunch, dinner, condiments selector
 THEN DO NOTES APP - DO THIS DA!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 THEN MOVE Extension notes to here..
 #---------------------------------------------------------------------------------------------------------------
 
 
-in the my account page, the personal details make it a little darker, it looks wrong now...let it be a little greyed out to show its not editable but at the same time show that names and stuff correctly
-then do team members page which implements 1. in this file
 
+- [ ] planned qty ->  make it max qty - revamp daily menu, no need for qty talk
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- [ ] customer orders are showing same as planned qty in kitchen production
+- [ ] automatic dashboard update based on requirement of that time
+
+
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------in the my account page, the personal details make it a little darker, it looks wrong now...let it be a little greyed out to show its not editable but at the same time show that names and stuff correctly
 0. Enter key in login page logins in
 
-1. i am going to introduce multiple roles based access, for example, admin who is a developer, admin who is just menu setter and stuff, so make changes accordingly such that we are always checkign roles from an Array, and for now i want you to add another role called developer..in the schema let us change it entirely, no need of an admin_users table, instead we will have a roles table and then a roles field in the customer table so that roles field is an array that contains all the roles of that user, so if admin is 1 and developer is 2, then the user will have roles field [1,2]....and similarly lets add a Roles page to the side bar which allows us to manage these roles. similartly in login and stuff, or ANYWHERE in the codebase where we were checking and depending on admin_users table, let us start using this...and also i want you to handle everywhere that we check for admin or any role, right now we are using local storage, so we will continue doing that, make sure you check all places
 
-1.1. Frosted glass/Liquid glass components in some places..? I think frosted glass is better - with glass reaper like shaders in the back in brown theme
+
+
+
+0.1 i am going to introduce multiple roles based access, for example, admin who is a developer, admin who is just menu setter and stuff, so make changes accordingly such that we are always checkign roles from an Array, and for now i want you to add another role called developer..in the schema let us change it entirely, no need of an admin_users table, instead we will have a roles table and then a roles field in the customer table so that roles field is an array that contains all the roles of that user, so if admin is 1 and developer is 2, then the user will have roles field [1,2]....and similarly lets add a Roles page to the side bar which allows us to manage these roles. similartly in login and stuff, or ANYWHERE in the codebase where we were checking and depending on admin_users table, let us start using this...and also i want you to handle everywhere that we check for admin or any role, right now we are using local storage, so we will continue doing that, make sure you check all places, then create a team members page which allows us to handle RBA
+
+
+1.0 - reports make it a line graph dont show teo data pointsi n one graph, show multiple graphs, and put the geaph above the table..
+
+1.1. xxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx x Frosted glass/Liquid glass components in some places..? I think frosted glass is better - with glass reaper like shaders in the back in brown theme
 
 2. use pagination component in the order history page
 
@@ -1318,3 +1331,8 @@ Steps to integrate
  1. Install external dependencies
  2. Fill image assets with Unsplash stock images you know exist
  3. Use lucide-react icons for svgs or logos if component requires them
+
+
+
+SUBSCRCIPTION STUFF:
+- [ ] show number of subscription orders in daily menu page
