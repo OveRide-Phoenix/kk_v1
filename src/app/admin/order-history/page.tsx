@@ -60,8 +60,6 @@ import {
   Filter,
   RefreshCw,
   Search,
-  ArrowLeft,
-  ArrowRight,
   Loader2,
   Eye,
   CreditCard,
@@ -77,6 +75,14 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
 type OrderItem = {
   name: string;
@@ -489,6 +495,37 @@ export default function OrderHistoryPage() {
   const totalPages = Math.ceil(totalOrders / PAGE_SIZE);
   const hasNextPage = page + 1 < totalPages;
   const hasPrevPage = page > 0;
+  const paginationRange = useMemo<(number | "ellipsis")[]>(() => {
+    if (totalPages <= 1) return [];
+    const currentPage = page + 1;
+    const siblings = 1;
+    const firstPage = 1;
+    const lastPage = totalPages;
+    const pages: Array<number | "ellipsis"> = [];
+
+    const startPage = Math.max(currentPage - siblings, firstPage);
+    const endPage = Math.min(currentPage + siblings, lastPage);
+
+    if (startPage > firstPage) {
+      pages.push(firstPage);
+      if (startPage > firstPage + 1) {
+        pages.push("ellipsis");
+      }
+    }
+
+    for (let index = startPage; index <= endPage; index += 1) {
+      pages.push(index);
+    }
+
+    if (endPage < lastPage) {
+      if (endPage < lastPage - 1) {
+        pages.push("ellipsis");
+      }
+      pages.push(lastPage);
+    }
+
+    return pages;
+  }, [page, totalPages]);
 
   const filtersApplied =
     filters.status !== "all" ||
@@ -750,29 +787,55 @@ export default function OrderHistoryPage() {
             )}
           </CardContent>
           <CardFooter className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground whitespace-nowrap">
               Page {Math.min(page + 1, Math.max(totalPages, 1))} of {Math.max(totalPages, 1)}
             </p>
-            {totalPages > 1 && (
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setPage((prev) => prev - 1)}
-                  disabled={!hasPrevPage}
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setPage((prev) => prev + 1)}
-                  disabled={!hasNextPage}
-                >
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
+            {totalPages > 1 ? (
+              <Pagination>
+                <PaginationContent>
+                  <PaginationPrevious
+                    href="#"
+                    disabled={!hasPrevPage}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      if (hasPrevPage) {
+                        setPage((prev) => prev - 1);
+                      }
+                    }}
+                  />
+                  {paginationRange.map((entry, index) => {
+                    if (entry === "ellipsis") {
+                      return <PaginationEllipsis key={`ellipsis-${index}`} />;
+                    }
+                    return (
+                      <PaginationLink
+                        key={entry}
+                        href="#"
+                        isActive={entry === page + 1}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          if (entry !== page + 1) {
+                            setPage(entry - 1);
+                          }
+                        }}
+                      >
+                        {entry}
+                      </PaginationLink>
+                    );
+                  })}
+                  <PaginationNext
+                    href="#"
+                    disabled={!hasNextPage}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      if (hasNextPage) {
+                        setPage((prev) => prev + 1);
+                      }
+                    }}
+                  />
+                </PaginationContent>
+              </Pagination>
+            ) : null}
           </CardFooter>
         </Card>
       </div>
