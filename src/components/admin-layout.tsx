@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Bell, User, Menu, Search, LogOut } from "lucide-react"
+import { Bell, User, Menu, Search, LogOut, SwitchCamera } from "lucide-react"
 import Sidebar from "@/components/sidebar"
 import { useAuthStore } from "@/store/store"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -20,6 +20,7 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
   const logout = useAuthStore((state) => state.logout)
   const user = useAuthStore((state) => state.user)
   const setUser = useAuthStore((state) => state.setUser)
+  const setRoleState = useAuthStore((state) => state.setRoleState)
   const router = useRouter()
   const { toast } = useToast()
 
@@ -201,6 +202,130 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
     }
   }, [clearSessionTimers, handleSessionExpired, isHydrated, tokenVersion])
 
+  const handleSwitchToCustomer = useCallback(async () => {
+    if (!user?.phone) {
+      toast({
+        title: "Unable to switch",
+        description: "This admin account is missing a phone number.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const digitsOnly = user.phone.replace(/\D/g, "")
+    if (!digitsOnly) {
+      toast({
+        title: "Unable to switch",
+        description: "Could not determine the admin phone number.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const formattedPhone = digitsOnly.length > 10 ? digitsOnly.slice(-10) : digitsOnly
+
+    try {
+      const response = await fetch("/api/backend/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: formattedPhone, admin_password: null }),
+      })
+
+      const data = await response.json()
+      if (!response.ok) {
+        const message =
+          typeof data?.detail === "string"
+            ? data.detail
+            : typeof data?.msg === "string"
+              ? data.msg
+              : "Failed to switch to customer view."
+        throw new Error(message)
+      }
+
+      try {
+        if (data.access_token) {
+          localStorage.setItem("access_token", data.access_token)
+        }
+        if (data.refresh_token) {
+          localStorage.setItem("refresh_token", data.refresh_token)
+        }
+      } catch {
+        /* ignore storage errors */
+      }
+
+      const resolvedUser = data.user ?? null
+      const roleDetails = Array.isArray(resolvedUser?.role_details)
+        ? resolvedUser.role_details
+        : Array.isArray(data.role_details)
+          ? data.role_details
+          : []
+      const adminRoleIds = roleDetails
+        .filter((detail) => detail.code === "admin")
+        .map((detail) => Number(detail.role_id))
+        .filter((value) => Number.isFinite(value))
+
+      const roles = Array.isArray(resolvedUser?.roles)
+        ? resolvedUser.roles
+        : Array.isArray(data.user?.roles)
+          ? data.user.roles
+          : []
+      const roleCodes = Array.isArray(resolvedUser?.role_codes)
+        ? resolvedUser.role_codes
+        : Array.isArray(data.role_codes)
+          ? data.role_codes
+          : []
+
+      const normalisedRoleCodes = (roleCodes as Array<string | number>)
+        .map((code) => (typeof code === "string" ? code : String(code)))
+        .filter((code) => code !== "admin")
+      const normalisedRoles = (roles as Array<string | number>)
+        .map((value) => Number(value))
+        .filter((value) => Number.isFinite(value))
+        .map((value) => Math.trunc(value))
+        .filter((value) => !adminRoleIds.includes(value))
+      setRoleState(normalisedRoles, normalisedRoleCodes)
+
+      setTokenVersion((prev) => prev + 1)
+
+      if (resolvedUser) {
+        const adjustedUser = {
+          ...resolvedUser,
+          roles: normalisedRoles,
+          role_codes: normalisedRoleCodes,
+        }
+        setUser(adjustedUser)
+      } else {
+        try {
+          const meRes = await fetch("/api/backend/auth/me")
+          if (meRes.ok) {
+            const me = await meRes.json()
+            const adjustedMe = {
+              ...me,
+              roles: normalisedRoles,
+              role_codes: normalisedRoleCodes,
+            }
+            setUser(adjustedMe)
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+
+      toast({
+        title: "Switched to customer view",
+        description: "You can return to the admin panel from the customer navigation.",
+      })
+
+      router.push("/customer/home")
+    } catch (error) {
+      toast({
+        title: "Switch failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      })
+    }
+  }, [router, setRoleState, setUser, toast, user])
+
   const getPageTitle = () => {
     switch (activePage) {
       case "dashboard":
@@ -263,6 +388,14 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
                 aria-label="Search across Kuteera Kitchen"
               >
                 <Search className="h-5 w-5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleSwitchToCustomer}
+                aria-label="Switch to customer view"
+              >
+                <SwitchCamera className="h-5 w-5" />
               </Button>
               <Button variant="ghost" size="icon">
                 <Bell className="h-5 w-5" />

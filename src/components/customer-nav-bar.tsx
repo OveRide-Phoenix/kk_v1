@@ -19,10 +19,11 @@ type CustomerNavBarProps = {
 
 export default function CustomerNavBar({ unauthLinks }: CustomerNavBarProps = {}) {
   const [isScrolled, setIsScrolled] = useState(false)
+  const [hydrated, setHydrated] = useState(false)
   const user = useAuthStore((state) => state.user)
   const setUser = useAuthStore((state) => state.setUser)
   const logout = useAuthStore((state) => state.logout)
-  const isAdmin = useAuthStore((state) => state.roleCodes.includes("admin"))
+  const roleCodes = useAuthStore((state) => state.roleCodes)
   const router = useRouter()
   const pathname = usePathname()
 
@@ -53,6 +54,11 @@ export default function CustomerNavBar({ unauthLinks }: CustomerNavBarProps = {}
   }, [])
 
   useEffect(() => {
+    setHydrated(true)
+  }, [])
+
+  useEffect(() => {
+    if (!hydrated) return
     if (user) return
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null
     if (!token) return
@@ -68,7 +74,10 @@ export default function CustomerNavBar({ unauthLinks }: CustomerNavBarProps = {}
         console.error("Failed to fetch user context", error)
       }
     })()
-  }, [user, setUser])
+  }, [hydrated, user, setUser])
+
+  const isAdmin = hydrated && roleCodes.includes("admin")
+  const hasUser = hydrated && Boolean(user)
 
   return (
     <nav
@@ -98,7 +107,7 @@ export default function CustomerNavBar({ unauthLinks }: CustomerNavBarProps = {}
               <span className={navLinkClass("/customer/subscription", { disabled: true })}>Subscription</span>
             </div>
             <div className="pl-6 text-sm text-[#463028]">
-              {user ? (
+              {hasUser ? (
                 <div className="flex items-center gap-2">
                   {isAdmin && <Crown className="h-4 w-4 text-amber-500" />}
                   <Link

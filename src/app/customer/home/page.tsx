@@ -4,7 +4,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { format as formatDate, isSameDay, isSameMonth } from "date-fns"
+import { format as formatDate, isSameDay, isSameMonth, parseISO } from "date-fns"
 import { Calendar, ChefHat, Info, Leaf, Loader2, Minus, Plus, Repeat, ShoppingCart, Sparkles, UtensilsCrossed } from "lucide-react"
 import Autoplay from "embla-carousel-autoplay"
 
@@ -90,6 +90,12 @@ const MEAL_LABELS: Record<MealType, string> = {
 
 const PLACEHOLDER_IMAGE = "/images/menu/idli-sambar.jpg"
 
+const normalizeQty = (value: unknown): number => {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed <= 0) return 0
+  return Math.floor(parsed)
+}
+
 const GALLERY_IMAGES = [
   {
     src: "/images/menu/masala-dosa.jpg",
@@ -122,6 +128,7 @@ export default function CustomerHomePage() {
   const router = useRouter()
   const user = useAuthStore((state) => state.user)
   const setUser = useAuthStore((state) => state.setUser)
+  const [hydrated, setHydrated] = useState(false)
 
   const todayISO = useMemo(() => formatDate(new Date(), "yyyy-MM-dd"), [])
   const [menuByMeal, setMenuByMeal] = useState<Record<MealType, MenuItem[]>>({
@@ -129,6 +136,12 @@ export default function CustomerHomePage() {
     lunch: [],
     dinner: [],
     condiments: [],
+  })
+  const [isReleasedByMeal, setIsReleasedByMeal] = useState<Record<MealType, boolean>>({
+    breakfast: false,
+    lunch: false,
+    dinner: false,
+    condiments: false,
   })
   const [activeMeal, setActiveMeal] = useState<MealType>("breakfast")
   const [isLoading, setIsLoading] = useState(false)
@@ -150,6 +163,7 @@ export default function CustomerHomePage() {
   )
 
   useEffect(() => {
+    if (!hydrated) return
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null
     if (user || !token) return
     ;(async () => {
@@ -164,10 +178,18 @@ export default function CustomerHomePage() {
         console.warn("Unable to restore session", err)
       }
     })()
-  }, [user, setUser])
+  }, [hydrated, user, setUser])
 
-  const customerId = user?.customer_id
-  const isAuthenticated = Boolean(customerId)
+  useEffect(() => {
+    setHydrated(true)
+  }, [])
+
+  const customerId = hydrated ? user?.customer_id : undefined
+  const isAuthenticated = hydrated && Boolean(customerId)
+  const orderingForLabel = useMemo(
+    () => (hydrated ? formatDate(parseISO(todayISO), "do MMMM") : ""),
+    [hydrated, todayISO]
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -177,6 +199,7 @@ export default function CustomerHomePage() {
     ;(async () => {
       try {
         const nextMenu: Partial<Record<MealType, MenuItem[]>> = {}
+        const nextRelease: Partial<Record<MealType, boolean>> = {}
 
         await Promise.all(
           MEALS.map(async (meal) => {
@@ -188,6 +211,7 @@ export default function CustomerHomePage() {
             const response = await fetch(url.toString())
             if (response.status === 404) {
               nextMenu[meal] = []
+              nextRelease[meal] = false
               return
             }
             if (!response.ok) {
@@ -196,16 +220,20 @@ export default function CustomerHomePage() {
 
             const data = await response.json()
             const items = (data.items ?? []) as MenuApiItem[]
-            nextMenu[meal] = items.map((item) => ({
-              menu_item_id: item.menu_item_id ?? 0,
-              item_id: item.item_id ?? 0,
-              item_name: item.item_name ?? item.name ?? "Item",
-              meal,
-              rate: item.rate ?? item.price ?? 0,
-              available_qty: item.available_qty ?? 0,
-              description: item.description ?? "",
-              picture_url: item.picture_url ?? null,
-            }))
+            const isReleased = Boolean((data as any).is_released)
+            nextRelease[meal] = isReleased
+            nextMenu[meal] = isReleased
+              ? items.map((item) => ({
+                  menu_item_id: item.menu_item_id ?? 0,
+                  item_id: item.item_id ?? 0,
+                  item_name: item.item_name ?? item.name ?? "Item",
+                  meal,
+                  rate: item.rate ?? item.price ?? 0,
+                  available_qty: normalizeQty(item.available_qty),
+                  description: item.description ?? "",
+                  picture_url: item.picture_url ?? null,
+                }))
+              : []
           })
         )
 
@@ -216,11 +244,29 @@ export default function CustomerHomePage() {
             dinner: nextMenu.dinner ?? [],
             condiments: nextMenu.condiments ?? [],
           })
+          setIsReleasedByMeal({
+            breakfast: nextRelease.breakfast ?? false,
+            lunch: nextRelease.lunch ?? false,
+            dinner: nextRelease.dinner ?? false,
+            condiments: nextRelease.condiments ?? false,
+          })
         }
       } catch (err) {
         console.error(err)
         if (!cancelled) {
           setError("Unable to load today's menu. Please try again later.")
+          setMenuByMeal({
+            breakfast: [],
+            lunch: [],
+            dinner: [],
+            condiments: [],
+          })
+          setIsReleasedByMeal({
+            breakfast: false,
+            lunch: false,
+            dinner: false,
+            condiments: false,
+          })
         }
       } finally {
         if (!cancelled) {
@@ -427,7 +473,8 @@ export default function CustomerHomePage() {
 
   const setQuantityForItem = (menuItem: MenuItem, nextValue: number) => {
     if (!isAuthenticated) return
-    const clamped = Math.max(0, Math.min(nextValue, menuItem.available_qty))
+    const desired = Math.floor(nextValue)
+    const clamped = Math.max(0, Math.min(desired, menuItem.available_qty))
     setQuantities((prev) => {
       if (clamped <= 0) {
         if (!(menuItem.menu_item_id in prev)) {
@@ -961,11 +1008,18 @@ export default function CustomerHomePage() {
                           {MEAL_LABELS[meal]}
                         </h3>
                         <p className="text-xs text-brand-toast">
-                          {menuByMeal[meal]?.length
+                          {!isReleasedByMeal[meal]
+                            ? "Menu not released yet"
+                            : menuByMeal[meal]?.length
                             ? "Highlighted selections from the kitchen"
                             : "No items available right now"}
                         </p>
                       </div>
+                      {orderingForLabel && (
+                        <span className="text-xs font-medium uppercase tracking-wide text-brand-toast/80">
+                          Ordering for: {orderingForLabel}
+                        </span>
+                      )}
                     </div>
                     {menuByMeal[meal]?.length ? (
                       <div className="grid gap-4 md:grid-cols-3">

@@ -5,7 +5,6 @@ import {
   Home,
   Package,
   Users,
-  UserCog,
   Calendar,
   Utensils,
   Menu,
@@ -38,8 +37,7 @@ const primaryNavigationItems = [
     { name: "Daily Menu Setup", icon: Calendar, href: "/admin/dailymenusetup", id: "dailymenusetup" },
     { name: "Kitchen Production", icon: Utensils, href: "/admin/production", id: "production" },
     { name: "Order History", icon: ShoppingCart, href: "/admin/order-history", id: "orders" },
-    { name: "Roles", icon: ShieldCheck, href: "/admin/roles", id: "roles" },
-    { name: "Team Members", icon: UserCog, href: "/admin/team-members", id: "team-members" },
+    { name: "Access Control", icon: ShieldCheck, href: "/admin/team-members", id: "team-members" },
     { name: "Logs & Audit", icon: FileText, href: "/admin/logs", id: "logs" },
     { name: "Reports & Analytics", icon: BarChart3, href: "/admin/reports", id: "reports" },
 ];

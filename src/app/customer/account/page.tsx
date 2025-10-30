@@ -180,12 +180,7 @@ export default function AccountPage() {
     const data = (await response.json()) as CustomerProfile
     setProfile(data)
     setForm(data)
-    setUser({
-      ...(user ?? {}),
-      roles: data.roles ?? [],
-      role_codes: data.role_codes ?? [],
-    })
-  }, [customerId, user, setUser])
+  }, [customerId])
 
   const fetchAddresses = useCallback(async () => {
     if (!customerId) return

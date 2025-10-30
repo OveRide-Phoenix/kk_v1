@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { addMonths, endOfMonth, format, parseISO, startOfMonth } from "date-fns";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { addMonths, endOfMonth, format, getDaysInMonth, parseISO, startOfMonth } from "date-fns";
 import {
   BarChart,
   Bar,
@@ -14,6 +14,8 @@ import {
   ResponsiveContainer,
   Legend,
   CartesianGrid,
+  LineChart,
+  Line,
 } from "recharts";
 import { Download, Loader2 } from "lucide-react";
 
@@ -101,7 +103,6 @@ const TAB_LABELS: Record<TabKey, string> = {
 };
 
 const PIE_COLORS = ["#7c3aed", "#0ea5e9", "#f97316", "#22c55e", "#facc15", "#ec4899"];
-const DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const MONTHS_TO_SHOW = 18;
 
 const currencyFormatter = new Intl.NumberFormat("en-IN", {
@@ -162,10 +163,13 @@ export default function ReportsPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("sales");
   const [selectedMonthValue, setSelectedMonthValue] = useState<string>(() => monthOptions[0]?.value ?? "");
   const [reports, setReports] = useState<ReportsState>(INITIAL_REPORTS);
+  const [comparisonReports, setComparisonReports] = useState<ReportsState | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastGenerated, setLastGenerated] = useState<{ start: string; end: string; label: string } | null>(null);
+  const [comparisonMetadata, setComparisonMetadata] = useState<{ start: string; end: string; label: string } | null>(null);
   const [hasGenerated, setHasGenerated] = useState(false);
+  const initialLoadRef = useRef(false);
 
   const selectedMonth = useMemo(
     () => monthOptions.find((option) => option.value === selectedMonthValue),
@@ -174,56 +178,91 @@ export default function ReportsPage() {
   const activeData = reports[activeTab];
   const hasSelectedMonth = Boolean(selectedMonth);
 
-  const handleGenerate = async () => {
+  const fetchReportsForRange = useCallback(async (startDate: Date, endDate: Date): Promise<ReportsState> => {
+    const start = format(startDate, "yyyy-MM-dd");
+    const end = format(endDate, "yyyy-MM-dd");
+    const params = new URLSearchParams({ start_date: start, end_date: end }).toString();
+
+    const [salesRes, categoryRes, customersRes, subscriptionsRes] = await Promise.all([
+      http.get(`/api/reports/sales?${params}`),
+      http.get(`/api/reports/category?${params}`),
+      http.get(`/api/reports/customers?${params}`),
+      http.get(`/api/reports/subscriptions?${params}`),
+    ]);
+
+    const responses: Array<{ key: TabKey; response: Response }> = [
+      { key: "sales", response: salesRes },
+      { key: "category", response: categoryRes },
+      { key: "customers", response: customersRes },
+      { key: "subscriptions", response: subscriptionsRes },
+    ];
+
+    const failed = responses.find(
+      ({ response }) => !response.ok && response.status !== 404,
+    );
+    if (failed) {
+      throw new Error(
+        `Failed to generate ${TAB_LABELS[failed.key as TabKey].toLowerCase()} report (${failed.response.status})`,
+      );
+    }
+
+    const [salesData, categoryData, customerData, subscriptionData] = await Promise.all([
+      salesRes.status === 404 ? Promise.resolve([] as SalesRecord[]) : parseJsonSafe<SalesRecord[]>(salesRes),
+      categoryRes.status === 404 ? Promise.resolve([] as CategoryRecord[]) : parseJsonSafe<CategoryRecord[]>(categoryRes),
+      customersRes.status === 404 ? Promise.resolve([] as CustomerRecord[]) : parseJsonSafe<CustomerRecord[]>(customersRes),
+      subscriptionsRes.status === 404
+        ? Promise.resolve([] as SubscriptionRecord[])
+        : parseJsonSafe<SubscriptionRecord[]>(subscriptionsRes),
+    ]);
+
+    return {
+      sales: salesData ?? [],
+      category: categoryData ?? [],
+      customers: customerData ?? [],
+      subscriptions: subscriptionData ?? [],
+    };
+  }, []);
+
+  const handleGenerate = useCallback(async () => {
     if (!selectedMonth) {
       setError("Please pick a month.");
       return;
     }
 
-    const startDate = selectedMonth.start;
-    const endDate = selectedMonth.end;
-    const start = format(startDate, "yyyy-MM-dd");
-    const end = format(endDate, "yyyy-MM-dd");
-    const params = new URLSearchParams({ start_date: start, end_date: end }).toString();
-
     setLoading(true);
     setError(null);
+    setComparisonReports(null);
+    setComparisonMetadata(null);
+
+    const startDate = selectedMonth.start;
+    const endDate = selectedMonth.end;
 
     try {
-      const [salesRes, categoryRes, customersRes, subscriptionsRes] = await Promise.all([
-        http.get(`/api/reports/sales?${params}`),
-        http.get(`/api/reports/category?${params}`),
-        http.get(`/api/reports/customers?${params}`),
-        http.get(`/api/reports/subscriptions?${params}`),
-      ]);
-
-      const responses: Array<{ key: TabKey; response: Response }> = [
-        { key: "sales", response: salesRes },
-        { key: "category", response: categoryRes },
-        { key: "customers", response: customersRes },
-        { key: "subscriptions", response: subscriptionsRes },
-      ];
-
-      const failed = responses.find(({ response }) => !response.ok);
-      if (failed) {
-        throw new Error(`Failed to generate ${TAB_LABELS[failed.key as TabKey].toLowerCase()} report (${failed.response.status})`);
-      }
-
-      const [salesData, categoryData, customerData, subscriptionData] = await Promise.all([
-        parseJsonSafe<SalesRecord[]>(salesRes),
-        parseJsonSafe<CategoryRecord[]>(categoryRes),
-        parseJsonSafe<CustomerRecord[]>(customersRes),
-        parseJsonSafe<SubscriptionRecord[]>(subscriptionsRes),
-      ]);
-
-      setReports({
-        sales: salesData ?? [],
-        category: categoryData ?? [],
-        customers: customerData ?? [],
-        subscriptions: subscriptionData ?? [],
+      const currentReports = await fetchReportsForRange(startDate, endDate);
+      setReports(currentReports);
+      setLastGenerated({
+        start: format(startDate, "yyyy-MM-dd"),
+        end: format(endDate, "yyyy-MM-dd"),
+        label: selectedMonth.label,
       });
-      setLastGenerated({ start, end, label: selectedMonth.label });
       setHasGenerated(true);
+
+      const comparisonStart = startOfMonth(addMonths(startDate, -1));
+      const comparisonEnd = endOfMonth(addMonths(startDate, -1));
+
+      try {
+        const previousReports = await fetchReportsForRange(comparisonStart, comparisonEnd);
+        setComparisonReports(previousReports);
+        setComparisonMetadata({
+          start: format(comparisonStart, "yyyy-MM-dd"),
+          end: format(comparisonEnd, "yyyy-MM-dd"),
+          label: format(comparisonStart, "MMMM yyyy"),
+        });
+      } catch (comparisonError) {
+        console.warn("Unable to load comparison month report", comparisonError);
+        setComparisonReports(null);
+        setComparisonMetadata(null);
+      }
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -233,7 +272,14 @@ export default function ReportsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedMonth, fetchReportsForRange]);
+
+  useEffect(() => {
+    if (!initialLoadRef.current && selectedMonth) {
+      initialLoadRef.current = true;
+      handleGenerate();
+    }
+  }, [selectedMonth, handleGenerate]);
 
   const handleExport = () => {
     if (!hasGenerated || !lastGenerated) {
@@ -306,114 +352,372 @@ export default function ReportsPage() {
     URL.revokeObjectURL(url);
   };
 
-  const monthlyMetrics = useMemo(() => {
-    if (!hasGenerated) {
-      return null;
-    }
-
-    const totalSales = reports.sales.reduce((sum, entry) => sum + (entry.total_sales ?? 0), 0);
-    const totalOrders = reports.sales.reduce((sum, entry) => sum + (entry.total_orders ?? 0), 0);
-    const avgOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;
-    const topCategory = reports.category[0];
-    const totalSubscriptions = reports.subscriptions.reduce(
-      (sum, entry) => sum + (entry.total_subscriptions ?? 0),
-      0,
-    );
-    const subscriptionRevenue = reports.subscriptions.reduce(
-      (sum, entry) => sum + (entry.total_revenue ?? 0),
-      0,
-    );
-
-    return {
-      totalSales,
-      totalOrders,
-      avgOrderValue,
-      topCategoryName: topCategory?.category_name,
-      topCategoryRevenue: topCategory?.total_revenue ?? 0,
-      totalSubscriptions,
-      subscriptionRevenue,
-    };
-  }, [reports, hasGenerated]);
-
-  const metricCards = useMemo(() => {
-    if (!monthlyMetrics) {
+  const salesDailyStats = useMemo(() => {
+    if (!reports.sales.length) {
       return [];
     }
 
+    return [...reports.sales]
+      .map((entry) => {
+        const date = parseISO(entry.date);
+        const totalSales = entry.total_sales ?? 0;
+        const totalOrders = entry.total_orders ?? 0;
+        return {
+          dateKey: entry.date,
+          label: format(date, "dd MMM"),
+          dayOfMonth: date.getDate(),
+          total_sales: Number(totalSales.toFixed(2)),
+          total_orders: totalOrders,
+          average_order_value:
+            totalOrders > 0 ? Number((totalSales / totalOrders).toFixed(2)) : 0,
+        };
+      })
+      .sort((a, b) => a.dayOfMonth - b.dayOfMonth);
+  }, [reports.sales]);
+
+  const comparisonSalesDailyStats = useMemo(() => {
+    if (!comparisonReports?.sales?.length) {
+      return [];
+    }
+
+    return [...comparisonReports.sales]
+      .map((entry) => {
+        const date = parseISO(entry.date);
+        const totalSales = entry.total_sales ?? 0;
+        const totalOrders = entry.total_orders ?? 0;
+        return {
+          dateKey: entry.date,
+          label: format(date, "dd MMM"),
+          dayOfMonth: date.getDate(),
+          total_sales: Number(totalSales.toFixed(2)),
+          total_orders: totalOrders,
+          average_order_value:
+            totalOrders > 0 ? Number((totalSales / totalOrders).toFixed(2)) : 0,
+        };
+      })
+      .sort((a, b) => a.dayOfMonth - b.dayOfMonth);
+  }, [comparisonReports]);
+
+  const salesComparisonSeries = useMemo(() => {
+    if (!salesDailyStats.length && !comparisonSalesDailyStats.length) {
+      return [];
+    }
+
+    const daySet = new Set<number>();
+    salesDailyStats.forEach((entry) => daySet.add(entry.dayOfMonth));
+    comparisonSalesDailyStats.forEach((entry) => daySet.add(entry.dayOfMonth));
+
+    const days = Array.from(daySet).sort((a, b) => a - b);
+
+    return days.map((day) => {
+      const current = salesDailyStats.find((entry) => entry.dayOfMonth === day);
+      const previous = comparisonSalesDailyStats.find((entry) => entry.dayOfMonth === day);
+      const dayLabel = `Day ${day.toString().padStart(2, "0")}`;
+
+      return {
+        dayLabel,
+        current_sales: current?.total_sales,
+        previous_sales: previous?.total_sales,
+        current_orders: current?.total_orders,
+        previous_orders: previous?.total_orders,
+        current_aov: current?.average_order_value,
+        previous_aov: previous?.average_order_value,
+      };
+    });
+  }, [salesDailyStats, comparisonSalesDailyStats]);
+
+  const salesAggregates = useMemo(() => {
+    const currentSales = reports.sales.reduce((sum, entry) => sum + (entry.total_sales ?? 0), 0);
+    const currentOrders = reports.sales.reduce((sum, entry) => sum + (entry.total_orders ?? 0), 0);
+    const currentAOV = currentOrders > 0 ? currentSales / currentOrders : 0;
+
+    const hasPreviousSales = Boolean(comparisonReports?.sales?.length);
+    const previousSales = hasPreviousSales
+      ? comparisonReports!.sales.reduce((sum, entry) => sum + (entry.total_sales ?? 0), 0)
+      : null;
+    const previousOrders = hasPreviousSales
+      ? comparisonReports!.sales.reduce((sum, entry) => sum + (entry.total_orders ?? 0), 0)
+      : null;
+    const previousAOV =
+      hasPreviousSales && previousOrders && previousOrders > 0 && previousSales !== null
+        ? previousSales / previousOrders
+        : null;
+
+    const salesChange =
+      previousSales && previousSales > 0 ? ((currentSales - previousSales) / previousSales) * 100 : null;
+    const orderChange =
+      previousOrders && previousOrders > 0 ? ((currentOrders - previousOrders) / previousOrders) * 100 : null;
+
+    return {
+      currentSales,
+      currentOrders,
+      currentAOV,
+      previousSales,
+      previousOrders,
+      previousAOV,
+      salesChange,
+      orderChange,
+    };
+  }, [reports.sales, comparisonReports]);
+
+  const forecastMetrics = useMemo(() => {
+    if (!selectedMonth) {
+      return { expectedNextMonthSales: null, methodLabel: undefined as string | undefined };
+    }
+
+    const currentDaysWithSales = salesDailyStats.length;
+    const previousDaysWithSales = comparisonSalesDailyStats.length;
+    const currentDailyAverage =
+      currentDaysWithSales > 0 ? salesAggregates.currentSales / currentDaysWithSales : 0;
+    const previousDailyAverage =
+      previousDaysWithSales > 0 && salesAggregates.previousSales !== null
+        ? salesAggregates.previousSales / previousDaysWithSales
+        : null;
+
+    const blendedDailyAverage =
+      previousDailyAverage !== null ? (currentDailyAverage + previousDailyAverage) / 2 : currentDailyAverage;
+
+    if (blendedDailyAverage <= 0) {
+      return { expectedNextMonthSales: null, methodLabel: undefined };
+    }
+
+    const nextMonthStart = startOfMonth(addMonths(selectedMonth.start, 1));
+    const expectedNextMonthSales = blendedDailyAverage * getDaysInMonth(nextMonthStart);
+
+    return {
+      expectedNextMonthSales,
+      methodLabel:
+        previousDailyAverage !== null
+          ? "Average daily revenue across the last two months"
+          : "Based on current month daily run rate",
+    };
+  }, [selectedMonth, salesAggregates, salesDailyStats, comparisonSalesDailyStats]);
+
+  const loyaltyStats = useMemo(() => {
+    if (!reports.customers.length) {
+      return {
+        totalCustomers: 0,
+        newCustomers: 0,
+        regularCustomers: 0,
+        loyalCustomers: 0,
+        returningCustomers: 0,
+        returningRate: 0,
+        loyalShare: 0,
+      };
+    }
+
+    let newCustomers = 0;
+    let regularCustomers = 0;
+    let loyalCustomers = 0;
+
+    reports.customers.forEach((customer) => {
+      const orders = customer.total_orders ?? 0;
+      if (orders >= 5) {
+        loyalCustomers += 1;
+      } else if (orders >= 2) {
+        regularCustomers += 1;
+      } else {
+        newCustomers += 1;
+      }
+    });
+
+    const totalCustomers = newCustomers + regularCustomers + loyalCustomers;
+    const returningCustomers = regularCustomers + loyalCustomers;
+
+    return {
+      totalCustomers,
+      newCustomers,
+      regularCustomers,
+      loyalCustomers,
+      returningCustomers,
+      returningRate: totalCustomers > 0 ? (returningCustomers / totalCustomers) * 100 : 0,
+      loyalShare: totalCustomers > 0 ? (loyalCustomers / totalCustomers) * 100 : 0,
+    };
+  }, [reports.customers]);
+
+  const loyaltySegments = useMemo(() => {
+    const segments = [
+      { segment: "New", count: loyaltyStats.newCustomers },
+      { segment: "Regular", count: loyaltyStats.regularCustomers },
+      { segment: "Loyal", count: loyaltyStats.loyalCustomers },
+    ];
+    return segments.filter((segment) => segment.count > 0);
+  }, [loyaltyStats]);
+
+  const monthComparisonChartData = useMemo(() => {
+    const rows: Array<{ month: string; total_sales: number; total_orders: number }> = [];
+    if (salesAggregates.previousSales !== null && comparisonMetadata) {
+      rows.push({
+        month: comparisonMetadata.label,
+        total_sales: Number(salesAggregates.previousSales.toFixed(2)),
+        total_orders: salesAggregates.previousOrders ?? 0,
+      });
+    }
+    if (selectedMonth) {
+      rows.push({
+        month: selectedMonth.label,
+        total_sales: Number(salesAggregates.currentSales.toFixed(2)),
+        total_orders: salesAggregates.currentOrders,
+      });
+    }
+    return rows;
+  }, [salesAggregates, selectedMonth, comparisonMetadata]);
+
+  const categoryComparisonData = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        category: string;
+        currentRevenue: number;
+        previousRevenue: number;
+        currentItems: number;
+        previousItems: number;
+      }
+    >();
+
+    const ensureEntry = (category: string) => {
+      if (!map.has(category)) {
+        map.set(category, {
+          category,
+          currentRevenue: 0,
+          previousRevenue: 0,
+          currentItems: 0,
+          previousItems: 0,
+        });
+      }
+      return map.get(category)!;
+    };
+
+    reports.category.forEach((row) => {
+      const entry = ensureEntry(row.category_name);
+      entry.currentRevenue += row.total_revenue ?? 0;
+      entry.currentItems += row.total_items_sold ?? 0;
+    });
+
+    comparisonReports?.category?.forEach((row) => {
+      const entry = ensureEntry(row.category_name);
+      entry.previousRevenue += row.total_revenue ?? 0;
+      entry.previousItems += row.total_items_sold ?? 0;
+    });
+
+    const values = Array.from(map.values());
+    values.sort(
+      (a, b) =>
+        b.currentRevenue + b.previousRevenue - (a.currentRevenue + a.previousRevenue),
+    );
+
+    return values.slice(0, 8);
+  }, [reports.category, comparisonReports]);
+
+  const subscriptionComparisonData = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        plan: string;
+        currentSubscriptions: number;
+        previousSubscriptions: number;
+        currentRevenue: number;
+        previousRevenue: number;
+      }
+    >();
+
+    const ensureEntry = (plan: string) => {
+      if (!map.has(plan)) {
+        map.set(plan, {
+          plan,
+          currentSubscriptions: 0,
+          previousSubscriptions: 0,
+          currentRevenue: 0,
+          previousRevenue: 0,
+        });
+      }
+      return map.get(plan)!;
+    };
+
+    reports.subscriptions.forEach((row) => {
+      const entry = ensureEntry(row.plan_type);
+      entry.currentSubscriptions += row.total_subscriptions ?? 0;
+      entry.currentRevenue += row.total_revenue ?? 0;
+    });
+
+    comparisonReports?.subscriptions?.forEach((row) => {
+      const entry = ensureEntry(row.plan_type);
+      entry.previousSubscriptions += row.total_subscriptions ?? 0;
+      entry.previousRevenue += row.total_revenue ?? 0;
+    });
+
+    return Array.from(map.values());
+  }, [reports.subscriptions, comparisonReports]);
+
+  const topCustomers = useMemo(() => {
+    if (!reports.customers.length) {
+      return [];
+    }
+
+    return [...reports.customers]
+      .sort((a, b) => (b.total_spent ?? 0) - (a.total_spent ?? 0))
+      .slice(0, 10);
+  }, [reports.customers]);
+
+  const metricCards = useMemo(() => {
+    if (!hasGenerated) {
+      return [];
+    }
+
+    const formatChange = (value: number | null) => {
+      if (value === null) return undefined;
+      const sign = value >= 0 ? "+" : "";
+      return `${sign}${value.toFixed(1)}%`;
+    };
+
     return [
       {
-        title: "Total Sales",
-        value: currencyFormatter.format(monthlyMetrics.totalSales),
+        title: "Current Month Sales",
+        value: currencyFormatter.format(salesAggregates.currentSales),
+        helper:
+          salesAggregates.salesChange !== null && comparisonMetadata
+            ? `MoM change · ${formatChange(salesAggregates.salesChange)} vs ${comparisonMetadata.label}`
+            : undefined,
       },
       {
         title: "Total Orders",
-        value: numberFormatter.format(monthlyMetrics.totalOrders),
+        value: numberFormatter.format(salesAggregates.currentOrders),
+        helper:
+          salesAggregates.orderChange !== null && comparisonMetadata
+            ? `MoM change · ${formatChange(salesAggregates.orderChange)} vs ${comparisonMetadata.label}`
+            : undefined,
       },
       {
-        title: "Avg Order Value",
+        title: "Returning Customers",
+        value: numberFormatter.format(loyaltyStats.returningCustomers),
+        helper:
+          loyaltyStats.totalCustomers > 0
+            ? `${loyaltyStats.returningRate.toFixed(1)}% of active customers`
+            : undefined,
+      },
+      {
+        title: "Loyal Customers",
+        value: numberFormatter.format(loyaltyStats.loyalCustomers),
+        helper:
+          loyaltyStats.totalCustomers > 0
+            ? `${loyaltyStats.loyalShare.toFixed(1)}% of active customers`
+            : undefined,
+      },
+      {
+        title: "Projected Next Month Sales",
         value:
-          monthlyMetrics.totalOrders > 0
-            ? currencyFormatter.format(monthlyMetrics.avgOrderValue)
+          forecastMetrics.expectedNextMonthSales !== null
+            ? currencyFormatter.format(forecastMetrics.expectedNextMonthSales)
             : "—",
-      },
-      {
-        title: "Top Category",
-        value: monthlyMetrics.topCategoryName ?? "—",
-        helper:
-          monthlyMetrics.topCategoryName && monthlyMetrics.topCategoryRevenue > 0
-            ? `Revenue · ${currencyFormatter.format(monthlyMetrics.topCategoryRevenue)}`
-            : undefined,
-      },
-      {
-        title: "Total Subscriptions",
-        value: numberFormatter.format(monthlyMetrics.totalSubscriptions),
-        helper:
-          monthlyMetrics.subscriptionRevenue > 0
-            ? `Revenue · ${currencyFormatter.format(monthlyMetrics.subscriptionRevenue)}`
-            : undefined,
+        helper: forecastMetrics.methodLabel,
       },
     ];
-  }, [monthlyMetrics]);
-
-  const salesByDayOfWeek = useMemo(() => {
-    type SalesByDay = {
-      day: string;
-      total_sales: number;
-      total_orders: number;
-      average_order_value: number;
-    };
-
-    const result: SalesByDay[] = [];
-
-    if (!reports.sales.length) {
-      return result;
-    }
-
-    const aggregates = new Map<string, { totalSales: number; totalOrders: number }>();
-    for (const entry of reports.sales) {
-      const dayKey = format(parseISO(entry.date), "EEE");
-      const current = aggregates.get(dayKey) ?? { totalSales: 0, totalOrders: 0 };
-      current.totalSales += entry.total_sales ?? 0;
-      current.totalOrders += entry.total_orders ?? 0;
-      aggregates.set(dayKey, current);
-    }
-
-    DAY_ORDER.filter((day) => aggregates.has(day)).forEach((day) => {
-      const { totalSales, totalOrders } = aggregates.get(day)!;
-      result.push({
-        day,
-        total_sales: Number(totalSales.toFixed(2)),
-        total_orders: totalOrders,
-        average_order_value:
-          totalOrders > 0 ? Number((totalSales / totalOrders).toFixed(2)) : 0,
-      });
-    });
-
-    return result;
-  }, [reports.sales]);
+  }, [hasGenerated, salesAggregates, loyaltyStats, forecastMetrics, comparisonMetadata]);
 
   const hasDataForActiveTab =
-    activeTab === "sales" ? salesByDayOfWeek.length > 0 : activeData.length > 0;
+    activeTab === "sales"
+      ? salesDailyStats.length > 0 || comparisonSalesDailyStats.length > 0
+      : activeData.length > 0;
 
   const renderTable = () => {
     switch (activeTab) {
@@ -422,16 +726,16 @@ export default function ReportsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Day</TableHead>
+                <TableHead>Date</TableHead>
                 <TableHead className="text-right">Total Sales</TableHead>
                 <TableHead className="text-right">Total Orders</TableHead>
                 <TableHead className="text-right">Avg Order Value</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {salesByDayOfWeek.map((row) => (
-                <TableRow key={row.day}>
-                  <TableCell>{row.day}</TableCell>
+              {salesDailyStats.map((row) => (
+                <TableRow key={row.dateKey}>
+                  <TableCell>{row.label}</TableCell>
                   <TableCell className="text-right">
                     {currencyFormatter.format(row.total_sales ?? 0)}
                   </TableCell>
@@ -538,111 +842,309 @@ export default function ReportsPage() {
     }
   };
 
-  const renderChart = () => {
-    if (activeTab === "sales" && !salesByDayOfWeek.length) {
-      return (
-        <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-          No data available for the selected month.
-        </div>
-      );
-    }
-
-    if (activeTab !== "sales" && !activeData.length) {
-      return (
-        <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-          No data available for the selected month.
-        </div>
-      );
-    }
-
+  const renderCharts = () => {
     switch (activeTab) {
-      case "sales":
-        return (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={salesByDayOfWeek}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="day" />
-              <YAxis
-                yAxisId="sales"
-                tickFormatter={(value: number) => formatAxisCurrency(value)}
-                width={80}
-              />
-              <YAxis
-                yAxisId="orders"
-                orientation="right"
-                tickFormatter={(value: number) => numberFormatter.format(value)}
-                width={60}
-              />
-              <Tooltip
-                formatter={(value: number, name: string) => {
-                  if (name === "Total Orders") {
-                    return [numberFormatter.format(value), name];
-                  }
-                  return [currencyFormatter.format(value), name];
-                }}
-              />
-              <Legend />
-              <Bar yAxisId="sales" dataKey="total_sales" fill="#0ea5e9" name="Total Sales" />
-              <Bar yAxisId="orders" dataKey="total_orders" fill="#f97316" name="Total Orders" />
-            </BarChart>
-          </ResponsiveContainer>
-        );
+      case "sales": {
+        if (!salesDailyStats.length && !comparisonSalesDailyStats.length) {
+          return (
+            <div className="flex h-72 items-center justify-center rounded-lg border bg-muted/20 p-4 text-sm text-muted-foreground">
+              No sales data available for the selected month.
+            </div>
+          );
+        }
 
-      case "category":
         return (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={reports.category}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="category_name" />
-              <YAxis tickFormatter={(value: number) => formatAxisCurrency(value)} width={80} />
-              <Tooltip formatter={(value: number) => currencyFormatter.format(value)} />
-              <Legend />
-              <Bar dataKey="total_revenue" fill="#7c3aed" name="Total Revenue" />
-            </BarChart>
-          </ResponsiveContainer>
-        );
+          <div className="grid gap-4">
+            <div className="h-72 w-full rounded-lg border bg-muted/20 p-4">
+              <p className="mb-2 text-sm font-medium text-muted-foreground">Revenue vs previous month</p>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={salesComparisonSeries}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="dayLabel" />
+                  <YAxis tickFormatter={(value: number) => formatAxisCurrency(value)} width={80} />
+                  <Tooltip
+                    formatter={(value: number | undefined) =>
+                      typeof value === "number" ? currencyFormatter.format(value) : "—"
+                    }
+                  />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="current_sales"
+                    name={selectedMonth?.label ?? "Current month"}
+                    stroke="#0ea5e9"
+                    strokeWidth={2}
+                    dot={false}
+                    connectNulls
+                  />
+                  {comparisonSalesDailyStats.length > 0 && (
+                    <Line
+                      type="monotone"
+                      dataKey="previous_sales"
+                      name={comparisonMetadata?.label ?? "Previous month"}
+                      stroke="#7c3aed"
+                      strokeWidth={2}
+                      dot={false}
+                      connectNulls
+                    />
+                  )}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
 
-      case "customers":
-        return (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={reports.customers}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="customer_name" />
-              <YAxis tickFormatter={(value: number) => formatAxisCurrency(value)} width={80} />
-              <Tooltip formatter={(value: number) => currencyFormatter.format(value)} />
-              <Legend />
-              <Bar dataKey="total_spent" fill="#0ea5e9" name="Total Spent" />
-            </BarChart>
-          </ResponsiveContainer>
-        );
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="h-72 w-full rounded-lg border bg-muted/20 p-4">
+                <p className="mb-2 text-sm font-medium text-muted-foreground">Average order value trend</p>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={salesComparisonSeries}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="dayLabel" />
+                    <YAxis tickFormatter={(value: number) => currencyFormatter.format(value)} width={80} />
+                    <Tooltip
+                      formatter={(value: number | undefined) =>
+                        typeof value === "number" ? currencyFormatter.format(value) : "—"
+                      }
+                    />
+                    <Legend />
+                    <Line
+                      type="monotone"
+                      dataKey="current_aov"
+                      name={`${selectedMonth?.label ?? "Current"} AOV`}
+                      stroke="#22c55e"
+                      strokeWidth={2}
+                      dot={false}
+                      connectNulls
+                    />
+                    {comparisonSalesDailyStats.length > 0 && (
+                      <Line
+                        type="monotone"
+                        dataKey="previous_aov"
+                        name={`${comparisonMetadata?.label ?? "Previous"} AOV`}
+                        stroke="#f59e0b"
+                        strokeWidth={2}
+                        dot={false}
+                        connectNulls
+                      />
+                    )}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
 
-      case "subscriptions":
-        return (
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Tooltip
-                formatter={(value: number) => numberFormatter.format(value)}
-                labelFormatter={(label) => String(label)}
-              />
-              <Legend />
-              <Pie
-                data={reports.subscriptions}
-                dataKey="total_subscriptions"
-                nameKey="plan_type"
-                innerRadius={60}
-                outerRadius={110}
-                paddingAngle={2}
-              >
-                {reports.subscriptions.map((entry, index) => (
-                  <Cell key={entry.plan_type} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                ))}
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
+              <div className="h-72 w-full rounded-lg border bg-muted/20 p-4">
+                <p className="mb-2 text-sm font-medium text-muted-foreground">Month-over-month sales</p>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={monthComparisonChartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis tickFormatter={(value: number) => formatAxisCurrency(value)} width={80} />
+                    <Tooltip formatter={(value: number) => currencyFormatter.format(value)} />
+                    <Legend />
+                    <Bar dataKey="total_sales" name="Total Sales" fill="#0ea5e9" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {monthComparisonChartData.length > 0 && (
+              <div className="h-72 w-full rounded-lg border bg-muted/20 p-4">
+                <p className="mb-2 text-sm font-medium text-muted-foreground">Month-over-month order volume</p>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={monthComparisonChartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis tickFormatter={(value: number) => numberFormatter.format(value)} width={60} />
+                    <Tooltip formatter={(value: number) => numberFormatter.format(value)} />
+                    <Legend />
+                    <Bar dataKey="total_orders" name="Total Orders" fill="#6366f1" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
         );
+      }
+
+      case "category": {
+        if (!categoryComparisonData.length) {
+          return (
+            <div className="flex h-72 items-center justify-center rounded-lg border bg-muted/20 p-4 text-sm text-muted-foreground">
+              No category insights available for this month.
+            </div>
+          );
+        }
+
+        return (
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="h-72 w-full rounded-lg border bg-muted/20 p-4">
+              <p className="mb-2 text-sm font-medium text-muted-foreground">Revenue by category (MoM)</p>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={categoryComparisonData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="category" />
+                  <YAxis tickFormatter={(value: number) => formatAxisCurrency(value)} width={80} />
+                  <Tooltip formatter={(value: number) => currencyFormatter.format(value)} />
+                  <Legend />
+                  <Bar dataKey="currentRevenue" name={selectedMonth?.label ?? "Current"} fill="#0ea5e9" />
+                  {comparisonReports?.category?.length ? (
+                    <Bar
+                      dataKey="previousRevenue"
+                      name={comparisonMetadata?.label ?? "Previous"}
+                      fill="#7c3aed"
+                    />
+                  ) : null}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="h-72 w-full rounded-lg border bg-muted/20 p-4">
+              <p className="mb-2 text-sm font-medium text-muted-foreground">Items sold by category (MoM)</p>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={categoryComparisonData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="category" />
+                  <YAxis tickFormatter={(value: number) => numberFormatter.format(value)} width={60} />
+                  <Tooltip formatter={(value: number) => numberFormatter.format(value)} />
+                  <Legend />
+                  <Bar dataKey="currentItems" name={selectedMonth?.label ?? "Current"} fill="#0ea5e9" />
+                  {comparisonReports?.category?.length ? (
+                    <Bar
+                      dataKey="previousItems"
+                      name={comparisonMetadata?.label ?? "Previous"}
+                      fill="#f97316"
+                    />
+                  ) : null}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        );
+      }
+
+      case "customers": {
+        if (!reports.customers.length) {
+          return (
+            <div className="flex h-72 items-center justify-center rounded-lg border bg-muted/20 p-4 text-sm text-muted-foreground">
+              No customer insights available for this month.
+            </div>
+          );
+        }
+
+        return (
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="h-72 w-full rounded-lg border bg-muted/20 p-4">
+              <p className="mb-2 text-sm font-medium text-muted-foreground">Top customers by spend</p>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={topCustomers}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="customer_name" />
+                  <YAxis tickFormatter={(value: number) => formatAxisCurrency(value)} width={80} />
+                  <Tooltip formatter={(value: number) => currencyFormatter.format(value)} />
+                  <Legend />
+                  <Bar dataKey="total_spent" name="Total Spend" fill="#0ea5e9" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="h-72 w-full rounded-lg border bg-muted/20 p-4">
+              <p className="mb-2 text-sm font-medium text-muted-foreground">Orders by customer</p>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={topCustomers}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="customer_name" />
+                  <YAxis tickFormatter={(value: number) => numberFormatter.format(value)} width={60} />
+                  <Tooltip formatter={(value: number) => numberFormatter.format(value)} />
+                  <Legend />
+                  <Bar dataKey="total_orders" name="Total Orders" fill="#6366f1" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {loyaltySegments.length > 0 && (
+              <div className="h-72 w-full rounded-lg border bg-muted/20 p-4 lg:col-span-2">
+                <p className="mb-2 text-sm font-medium text-muted-foreground">Customer loyalty breakdown</p>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Tooltip formatter={(value: number) => numberFormatter.format(value)} />
+                    <Legend />
+                    <Pie data={loyaltySegments} dataKey="count" nameKey="segment" innerRadius={60} outerRadius={110}>
+                      {loyaltySegments.map((entry, index) => (
+                        <Cell key={entry.segment} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      case "subscriptions": {
+        if (!subscriptionComparisonData.length) {
+          return (
+            <div className="flex h-72 items-center justify-center rounded-lg border bg-muted/20 p-4 text-sm text-muted-foreground">
+              No subscription insights available for this month.
+            </div>
+          );
+        }
+
+        return (
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="h-72 w-full rounded-lg border bg-muted/20 p-4">
+              <p className="mb-2 text-sm font-medium text-muted-foreground">Subscriptions by plan (MoM)</p>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={subscriptionComparisonData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="plan" />
+                  <YAxis tickFormatter={(value: number) => numberFormatter.format(value)} width={60} />
+                  <Tooltip formatter={(value: number) => numberFormatter.format(value)} />
+                  <Legend />
+                  <Bar
+                    dataKey="currentSubscriptions"
+                    name={selectedMonth?.label ?? "Current"}
+                    fill="#0ea5e9"
+                  />
+                  {comparisonReports?.subscriptions?.length ? (
+                    <Bar
+                      dataKey="previousSubscriptions"
+                      name={comparisonMetadata?.label ?? "Previous"}
+                      fill="#7c3aed"
+                    />
+                  ) : null}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="h-72 w-full rounded-lg border bg-muted/20 p-4">
+              <p className="mb-2 text-sm font-medium text-muted-foreground">Subscription revenue (MoM)</p>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={subscriptionComparisonData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="plan" />
+                  <YAxis tickFormatter={(value: number) => formatAxisCurrency(value)} width={80} />
+                  <Tooltip formatter={(value: number) => currencyFormatter.format(value)} />
+                  <Legend />
+                  <Bar dataKey="currentRevenue" name={selectedMonth?.label ?? "Current"} fill="#22c55e" />
+                  {comparisonReports?.subscriptions?.length ? (
+                    <Bar
+                      dataKey="previousRevenue"
+                      name={comparisonMetadata?.label ?? "Previous"}
+                      fill="#f97316"
+                    />
+                  ) : null}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        );
+      }
 
       default:
-        return null;
+        return (
+          <div className="flex h-72 items-center justify-center rounded-lg border bg-muted/20 p-4 text-sm text-muted-foreground">
+            No data available.
+          </div>
+        );
     }
   };
 
@@ -769,10 +1271,8 @@ export default function ReportsPage() {
 
                 {hasDataForActiveTab ? (
                   <>
+                    {renderCharts()}
                     <div className="overflow-x-auto">{renderTable()}</div>
-                    <div className="h-72 w-full rounded-lg border bg-muted/20 p-4">
-                      {renderChart()}
-                    </div>
                   </>
                 ) : (
                   <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">

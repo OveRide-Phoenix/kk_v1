@@ -776,12 +776,12 @@ def delete_role(role_id: int, user = Depends(admin_required)):
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
-        cursor.execute("SELECT role_id, is_system FROM roles WHERE role_id=%s", (role_id,))
+        cursor.execute("SELECT role_id, code, is_system FROM roles WHERE role_id=%s", (role_id,))
         role = cursor.fetchone()
         if not role:
             raise HTTPException(status_code=404, detail="Role not found")
-        if role["is_system"]:
-            raise HTTPException(status_code=400, detail="System roles cannot be deleted")
+        if role["is_system"] or role["code"] in {ADMIN_ROLE_CODE, DEVELOPER_ROLE_CODE}:
+            raise HTTPException(status_code=400, detail="Protected roles cannot be deleted")
 
         usage = role_usage_counts(db)
         if usage.get(role_id, 0) > 0:

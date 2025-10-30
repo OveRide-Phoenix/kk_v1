@@ -46,21 +46,6 @@ export default function CustomerGuard({ children }: { children: React.ReactNode 
           const me = await response.json()
           if (cancelled) return
           setUser(me)
-          const isAdmin = Array.isArray(me.role_codes) ? me.role_codes.includes("admin") : me.role === "admin"
-          if (isAdmin) {
-            logout()
-            router.replace("/")
-            return
-          }
-        } else {
-          const isAdminUser = Array.isArray((user as any)?.role_codes)
-            ? (user as any).role_codes.includes("admin")
-            : (user as any)?.role === "admin"
-          if (isAdminUser) {
-            logout()
-            router.replace("/")
-            return
-          }
         }
       } catch (error) {
         console.error("Customer auth guard error", error)

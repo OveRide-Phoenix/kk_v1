@@ -4,7 +4,7 @@ import Image from "next/image"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { ShoppingBag, ShoppingCart, MapPin, Plus, Minus, Clock } from "lucide-react"
-import { format as formatDate } from "date-fns"
+import { format as formatDate, parseISO } from "date-fns"
 
 import CustomerNavBar from "@/components/customer-nav-bar"
 import { Button } from "@/components/ui/button"
@@ -88,12 +88,23 @@ const MEALS: MealType[] = ["breakfast", "lunch", "dinner", "condiments"]
 
 const PLACEHOLDER_IMAGE = "/images/menu/idli-sambar.jpg"
 
+const normalizeQty = (value: unknown): number => {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed <= 0) return 0
+  return Math.floor(parsed)
+}
+
 export default function NewOrderPage() {
   const router = useRouter()
   const user = useAuthStore((state) => state.user)
   const setUser = useAuthStore((state) => state.setUser)
+  const [hydrated, setHydrated] = useState(false)
 
   const orderDate = useMemo(() => formatDate(new Date(), "yyyy-MM-dd"), [])
+  const orderingForLabel = useMemo(
+    () => (hydrated ? formatDate(parseISO(orderDate), "do MMMM") : ""),
+    [hydrated, orderDate]
+  )
 
   const [menuByMeal, setMenuByMeal] = useState<Record<MealType, MenuItem[]>>({
     breakfast: [],
@@ -245,6 +256,7 @@ export default function NewOrderPage() {
   }, [])
 
   useEffect(() => {
+    if (!hydrated) return
     const customerId = user?.customer_id
     if (!customerId) return
 
@@ -267,7 +279,7 @@ export default function NewOrderPage() {
     }
 
     fetchAddresses()
-  }, [user])
+  }, [hydrated, user])
 
   useEffect(() => {
     if (!addresses.length) return
@@ -335,7 +347,7 @@ export default function NewOrderPage() {
               item_name: item.item_name ?? item.name ?? "Item",
               meal,
               rate: item.rate ?? item.price ?? 0,
-              available_qty: item.available_qty ?? 0,
+              available_qty: normalizeQty(item.available_qty),
               description: item.description ?? "",
               picture_url: item.picture_url ?? null,
             }))
@@ -389,12 +401,15 @@ export default function NewOrderPage() {
   }, [cartSelection, orderDate, selectedAddressId, addresses, storedCartLoaded])
 
   const setQuantityForItem = (menuItem: MenuItem, value: number) => {
+    const limit = menuItem.available_qty
+    const desired = Math.floor(value)
+    const clamped = Math.max(0, Math.min(desired, limit))
     setQuantities((prev) => {
       const next = { ...prev }
-      if (value <= 0) {
+      if (clamped <= 0) {
         delete next[menuItem.menu_item_id]
       } else {
-        next[menuItem.menu_item_id] = value
+        next[menuItem.menu_item_id] = clamped
       }
       return next
     })
@@ -487,6 +502,11 @@ export default function NewOrderPage() {
             <div className="flex items-center gap-2 text-sm text-[#8d6e63]">
               <Clock className="h-4 w-4" />
               <span>Order Date: {formatDate(new Date(orderDate), "PPP")}</span>
+              {orderingForLabel && (
+                <span className="ml-3 font-semibold text-[#463028]">
+                  Ordering for: {orderingForLabel}
+                </span>
+              )}
             </div>
           </section>
 
@@ -718,3 +738,6 @@ function createMenuItemMap(menuByMeal: Record<MealType, MenuItem[]>) {
   })
   return map
 }
+  useEffect(() => {
+    setHydrated(true)
+  }, [])

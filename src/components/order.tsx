@@ -99,6 +99,11 @@ export default function CustomerDailyMenu({
   const formatISODate = (d: Date) => formatDate(d, "yyyy-MM-dd");
   const inr = (n: number) => `₹${n.toFixed(2)}`;
   const fmtBtnDate = (d: Date) => formatDate(d, "EEE, MMM d"); // e.g., Tue, Oct 8
+  const normalizeQty = (value: unknown): number => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+    return Math.floor(parsed);
+  };
 
   // Default: before 6 PM => today; else tomorrow
   useEffect(() => {
@@ -138,6 +143,8 @@ export default function CustomerDailyMenu({
             // ✅ keep picture_url if backend returns it
             nextItems[meal] = (data.items ?? []).map((it: any) => ({
               ...it,
+              planned_qty: normalizeQty(it.planned_qty),
+              available_qty: normalizeQty(it.available_qty),
               picture_url: it.picture_url ?? null,
             }));
             nextReleased[meal] = data.is_released ?? false;
@@ -201,15 +208,21 @@ export default function CustomerDailyMenu({
   const qtyInCart = (meal: MealType, item_id: number) =>
     cart.find((l) => l.meal === meal && l.item_id === item_id)?.qty ?? 0;
 
+  const getLimit = (item: MenuItem) => Math.max(0, Number(item.available_qty ?? 0));
+
   const canAdd = (meal: MealType, item: MenuItem) => {
+    const limit = getLimit(item);
+    if (limit <= 0) return false;
     const line = cart.find(
       (l) => l.meal === meal && l.item_id === item.item_id
     );
     const already = line?.qty ?? 0;
-    return already < item.available_qty;
+    return already < limit;
   };
 
   const addOne = (meal: MealType, item: MenuItem) => {
+    const limit = getLimit(item);
+    if (limit <= 0) return;
     if (!canAdd(meal, item)) return;
     setCart((prev) => {
       const i = prev.findIndex(
@@ -223,12 +236,13 @@ export default function CustomerDailyMenu({
             item_id: item.item_id,
             menu_item_id: item.menu_item_id,
             item_name: item.item_name,
-            qty: 1,
+            qty: Math.min(1, limit),
             rate: item.rate,
           },
         ];
       const copy = [...prev];
-      copy[i] = { ...copy[i], qty: copy[i].qty + 1 };
+      const nextQty = Math.min(copy[i].qty + 1, limit);
+      copy[i] = { ...copy[i], qty: nextQty };
       return copy;
     });
   };
@@ -249,6 +263,7 @@ export default function CustomerDailyMenu({
 
   const todayD = today();
   const tomorrowD = tomorrow();
+  const orderingLabel = confirmedDate ? formatDate(confirmedDate, "do MMMM") : null;
 
   return (
     <div className="relative w-full max-w-6xl p-4 sm:p-6 pb-40">
@@ -290,9 +305,14 @@ export default function CustomerDailyMenu({
         <span className="text-sm text-muted-foreground">
           Selected Date:&nbsp;
           <span className="font-medium">
-            {confirmedDate ? formatDate(confirmedDate, "EEE, MMM d") : "—"}
+            {confirmedDate ? fmtBtnDate(confirmedDate) : "—"}
           </span>
         </span>
+        {orderingLabel && (
+          <span className="text-sm font-semibold text-muted-foreground/80">
+            Ordering for: {orderingLabel}
+          </span>
+        )}
       </div>
 
       {/* Sections */}
@@ -325,7 +345,9 @@ export default function CustomerDailyMenu({
                 <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                   {visibleItems.map((it) => {
                     const qty = qtyInCart(meal, it.item_id);
-                    const soldOut = it.available_qty <= 0;
+                    const limit = getLimit(it);
+                    const soldOut = limit <= 0;
+                    const reachedLimit = limit > 0 && qty >= limit;
                     return (
                       <Card
                         key={`${meal}-${it.item_id}`}
@@ -420,13 +442,19 @@ export default function CustomerDailyMenu({
                                   variant="default"
                                   className="h-8 w-8"
                                   onClick={() => addOne(meal, it)}
-                                  disabled={!canAdd(meal, it)}
+                                  disabled={soldOut || reachedLimit}
                                   aria-label="increase"
                                 >
                                   <Plus className="h-4 w-4" />
                                 </Button>
                               </div>
                             )}
+                            {!soldOut && reachedLimit && (
+                              <span className="absolute top-3 right-3 text-xs font-medium text-muted-foreground">
+                                Max {limit}
+                              </span>
+                            )}
+                            {/* remaining indicator removed per request */}
                           </div>
                         </CardContent>
                       </Card>

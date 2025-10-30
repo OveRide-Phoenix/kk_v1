@@ -11,20 +11,17 @@ THEN MOVE Extension notes to here..
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- [ ] customer orders are showing same as planned qty in kitchen production
 - [ ] automatic dashboard update based on requirement of that time
 
-
-when any role change happens give a toast or a dialog or something asking the member to please log out and log back in to see the changes.. also in the team members page, make the customer ID a drop down that shows customer id - name of the customers.. also combine both the pages, roles and team memberes - create role and add new team member can be done in a dialog window with the same fields. but lets have all of it in one page with only two tables one below the other, the current team members table should be first..
-
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------in the my account page, the personal details make it a little darker, it looks wrong now...let it be a little greyed out to show its not editable but at the same time show that names and stuff correctly
-0. Enter key in login page logins in
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------0. Enter key in login page logs in
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------home page menu is showing menu if not released also
 
-0.0.1. An API that deletes all the tables and then recreates all the tables and also inserts data into tables like items, categories and stuff..
 
-‼️‼️‼️‼️‼️‼️ the + - in the menu's (ordertest and in the home page, shuold only allow adding available number of items, so if idli has only 48 items left (available) then i shoul dbe allowed to select only 48 idli's)
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------‼️‼️‼️‼️‼️‼️ the + - in the menu's (ordertest and in the home page, shuold only allow adding available number of items, so if idli has only 48 items left (available) then i shoul dbe allowed to select only 48 idli's)
 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------0.1 i am going to introduce multiple roles based access, for example, admin who is a developer, admin who is just menu setter and stuff, so make changes accordingly such that we are always checkign roles from an Array, and for now i want you to add another role called developer..in the schema let us change it entirely, no need of an admin_users table, instead we will have a roles table and then a roles field in the customer table so that roles field is an array that contains all the roles of that user, so if admin is 1 and developer is 2, then the user will have roles field [1,2]....and similarly lets add a Roles page to the side bar which allows us to manage these roles. similartly in login and stuff, or ANYWHERE in the codebase where we were checking and depending on admin_users table, let us start using this...and also i want you to handle everywhere that we check for admin or any role, right now we are using local storage, so we will continue doing that, make sure you check all places, then create a team members page which allows us to handle RBA
 
 
-1.0 - reports make it a line graph dont show teo data pointsi n one graph, show multiple graphs, and put the geaph above the table..
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------1.0 - reports make it a line graph dont show two data points in one graph, show multiple graphs, and put the graph above the table..
 
 1.1. xxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx x Frosted glass/Liquid glass components in some places..? I think frosted glass is better - with glass reaper like shaders in the back in brown theme
 
@@ -838,7 +835,43 @@ Steps to integrate
  3. Use lucide-react icons for svgs or logos if component requires them
 
 
-REMOVE DOWN
+10. An API that deletes all the tables and then recreates all the tables and also inserts data into tables like items, categories and stuff..or just integrate sqlalchecmy and alembic??
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+CHECK & REMOVE DOWN
 10. use this for the breakfast lunch dinner condiments selector in the today's menu sections, but keep it translucent, dont make it fully transparent:
 You are given a task to integrate an existing React component in the codebase
 

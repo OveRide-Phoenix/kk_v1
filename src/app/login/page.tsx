@@ -157,16 +157,59 @@ export default function LoginPage() {
 
         const resolvedUser = user ?? data.user ?? null;
 
-        if (resolvedUser) {
-          setUser(resolvedUser);
+        const baseUser = (resolvedUser ?? data.user ?? null) as
+          | (Record<string, unknown> & {
+              roles?: Array<number | string>;
+              role_codes?: Array<string | number>;
+              role_details?: Array<{ role_id: number; code: string }>;
+            })
+          | null;
+
+        const rawRoles = (baseUser?.roles ?? []) as Array<number | string>;
+        const rawRoleCodes = (baseUser?.role_codes ?? data.role_codes ?? []) as Array<string | number>;
+        const rawRoleDetails = (baseUser?.role_details ?? data.role_details ?? []) as Array<
+          { role_id: number; code: string }
+        >;
+
+        const adminRoleIds = rawRoleDetails
+          .filter((detail) => detail.code === "admin")
+          .map((detail) => Number(detail.role_id))
+          .filter((value) => Number.isFinite(value));
+
+        const normaliseIds = (values: Array<string | number>) =>
+          values
+            .map((value) => Number(value))
+            .filter((value) => Number.isFinite(value))
+            .map((value) => Math.trunc(value));
+
+        const normaliseCodes = (values: Array<string | number>) =>
+          values.map((value) => (typeof value === "string" ? value : String(value)));
+
+        const allRoleIds = normaliseIds(rawRoles);
+        const allRoleCodes = normaliseCodes(rawRoleCodes);
+
+        const isAdminLoginRequested = mode === "admin";
+        const filteredRoleIds = isAdminLoginRequested
+          ? allRoleIds
+          : allRoleIds.filter((id) => !adminRoleIds.includes(id));
+        const filteredRoleCodes = isAdminLoginRequested
+          ? allRoleCodes
+          : allRoleCodes.filter((code) => code !== "admin");
+
+        if (baseUser) {
+          const adjustedUser = isAdminLoginRequested
+            ? baseUser
+            : {
+                ...baseUser,
+                roles: filteredRoleIds,
+                role_codes: filteredRoleCodes,
+              };
+          setUser(adjustedUser);
         } else {
-          const roles = Array.isArray(data.user?.roles) ? data.user.roles : [];
-          const roleCodes = Array.isArray(data.role_codes) ? data.role_codes : [];
-          setRoleState(roles, roleCodes);
+          setRoleState(filteredRoleIds, filteredRoleCodes);
         }
 
-        const roleCodes = (resolvedUser?.role_codes ?? data.role_codes ?? []) as string[];
-        const destination = roleCodes.includes("admin") ? "/admin" : "/customer/home";
+        const destination = mode === "admin" ? "/admin" : "/customer/home";
         router.push(destination);
       } else {
         const errorDetail = data.detail || data.msg || "Login failed. Try again.";
@@ -185,127 +228,144 @@ export default function LoginPage() {
     }
   };
 
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (canLoginAsAdmin) {
+      void handleLogin("admin");
+      return;
+    }
+    void handleLogin("customer");
+  };
+
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <CustomerNavBar unauthLinks={[{ href: "/register", label: "Register" }]} />
 
       <main className="flex flex-1 items-center justify-center px-4 pb-12 pt-24">
-        <Card className="w-full max-w-md border-primary/20">
-          <CardHeader>
+        <form
+          className="w-full max-w-md"
+          onSubmit={handleSubmit}
+        >
+          <Card className="border-primary/20">
+            <CardHeader>
             <CardTitle className="text-2xl font-bold">Welcome back</CardTitle>
             <CardDescription>
               Enter your phone number and city to login or register
             </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <Label htmlFor="phone">Phone Number</Label>
-              <Input
-                id="phone"
-                type="tel"
-                placeholder="+91"
-                value={phoneNumber}
-                onChange={handlePhoneChange}
-                required
-              />
-            </div>
-            <div className="space-y-2 pt-4">
-              <Label htmlFor="city">City</Label>
-              <Input id="city" type="text" value={city} readOnly />
-            </div>
-              {canLoginAsAdmin && (
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <Label htmlFor="phone">Phone Number</Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  placeholder="+91"
+                  value={phoneNumber}
+                  onChange={handlePhoneChange}
+                  required
+                />
+              </div>
               <div className="space-y-2 pt-4">
-                <Label htmlFor="adminPassword">Admin Password</Label>
-                <div className="relative">
-                  <Input
-                    id="adminPassword"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Enter admin password"
-                    value={adminPassword}
-                    onChange={(e) => setAdminPassword(e.target.value)}
-                  />
+                <Label htmlFor="city">City</Label>
+                <Input id="city" type="text" value={city} readOnly />
+              </div>
+              {canLoginAsAdmin && (
+                <div className="space-y-2 pt-4">
+                  <Label htmlFor="adminPassword">Admin Password</Label>
+                  <div className="relative">
+                    <Input
+                      id="adminPassword"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Enter admin password"
+                      value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? (
+                        <Eye className="h-4 w-4" />
+                      ) : (
+                        <EyeOff className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
+              <div className="flex items-center space-x-2 pt-4">
+                <input
+                  type="checkbox"
+                  id="rememberMe"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="rounded border-gray-300"
+                  title="Remember me"
+                />
+                <Label htmlFor="rememberMe" className="text-sm">
+                  Remember me
+                </Label>
+              </div>
+            </CardContent>
+            <CardFooter className="flex flex-col space-y-2">
+              <div className="flex w-full flex-col gap-2 sm:flex-row">
+                <Button
+                  type="button"
+                  className="w-full bg-primary"
+                  onClick={() => handleLogin("customer")}
+                  disabled={!phoneNumber || isLoading}
+                >
+                  {isLoading && loginAttempt === "customer" ? (
+                    <div className="flex items-center gap-2">
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      <span>Logging in...</span>
+                    </div>
+                  ) : (
+                    canLoginAsAdmin ? "Login as Customer" : "Login"
+                  )}
+                </Button>
+                {canLoginAsAdmin && (
                   <Button
                     type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                    onClick={() => setShowPassword(!showPassword)}
+                    className="w-full bg-[#463028] text-white hover:bg-[#342118]"
+                    onClick={() => handleLogin("admin")}
+                    disabled={!canLoginAsAdmin || isLoading}
                   >
-                    {showPassword ? (
-                      <Eye className="h-4 w-4" />
+                    {isLoading && loginAttempt === "admin" ? (
+                      <div className="flex items-center gap-2">
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        <span>Logging in...</span>
+                      </div>
                     ) : (
-                      <EyeOff className="h-4 w-4" />
+                      "Login as Admin"
                     )}
                   </Button>
-                </div>
-              </div>
-            )}
-            {/* Add Remember Me checkbox before error message */}
-            <div className="flex items-center space-x-2 pt-4">
-              <input
-                type="checkbox"
-                id="rememberMe"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="rounded border-gray-300"
-                title="Remember me"
-              />
-              <Label htmlFor="rememberMe" className="text-sm">
-                Remember me
-              </Label>
-            </div>
-          </CardContent>
-          <CardFooter className="flex flex-col space-y-2">
-            <div className="flex w-full flex-col gap-2 sm:flex-row">
-              <Button
-                className="w-full bg-primary"
-                onClick={() => handleLogin("customer")}
-                disabled={!phoneNumber || isLoading}
-              >
-                {isLoading && loginAttempt === "customer" ? (
-                  <div className="flex items-center gap-2">
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                    <span>Logging in...</span>
-                  </div>
-                ) : (
-                  canLoginAsAdmin ? "Login as Customer" : "Login"
                 )}
+              </div>
+              <Button
+                type="button"
+                className={`w-full transition-all ${
+                  showRegisterHighlight
+                    ? "shadow-lg shadow-red-500/25 ring-2 ring-red-400"
+                    : ""
+                }`}
+                variant="outline"
+                onClick={() => router.push("/register")}
+              >
+                Register
               </Button>
-          {canLoginAsAdmin && (
-            <Button
-              className="w-full bg-[#463028] text-white hover:bg-[#342118]"
-              onClick={() => handleLogin("admin")}
-              disabled={!canLoginAsAdmin || isLoading}
-            >
-              {isLoading && loginAttempt === "admin" ? (
-                <div className="flex items-center gap-2">
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  <span>Logging in...</span>
-                </div>
-              ) : (
-                "Login as Admin"
+              {errorMessage && (
+                <p className="text-red-600 text-sm text-center mt-6">
+                  {errorMessage}
+                </p>
               )}
-            </Button>
-          )}
-        </div>
-            <Button
-              className={`w-full transition-all ${
-                showRegisterHighlight
-                  ? "shadow-lg shadow-red-500/25 ring-2 ring-red-400"
-                  : ""
-              }`}
-              variant="outline"
-              onClick={() => router.push("/register")}
-            >
-              Register
-            </Button>
-            {errorMessage && (
-              <p className="text-red-600 text-sm text-center mt-6">
-                {errorMessage}
-              </p>
-            )}
-          </CardFooter>
-        </Card>
+              <button type="submit" className="hidden" aria-hidden="true" />
+            </CardFooter>
+          </Card>
+        </form>
       </main>
     </div>
   );
