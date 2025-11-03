@@ -165,6 +165,9 @@ class Item(Base):
     quantity_portion = Column(Integer, nullable=True)
     buffer_percentage = Column(DECIMAL(5, 2), nullable=True)
     picture_url = Column(String(255), nullable=True)
+    max_qty_breakfast = Column(Integer, nullable=True)
+    max_qty_lunch = Column(Integer, nullable=True)
+    max_qty_dinner = Column(Integer, nullable=True)
 
     breakfast_price = Column(DECIMAL(10, 2), nullable=True)
     lunch_price = Column(DECIMAL(10, 2), nullable=True)
@@ -208,7 +211,7 @@ class MenuItem(Base):
     item_id = Column(Integer, ForeignKey("items.item_id"), nullable=False)
     category_id = Column(Integer, ForeignKey("categories.category_id"), nullable=True)
 
-    planned_qty = Column(Integer, nullable=True)
+    max_qty = Column(Integer, nullable=True)
     available_qty = Column(Integer, nullable=True)
     buffer_qty = Column(DECIMAL(10, 2), nullable=True, default=0)
     final_qty = Column(DECIMAL(10, 2), nullable=True, default=0)

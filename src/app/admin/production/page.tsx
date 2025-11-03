@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { addDays, format, isSameDay } from "date-fns";
 import type {
@@ -64,10 +63,12 @@ type MenuApiItem = {
 
   item_name?: string;
   name?: string;
-  planned_qty?: number;
+  max_qty?: number;
+  planned_qty?: number; // legacy fallback support
   available_qty?: number;
   quantity?: number;
   planned_quantity?: number;
+  item_max_qty?: number;
   buffer_qty: number;
   final_qty: number;
   uom?: string;
@@ -276,7 +277,7 @@ function buildPrintableMarkup(
       const cards = planByCategory[category]
         .map((item) => {
           const detailRows = [
-            `<div><span class="label">Planned Qty</span><span class="value">${escapeHtml(formatQuantity(item.planned_quantity))}</span></div>`,
+            `<div><span class="label">Max Qty</span><span class="value">${escapeHtml(formatQuantity(item.planned_quantity))}</span></div>`,
             `<div><span class="label">Customer orders</span><span class="value">${escapeHtml(formatQuantity(item.customer_orders))}</span></div>`,
             `<div><span class="label">Buffer</span><span class="value">${escapeHtml(formatQuantity(item.buffer_quantity))}</span></div>`,
           ].join("\n    ");
@@ -536,7 +537,7 @@ function PlanItemCard({
       </div>
       <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
         <div>
-          <p className="text-muted-foreground">Planned Qty</p>
+          <p className="text-muted-foreground">Max Qty</p>
           <p className="font-medium text-gray-900">
             {formatQuantity(item.planned_quantity)}
           </p>
@@ -649,14 +650,16 @@ async function fetchPublishedMenu(
             item.quantity_uom ??
             "Nos";
 
-          const plannedRaw =
-            item.planned_qty ??
+          const maxRaw =
+            item.max_qty ??
+            item.item_max_qty ??
+            item.planned_qty ?? // legacy fallback
             item.planned_quantity ??
             item.final_qty ??
             item.final_quantity ??
             item.quantity ??
             0;
-          const persistedPlan = Math.max(Number(plannedRaw) || 0, 0);
+          const resolvedMax = Math.max(Number(maxRaw) || 0, 0);
 
           const bufferPercentage = Number(item.buffer_percentage ?? 0) || 0;
           const storedBufferRaw =
@@ -671,7 +674,7 @@ async function fetchPublishedMenu(
 
           if (!planGenerated && bufferQuantity === 0 && bufferPercentage > 0) {
             bufferQuantity = Math.max(
-              Math.round((persistedPlan * bufferPercentage) / 100),
+              Math.round((resolvedMax * bufferPercentage) / 100),
               0,
             );
           }
@@ -682,11 +685,11 @@ async function fetchPublishedMenu(
 
           let finalQuantity = Number(storedFinalRaw);
           if (!Number.isFinite(finalQuantity) || finalQuantity <= 0) {
-            finalQuantity = persistedPlan + bufferQuantity;
+            finalQuantity = resolvedMax + bufferQuantity;
           }
 
           if (!planGenerated) {
-            finalQuantity = Math.max(finalQuantity, persistedPlan + bufferQuantity);
+            finalQuantity = Math.max(finalQuantity, resolvedMax + bufferQuantity);
           }
 
           const availableRaw =
@@ -707,7 +710,7 @@ async function fetchPublishedMenu(
             item_id: itemId ?? undefined,
             item_name: itemName,
             unit,
-            planned_quantity: Number(persistedPlan.toFixed(2)),
+            planned_quantity: Number(resolvedMax.toFixed(2)),
             available_quantity: Number(availableQuantity.toFixed(2)),
             buffer_quantity: bufferQuantity,
             final_quantity: Number(finalQuantity.toFixed(2)),
@@ -1104,13 +1107,13 @@ useEffect(() => {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(errorText || "Failed to update planned quantities");
+        throw new Error(errorText || "Failed to update max quantities");
       }
 
       const data = await response.json();
       const updatedItems = (data?.updated_items ?? []) as Array<{
         item_name: string;
-        new_planned_qty: number;
+        new_max_qty: number;
       }>;
 
       if (!updatedItems.length) {
@@ -1125,7 +1128,7 @@ useEffect(() => {
             (entry) => entry.item_name.toLowerCase() === item.item_name.toLowerCase(),
           );
           if (!updated) return item;
-          const newFinalRaw = Number(updated.new_planned_qty);
+          const newFinalRaw = Number(updated.new_max_qty);
           const finalQuantity = Number.isFinite(newFinalRaw)
             ? Number(newFinalRaw.toFixed(2))
             : Number((item.planned_quantity + item.buffer_quantity).toFixed(2));
@@ -1155,7 +1158,7 @@ useEffect(() => {
       const message =
         error instanceof Error
           ? error.message
-          : "Failed to update planned quantities";
+          : "Failed to update max quantities";
       setLastMinuteError(message);
     } finally {
       setIsApplyingLastMinute(false);
@@ -1370,7 +1373,7 @@ useEffect(() => {
                   onClick={handleOpenLastMinuteDialog}
                   disabled={!isCurrentCategoryEditable}
                 >
-                  Adjust Planned Qty
+                  Adjust Max Qty
                 </Button>
               )}
               {planGenerated && (
@@ -1398,12 +1401,29 @@ useEffect(() => {
           ) : !currentMenuAvailable ? (
             <div className="w-full px-4 py-6 text-sm text-left text-muted-foreground">
               Menu not released for {selectedCategory.toLowerCase()} on {selectedDateLabel}.{" "}
-              <Link
-                href="/admin/dailymenusetup"
-                className="font-medium text-primary hover:underline"
+              <Button
+                variant="link"
+                className="p-0 h-auto font-medium text-primary"
+                onClick={() => {
+                  if (typeof window === "undefined") return;
+                  if (selectedDateISO) {
+                    try {
+                      window.localStorage.setItem(
+                        "dailymenusetup:prefill",
+                        JSON.stringify({
+                          date: selectedDateISO,
+                          bld_type: selectedCategory,
+                        }),
+                      );
+                    } catch (error) {
+                      console.error("Failed to persist menu prefill", error);
+                    }
+                  }
+                  window.location.href = "/admin/dailymenusetup";
+                }}
               >
                 Please release the menu
-              </Link>
+              </Button>
               .
             </div>
           ) : currentItems.length === 0 ? (
@@ -1521,12 +1541,12 @@ useEffect(() => {
         <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>
-              Adjust Planned Quantities · {selectedCategory}
+              Adjust Max Quantities · {selectedCategory}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Increase planned quantities for items to cover last-minute orders. Buffer values remain unchanged.
+              Increase max quantities for items to cover last-minute orders. Buffer values remain unchanged.
             </p>
             {currentItems.length === 0 ? (
               <p className="text-sm text-muted-foreground">
@@ -1542,7 +1562,7 @@ useEffect(() => {
                     <div>
                       <p className="font-medium text-foreground">{item.item_name}</p>
                       <p className="text-xs text-muted-foreground">
-                        Planned: {formatQuantity(item.planned_quantity)} {item.unit}
+                        Max: {formatQuantity(item.planned_quantity)} {item.unit}
                       </p>
                     </div>
                     <Input

@@ -113,6 +113,28 @@ export default function ProductDetails({ product, open, onOpenChange }: ProductD
                   <p className="mt-1">{product.buffer_percentage}%</p>
                 </div>
               </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500">Max Qty · Breakfast</h3>
+                  <p className="mt-1">{product.max_qty_breakfast ?? "—"}</p>
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500">Max Qty · Lunch</h3>
+                  <p className="mt-1">{product.max_qty_lunch ?? "—"}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500">Max Qty · Dinner</h3>
+                  <p className="mt-1">{product.max_qty_dinner ?? "—"}</p>
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500">Net Price</h3>
+                  <p className="mt-1">{product.net_price}</p>
+                </div>
+              </div>
             </div>
           </div>
         </CardContent>

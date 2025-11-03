@@ -49,11 +49,12 @@ interface MenuItem {
   item_id: number;
   item_name: string;
   category_id: number | null;
-  planned_qty: number;
+  max_qty: number;
   available_qty: number;
   rate: number;
   is_default: boolean;
   sort_order: number;
+  item_max_qty?: number | null;
 }
 
 export function DailyMenuSetup() {
@@ -101,6 +102,9 @@ export function DailyMenuSetup() {
       factor: number | null;
       quantity_portion: number | null;
       buffer_percentage: number | null;
+      max_qty_breakfast: number | null;
+      max_qty_lunch: number | null;
+      max_qty_dinner: number | null;
       picture_url: string | null;
       breakfast_price: number | null;
       lunch_price: number | null;
@@ -115,7 +119,7 @@ export function DailyMenuSetup() {
     }[]
   >([]);
   const [selectedItems, setSelectedItems] = useState<number[]>([]);
-  const [currentSection, setCurrentSection] = useState<string>("Breakfast");
+  const [currentSection, setCurrentSection] = useState<string>("breakfast");
 
   // Edit / view states
   const [editIndexByMeal, setEditIndexByMeal] = useState<
@@ -164,6 +168,14 @@ export function DailyMenuSetup() {
   const formatISODate = (d: Date) =>
     formatDate(normalizeToMidnight(d), "yyyy-MM-dd");
 
+  const parseMaxField = (value: unknown): number | null => {
+    if (value === null || value === undefined) return null;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return null;
+    const floored = Math.floor(parsed);
+    return floored < 0 ? 0 : floored;
+  };
+
   useEffect(() => {
     if (!calendarOpen) return;
     const base = confirmedDate
@@ -171,6 +183,39 @@ export function DailyMenuSetup() {
       : normalizeToMidnight(new Date());
     setDraftDate(base);
   }, [calendarOpen, confirmedDate]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const storageKey = "dailymenusetup:prefill";
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) return;
+    window.localStorage.removeItem(storageKey);
+    try {
+      const payload = JSON.parse(raw) as {
+        date?: string;
+        bld_type?: string;
+      };
+
+      if (payload?.date) {
+        const parsed = new Date(payload.date);
+        if (!Number.isNaN(parsed.getTime())) {
+          const normalized = normalizeToMidnight(parsed);
+          setDraftDate(new Date(normalized));
+          setConfirmedDate(new Date(normalized));
+        }
+      }
+
+      if (payload?.bld_type) {
+        const normalizedMeal = payload.bld_type.toLowerCase();
+        const validMeals = ["breakfast", "lunch", "dinner", "condiments"];
+        if (validMeals.includes(normalizedMeal)) {
+          setCurrentSection(normalizedMeal);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to apply daily menu prefill", error);
+    }
+  }, []);
 
   // ───────────────────────────────────────────────────────────────────────
   // 1) Fetch for all meal sections when date is confirmed
@@ -207,17 +252,24 @@ export function DailyMenuSetup() {
       const data = await res.json();
       setMenuIdByMeal((prev) => ({ ...prev, [meal]: data.menu_id }));
       setIsReleasedByMeal((prev) => ({ ...prev, [meal]: data.is_released }));
-      const mapped = data.items.map((it: any) => ({
-        menu_item_id: it.menu_item_id,
-        item_id: it.item_id,
-        item_name: it.item_name,
-        category_id: it.category_id,
-        planned_qty: it.planned_qty,
-        available_qty: it.available_qty,
-        rate: it.rate,
-        is_default: it.is_default,
-        sort_order: it.sort_order,
-      }));
+      const mapped = data.items.map((it: any) => {
+        const persistedMax = parseMaxField(it.max_qty);
+        const catalogMax = parseMaxField(it.item_max_qty);
+        const resolvedMax = persistedMax ?? catalogMax ?? 0;
+        const availableQty = Number(it.available_qty);
+        return {
+          menu_item_id: it.menu_item_id,
+          item_id: it.item_id,
+          item_name: it.item_name,
+          category_id: it.category_id,
+          max_qty: resolvedMax,
+          available_qty: Number.isFinite(availableQty) ? availableQty : resolvedMax,
+          rate: Number(it.rate ?? 0),
+          is_default: Boolean(it.is_default),
+          sort_order: it.sort_order,
+          item_max_qty: catalogMax,
+        };
+      });
       setItemsByMeal((prev) => ({ ...prev, [meal]: mapped }));
     } catch (err) {
       console.error(err);
@@ -241,7 +293,16 @@ export function DailyMenuSetup() {
           throw new Error(`Failed to load items for ${currentSection}`);
         return res.json();
       })
-      .then((data) => setAvailableItems(data))
+      .then((data) =>
+        setAvailableItems(
+          data.map((item: any) => ({
+            ...item,
+            max_qty_breakfast: parseMaxField(item.max_qty_breakfast),
+            max_qty_lunch: parseMaxField(item.max_qty_lunch),
+            max_qty_dinner: parseMaxField(item.max_qty_dinner),
+          })),
+        )
+      )
       .catch((err) => {
         console.error(err);
         setAvailableItems([]);
@@ -274,15 +335,36 @@ export function DailyMenuSetup() {
 
     const newRows: MenuItem[] = uniqueSelections.map((id, index) => {
       const found = availableItems.find((i) => i.item_id === id)!;
+      const catalogMax = (() => {
+        switch (currentSection) {
+          case "breakfast":
+            return found.max_qty_breakfast;
+          case "lunch":
+            return found.max_qty_lunch;
+          case "dinner":
+          case "condiments":
+            return found.max_qty_dinner;
+          default:
+            return null;
+        }
+      })();
+
+      const resolvedMax = (() => {
+        if (catalogMax == null) return 1;
+        const numeric = Number(catalogMax);
+        if (!Number.isFinite(numeric) || numeric <= 0) return 1;
+        return Math.floor(numeric);
+      })();
       return {
         item_id: found.item_id,
         item_name: found.name,
         category_id: found.category_id,
-        planned_qty: 1,
-        available_qty: 1,
-        rate: found.net_price ?? 0,
+        max_qty: resolvedMax,
+        available_qty: resolvedMax,
+        rate: Number(found.net_price ?? 0),
         is_default: false,
         sort_order: itemsByMeal[currentSection].length + index + 1,
+        item_max_qty: catalogMax ?? null,
       };
     });
 
@@ -333,8 +415,8 @@ export function DailyMenuSetup() {
         return {
           item_id: row.item_id,
           category_id: row.category_id,
-          planned_qty: row.planned_qty,
-          available_qty: row.planned_qty, // mirror on first save
+          max_qty: row.max_qty,
+          available_qty: row.max_qty, // mirror on first save
           rate: row.rate,
           is_default: row.is_default,
           sort_order: row.sort_order || idx + 1,
@@ -343,7 +425,7 @@ export function DailyMenuSetup() {
       return {
         item_id: row.item_id,
         category_id: row.category_id,
-        planned_qty: row.planned_qty,
+        max_qty: row.max_qty,
         available_qty: row.available_qty, // keep any later adjustments
         rate: row.rate,
         is_default: row.is_default,
@@ -375,17 +457,24 @@ export function DailyMenuSetup() {
       setMenuIdByMeal((prev) => ({ ...prev, [meal]: data.menu_id }));
       setIsReleasedByMeal((prev) => ({ ...prev, [meal]: data.is_released }));
 
-      const mapped = data.items.map((it: any) => ({
-        menu_item_id: it.menu_item_id,
-        item_id: it.item_id,
-        item_name: it.item_name,
-        category_id: it.category_id,
-        planned_qty: it.planned_qty,
-        available_qty: it.available_qty,
-        rate: it.rate,
-        is_default: it.is_default,
-        sort_order: it.sort_order,
-      }));
+      const mapped = data.items.map((it: any) => {
+        const persistedMax = parseMaxField(it.max_qty);
+        const catalogMax = parseMaxField(it.item_max_qty);
+        const resolvedMax = persistedMax ?? catalogMax ?? 0;
+        const availableQty = Number(it.available_qty);
+        return {
+          menu_item_id: it.menu_item_id,
+          item_id: it.item_id,
+          item_name: it.item_name,
+          category_id: it.category_id,
+          max_qty: resolvedMax,
+          available_qty: Number.isFinite(availableQty) ? availableQty : resolvedMax,
+          rate: Number(it.rate ?? 0),
+          is_default: Boolean(it.is_default),
+          sort_order: it.sort_order,
+          item_max_qty: catalogMax,
+        };
+      });
       setItemsByMeal((prev) => ({ ...prev, [meal]: mapped }));
     } catch (err) {
       console.error(err);
@@ -570,7 +659,7 @@ export function DailyMenuSetup() {
                     <TableRow>
                       <TableHead className="text-center">Sl.no</TableHead>
                       <TableHead>Item Name</TableHead>
-                      <TableHead>Planned Qty</TableHead>
+                      <TableHead>Max Qty</TableHead>
                       <TableHead>Available Qty</TableHead>
                       <TableHead>Menu Rate</TableHead>
                       <TableHead>Default</TableHead>
@@ -606,14 +695,14 @@ export function DailyMenuSetup() {
                             (row.menu_item_id == null || isRowEditing) ? (
                               // editable
                               <InputWithButton
-                                value={row.planned_qty}
+                                value={row.max_qty}
                                 onChange={(val: number) =>
-                                  handleSave(meal, index, "planned_qty", val)
+                                  handleSave(meal, index, "max_qty", val)
                                 }
                               />
                             ) : (
                               // read-only
-                              row.planned_qty
+                              row.max_qty
                             )}
                           </TableCell>
 
@@ -622,7 +711,7 @@ export function DailyMenuSetup() {
                               row.available_qty
                             ) : row.menu_item_id == null ? (
                               // first-time setup: show what will be saved
-                              row.planned_qty
+                              row.max_qty
                             ) : isReleasedByMeal[meal] ? (
                               // released: read-only
                               row.available_qty

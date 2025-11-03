@@ -3,7 +3,7 @@
 import { AutoMenuGenerator } from "@/components/developer/auto-menu-generator";
 import { AdminLayout } from "@/components/admin-layout";
 
-export default function DeveloperAutoMenuPage() {
+export default function AdminDeveloperAutoMenuPage() {
   return (
     <AdminLayout activePage="dev-auto-menu">
       <AutoMenuGenerator />

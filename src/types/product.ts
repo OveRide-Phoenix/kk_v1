@@ -35,6 +35,9 @@ export interface Product {
   factor?: number
   quantity_portion?: number
   buffer_percentage?: number
+  max_qty_breakfast?: number
+  max_qty_lunch?: number
+  max_qty_dinner?: number
   picture_url?: string
   breakfast_price?: number
   lunch_price?: number

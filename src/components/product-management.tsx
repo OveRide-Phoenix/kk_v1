@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Search, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,12 +10,90 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import ProductTable from "@/components/product-table"
 import ProductForm from "@/components/product-form"
 import DeleteConfirmationDialog from "@/components/delete-confirmation-dialog"
-import { type Product, type ComboProduct, type AddonProduct, type CategoryProduct, ProductType } from "@/types/product"
+import { type Product, type ComboProduct, type AddonProduct, type CategoryProduct } from "@/types/product"
 import { AdminLayout } from "./admin-layout"
 import ComboForm from "@/components/combo-form"
 import AddonForm from "@/components/addon-form"
+import { useToast } from "@/hooks/use-toast"
+
+const normalizeOptionalString = (value: unknown): string | null => {
+  if (value === null || value === undefined) return null
+  const str = String(value).trim()
+  return str.length ? str : null
+}
+
+const normalizeRequiredString = (value: unknown, fallback = ""): string => {
+  if (value === null || value === undefined) return fallback
+  const str = String(value).trim()
+  return str.length ? str : fallback
+}
+
+const normalizeInt = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === "") return null
+  const num = Number(value)
+  if (!Number.isFinite(num)) return null
+  return Math.max(0, Math.trunc(num))
+}
+
+const normalizeFloat = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === "") return null
+  const num = Number(value)
+  return Number.isFinite(num) ? num : null
+}
+
+const resolveItemId = (input: any): number | null => {
+  const candidates = [input?.item_id, input?.id]
+  for (const candidate of candidates) {
+    const parsed = Number(candidate)
+    if (Number.isInteger(parsed) && parsed > 0) {
+      return parsed
+    }
+  }
+  return null
+}
+
+const buildItemUpdatePayload = (product: Product): Record<string, unknown> => {
+  const payload: Record<string, unknown> = {
+    name: normalizeRequiredString(product.name),
+    description: normalizeOptionalString(product.description),
+    alias: normalizeOptionalString(product.alias),
+    category_id: normalizeInt((product as any).category_id),
+    uom: normalizeRequiredString(product.uom),
+    weight_factor: normalizeFloat(product.weight_factor),
+    weight_uom: normalizeOptionalString(product.weight_uom),
+    item_type: normalizeOptionalString(product.item_type),
+    hsn_code: normalizeOptionalString(product.hsn_code),
+    factor: normalizeFloat(product.factor),
+    quantity_portion: normalizeInt(product.quantity_portion),
+    buffer_percentage: normalizeFloat(product.buffer_percentage),
+    max_qty_breakfast: normalizeInt((product as any).max_qty_breakfast),
+    max_qty_lunch: normalizeInt((product as any).max_qty_lunch),
+    max_qty_dinner: normalizeInt((product as any).max_qty_dinner),
+    breakfast_price: normalizeFloat(product.breakfast_price),
+    lunch_price: normalizeFloat(product.lunch_price),
+    dinner_price: normalizeFloat(product.dinner_price),
+    condiments_price: normalizeFloat(product.condiments_price),
+    festival_price: normalizeFloat(product.festival_price),
+    cgst: normalizeFloat(product.cgst),
+    sgst: normalizeFloat(product.sgst),
+    igst: normalizeFloat(product.igst),
+    net_price: normalizeFloat(product.net_price),
+    is_combo: Boolean(product.is_combo),
+  }
+
+  const pictureValue = (product as any).picture_url
+  if (typeof pictureValue === "string") {
+    const trimmed = pictureValue.trim()
+    payload.picture_url = trimmed.length ? trimmed : null
+  }
+
+  return Object.fromEntries(
+    Object.entries(payload).filter(([, value]) => value !== undefined)
+  )
+}
 
 export default function ProductManagement() {
+  const { toast } = useToast()
   const [products, setProducts] = useState<Product | ComboProduct | AddonProduct | CategoryProduct[]>([])
   const [filteredProducts, setFilteredProducts] = useState<Product | ComboProduct | AddonProduct | CategoryProduct[]>([])
   const [searchQuery, setSearchQuery] = useState("")
@@ -28,45 +106,44 @@ export default function ProductManagement() {
   const [activeTab, setActiveTab] = useState("items")
 
   // Get unique groups for filter dropdown
-const uniqueGroups = Array.from(new Set((products as any[]).map((product) => product.group)))
+  const uniqueGroups = Array.from(new Set((products as any[]).map((product) => product.group)))
 
   // Get unique product types for filter dropdown
-const uniqueTypes = Array.from(new Set((products as any[]).map((product) => product.item_type)))
+  const uniqueTypes = Array.from(new Set((products as any[]).map((product) => product.item_type)))
+
+  const fetchProducts = useCallback(async () => {
+    let url = ""
+    switch (activeTab) {
+      case "items":
+        url = "http://localhost:8000/api/products/items"
+        break
+      case "combos":
+        url = "http://localhost:8000/api/products/combos"
+        break
+      case "addons":
+        url = "http://localhost:8000/api/products/addons"
+        break
+      case "categories":
+        url = "http://localhost:8000/api/products/categories"
+        break
+    }
+
+    try {
+      const response = await fetch(url)
+      const data = await response.json()
+      const arrayData = Array.isArray(data) ? data : []
+      setProducts(arrayData)
+      setFilteredProducts(arrayData)
+    } catch (err) {
+      setProducts([])
+      setFilteredProducts([])
+    }
+  }, [activeTab])
 
   // Fetch data from FastAPI based on activeTab
   useEffect(() => {
-    const fetchProducts = async () => {
-      let url = ""
-      switch (activeTab) {
-        case "items":
-          url = "http://localhost:8000/api/products/items"
-          break
-        case "combos":
-          url = "http://localhost:8000/api/products/combos"
-          break
-        case "addons":
-          url = "http://localhost:8000/api/products/addons"
-          break
-        case "categories":
-          url = "http://localhost:8000/api/products/categories"
-          break
-      }
-
-      try {
-        const response = await fetch(url)
-        const data = await response.json()
-        
-        // Remove the mapping - pass the raw API data directly to ProductTable
-        setProducts(data)
-        setFilteredProducts(data)
-      } catch (err) {
-        setProducts([])
-        setFilteredProducts([])
-      }
-    }
-
-    fetchProducts()
-  }, [activeTab])
+    void fetchProducts()
+  }, [fetchProducts])
   
 
   // Filter products based on search query and filters
@@ -152,20 +229,86 @@ const uniqueTypes = Array.from(new Set((products as any[]).map((product) => prod
     }
   }
 
-  const handleSaveProduct = (product: Product) => {
-    if (selectedProduct) {
-      // Update existing product
-      const updatedProducts = (products as any[]).map((p) => (p.id === product.id ? product : p))
-      setProducts(updatedProducts)
-    } else {
-      // Add new product
-      const newProduct = {
-        ...product,
-        id: Date.now().toString(), // Simple ID generation
+  const handleSaveProduct = async (product: any) => {
+    if (activeTab !== "items") {
+      if (selectedProduct) {
+        const updatedProducts = (products as any[]).map((p) => (p.id === product.id ? product : p))
+        setProducts(updatedProducts)
+      } else {
+        const newProduct = {
+          ...product,
+          id: Date.now().toString(),
+        }
+        setProducts([...(products as any[]), newProduct])
       }
-      setProducts([...(products as any[]), newProduct])
+      setIsFormOpen(false)
+      setSelectedProduct(null)
+      return
     }
-    setIsFormOpen(false)
+
+    const itemId = resolveItemId(product)
+    if (!itemId) {
+      toast({
+        title: "Update failed",
+        description: "Creating new catalog items from this screen isn't supported yet.",
+        variant: "destructive",
+      })
+      throw new Error("Missing item identifier")
+    }
+
+    const payload = buildItemUpdatePayload(product)
+
+    const accessToken = typeof window !== "undefined" ? localStorage.getItem("access_token") : null
+
+    const headers: Record<string, string> = { "Content-Type": "application/json" }
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`
+    }
+
+    try {
+      const response = await fetch(`http://localhost:8000/api/products/items/${itemId}`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify(payload),
+        credentials: "include",
+      })
+
+      if (!response.ok) {
+        let detail = "Failed to update item"
+        try {
+          const body = await response.json()
+          if (typeof body?.detail === "string" && body.detail.trim().length > 0) {
+            detail = body.detail
+          }
+        } catch {
+          const text = await response.text()
+          if (text.trim().length > 0) {
+            detail = text
+          }
+        }
+
+        toast({
+          title: "Update failed",
+          description: detail,
+          variant: "destructive",
+        })
+        throw new Error(detail)
+      }
+
+      toast({
+        title: "Item updated",
+        description: `${normalizeRequiredString(payload.name ?? product.name, "Item")} saved successfully.`,
+      })
+
+      await fetchProducts()
+      setIsFormOpen(false)
+      setSelectedProduct(null)
+    } catch (error) {
+      if (!(error instanceof Error)) {
+        throw new Error("Unknown error while updating item")
+      }
+      throw error
+    }
   }
 
   const singularFormMap = {
@@ -293,4 +436,3 @@ const uniqueTypes = Array.from(new Set((products as any[]).map((product) => prod
     </AdminLayout>
   )
 }
-

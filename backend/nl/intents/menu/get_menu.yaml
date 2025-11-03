@@ -25,7 +25,7 @@ sql:
       mi.rate,
       mi.buffer_qty,
       mi.final_qty,
-      mi.planned_qty,
+      mi.max_qty,
       mi.available_qty,
       mi.sort_order,
       mi.is_default,
@@ -47,7 +47,7 @@ projection:
   - rate
   - buffer_qty
   - final_qty
-  - planned_qty
+  - max_qty
   - available_qty
   - sort_order
   - is_default

@@ -283,6 +283,15 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
         .filter((value) => Number.isFinite(value))
         .map((value) => Math.trunc(value))
         .filter((value) => !adminRoleIds.includes(value))
+
+      if (typeof window !== "undefined") {
+        try {
+          sessionStorage.setItem("kk-switching-to-customer", "1")
+        } catch {
+          /* ignore sessionStorage issues */
+        }
+      }
+
       setRoleState(normalisedRoles, normalisedRoleCodes)
 
       setTokenVersion((prev) => prev + 1)
@@ -318,6 +327,13 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
 
       router.push("/customer/home")
     } catch (error) {
+      if (typeof window !== "undefined") {
+        try {
+          sessionStorage.removeItem("kk-switching-to-customer")
+        } catch {
+          /* ignore storage errors */
+        }
+      }
       toast({
         title: "Switch failed",
         description: error instanceof Error ? error.message : "Please try again.",

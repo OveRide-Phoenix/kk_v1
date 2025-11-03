@@ -1049,23 +1049,265 @@ def get_dev_db_schema(
         db.close()
 
 # ---------------- Product Management ----------------
+
+class ItemUpdatePayload(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    alias: Optional[str] = None
+    category_id: Optional[int] = None
+    uom: Optional[str] = None
+    weight_factor: Optional[float] = None
+    weight_uom: Optional[str] = None
+    item_type: Optional[str] = None
+    hsn_code: Optional[str] = None
+    factor: Optional[float] = None
+    quantity_portion: Optional[int] = None
+    buffer_percentage: Optional[float] = None
+    max_qty_breakfast: Optional[int] = None
+    max_qty_lunch: Optional[int] = None
+    max_qty_dinner: Optional[int] = None
+    picture_url: Optional[str] = None
+    breakfast_price: Optional[float] = None
+    lunch_price: Optional[float] = None
+    dinner_price: Optional[float] = None
+    condiments_price: Optional[float] = None
+    festival_price: Optional[float] = None
+    cgst: Optional[float] = None
+    sgst: Optional[float] = None
+    igst: Optional[float] = None
+    net_price: Optional[float] = None
+    is_combo: Optional[bool] = None
 @app.get("/api/products/items", tags=["Products"])
 def get_all_items():
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
-        cursor.execute("""
-            SELECT 
-                i.item_id, i.name, i.description, i.alias, i.category_id, c.category_name,
-                i.uom, i.weight_factor, i.weight_uom, i.item_type, i.hsn_code, i.factor,
-                i.quantity_portion, i.buffer_percentage, i.picture_url,
-                i.breakfast_price, i.lunch_price, i.dinner_price, i.condiments_price, i.festival_price,
-                i.cgst, i.sgst, i.igst, i.net_price
-            FROM items i
-            LEFT JOIN categories c ON i.category_id = c.category_id
-        """)
-        return cursor.fetchall()
+        try:
+            cursor.execute("""
+                SELECT 
+                    i.item_id, i.name, i.description, i.alias, i.category_id, c.category_name,
+                    i.uom, i.weight_factor, i.weight_uom, i.item_type, i.hsn_code, i.factor,
+                    i.quantity_portion,
+                    i.buffer_percentage,
+                    i.max_qty_breakfast,
+                    i.max_qty_lunch,
+                    i.max_qty_dinner,
+                    i.picture_url,
+                    i.breakfast_price, i.lunch_price, i.dinner_price, i.condiments_price, i.festival_price,
+                    i.cgst, i.sgst, i.igst, i.net_price
+                FROM items i
+                LEFT JOIN categories c ON i.category_id = c.category_id
+            """)
+            records = cursor.fetchall()
+        except mysql.connector.Error as err:
+            if err.errno == errorcode.ER_BAD_FIELD_ERROR:
+                cursor.execute("""
+                    SELECT 
+                        i.item_id, i.name, i.description, i.alias, i.category_id, c.category_name,
+                        i.uom, i.weight_factor, i.weight_uom, i.item_type, i.hsn_code, i.factor,
+                        i.quantity_portion,
+                        i.buffer_percentage,
+                        i.max_qty,
+                        i.picture_url,
+                        i.breakfast_price, i.lunch_price, i.dinner_price, i.condiments_price, i.festival_price,
+                        i.cgst, i.sgst, i.igst, i.net_price
+                    FROM items i
+                    LEFT JOIN categories c ON i.category_id = c.category_id
+                """)
+                records = cursor.fetchall()
+                for row in records:
+                    legacy = row.pop("max_qty", None)
+                    row["max_qty_breakfast"] = legacy
+                    row["max_qty_lunch"] = legacy
+                    row["max_qty_dinner"] = legacy
+            else:
+                raise
+        return records
     except mysql.connector.Error as err:
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.put("/api/products/items/{item_id}", tags=["Products"])
+def update_item(item_id: int, payload: ItemUpdatePayload, user: Dict[str, Any] = Depends(admin_required)):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute("SHOW COLUMNS FROM items")
+        available_columns = {row["Field"] for row in cursor.fetchall()}
+
+        data = payload.model_dump(exclude_unset=True)
+        if not data:
+            raise HTTPException(status_code=400, detail="No fields provided to update")
+
+        string_fields = {"name", "description", "alias", "uom", "weight_uom", "item_type", "hsn_code", "picture_url"}
+        nullable_string_fields = {"description", "alias", "weight_uom", "item_type", "hsn_code", "picture_url"}
+        int_fields = {"category_id", "quantity_portion", "max_qty_breakfast", "max_qty_lunch", "max_qty_dinner"}
+        float_fields = {
+            "weight_factor",
+            "factor",
+            "buffer_percentage",
+            "breakfast_price",
+            "lunch_price",
+            "dinner_price",
+            "condiments_price",
+            "festival_price",
+            "cgst",
+            "sgst",
+            "igst",
+            "net_price",
+        }
+
+        cleaned: Dict[str, Any] = {}
+        for field, value in data.items():
+            if field in string_fields and isinstance(value, str):
+                value = value.strip()
+                if not value and field in nullable_string_fields:
+                    value = None
+            if field in int_fields and value is not None:
+                try:
+                    value = int(value)
+                except (TypeError, ValueError):
+                    value = None
+            if field in float_fields and value is not None:
+                try:
+                    value = float(value)
+                except (TypeError, ValueError):
+                    value = None
+            if field == "is_combo" and value is not None:
+                value = 1 if value else 0
+            cleaned[field] = value
+
+        field_map = {
+            "name": "name",
+            "description": "description",
+            "alias": "alias",
+            "category_id": "category_id",
+            "uom": "uom",
+            "weight_factor": "weight_factor",
+            "weight_uom": "weight_uom",
+            "item_type": "item_type",
+            "hsn_code": "hsn_code",
+            "factor": "factor",
+            "quantity_portion": "quantity_portion",
+            "buffer_percentage": "buffer_percentage",
+            "max_qty_breakfast": "max_qty_breakfast",
+            "max_qty_lunch": "max_qty_lunch",
+            "max_qty_dinner": "max_qty_dinner",
+            "picture_url": "picture_url",
+            "breakfast_price": "breakfast_price",
+            "lunch_price": "lunch_price",
+            "dinner_price": "dinner_price",
+            "condiments_price": "condiments_price",
+            "festival_price": "festival_price",
+            "cgst": "cgst",
+            "sgst": "sgst",
+            "igst": "igst",
+            "net_price": "net_price",
+            "is_combo": "is_combo",
+        }
+
+        field_map = {field: column for field, column in field_map.items() if column in available_columns}
+
+        set_clauses: List[str] = []
+        values: List[Any] = []
+        updated_fields: List[str] = []
+
+        for field, column in field_map.items():
+            if field not in cleaned:
+                continue
+            set_clauses.append(f"{column} = %s")
+            values.append(cleaned[field])
+            updated_fields.append(column)
+
+        if not set_clauses:
+            raise HTTPException(status_code=400, detail="No valid fields provided to update")
+
+        values.append(item_id)
+        update_query = f"UPDATE items SET {', '.join(set_clauses)} WHERE item_id = %s"
+        cursor.execute(update_query, values)
+        if cursor.rowcount == 0:
+            cursor.execute("SELECT 1 FROM items WHERE item_id = %s", (item_id,))
+            exists = cursor.fetchone()
+            if not exists:
+                db.rollback()
+                raise HTTPException(status_code=404, detail="Item not found")
+
+        db.commit()
+
+        updated_item = None
+        try:
+            cursor.execute(
+                """
+                SELECT 
+                    i.item_id, i.name, i.description, i.alias, i.category_id, c.category_name,
+                    i.uom, i.weight_factor, i.weight_uom, i.item_type, i.hsn_code, i.factor,
+                    i.quantity_portion,
+                    i.buffer_percentage,
+                    i.max_qty_breakfast,
+                    i.max_qty_lunch,
+                    i.max_qty_dinner,
+                    i.picture_url,
+                    i.breakfast_price, i.lunch_price, i.dinner_price, i.condiments_price, i.festival_price,
+                    i.cgst, i.sgst, i.igst, i.net_price,
+                    i.is_combo
+                FROM items i
+                LEFT JOIN categories c ON i.category_id = c.category_id
+                WHERE i.item_id = %s
+                """,
+                (item_id,),
+            )
+            updated_item = cursor.fetchone()
+        except mysql.connector.Error as err:
+            if err.errno == errorcode.ER_BAD_FIELD_ERROR:
+                cursor.execute(
+                    """
+                    SELECT 
+                        i.item_id, i.name, i.description, i.alias, i.category_id, c.category_name,
+                        i.uom, i.weight_factor, i.weight_uom, i.item_type, i.hsn_code, i.factor,
+                        i.quantity_portion,
+                        i.buffer_percentage,
+                        i.max_qty_breakfast,
+                        i.max_qty_lunch,
+                        i.max_qty_dinner,
+                        i.picture_url,
+                        i.breakfast_price, i.lunch_price, i.dinner_price, i.condiments_price, i.festival_price,
+                        i.cgst, i.sgst, i.igst, i.net_price
+                    FROM items i
+                    LEFT JOIN categories c ON i.category_id = c.category_id
+                    WHERE i.item_id = %s
+                    """,
+                    (item_id,),
+                )
+                updated_item = cursor.fetchone()
+                if updated_item is not None:
+                    updated_item["is_combo"] = False
+            else:
+                raise
+
+        log_admin_action(
+            db,
+            admin_id=user.get("admin_id") if isinstance(user, dict) else None,
+            action_type="UPDATE",
+            entity_type="ITEM",
+            entity_id=item_id,
+            description=f"Updated item {item_id}: {', '.join(updated_fields)}",
+        )
+
+        if not updated_item:
+            return {"success": True, "item_id": item_id, "updated_fields": updated_fields}
+
+        updated_item["is_combo"] = bool(updated_item.get("is_combo", False))
+
+        return {
+            "success": True,
+            "item": updated_item,
+            "updated_fields": updated_fields,
+        }
+    except mysql.connector.Error as err:
+        db.rollback()
         raise HTTPException(status_code=500, detail=str(err))
     finally:
         cursor.close()
@@ -1196,6 +1438,9 @@ def get_available_items(bld_type: str = Query(..., description="BLD type: Breakf
                 factor,
                 quantity_portion,
                 buffer_percentage,
+                max_qty_breakfast,
+                max_qty_lunch,
+                max_qty_dinner,
                 picture_url,
                 breakfast_price,
                 lunch_price,
@@ -1209,8 +1454,55 @@ def get_available_items(bld_type: str = Query(..., description="BLD type: Breakf
             FROM items
             WHERE bld_id = %s
         """
-        cursor.execute(query, (bld_id,))
-        items = cursor.fetchall()
+        legacy_mode = False
+        try:
+            cursor.execute(query, (bld_id,))
+            items = cursor.fetchall()
+        except mysql.connector.Error as err:
+            if err.errno == errorcode.ER_BAD_FIELD_ERROR:
+                legacy_mode = True
+                legacy_query = """
+                    SELECT
+                        item_id,
+                        bld_id,
+                        name,
+                        description,
+                        alias,
+                        category_id,
+                        uom,
+                        weight_factor,
+                        weight_uom,
+                        item_type,
+                        hsn_code,
+                        factor,
+                        quantity_portion,
+                        buffer_percentage,
+                        max_qty,
+                        picture_url,
+                        breakfast_price,
+                        lunch_price,
+                        dinner_price,
+                        condiments_price,
+                        festival_price,
+                        cgst,
+                        sgst,
+                        igst,
+                        net_price
+                    FROM items
+                    WHERE bld_id = %s
+                """
+                cursor.execute(legacy_query, (bld_id,))
+                items = cursor.fetchall()
+            else:
+                raise
+
+        if legacy_mode:
+            for item in items:
+                legacy_value = item.pop("max_qty", None)
+                item["max_qty_breakfast"] = legacy_value
+                item["max_qty_lunch"] = legacy_value
+                item["max_qty_dinner"] = legacy_value
+
         return items
 
     except mysql.connector.Error as err:
@@ -1276,20 +1568,60 @@ def get_daily_menu(
                 i.uom,
                 i.buffer_percentage,
                 mi.category_id,
-                mi.planned_qty,
+                mi.max_qty,
                 mi.available_qty,
                 mi.buffer_qty,
                 mi.final_qty,
                 mi.rate,
                 mi.is_default,
-                mi.sort_order
+                mi.sort_order,
+                i.max_qty_breakfast,
+                i.max_qty_lunch,
+                i.max_qty_dinner
             FROM menu_items mi
             JOIN items i ON mi.item_id = i.item_id
             WHERE mi.menu_id = %s
             ORDER BY mi.sort_order ASC
         """
-        cursor.execute(items_query, (menu_id,))
-        menu_items = cursor.fetchall()
+        legacy_items_mode = False
+        try:
+            cursor.execute(items_query, (menu_id,))
+            menu_items = cursor.fetchall()
+        except mysql.connector.Error as err:
+            if err.errno == errorcode.ER_BAD_FIELD_ERROR:
+                legacy_items_mode = True
+                legacy_items_query = """
+                    SELECT
+                        mi.menu_item_id,
+                        mi.item_id,
+                        i.name AS item_name,
+                        i.uom,
+                        i.buffer_percentage,
+                        mi.category_id,
+                        mi.max_qty,
+                        mi.available_qty,
+                        mi.buffer_qty,
+                        mi.final_qty,
+                        mi.rate,
+                        mi.is_default,
+                        mi.sort_order,
+                        i.max_qty AS legacy_item_max_qty
+                    FROM menu_items mi
+                    JOIN items i ON mi.item_id = i.item_id
+                    WHERE mi.menu_id = %s
+                    ORDER BY mi.sort_order ASC
+                """
+                cursor.execute(legacy_items_query, (menu_id,))
+                menu_items = cursor.fetchall()
+            else:
+                raise
+
+        meal_column = {
+            "Breakfast": "max_qty_breakfast",
+            "Lunch": "max_qty_lunch",
+            "Dinner": "max_qty_dinner",
+            "Condiments": "max_qty_dinner",  # fallback; condiments typically align with dinner defaults
+        }.get(bld_type, "max_qty_breakfast")
 
         return {
             "menu_id": menu_id,
@@ -1308,13 +1640,18 @@ def get_daily_menu(
                     "uom": it.get("uom"),
                     "buffer_percentage": float(it["buffer_percentage"] or 0),
                     "category_id": it["category_id"],
-                    "planned_qty": it["planned_qty"],
+                    "max_qty": it["max_qty"],
                     "available_qty": it["available_qty"],
                     "buffer_qty": float(it["buffer_qty"] or 0),
                     "final_qty": float(it["final_qty"] or 0),
                     "rate": float(it["rate"]),
                     "is_default": bool(it["is_default"]),
                     "sort_order": it["sort_order"],
+                    "item_max_qty": (
+                        it.get("legacy_item_max_qty")
+                        if legacy_items_mode
+                        else it.get(meal_column)
+                    ),
                 }
                 for it in menu_items
             ]
@@ -1330,7 +1667,7 @@ def get_daily_menu(
 class MenuItemPayload(BaseModel):
     item_id: int
     category_id: Optional[int] = None
-    planned_qty: Optional[int] = None
+    max_qty: Optional[int] = None
     available_qty: Optional[int] = None
     rate: float
     is_default: bool = False
@@ -1346,9 +1683,6 @@ class DailyMenuPayload(BaseModel):
 
 class AutoMenuRequest(BaseModel):
     date: Optional[str] = None
-    breakfast_planned_qty: int = Field(50, ge=0)
-    lunch_planned_qty: int = Field(80, ge=0)
-    dinner_planned_qty: int = Field(60, ge=0)
 
 
 MEAL_TYPES = ["Breakfast", "Lunch", "Dinner"]
@@ -1395,9 +1729,15 @@ def upsert_daily_menu(payload: DailyMenuPayload):
 
         # Insert each item from payload
         for idx, mi in enumerate(payload.items, start=1):
+            max_qty_value = mi.max_qty if mi.max_qty is not None else None
+            available_qty_value = (
+                mi.available_qty
+                if mi.available_qty is not None
+                else max_qty_value
+            )
             insert_item_query = """
                 INSERT INTO menu_items
-                    (menu_id, item_id, category_id, planned_qty, available_qty, rate, is_default, sort_order)
+                    (menu_id, item_id, category_id, max_qty, available_qty, rate, is_default, sort_order)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """
             cursor.execute(
@@ -1406,8 +1746,8 @@ def upsert_daily_menu(payload: DailyMenuPayload):
                     menu_id,
                     mi.item_id,
                     mi.category_id,
-                    mi.planned_qty,
-                    mi.available_qty,
+                    max_qty_value,
+                    available_qty_value,
                     mi.rate,
                     int(mi.is_default),
                     mi.sort_order or idx,
@@ -1468,16 +1808,9 @@ def release_menu(menu_id: int):
 @app.post("/api/dev/daily-menu/auto", tags=["Developer Tools"])
 def auto_generate_daily_menu(payload: AutoMenuRequest, _: Dict[str, Any] = Depends(developer_required)):
     target_date = _normalize_menu_date(payload.date)
-    planned_lookup = {
-        "Breakfast": payload.breakfast_planned_qty,
-        "Lunch": payload.lunch_planned_qty,
-        "Dinner": payload.dinner_planned_qty,
-    }
-
     summary: Dict[str, Any] = {}
 
     for meal in MEAL_TYPES:
-        planned_qty = planned_lookup.get(meal, 0)
         items = _fetch_items_for_meal(meal)
         limited_items = items[:8]  # keep menus lightweight (≈5-10 items)
         if not items:
@@ -1487,18 +1820,32 @@ def auto_generate_daily_menu(payload: AutoMenuRequest, _: Dict[str, Any] = Depen
             }
             continue
 
-        menu_items = [
-            MenuItemPayload(
-                item_id=item["item_id"],
-                category_id=item.get("category_id"),
-                planned_qty=planned_qty,
-                available_qty=planned_qty,
-                rate=_resolve_item_rate(meal, item),
-                is_default=True,
-                sort_order=index,
+        meal_field = {
+            "Breakfast": "max_qty_breakfast",
+            "Lunch": "max_qty_lunch",
+            "Dinner": "max_qty_dinner",
+            "Condiments": "max_qty_dinner",
+        }.get(meal, "max_qty_breakfast")
+
+        menu_items: List[MenuItemPayload] = []
+        for index, item in enumerate(limited_items, start=1):
+            item_max_qty = item.get(meal_field)
+            try:
+                resolved_max_qty = int(item_max_qty) if item_max_qty is not None else 0
+            except (TypeError, ValueError):
+                resolved_max_qty = 0
+
+            menu_items.append(
+                MenuItemPayload(
+                    item_id=item["item_id"],
+                    category_id=item.get("category_id"),
+                    max_qty=resolved_max_qty,
+                    available_qty=resolved_max_qty,
+                    rate=_resolve_item_rate(meal, item),
+                    is_default=True,
+                    sort_order=index,
+                )
             )
-            for index, item in enumerate(limited_items, start=1)
-        ]
 
         menu_payload = DailyMenuPayload(
             date=target_date,
@@ -1640,6 +1987,9 @@ def _fetch_items_for_meal(bld_type: str) -> List[Dict[str, Any]]:
             SELECT
                 item_id,
                 category_id,
+                max_qty_breakfast,
+                max_qty_lunch,
+                max_qty_dinner,
                 breakfast_price,
                 lunch_price,
                 dinner_price,
@@ -2237,14 +2587,14 @@ class ProductionPlanRequest(BaseModel):
     menu_type: str
     plans: List[ProductionPlanItem]
 
-class PlannedQtyUpdate(BaseModel):
+class MaxQtyUpdate(BaseModel):
     item_name: str
     additional_qty: float = Field(..., gt=0)
 
-class UpdatePlannedRequest(BaseModel):
+class UpdateMaxQtyRequest(BaseModel):
     date: str
     menu_type: str
-    updates: List[PlannedQtyUpdate]
+    updates: List[MaxQtyUpdate]
 
 class OrderItemPayload(BaseModel):
     item_id: int
@@ -2525,7 +2875,7 @@ def generate_production_plan(payload: ProductionPlanRequest):
                 UPDATE menu_items mi
                 JOIN items i ON mi.item_id = i.item_id
                 SET mi.buffer_qty = %s,
-                    mi.planned_qty = %s,
+                    mi.max_qty = %s,
                     mi.final_qty = %s
                 WHERE mi.menu_id = %s
                 AND LOWER(i.name) = LOWER(%s)
@@ -2564,7 +2914,7 @@ def generate_production_plan(payload: ProductionPlanRequest):
         db.close()
 
 @app.patch("/api/production/update-planned", tags=["Production"])
-def update_planned_quantities(payload: UpdatePlannedRequest):
+def update_max_quantities(payload: UpdateMaxQtyRequest):
     if not payload.updates:
         raise HTTPException(status_code=400, detail="No updates provided")
 
@@ -2596,7 +2946,7 @@ def update_planned_quantities(payload: UpdatePlannedRequest):
                 """
                 UPDATE menu_items mi
                 JOIN items i ON mi.item_id = i.item_id
-                   SET mi.planned_qty = COALESCE(mi.planned_qty, 0) + %s,
+                   SET mi.max_qty = COALESCE(mi.max_qty, 0) + %s,
                        mi.final_qty = COALESCE(mi.final_qty, 0) + %s
                  WHERE mi.menu_id = %s
                    AND LOWER(i.name) = LOWER(%s)
@@ -2608,7 +2958,7 @@ def update_planned_quantities(payload: UpdatePlannedRequest):
 
             cursor.execute(
                 """
-                SELECT mi.planned_qty
+                SELECT mi.max_qty
                   FROM menu_items mi
                   JOIN items i ON mi.item_id = i.item_id
                  WHERE mi.menu_id = %s
@@ -2622,7 +2972,7 @@ def update_planned_quantities(payload: UpdatePlannedRequest):
                 updated_items.append(
                     {
                         "item_name": adjustment.item_name,
-                        "new_planned_qty": float(planned_row["planned_qty"]),
+                        "new_max_qty": float(planned_row["max_qty"]),
                     }
                 )
 
@@ -2637,7 +2987,7 @@ def update_planned_quantities(payload: UpdatePlannedRequest):
             action_type="UPDATE",
             entity_type="ITEM",
             entity_id=menu_id,
-            description=f"Adjusted planned quantities for {payload.date} ({payload.menu_type})",
+            description=f"Adjusted max quantities for {payload.date} ({payload.menu_type})",
         )
 
         return {

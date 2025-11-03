@@ -968,7 +968,7 @@ def find_menu_items_by_name(
             b.bld_type,
             mi.buffer_qty,
             mi.final_qty,
-            mi.planned_qty,
+            mi.max_qty,
             mi.available_qty
         FROM menu m
         JOIN bld b ON b.bld_id = m.bld_id
@@ -999,7 +999,7 @@ def fetch_menu_item(db: Session, menu_item_id: int) -> List[Dict[str, Any]]:
                 i.name AS item_name,
                 mi.buffer_qty,
                 mi.final_qty,
-                mi.planned_qty,
+                mi.max_qty,
                 mi.available_qty
             FROM menu_items mi
             JOIN menu m ON m.menu_id = mi.menu_id

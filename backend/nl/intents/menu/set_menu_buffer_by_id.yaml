@@ -30,7 +30,7 @@ sql:
       i.name AS item_name,
       mi.buffer_qty,
       mi.final_qty,
-      mi.planned_qty,
+      mi.max_qty,
       mi.available_qty
     FROM menu_items mi
     JOIN menu m ON m.menu_id = mi.menu_id

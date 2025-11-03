@@ -16,12 +16,13 @@ interface MenuItem {
   item_id: number;
   item_name: string;
   category_id: number | null;
-  planned_qty: number;
+  max_qty: number;
   available_qty: number;
   rate: number;
   is_default: boolean;
   sort_order: number;
   picture_url?: string | null; // ✅ added for thumbnails
+  item_max_qty?: number | null;
 }
 
 interface MenuSectionResponse {
@@ -143,7 +144,7 @@ export default function CustomerDailyMenu({
             // ✅ keep picture_url if backend returns it
             nextItems[meal] = (data.items ?? []).map((it: any) => ({
               ...it,
-              planned_qty: normalizeQty(it.planned_qty),
+              max_qty: normalizeQty(it.max_qty ?? it.item_max_qty),
               available_qty: normalizeQty(it.available_qty),
               picture_url: it.picture_url ?? null,
             }));

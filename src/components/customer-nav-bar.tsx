@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, type ComponentProps } from "react"
+import { useEffect, useMemo, useState, type ComponentProps } from "react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
 import { Crown, LogOut, User } from "lucide-react"
@@ -26,6 +26,7 @@ export default function CustomerNavBar({ unauthLinks }: CustomerNavBarProps = {}
   const roleCodes = useAuthStore((state) => state.roleCodes)
   const router = useRouter()
   const pathname = usePathname()
+  const userRecord = user as Record<string, unknown> | null
 
   const navLinkClass = (href: string, options?: { disabled?: boolean }) => {
     const disabled = options?.disabled
@@ -76,8 +77,51 @@ export default function CustomerNavBar({ unauthLinks }: CustomerNavBarProps = {}
     })()
   }, [hydrated, user, setUser])
 
-  const isAdmin = hydrated && roleCodes.includes("admin")
+  const derivedRoleCodes = useMemo(() => {
+    const codes = new Set<string>()
+
+    const addCodes = (source: unknown) => {
+      if (!source) return
+      if (Array.isArray(source)) {
+        for (const entry of source) {
+          if (typeof entry === "string") {
+            const trimmed = entry.trim()
+            if (trimmed) {
+              codes.add(trimmed.toLowerCase())
+            }
+          } else if (entry && typeof entry === "object" && "code" in entry) {
+            const value = (entry as { code?: unknown }).code
+            if (typeof value === "string") {
+              const trimmed = value.trim()
+              if (trimmed) {
+                codes.add(trimmed.toLowerCase())
+              }
+            }
+          }
+        }
+      }
+    }
+
+    addCodes(roleCodes)
+    addCodes(userRecord?.["role_codes"])
+    addCodes(userRecord?.["roleCodes"])
+    addCodes(userRecord?.["role_details"])
+    addCodes(userRecord?.["roleDetails"])
+
+    return codes
+  }, [roleCodes, userRecord])
+
+  const isAdmin =
+    hydrated &&
+    (derivedRoleCodes.has("admin") ||
+      Boolean(userRecord?.["is_admin"]) ||
+      Boolean(userRecord?.["admin_is_active"]))
+
   const hasUser = hydrated && Boolean(user)
+  const displayName =
+    (typeof user?.name === "string" && user.name.trim()) ||
+    (typeof user?.phone === "string" && user.phone.trim()) ||
+    "Customer"
 
   return (
     <nav
@@ -115,7 +159,7 @@ export default function CustomerNavBar({ unauthLinks }: CustomerNavBarProps = {}
                     className="inline-flex items-center gap-1.5 font-medium text-primary hover:underline"
                   >
                     <User className="h-4 w-4 text-[#463028]" aria-hidden="true" />
-                    <span>{user.name || user.phone || "Customer"}</span>
+                    <span>{displayName}</span>
                   </Link>
                   <Button
                     variant="ghost"

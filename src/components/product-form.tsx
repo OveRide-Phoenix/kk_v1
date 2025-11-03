@@ -11,52 +11,84 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { type Product, ProductType } from "@/types/product"
+import { type Product } from "@/types/product"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 
 interface ProductFormProps {
   product: Product | null
-  onSave: (product: Product) => void
+  onSave: (product: Product) => Promise<void> | void
   onCancel: () => void
+}
+
+const normalizeMaxField = (value: unknown): number => {
+  if (value === null || value === undefined) return 0;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return Math.floor(parsed);
+};
+
+const createInitialFormData = (item: Product | null) => {
+  if (item) {
+    return {
+      ...item,
+      max_qty_breakfast: normalizeMaxField(item.max_qty_breakfast),
+      max_qty_lunch: normalizeMaxField(item.max_qty_lunch),
+      max_qty_dinner: normalizeMaxField(item.max_qty_dinner),
+    }
+  }
+
+  return {
+    name: "",
+    description: "",
+    alias: "",
+    category_id: "",
+    uom: "",
+    weight_factor: 0,
+    weight_uom: "",
+    item_type: "",
+    hsn_code: "",
+    factor: 1,
+    quantity_portion: 0,
+    buffer_percentage: 0,
+    max_qty_breakfast: 0,
+    max_qty_lunch: 0,
+    max_qty_dinner: 0,
+    picture_url: "",
+    breakfast_price: 0,
+    lunch_price: 0,
+    dinner_price: 0,
+    condiments_price: 0,
+    festival_price: 0,
+    cgst: 0,
+    sgst: 0,
+    igst: 0,
+    net_price: 0,
+    is_combo: false,
+  }
 }
 
 export default function ProductForm({ product, onSave, onCancel }: ProductFormProps) {
   const isEditing = !!product
-  const [formData, setFormData] = useState<any>(
-    product || {
-      name: "",
-      description: "",
-      alias: "",
-      category_id: "",
-      uom: "",
-      weight_factor: 0,
-      weight_uom: "",
-      item_type: "",
-      hsn_code: "",
-      factor: 1,
-      quantity_portion: 0,
-      buffer_percentage: 0,
-      picture_url: "",
-      breakfast_price: 0,
-      lunch_price: 0,
-      dinner_price: 0,
-      condiments_price: 0,
-      festival_price: 0,
-      cgst: 0,
-      sgst: 0,
-      igst: 0,
-      net_price: 0,
-      is_combo: false,
-    }
-  )
+  const [formData, setFormData] = useState<any>(() => createInitialFormData(product))
+  const [submitting, setSubmitting] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
 
   const handleChange = (field: string, value: any) => {
     setFormData((prev: any) => ({ ...prev, [field]: value }))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    onSave(formData)
+    setSubmitting(true)
+    setFormError(null)
+    try {
+      await Promise.resolve(onSave(formData))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save item"
+      setFormError(message)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   // Generate alias from name
@@ -71,6 +103,12 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     }
   }, [formData.name, isEditing])
 
+  useEffect(() => {
+    setFormData(createInitialFormData(product))
+    setFormError(null)
+    setSubmitting(false)
+  }, [product])
+
   return (
     <Dialog open={true} onOpenChange={() => onCancel()}>
       <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
@@ -78,6 +116,11 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
           <DialogTitle>{isEditing ? "Edit" : "Add"} Item</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
+          {formError && (
+            <div className="mb-4 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+              {formError}
+            </div>
+          )}
           <Tabs defaultValue="basic" className="w-full">
             <TabsList className="grid w-full grid-cols-3 mb-4">
               <TabsTrigger value="basic">Basic Details</TabsTrigger>
@@ -217,6 +260,57 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   />
                 </div>
                 <div className="space-y-2">
+                  <Label htmlFor="max_qty_breakfast">Max Qty · Breakfast</Label>
+                  <Input
+                    id="max_qty_breakfast"
+                    type="number"
+                    min={0}
+                    value={formData.max_qty_breakfast ?? 0}
+                    onChange={(e) => {
+                      const parsed = Number.parseInt(e.target.value, 10)
+                      handleChange(
+                        "max_qty_breakfast",
+                        Number.isNaN(parsed) ? 0 : Math.max(parsed, 0),
+                      )
+                    }}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="max_qty_lunch">Max Qty · Lunch</Label>
+                  <Input
+                    id="max_qty_lunch"
+                    type="number"
+                    min={0}
+                    value={formData.max_qty_lunch ?? 0}
+                    onChange={(e) => {
+                      const parsed = Number.parseInt(e.target.value, 10)
+                      handleChange(
+                        "max_qty_lunch",
+                        Number.isNaN(parsed) ? 0 : Math.max(parsed, 0),
+                      )
+                    }}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="max_qty_dinner">Max Qty · Dinner</Label>
+                  <Input
+                    id="max_qty_dinner"
+                    type="number"
+                    min={0}
+                    value={formData.max_qty_dinner ?? 0}
+                    onChange={(e) => {
+                      const parsed = Number.parseInt(e.target.value, 10)
+                      handleChange(
+                        "max_qty_dinner",
+                        Number.isNaN(parsed) ? 0 : Math.max(parsed, 0),
+                      )
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Sets the default cap when this item is auto-added to a daily menu for the selected meal.
+                  </p>
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="picture_url">Upload Picture</Label>
                   <Input
                     id="picture_url"
@@ -346,7 +440,9 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
             <Button type="button" variant="outline" onClick={onCancel}>
               Cancel
             </Button>
-            <Button type="submit">{isEditing ? "Update" : "Create"}</Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? (isEditing ? "Updating…" : "Creating…") : isEditing ? "Update" : "Create"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

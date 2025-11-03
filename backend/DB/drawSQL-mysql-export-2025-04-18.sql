@@ -68,6 +68,9 @@ CREATE TABLE `items`(
     `factor` DECIMAL(5, 3) NULL DEFAULT '1',
     `quantity_portion` INT NULL,
     `buffer_percentage` DECIMAL(5, 2) NULL,
+    `max_qty_breakfast` INT NULL,
+    `max_qty_lunch` INT NULL,
+    `max_qty_dinner` INT NULL,
     `picture_url` VARCHAR(255) NULL,
     `breakfast_price` DECIMAL(10, 2) NULL,
     `lunch_price` DECIMAL(10, 2) NULL,
@@ -85,7 +88,7 @@ CREATE TABLE `menu_items`(
     `menu_id` INT NOT NULL,
     `item_id` INT NOT NULL,
     `group_id` INT NULL,
-    `planned_qty` INT NULL,
+    `max_qty` INT NULL,
     `rate` DECIMAL(10, 2) NOT NULL,
     `is_default` BOOLEAN NOT NULL DEFAULT 'DEFAULT FALSE',
     `sort_order` INT NULL

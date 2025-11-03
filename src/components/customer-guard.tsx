@@ -64,6 +64,16 @@ export default function CustomerGuard({ children }: { children: React.ReactNode 
     }
   }, [router, pathname, user, setUser, logout])
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        sessionStorage.removeItem("kk-switching-to-customer")
+      } catch {
+        /* ignore storage errors */
+      }
+    }
+  }, [])
+
   if (checking) {
     return <LoadingScreen />
   }

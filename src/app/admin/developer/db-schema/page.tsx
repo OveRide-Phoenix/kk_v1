@@ -83,7 +83,7 @@ function DBSchemaContent() {
         setData(schemaPayload);
         setExpanded(
           schemaPayload.tables.reduce<Record<string, boolean>>((acc, table) => {
-            acc[table.name] = true;
+            acc[table.name] = false;
             return acc;
           }, {}),
         );
@@ -193,7 +193,7 @@ function DBSchemaContent() {
   const toggleTable = useCallback((name: string) => {
     setExpanded((prev) => ({
       ...prev,
-      [name]: !(prev[name] ?? true),
+      [name]: !(prev[name] ?? false),
     }));
   }, []);
 
@@ -284,7 +284,7 @@ function DBSchemaContent() {
 
             <div className="space-y-3">
               {filteredTables.map((table) => {
-                const isOpen = expanded[table.name] ?? true;
+                const isOpen = expanded[table.name] ?? false;
                 const sqlEnabled = sqlVisible[table.name] ?? false;
                 const columns = table.columns ?? [];
                 return (
