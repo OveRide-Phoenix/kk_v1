@@ -57,6 +57,15 @@ interface MenuItem {
   item_max_qty?: number | null;
 }
 
+const SECTION_TO_BLD_ID: Record<string, number> = {
+  breakfast: 1,
+  lunch: 2,
+  dinner: 3,
+  condiments: 4,
+};
+
+const MEALS_REQUIRING_DEFAULT = new Set(["breakfast", "lunch", "dinner"]);
+
 export function DailyMenuSetup() {
   // ───────────────────────────────────────────────────────────────────────
   // Local state
@@ -89,7 +98,6 @@ export function DailyMenuSetup() {
   const [availableItems, setAvailableItems] = useState<
     {
       item_id: number;
-      bld_id: number;
       name: string;
       description: string;
       alias: string | null;
@@ -116,6 +124,7 @@ export function DailyMenuSetup() {
       igst: number | null;
       net_price: number | null;
       is_combo: boolean;
+      bld_ids: number[];
     }[]
   >([]);
   const [selectedItems, setSelectedItems] = useState<number[]>([]);
@@ -155,6 +164,29 @@ export function DailyMenuSetup() {
     dinner: false,
     condiments: false,
   });
+
+  const mealLabel = (meal: string) =>
+    meal.charAt(0).toUpperCase() + meal.slice(1);
+
+  const ensureDefaultSelection = (meal: string) => {
+    if (!MEALS_REQUIRING_DEFAULT.has(meal.toLowerCase())) {
+      return true;
+    }
+    const rows = itemsByMeal[meal] ?? [];
+    const hasDefault = rows.some((row) => Boolean(row.is_default));
+    if (hasDefault) {
+      return true;
+    }
+
+    toast({
+      title: "Select a default item",
+      description: `Please mark one ${mealLabel(
+        meal
+      )} item as default before continuing.`,
+      variant: "destructive",
+    });
+    return false;
+  };
 
   // ───────────────────────────────────────────────────────────────────────
   // Helpers: format date → "YYYY-MM-DD"
@@ -300,6 +332,7 @@ export function DailyMenuSetup() {
             max_qty_breakfast: parseMaxField(item.max_qty_breakfast),
             max_qty_lunch: parseMaxField(item.max_qty_lunch),
             max_qty_dinner: parseMaxField(item.max_qty_dinner),
+            bld_ids: Array.isArray(item.bld_ids) ? [...item.bld_ids] : [],
           })),
         )
       )
@@ -405,8 +438,11 @@ export function DailyMenuSetup() {
   // ───────────────────────────────────────────────────────────────────────
   // 5) Save (Upsert) for a specific meal section
   // ───────────────────────────────────────────────────────────────────────
-  const handleSaveMenu = async (meal: string) => {
-    if (!confirmedDate) return;
+  const handleSaveMenu = async (meal: string): Promise<boolean> => {
+    if (!confirmedDate) return false;
+    if (!ensureDefaultSelection(meal)) {
+      return false;
+    }
     setSavingMenu(true);
 
     const rows = itemsByMeal[meal];
@@ -450,7 +486,7 @@ export function DailyMenuSetup() {
 
       if (!res.ok) {
         console.error("Save failed:", await res.text());
-        return;
+        return false;
       }
 
       const data = await res.json();
@@ -476,8 +512,10 @@ export function DailyMenuSetup() {
         };
       });
       setItemsByMeal((prev) => ({ ...prev, [meal]: mapped }));
+      return true;
     } catch (err) {
       console.error(err);
+      return false;
     } finally {
       setSavingMenu(false);
     }
@@ -492,7 +530,10 @@ export function DailyMenuSetup() {
     try {
       // On release, always save first so UI changes are persisted
       if (!unrelease) {
-        await handleSaveMenu(meal);
+        const saved = await handleSaveMenu(meal);
+        if (!saved) {
+          return;
+        }
       }
 
       const endpoint = unrelease
@@ -516,14 +557,22 @@ export function DailyMenuSetup() {
   // ───────────────────────────────────────────────────────────────────────
   // 7) Filtering for dialog tabs
   // ───────────────────────────────────────────────────────────────────────
-  const filteredItemsByQuery = (arr: typeof availableItems) =>
-    arr.filter(
+  const filteredItemsByQuery = (arr: typeof availableItems) => {
+    const mealId = SECTION_TO_BLD_ID[currentSection] ?? null;
+    const byMeal = mealId
+      ? arr.filter(
+          (item) =>
+            Array.isArray(item.bld_ids) && item.bld_ids.includes(mealId)
+        )
+      : arr;
+    return byMeal.filter(
       (it) =>
         it.name.toLowerCase().includes(itemSearchQuery.toLowerCase()) ||
         (it.description || "")
           .toLowerCase()
           .includes(itemSearchQuery.toLowerCase())
     );
+  };
 
   const displayDate = confirmedDate ?? draftDate;
   const computeMidnightTimestamp = (offsetDays = 0) => {

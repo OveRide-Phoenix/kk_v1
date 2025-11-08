@@ -31,6 +31,7 @@ export interface Product {
   weight_factor?: number
   weight_uom?: string
   item_type: ItemType | string
+  bld_ids: number[]
   hsn_code?: string
   factor?: number
   quantity_portion?: number

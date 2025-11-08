@@ -87,6 +87,18 @@ const buildItemUpdatePayload = (product: Product): Record<string, unknown> => {
     payload.picture_url = trimmed.length ? trimmed : null
   }
 
+  const mealIds = Array.isArray((product as any).bld_ids)
+    ? Array.from(
+        new Set(
+          ((product as any).bld_ids as any[]).map((value) => {
+            const parsed = Number(value)
+            return Number.isInteger(parsed) && parsed > 0 ? parsed : null
+          }).filter((value): value is number => value !== null)
+        )
+      ).sort((a, b) => a - b)
+    : []
+  payload.bld_ids = mealIds
+
   return Object.fromEntries(
     Object.entries(payload).filter(([, value]) => value !== undefined)
   )

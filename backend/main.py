@@ -6,7 +6,7 @@ from mysql.connector import errorcode
 from fastapi import FastAPI, HTTPException, Query, Depends
 from pydantic import BaseModel, Field
 from decimal import Decimal
-from typing import List, Dict, Optional, Tuple, Any
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 from fastapi.middleware.cors import CORSMiddleware
 import csv
 import io
@@ -84,6 +84,168 @@ def _parse_optional_date(value: Optional[str]) -> Optional[date]:
         return datetime.strptime(stripped, "%Y-%m-%d").date()
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.") from exc
+
+
+MEAL_NORMALIZATION_MAP = {
+    "breakfast": "Breakfast",
+    "lunch": "Lunch",
+    "dinner": "Dinner",
+    "condiments": "Condiments",
+}
+
+
+def normalize_meal_type(raw: Optional[str]) -> str:
+    if raw is None:
+        raise HTTPException(status_code=400, detail="BLD type is required")
+    cleaned = raw.strip()
+    if not cleaned:
+        raise HTTPException(status_code=400, detail="BLD type is required")
+    return MEAL_NORMALIZATION_MAP.get(cleaned.lower(), cleaned)
+
+
+def _row_value(row: Any, key: str, index: int = 0) -> Optional[int]:
+    if row is None:
+        return None
+    if isinstance(row, dict):
+        value = row.get(key)
+    elif isinstance(row, (list, tuple)):
+        value = row[index] if len(row) > index else None
+    else:
+        value = None
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def resolve_bld_id(cursor, bld_type: str) -> int:
+    normalized = normalize_meal_type(bld_type)
+    cursor.execute(
+        "SELECT bld_id FROM bld WHERE LOWER(bld_type) = LOWER(%s) LIMIT 1",
+        (normalized,),
+    )
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="BLD type not found")
+    bld_id = _row_value(row, "bld_id", 0)
+    if bld_id is None:
+        raise HTTPException(status_code=500, detail="Failed to resolve BLD identifier")
+    return bld_id
+
+
+def _normalize_int_list(values: Iterable[Any]) -> List[int]:
+    normalized: List[int] = []
+    for raw in values or []:
+        if raw is None:
+            continue
+        try:
+            parsed = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if parsed > 0:
+            normalized.append(parsed)
+    return normalized
+
+
+def _validate_bld_ids(cursor, bld_ids: Iterable[Any]) -> List[int]:
+    normalized = sorted(set(_normalize_int_list(bld_ids)))
+    if not normalized:
+        return []
+
+    placeholders = ", ".join(["%s"] * len(normalized))
+    cursor.execute(
+        f"SELECT bld_id FROM bld WHERE bld_id IN ({placeholders})",
+        tuple(normalized),
+    )
+    rows = cursor.fetchall() or []
+    valid = {value for value in (_row_value(row, "bld_id", 0) for row in rows) if value is not None}
+
+    invalid = [bid for bid in normalized if bid not in valid]
+    if invalid:
+        raise HTTPException(status_code=400, detail=f"Invalid bld_ids: {invalid}")
+
+    return sorted(valid)
+
+
+def get_item_blds(cursor, item_id: int) -> List[int]:
+    cursor.execute(
+        "SELECT bld_id FROM item_bld_map WHERE item_id = %s ORDER BY bld_id",
+        (item_id,),
+    )
+    rows = cursor.fetchall() or []
+    return [value for value in (_row_value(row, "bld_id", 0) for row in rows) if value is not None]
+
+
+def set_item_blds(cursor, item_id: int, bld_ids: List[int]) -> None:
+    cursor.execute("DELETE FROM item_bld_map WHERE item_id = %s", (item_id,))
+    if not bld_ids:
+        return
+    values = [(item_id, bld_id) for bld_id in bld_ids]
+    cursor.executemany(
+        "INSERT INTO item_bld_map (item_id, bld_id) VALUES (%s, %s)",
+        values,
+    )
+
+
+def attach_bld_ids(cursor, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    if not items:
+        return items
+
+    item_ids = sorted(
+        {
+            int(item_id)
+            for item_id in (item.get("item_id") for item in items)
+            if item_id is not None
+        }
+    )
+    if not item_ids:
+        for item in items:
+            item["bld_ids"] = []
+        return items
+
+    placeholders = ", ".join(["%s"] * len(item_ids))
+    cursor.execute(
+        f"""
+        SELECT item_id, bld_id
+          FROM item_bld_map
+         WHERE item_id IN ({placeholders})
+         ORDER BY item_id, bld_id
+        """,
+        tuple(item_ids),
+    )
+    rows = cursor.fetchall() or []
+    mapping: Dict[int, List[int]] = {}
+    for row in rows:
+        item_id = _row_value(row, "item_id", 0)
+        bld_id = _row_value(row, "bld_id", 1)
+        if item_id is None or bld_id is None:
+            continue
+        mapping.setdefault(item_id, []).append(bld_id)
+
+    for item in items:
+        raw_key = item.get("item_id")
+        try:
+            normalized_key = int(raw_key)
+        except (TypeError, ValueError):
+            normalized_key = None
+        item["bld_ids"] = mapping.get(normalized_key, []) if normalized_key is not None else []
+    return items
+
+
+def filter_items_by_bld(items: List[Dict[str, Any]], bld_id: int) -> List[Dict[str, Any]]:
+    target = int(bld_id)
+    filtered: List[Dict[str, Any]] = []
+    for item in items:
+        ids = item.get("bld_ids") or []
+        try:
+            normalized_ids = {int(i) for i in ids}
+        except (TypeError, ValueError):
+            normalized_ids = set()
+        if target in normalized_ids:
+            filtered.append(item)
+    return filtered
 
 from .config import (
     SECRET_KEY, ALGORITHM,
@@ -1077,6 +1239,7 @@ class ItemUpdatePayload(BaseModel):
     igst: Optional[float] = None
     net_price: Optional[float] = None
     is_combo: Optional[bool] = None
+    bld_ids: Optional[List[int]] = None
 @app.get("/api/products/items", tags=["Products"])
 def get_all_items():
     db = get_db()
@@ -1122,6 +1285,7 @@ def get_all_items():
                     row["max_qty_dinner"] = legacy
             else:
                 raise
+        attach_bld_ids(cursor, records)
         return records
     except mysql.connector.Error as err:
         raise HTTPException(status_code=500, detail=str(err))
@@ -1139,8 +1303,8 @@ def update_item(item_id: int, payload: ItemUpdatePayload, user: Dict[str, Any] =
         available_columns = {row["Field"] for row in cursor.fetchall()}
 
         data = payload.model_dump(exclude_unset=True)
-        if not data:
-            raise HTTPException(status_code=400, detail="No fields provided to update")
+        raw_bld_ids = data.pop("bld_ids", [])
+        normalized_bld_ids = _validate_bld_ids(cursor, raw_bld_ids)
 
         string_fields = {"name", "description", "alias", "uom", "weight_uom", "item_type", "hsn_code", "picture_url"}
         nullable_string_fields = {"description", "alias", "weight_uom", "item_type", "hsn_code", "picture_url"}
@@ -1222,18 +1386,26 @@ def update_item(item_id: int, payload: ItemUpdatePayload, user: Dict[str, Any] =
             values.append(cleaned[field])
             updated_fields.append(column)
 
-        if not set_clauses:
-            raise HTTPException(status_code=400, detail="No valid fields provided to update")
-
-        values.append(item_id)
-        update_query = f"UPDATE items SET {', '.join(set_clauses)} WHERE item_id = %s"
-        cursor.execute(update_query, values)
-        if cursor.rowcount == 0:
+        if set_clauses:
+            values.append(item_id)
+            update_query = f"UPDATE items SET {', '.join(set_clauses)} WHERE item_id = %s"
+            cursor.execute(update_query, values)
+            if cursor.rowcount == 0:
+                cursor.execute("SELECT 1 FROM items WHERE item_id = %s", (item_id,))
+                exists = cursor.fetchone()
+                if not exists:
+                    db.rollback()
+                    raise HTTPException(status_code=404, detail="Item not found")
+        else:
             cursor.execute("SELECT 1 FROM items WHERE item_id = %s", (item_id,))
             exists = cursor.fetchone()
             if not exists:
                 db.rollback()
                 raise HTTPException(status_code=404, detail="Item not found")
+
+        set_item_blds(cursor, item_id, normalized_bld_ids)
+        if "bld_ids" not in updated_fields:
+            updated_fields.append("bld_ids")
 
         db.commit()
 
@@ -1296,7 +1468,9 @@ def update_item(item_id: int, payload: ItemUpdatePayload, user: Dict[str, Any] =
             description=f"Updated item {item_id}: {', '.join(updated_fields)}",
         )
 
-        if not updated_item:
+        if updated_item:
+            updated_item["bld_ids"] = get_item_blds(cursor, item_id)
+        else:
             return {"success": True, "item_id": item_id, "updated_fields": updated_fields}
 
         updated_item["is_combo"] = bool(updated_item.get("is_combo", False))
@@ -1410,49 +1584,43 @@ def get_available_items(bld_type: str = Query(..., description="BLD type: Breakf
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
-        # 1) Find the corresponding bld_id (integer) by matching bld_type (case-insensitive)
-        cursor.execute(
-            "SELECT bld_id FROM bld WHERE LOWER(bld_type) = LOWER(%s) LIMIT 1",
-            (bld_type,)
-        )
-        bld_row = cursor.fetchone()
-        if not bld_row:
-            raise HTTPException(status_code=404, detail="BLD type not found")
+        bld_id = resolve_bld_id(cursor, bld_type)
 
-        bld_id = bld_row["bld_id"]
-
-        # 2) Fetch all items whose bld_id matches that integer
         query = """
             SELECT 
-                item_id,
-                bld_id,
-                name,
-                description,
-                alias,
-                category_id,
-                uom,
-                weight_factor,
-                weight_uom,
-                item_type,
-                hsn_code,
-                factor,
-                quantity_portion,
-                buffer_percentage,
-                max_qty_breakfast,
-                max_qty_lunch,
-                max_qty_dinner,
-                picture_url,
-                breakfast_price,
-                lunch_price,
-                dinner_price,
-                condiments_price,
-                festival_price,
-                cgst,
-                sgst,
-                igst,
-                net_price
-            FROM items
-            WHERE bld_id = %s
+                i.item_id,
+                i.name,
+                i.description,
+                i.alias,
+                i.category_id,
+                i.uom,
+                i.weight_factor,
+                i.weight_uom,
+                i.item_type,
+                i.hsn_code,
+                i.factor,
+                i.quantity_portion,
+                i.buffer_percentage,
+                i.max_qty_breakfast,
+                i.max_qty_lunch,
+                i.max_qty_dinner,
+                i.picture_url,
+                i.breakfast_price,
+                i.lunch_price,
+                i.dinner_price,
+                i.condiments_price,
+                i.festival_price,
+                i.cgst,
+                i.sgst,
+                i.igst,
+                i.net_price
+            FROM items i
+            WHERE EXISTS (
+                SELECT 1 
+                  FROM item_bld_map map
+                 WHERE map.item_id = i.item_id
+                   AND map.bld_id = %s
+            )
         """
         legacy_mode = False
         try:
@@ -1463,33 +1631,37 @@ def get_available_items(bld_type: str = Query(..., description="BLD type: Breakf
                 legacy_mode = True
                 legacy_query = """
                     SELECT
-                        item_id,
-                        bld_id,
-                        name,
-                        description,
-                        alias,
-                        category_id,
-                        uom,
-                        weight_factor,
-                        weight_uom,
-                        item_type,
-                        hsn_code,
-                        factor,
-                        quantity_portion,
-                        buffer_percentage,
-                        max_qty,
-                        picture_url,
-                        breakfast_price,
-                        lunch_price,
-                        dinner_price,
-                        condiments_price,
-                        festival_price,
-                        cgst,
-                        sgst,
-                        igst,
-                        net_price
-                    FROM items
-                    WHERE bld_id = %s
+                        i.item_id,
+                        i.name,
+                        i.description,
+                        i.alias,
+                        i.category_id,
+                        i.uom,
+                        i.weight_factor,
+                        i.weight_uom,
+                        i.item_type,
+                        i.hsn_code,
+                        i.factor,
+                        i.quantity_portion,
+                        i.buffer_percentage,
+                        i.max_qty,
+                        i.picture_url,
+                        i.breakfast_price,
+                        i.lunch_price,
+                        i.dinner_price,
+                        i.condiments_price,
+                        i.festival_price,
+                        i.cgst,
+                        i.sgst,
+                        i.igst,
+                        i.net_price
+                    FROM items i
+                    WHERE EXISTS (
+                        SELECT 1 
+                          FROM item_bld_map map
+                         WHERE map.item_id = i.item_id
+                           AND map.bld_id = %s
+                    )
                 """
                 cursor.execute(legacy_query, (bld_id,))
                 items = cursor.fetchall()
@@ -1503,7 +1675,8 @@ def get_available_items(bld_type: str = Query(..., description="BLD type: Breakf
                 item["max_qty_lunch"] = legacy_value
                 item["max_qty_dinner"] = legacy_value
 
-        return items
+        attach_bld_ids(cursor, items)
+        return filter_items_by_bld(items, bld_id)
 
     except mysql.connector.Error as err:
         raise HTTPException(status_code=500, detail=str(err))
@@ -1523,13 +1696,8 @@ def get_daily_menu(
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
-        # Find bld_id from bld_type
-        cursor.execute("SELECT bld_id FROM bld WHERE LOWER(bld_type)=LOWER(%s) LIMIT 1", (bld_type,))
-        bld_row = cursor.fetchone()
-        if not bld_row:
-            raise HTTPException(status_code=404, detail="BLD type not found")
-
-        bld_id = bld_row["bld_id"]
+        canonical_bld_type = normalize_meal_type(bld_type)
+        bld_id = resolve_bld_id(cursor, canonical_bld_type)
 
         # Fetch menu row for that date and bld_id
         menu_query = """
@@ -1621,7 +1789,7 @@ def get_daily_menu(
             "Lunch": "max_qty_lunch",
             "Dinner": "max_qty_dinner",
             "Condiments": "max_qty_dinner",  # fallback; condiments typically align with dinner defaults
-        }.get(bld_type, "max_qty_breakfast")
+        }.get(canonical_bld_type, "max_qty_breakfast")
 
         return {
             "menu_id": menu_id,
@@ -1631,7 +1799,7 @@ def get_daily_menu(
             "is_production_generated": bool(menu_row["is_production_generated"]),
             "period_type": menu_row["period_type"],
             "bld_id": menu_row["bld_id"],
-            "bld_type": bld_type,
+            "bld_type": canonical_bld_type,
             "items": [
                 {
                     "menu_item_id": it["menu_item_id"],
@@ -1692,12 +1860,8 @@ def upsert_daily_menu(payload: DailyMenuPayload):
     db = get_db()
     cursor = db.cursor()
     try:
-        # Find bld_id from bld_type
-        cursor.execute("SELECT bld_id FROM bld WHERE LOWER(bld_type)=LOWER(%s) LIMIT 1", (payload.bld_type,))
-        bld_row = cursor.fetchone()
-        if not bld_row:
-            raise HTTPException(status_code=404, detail="BLD type not found")
-        bld_id = bld_row[0]
+        canonical_bld_type = normalize_meal_type(payload.bld_type)
+        bld_id = resolve_bld_id(cursor, canonical_bld_type)
 
         # Check if a menu exists for date + bld_id
         find_query = "SELECT menu_id FROM menu WHERE date = %s AND bld_id = %s"
@@ -1762,9 +1926,9 @@ def upsert_daily_menu(payload: DailyMenuPayload):
             action_type=action,
             entity_type="ITEM",
             entity_id=menu_id,
-            description=f"Upserted menu for {payload.date} ({payload.bld_type}) with {len(payload.items)} items",
+            description=f"Upserted menu for {payload.date} ({canonical_bld_type}) with {len(payload.items)} items",
         )
-        return get_daily_menu(date=payload.date, bld_type=payload.bld_type, period_type=payload.period_type)
+        return get_daily_menu(date=payload.date, bld_type=canonical_bld_type, period_type=payload.period_type)
     except mysql.connector.Error as err:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(err))
@@ -1827,6 +1991,7 @@ def auto_generate_daily_menu(payload: AutoMenuRequest, _: Dict[str, Any] = Depen
             "Condiments": "max_qty_dinner",
         }.get(meal, "max_qty_breakfast")
 
+        allow_default = meal != "Dinner"
         menu_items: List[MenuItemPayload] = []
         for index, item in enumerate(limited_items, start=1):
             item_max_qty = item.get(meal_field)
@@ -1842,7 +2007,7 @@ def auto_generate_daily_menu(payload: AutoMenuRequest, _: Dict[str, Any] = Depen
                     max_qty=resolved_max_qty,
                     available_qty=resolved_max_qty,
                     rate=_resolve_item_rate(meal, item),
-                    is_default=True,
+                    is_default=bool(allow_default and index == 1),
                     sort_order=index,
                 )
             )
@@ -1885,19 +2050,16 @@ def clear_daily_menu(payload: AutoMenuRequest, _: Dict[str, Any] = Depends(devel
     cursor = db.cursor(dictionary=True)
     try:
         for meal in MEAL_TYPES:
-            cursor.execute(
-                "SELECT bld_id FROM bld WHERE LOWER(bld_type) = LOWER(%s) LIMIT 1",
-                (meal,),
-            )
-            bld_row = cursor.fetchone()
-            if not bld_row:
-                summary[meal] = {
-                    "status": "skipped",
-                    "reason": "BLD configuration missing.",
-                }
-                continue
-
-            bld_id = bld_row["bld_id"]
+            try:
+                bld_id = resolve_bld_id(cursor, meal)
+            except HTTPException as exc:
+                if exc.status_code == 404:
+                    summary[meal] = {
+                        "status": "skipped",
+                        "reason": "BLD configuration missing.",
+                    }
+                    continue
+                raise
             cursor.execute(
                 "SELECT menu_id FROM menu WHERE date = %s AND bld_id = %s LIMIT 1",
                 (target_date, bld_id),
@@ -1974,35 +2136,35 @@ def _fetch_items_for_meal(bld_type: str) -> List[Dict[str, Any]]:
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
-        cursor.execute(
-            "SELECT bld_id FROM bld WHERE LOWER(bld_type) = LOWER(%s) LIMIT 1",
-            (bld_type,),
-        )
-        row = cursor.fetchone()
-        if not row:
-            return []
-        bld_id = row["bld_id"]
+        bld_id = resolve_bld_id(cursor, bld_type)
         cursor.execute(
             """
             SELECT
-                item_id,
-                category_id,
-                max_qty_breakfast,
-                max_qty_lunch,
-                max_qty_dinner,
-                breakfast_price,
-                lunch_price,
-                dinner_price,
-                condiments_price,
-                net_price,
-                name
-            FROM items
-            WHERE bld_id = %s
-            ORDER BY name
+                i.item_id,
+                i.category_id,
+                i.max_qty_breakfast,
+                i.max_qty_lunch,
+                i.max_qty_dinner,
+                i.breakfast_price,
+                i.lunch_price,
+                i.dinner_price,
+                i.condiments_price,
+                i.net_price,
+                i.name
+            FROM items i
+            WHERE EXISTS (
+                SELECT 1
+                  FROM item_bld_map map
+                 WHERE map.item_id = i.item_id
+                   AND map.bld_id = %s
+            )
+            ORDER BY i.name
             """,
             (bld_id,),
         )
-        return cursor.fetchall()
+        items = cursor.fetchall()
+        attach_bld_ids(cursor, items)
+        return filter_items_by_bld(items, bld_id)
     finally:
         cursor.close()
         db.close()
@@ -2844,15 +3006,8 @@ def generate_production_plan(payload: ProductionPlanRequest):
     cursor = db.cursor(dictionary=True)
     updated = 0
     try:
-        # Get bld_id from menu_type
-        cursor.execute(
-            "SELECT bld_id FROM bld WHERE LOWER(bld_type)=LOWER(%s) LIMIT 1",
-            (payload.menu_type,)
-        )
-        row = cursor.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Invalid menu_type")
-        bld_id = row["bld_id"]
+        canonical_menu_type = normalize_meal_type(payload.menu_type)
+        bld_id = resolve_bld_id(cursor, canonical_menu_type)
 
         # Find menu_id for that date + bld_id
         cursor.execute(
@@ -2897,13 +3052,13 @@ def generate_production_plan(payload: ProductionPlanRequest):
             action_type="UPDATE",
             entity_type="ITEM",
             entity_id=menu_id,
-            description=f"Generated production plan for {payload.date} ({payload.menu_type})",
+            description=f"Generated production plan for {payload.date} ({canonical_menu_type})",
         )
 
         return {
             "success": True,
             "updated_items": updated,
-            "menu_type": payload.menu_type,
+            "menu_type": canonical_menu_type,
             "message": "Production plan saved successfully"
         }
     except mysql.connector.Error as err:
@@ -2923,14 +3078,8 @@ def update_max_quantities(payload: UpdateMaxQtyRequest):
     updated_items: List[Dict[str, float]] = []
 
     try:
-        cursor.execute(
-            "SELECT bld_id FROM bld WHERE LOWER(bld_type)=LOWER(%s) LIMIT 1",
-            (payload.menu_type,),
-        )
-        bld_row = cursor.fetchone()
-        if not bld_row:
-            raise HTTPException(status_code=404, detail="Invalid menu_type")
-        bld_id = bld_row["bld_id"]
+        canonical_menu_type = normalize_meal_type(payload.menu_type)
+        bld_id = resolve_bld_id(cursor, canonical_menu_type)
 
         cursor.execute(
             "SELECT menu_id FROM menu WHERE date=%s AND bld_id=%s LIMIT 1",
@@ -2987,7 +3136,7 @@ def update_max_quantities(payload: UpdateMaxQtyRequest):
             action_type="UPDATE",
             entity_type="ITEM",
             entity_id=menu_id,
-            description=f"Adjusted max quantities for {payload.date} ({payload.menu_type})",
+            description=f"Adjusted max quantities for {payload.date} ({canonical_menu_type})",
         )
 
         return {

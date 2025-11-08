@@ -27,10 +27,17 @@ const normalizeMaxField = (value: unknown): number => {
   return Math.floor(parsed);
 };
 
+const MEAL_OPTIONS = [
+  { id: 1, label: "Breakfast" },
+  { id: 2, label: "Lunch" },
+  { id: 3, label: "Dinner" },
+];
+
 const createInitialFormData = (item: Product | null) => {
   if (item) {
     return {
       ...item,
+      bld_ids: Array.isArray(item.bld_ids) ? [...item.bld_ids] : [],
       max_qty_breakfast: normalizeMaxField(item.max_qty_breakfast),
       max_qty_lunch: normalizeMaxField(item.max_qty_lunch),
       max_qty_dinner: normalizeMaxField(item.max_qty_dinner),
@@ -53,6 +60,7 @@ const createInitialFormData = (item: Product | null) => {
     max_qty_breakfast: 0,
     max_qty_lunch: 0,
     max_qty_dinner: 0,
+    bld_ids: [],
     picture_url: "",
     breakfast_price: 0,
     lunch_price: 0,
@@ -75,6 +83,16 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
 
   const handleChange = (field: string, value: any) => {
     setFormData((prev: any) => ({ ...prev, [field]: value }))
+  }
+
+  const handleMealToggle = (mealId: number, isChecked: boolean) => {
+    setFormData((prev: any) => {
+      const current: number[] = Array.isArray(prev.bld_ids) ? prev.bld_ids : []
+      const without = current.filter((id) => id !== mealId)
+      const next = isChecked ? [...without, mealId] : without
+      next.sort((a, b) => a - b)
+      return { ...prev, bld_ids: next }
+    })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -190,6 +208,27 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                     value={formData.group ?? ""}
                     onChange={(e) => handleChange("group", e.target.value)}
                   />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Meals</Label>
+                  <div className="flex flex-wrap gap-4">
+                    {MEAL_OPTIONS.map((option) => {
+                      const checked =
+                        Array.isArray(formData.bld_ids) && formData.bld_ids.includes(option.id)
+                      return (
+                        <label
+                          key={option.id}
+                          className="flex items-center gap-2 text-sm font-medium text-muted-foreground"
+                        >
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={(value) => handleMealToggle(option.id, value === true)}
+                          />
+                          <span className="text-foreground">{option.label}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="uom">UOM (Unit of Measure) <span className="text-red-500">*</span></Label>

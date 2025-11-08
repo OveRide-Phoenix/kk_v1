@@ -10,7 +10,7 @@ THEN MOVE Extension notes to here..
 
 - [✅] the max qty change the max qty change that we made, i need the items table to have three parameters, maxqty for breakfast lunch dinner, suppose the item is added to dinner then it could have a different max qty, so add that also and tell me the sql changes to make and also make these changes in the product mangement forms and in the daily menu we only seee the corresponding value based on which bld menu it is added to! we made, i need the items table to have three parameters, maxqty for breakfast lunch dinner, suppose the item is added to dinner then it could have a different max qty, so add that also and tell me the sql changes to make
 
-- [ ] what is the logic for add breakfast item, add lunch item? are we checking bld_id and rendering it? if so some items can be part all three bld, breakfast, lunch and dinner, so make it an array and also handle in the backend, and the api's and the front end that we are able to crud this value...and in the daily menu when we are adding an item we check that array and then render all items that belong to the respective menu. take care of this even in the auto menu builder and stuff if required and wherever else it is used across the app.. and in the product mangement, give checkboxes to say its a breakfast item, lunch item or dinner item, that updates the bld_id array respectively..
+- [✅] what is the logic for add breakfast item, add lunch item? are we checking bld_id and rendering it? if so some items can be part all three bld, breakfast, lunch and dinner, so make it an array and also handle in the backend, and the api's and the front end that we are able to crud this value...and in the daily menu when we are adding an item we check that array and then render all items that belong to the respective menu. take care of this even in the auto menu builder and stuff if required and wherever else it is used across the app.. and in the product mangement, give checkboxes to say its a breakfast item, lunch item or dinner item, that updates the bld_id array respectively..
 
 1. bld id's
 
@@ -223,6 +223,8 @@ THEN MOVE Extension notes to here..
 - [ ] reorderable sidebar!! give a small edit icon in the bottom right, and i hsould be able to reorder it..(store preferences in a new table?)
 
 - [ ] add a menu type field in daily menu, that defaults to one day menu but allows us to set other stuff - but this is not a good way to do it, what if i want to create the condiments menu only, there needs to be a better approach
+
+- [] remove city for admin login
 
 - [✅] add the developer pages inside the admin routing so that auth guard and stuff works for that in addition to the regular checking if the user has develpoer roles before making any changes/actions from those pages..take role based access seriously implement it at a router level, so api's dont check for roles because you cant even be on this page if you dont have the role (unless api is checking for role then well and good)
 
