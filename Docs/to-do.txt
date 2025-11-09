@@ -5,9 +5,17 @@ THEN MOVE Extension notes to here..
 #---------------------------------------------------------------------------------------------------------------
 
 
-- [] in the order history page when i view an order, show the total amount below the items table not above..
+- [✅] in the order history page when i view an order, show the total amount below the items table not above..
 
-- [] in kitchen production when i saw export i mean to export only the meal that is selected
+- [✅] in kitchen production when i saw export i mean to export only the meal that is selected
+
+- [] In the order test page, under seed orders when i select the date, it should use the correct styling, use the same calendar as daily menu page!!
+
+
+
+- [✅] any edit in the qty must also say needs re-export..thats the whole point.. also the export button in kichen production is opening a dialog that doesnt fit in the screen, add scroll bar, and make sure that the api allows us to export only one meal's plan.... also move that button to the top next to save...and also save and export are two different things, save is to save progress if we edit the plan, export is what should hit the api and say that plan has been genereated, if required whehn we save you can update the satus of plan generated to In progress or something similar.
+
+- [] customer orders in the kitchen production plan shuold show the number of orders recived for that item + existing order items of subscription (not yet implemented) but why is it showing the buffer number now??
 
 - [] if i try to export a kitchen production plan where nothing is there, im getting this error: Error: Failed to save production plan
     at handleSaveCategory (http://localhost:3000/_next/static/chunks/src_f0716ca3._.js:4994:37)
@@ -15,6 +23,8 @@ THEN MOVE Extension notes to here..
 
     but i also see error handling dialog, sont show any browswer dialogs and stuff, handle it gracefully
 
+
+- [] there can be a scenario where the order contains some items from breakfast and some from lunch, so for such orders how to update the order status? becasue in kitchen production i could just export the breakfast's plan which should update all orders that have any item from that day's breakfast menu, so figure that out..
 
 
 

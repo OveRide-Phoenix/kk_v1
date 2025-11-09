@@ -905,9 +905,6 @@ export default function OrderHistoryPage() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-semibold text-foreground">Items</h4>
-                  <span className="text-sm text-muted-foreground">
-                    Total: {formatCurrency(selectedOrder.total_price)}
-                  </span>
                 </div>
                 <ScrollArea className="max-h-72 rounded-md border">
                   <Table>
@@ -933,6 +930,9 @@ export default function OrderHistoryPage() {
                     </TableBody>
                   </Table>
                 </ScrollArea>
+                <div className="flex justify-end text-sm font-semibold text-foreground">
+                  <span>Total: {formatCurrency(selectedOrder.total_price)}</span>
+                </div>
               </div>
 
               <Separator />

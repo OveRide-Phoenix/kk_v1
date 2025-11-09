@@ -45,9 +45,9 @@ const primaryNavigationItems = [
 ];
 
 const developerNavigationItems = [
+  { name: "Auto Menu Builder", icon: Sparkles, href: "/admin/developer/auto-menu", id: "dev-auto-menu" },
   { name: "Place Order", icon: Code2, href: "/admin/developer/ordertest", id: "ordertest" },
   { name: "DB Schema", icon: Database, href: "/admin/developer/db-schema", id: "dbschema" },
-  { name: "Auto Menu Builder", icon: Sparkles, href: "/admin/developer/auto-menu", id: "dev-auto-menu" },
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ 

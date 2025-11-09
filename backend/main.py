@@ -3282,6 +3282,11 @@ class ProductionPlanRequest(BaseModel):
     plans: List[ProductionPlanItem]
     city_code: Optional[str] = None
 
+class ProductionPlanResetRequest(BaseModel):
+    date: str
+    menu_type: str
+    city_code: Optional[str] = None
+
 class MaxQtyUpdate(BaseModel):
     item_name: str
     additional_qty: float = Field(..., gt=0)
@@ -3626,17 +3631,10 @@ def generate_production_plan(payload: ProductionPlanRequest):
             updated += cursor.rowcount
 
 
-        # Mark plan as generated
+        # Keep plan marked as in-progress
         cursor.execute(
-            "UPDATE menu SET is_production_generated = 1 WHERE menu_id=%s", (menu_id,)
-        )
-
-        _bulk_update_order_status_for_date(
-            cursor,
-            payload.date,
-            target_city,
-            ORDER_STATUS_PREPARING,
-            [ORDER_STATUS_PENDING, ORDER_STATUS_CONFIRMED],
+            "UPDATE menu SET is_production_generated = 0 WHERE menu_id=%s",
+            (menu_id,),
         )
         db.commit()
 
@@ -3646,14 +3644,131 @@ def generate_production_plan(payload: ProductionPlanRequest):
             action_type="UPDATE",
             entity_type="ITEM",
             entity_id=menu_id,
-            description=f"Generated production plan for {payload.date} {target_city} ({canonical_menu_type})",
+            description=f"Saved production plan for {payload.date} {target_city} ({canonical_menu_type})",
         )
 
         return {
             "success": True,
             "updated_items": updated,
             "menu_type": canonical_menu_type,
-            "message": "Production plan saved successfully"
+            "message": "Production plan saved successfully",
+        }
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+@app.post("/api/production/reopen", tags=["Production"])
+def reopen_production_plan(payload: ProductionPlanResetRequest):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        canonical_menu_type = normalize_meal_type(payload.menu_type)
+        bld_id = resolve_bld_id(cursor, canonical_menu_type)
+        target_city = normalize_city_code(payload.city_code or DEFAULT_CITY)
+
+        cursor.execute(
+            "SELECT menu_id FROM menu WHERE date=%s AND bld_id=%s AND city_code=%s LIMIT 1",
+            (payload.date, bld_id, target_city),
+        )
+        menu_row = cursor.fetchone()
+        if not menu_row:
+            raise HTTPException(status_code=404, detail="Menu not found for that date/type")
+
+        menu_id = int(menu_row["menu_id"])
+
+        cursor.execute(
+            "UPDATE menu SET is_production_generated = 0 WHERE menu_id = %s",
+            (menu_id,),
+        )
+
+        reverted_orders = _bulk_update_order_status_for_date(
+            cursor,
+            payload.date,
+            target_city,
+            ORDER_STATUS_CONFIRMED,
+            [ORDER_STATUS_PREPARING],
+        )
+
+        db.commit()
+
+        log_admin_action(
+            db,
+            admin_id=None,
+            action_type="UPDATE",
+            entity_type="ITEM",
+            entity_id=menu_id,
+            description=f"Reopened production plan for {payload.date} {target_city} ({canonical_menu_type})",
+        )
+
+        return {
+            "success": True,
+            "menu_type": canonical_menu_type,
+            "orders_reverted": reverted_orders,
+        }
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+@app.post("/api/production/finalize", tags=["Production"])
+def finalize_production_plan(payload: ProductionPlanResetRequest):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        canonical_menu_type = normalize_meal_type(payload.menu_type)
+        bld_id = resolve_bld_id(cursor, canonical_menu_type)
+        target_city = normalize_city_code(payload.city_code or DEFAULT_CITY)
+
+        cursor.execute(
+            "SELECT menu_id FROM menu WHERE date=%s AND bld_id=%s AND city_code=%s LIMIT 1",
+            (payload.date, bld_id, target_city),
+        )
+        menu_row = cursor.fetchone()
+        if not menu_row:
+            raise HTTPException(status_code=404, detail="Menu not found for that date/type")
+
+        menu_id = int(menu_row["menu_id"])
+
+        cursor.execute(
+            "SELECT COUNT(1) AS item_count FROM menu_items WHERE menu_id=%s",
+            (menu_id,),
+        )
+        item_row = cursor.fetchone() or {"item_count": 0}
+        if int(item_row.get("item_count") or 0) == 0:
+            raise HTTPException(status_code=400, detail="No items available to export for this menu")
+
+        cursor.execute(
+            "UPDATE menu SET is_production_generated = 1 WHERE menu_id = %s",
+            (menu_id,),
+        )
+
+        _bulk_update_order_status_for_date(
+            cursor,
+            payload.date,
+            target_city,
+            ORDER_STATUS_PREPARING,
+            [ORDER_STATUS_PENDING, ORDER_STATUS_CONFIRMED],
+        )
+
+        db.commit()
+
+        log_admin_action(
+            db,
+            admin_id=None,
+            action_type="UPDATE",
+            entity_type="ITEM",
+            entity_id=menu_id,
+            description=f"Finalized production plan for {payload.date} {target_city} ({canonical_menu_type})",
+        )
+
+        return {
+            "success": True,
+            "menu_type": canonical_menu_type,
         }
     except mysql.connector.Error as err:
         db.rollback()
@@ -4080,11 +4195,11 @@ def get_production_orders_summary(
             "((m.period_type IS NULL AND %s IS NULL) OR m.period_type = %s)",
             "m.city_code = %s",
         ]
-        params: List = [date, resolved_city, date, normalized_period, normalized_period, resolved_city]
+        clause_params: List[Any] = [date, normalized_period, normalized_period, resolved_city]
 
         if menu_type:
             where_clauses.append("LOWER(b.bld_type) = LOWER(%s)")
-            params.append(menu_type)
+            clause_params.append(menu_type)
 
         query = f"""
             WITH order_totals AS (
@@ -4117,7 +4232,7 @@ def get_production_orders_summary(
             ORDER BY b.bld_type, i.name
         """
 
-        summary_params = [date] + params
+        summary_params = [date, resolved_city, *clause_params]
         cursor.execute(query, summary_params)
         rows = cursor.fetchall() or []
 
