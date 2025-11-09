@@ -1,12 +1,13 @@
 from calendar import month
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import re
 import mysql.connector
 from mysql.connector import errorcode
 from fastapi import FastAPI, HTTPException, Query, Depends
 from pydantic import BaseModel, Field
-from decimal import Decimal
 from typing import Any, Dict, Iterable, List, Optional, Tuple
+import random
+from collections import defaultdict
 from fastapi.middleware.cors import CORSMiddleware
 import csv
 import io
@@ -33,6 +34,7 @@ from .utils.rbac import (
     parse_role_ids,
     roles_to_json,
 )
+from .city_config import DEFAULT_CITY, CityCode, normalize_city_code, city_supports_food, city_supports_condiments
 
 class OrderStatusUpdate(BaseModel):
     status: str = Field(..., min_length=1, max_length=50)
@@ -299,6 +301,204 @@ def _user_has_role(user: Dict[str, Any], role_code: str) -> bool:
     legacy_role = user.get("role")
     return legacy_role == role_code
 
+CITY_NAME_TO_CODE = {
+    "mysore": "MYS",
+    "mysuru": "MYS",
+    "blr": "BLR",
+    "bangalore": "BLR",
+    "bengaluru": "BLR",
+}
+
+CITY_CODE_TO_LABEL = {
+    "MYS": "Mysore",
+    "BLR": "Bangalore",
+}
+
+MENU_TYPE_ONE_DAY = "ONE_DAY"
+MENU_TYPE_CONDIMENTS = "CONDIMENTS"
+
+VALID_MENU_TYPES = {MENU_TYPE_ONE_DAY, MENU_TYPE_CONDIMENTS}
+CONDIMENTS_BLD_TYPE = "Condiments"
+
+ORDER_STATUS_PENDING = "Confirmed - Payment Due"
+ORDER_STATUS_CONFIRMED = "Confirmed"
+ORDER_STATUS_PREPARING = "Preparing"
+ORDER_STATUS_ON_THE_WAY = "On the Way"
+ORDER_STATUS_DELIVERED = "Delivered"
+ORDER_STATUS_CANCELLED = "Cancelled"
+
+_ORDER_STATUS_ALIASES = {
+    "pending": ORDER_STATUS_PENDING,
+    "payment due": ORDER_STATUS_PENDING,
+    "awaiting payment": ORDER_STATUS_PENDING,
+    "confirmed - payment due": ORDER_STATUS_PENDING,
+    "confirmed but needs to pay": ORDER_STATUS_PENDING,
+    "confirmed": ORDER_STATUS_CONFIRMED,
+    "preparing": ORDER_STATUS_PREPARING,
+    "in progress": ORDER_STATUS_PREPARING,
+    "processing": ORDER_STATUS_PREPARING,
+    "on the way": ORDER_STATUS_ON_THE_WAY,
+    "out for delivery": ORDER_STATUS_ON_THE_WAY,
+    "en route": ORDER_STATUS_ON_THE_WAY,
+    "delivered": ORDER_STATUS_DELIVERED,
+    "completed": ORDER_STATUS_DELIVERED,
+    "complete": ORDER_STATUS_DELIVERED,
+    "cancelled": ORDER_STATUS_CANCELLED,
+    "canceled": ORDER_STATUS_CANCELLED,
+}
+
+ORDER_STATUS_ALLOWED = set(_ORDER_STATUS_ALIASES.values())
+PENDING_ORDER_STATUS_NAMES = {
+    ORDER_STATUS_PENDING.lower(),
+    ORDER_STATUS_CONFIRMED.lower(),
+    ORDER_STATUS_PREPARING.lower(),
+    ORDER_STATUS_ON_THE_WAY.lower(),
+    "pending",
+    "in progress",
+    "processing",
+}
+
+
+def get_food_meals_for_city(city_code: CityCode) -> List[str]:
+    if not city_supports_food(city_code):
+        return []
+    return ["Breakfast", "Lunch", "Dinner"]
+
+
+def get_supported_meals_for_city(city_code: CityCode) -> List[str]:
+    meals = get_food_meals_for_city(city_code)
+    if city_supports_condiments(city_code):
+        meals.append("Condiments")
+    return meals
+
+_MENU_HAS_TYPE_COLUMN: Optional[bool] = None
+
+
+def _ensure_menu_type_column(db) -> None:
+    global _MENU_HAS_TYPE_COLUMN
+    if _MENU_HAS_TYPE_COLUMN:
+        return
+    cursor = db.cursor()
+    try:
+        cursor.execute("SHOW COLUMNS FROM menu LIKE 'menu_type'")
+        has_column = cursor.fetchone() is not None
+        if not has_column:
+            cursor.execute(
+                "ALTER TABLE menu ADD COLUMN menu_type VARCHAR(20) NOT NULL DEFAULT 'ONE_DAY'"
+            )
+            db.commit()
+        _MENU_HAS_TYPE_COLUMN = True
+    finally:
+        cursor.close()
+
+
+def normalize_order_status(value: str) -> str:
+    key = value.strip().lower()
+    base = key.replace(" (payment due)", "")
+    if not base:
+        raise HTTPException(status_code=400, detail="Status is required")
+    normalized = _ORDER_STATUS_ALIASES.get(base) or _ORDER_STATUS_ALIASES.get(key)
+    if not normalized:
+        raise HTTPException(status_code=400, detail=f"Unsupported status '{value}'")
+    return normalized
+
+
+def format_status_with_payment(status: Optional[str], paid: Optional[bool]) -> str:
+    base = normalize_status_for_response(status)
+    if paid:
+        return base
+    if "payment due" in base.lower():
+        return base
+    return f"{base} (Payment Due)"
+
+
+def _bulk_update_order_status_for_date(
+    cursor,
+    target_date: str,
+    city_code: CityCode,
+    new_status: str,
+    allowed_previous_statuses: Iterable[str],
+) -> int:
+    normalized_previous = sorted(
+        {status.lower() for status in allowed_previous_statuses if status}
+    )
+    if not normalized_previous:
+        return 0
+    placeholders = ", ".join(["%s"] * len(normalized_previous))
+    params = [new_status, new_status, target_date, city_code, *normalized_previous]
+    status_compare_expr = "LOWER(REPLACE(COALESCE(o.status, ''), ' (Payment Due)', ''))"
+    cursor.execute(
+        f"""
+        UPDATE orders o
+        JOIN addresses a ON o.address_id = a.address_id
+           SET o.status = CASE WHEN o.paid = 1 THEN %s ELSE CONCAT(%s, ' (Payment Due)') END
+         WHERE DATE(o.created_at) = %s
+           AND a.city_code = %s
+           AND {status_compare_expr} IN ({placeholders})
+        """,
+        tuple(params),
+    )
+    return cursor.rowcount
+
+
+def normalize_status_for_response(value: Optional[str]) -> str:
+    try:
+        return normalize_order_status(value or "")
+    except HTTPException:
+        return value or ORDER_STATUS_PENDING
+
+
+def _resolve_city_code(label: Optional[str], code: Optional[str]) -> CityCode:
+    if code:
+        return normalize_city_code(code)
+    if label:
+        mapped = CITY_NAME_TO_CODE.get(label.strip().lower())
+        if mapped:
+            return normalize_city_code(mapped)
+    return DEFAULT_CITY
+
+
+def _normalize_city_label(label: Optional[str], city_code: CityCode) -> str:
+    if label:
+        stripped = label.strip()
+        if stripped:
+            return stripped
+    return CITY_CODE_TO_LABEL.get(city_code, city_code)
+
+
+def _customer_has_city(cursor, customer_id: int, city_code: CityCode) -> bool:
+    cursor.execute(
+        "SELECT 1 FROM addresses WHERE customer_id=%s AND city_code=%s LIMIT 1",
+        (customer_id, city_code),
+    )
+    return cursor.fetchone() is not None
+
+
+def _resolve_city_context(city_override: Optional[str], user: Optional[Dict[str, Any]]) -> CityCode:
+    if city_override:
+        return normalize_city_code(city_override)
+    if user:
+        code = user.get("city_code")
+        if isinstance(code, str) and code.strip():
+            return normalize_city_code(code)
+    return DEFAULT_CITY
+
+
+def normalize_menu_type(value: Optional[str]) -> str:
+    if not value:
+        return MENU_TYPE_ONE_DAY
+    upper = value.strip().upper()
+    if upper in VALID_MENU_TYPES:
+        return upper
+    raise HTTPException(status_code=400, detail="Invalid menu_type")
+
+
+def ensure_menu_allowed(city_code: CityCode, menu_type: str):
+    if menu_type == MENU_TYPE_ONE_DAY and not city_supports_food(city_code):
+        raise HTTPException(status_code=400, detail="This city does not support food menus yet.")
+    if menu_type == MENU_TYPE_CONDIMENTS and not city_supports_condiments(city_code):
+        raise HTTPException(status_code=400, detail="This city does not support condiments menus yet.")
+
 
 def get_admin_role_id(db) -> Optional[int]:
     cursor = db.cursor()
@@ -522,6 +722,18 @@ def get_current_user(request: Request, creds: HTTPAuthorizationCredentials | Non
 
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
+def get_optional_user(request: Request, creds: HTTPAuthorizationCredentials | None = Depends(bearer)):
+    token = _read_access_token(request, creds)
+    if not token:
+        return None
+    try:
+        payload = decode_token(token)
+        if payload.get("type") != "access":
+            return None
+        return payload["sub"]
+    except Exception:
+        return None
+
 def admin_required(user = Depends(get_current_user)):
     if not user or not _user_has_role(user, ADMIN_ROLE_CODE):
         raise HTTPException(status_code=403, detail="Admin only")
@@ -544,7 +756,9 @@ def get_city(phone: str):
     try:
         query = """
         SELECT 
+            c.customer_id,
             a.city,
+            a.city_code,
             c.roles
         FROM customers c
         INNER JOIN addresses a ON c.customer_id = a.customer_id
@@ -560,8 +774,15 @@ def get_city(phone: str):
         roles = parse_role_ids(result.get("roles"))
         _, role_codes, role_details = build_role_context(db, roles)
         is_admin = ADMIN_ROLE_CODE in role_codes
+        cursor.execute(
+            "SELECT DISTINCT city_code FROM addresses WHERE customer_id=%s",
+            (result["customer_id"],),
+        )
+        eligible_rows = cursor.fetchall() or []
         return {
             "city": result["city"],
+            "city_code": result.get("city_code") or DEFAULT_CITY,
+            "eligible_city_codes": [row.get("city_code") or DEFAULT_CITY for row in eligible_rows],
             "is_admin": bool(is_admin),
             "roles": roles,
             "role_codes": role_codes,
@@ -595,6 +816,7 @@ class CustomerCreate(BaseModel):
     house_apartment_no: Optional[str] = None
     written_address: str
     city: str
+    city_code: Optional[str] = None
     pin_code: str
     latitude: float
     longitude: float
@@ -609,6 +831,8 @@ def register_user(user: CustomerCreate):
     cursor = db.cursor()
 
     try:
+        normalized_city_code = _resolve_city_code(user.city, user.city_code)
+        city_label = _normalize_city_label(user.city, normalized_city_code)
         # Insert into customers
         cursor.execute("""
             INSERT INTO customers (referred_by, primary_mobile, alternative_mobile, name, recipient_name, payment_frequency, email)
@@ -619,9 +843,21 @@ def register_user(user: CustomerCreate):
 
         # Insert into addresses
         cursor.execute("""
-            INSERT INTO addresses (customer_id, house_apartment_no, written_address, city, pin_code, latitude, longitude, address_type, route_assignment, is_default)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (customer_id, user.house_apartment_no, user.written_address, user.city, user.pin_code, user.latitude, user.longitude, user.address_type, user.route_assignment, user.is_default))
+            INSERT INTO addresses (customer_id, house_apartment_no, written_address, city, city_code, pin_code, latitude, longitude, address_type, route_assignment, is_default)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            customer_id,
+            user.house_apartment_no,
+            user.written_address,
+            city_label,
+            normalized_city_code,
+            user.pin_code,
+            user.latitude,
+            user.longitude,
+            user.address_type,
+            user.route_assignment,
+            user.is_default,
+        ))
 
         db.commit()
         return {"success": True}
@@ -642,6 +878,7 @@ class CustomerCreate(BaseModel):
     house_apartment_no: Optional[str] = None
     written_address: str
     city: str
+    city_code: Optional[str] = None
     pin_code: str
     latitude: Optional[float] = None
     longitude: Optional[float] = None
@@ -656,6 +893,8 @@ def register_customer(data: CustomerCreate):
     cursor = db.cursor()
 
     try:
+        normalized_city_code = _resolve_city_code(data.city, data.city_code)
+        city_label = _normalize_city_label(data.city, normalized_city_code)
         # Check if the mobile number already exists
         cursor.execute("SELECT id FROM customers WHERE primary_mobile = %s", (data.primary_mobile,))
         existing_customer = cursor.fetchone()
@@ -673,9 +912,21 @@ def register_customer(data: CustomerCreate):
 
         # Insert address details with address_type from dropdown and is_default set to True
         cursor.execute("""
-            INSERT INTO addresses (customer_id, house_apartment_no, written_address, city, pin_code, latitude, longitude, address_type, route_assignment, is_default)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (customer_id, data.house_apartment_no, data.written_address, data.city, data.pin_code, data.latitude, data.longitude, data.address_type, data.route_assignment, True))
+            INSERT INTO addresses (customer_id, house_apartment_no, written_address, city, city_code, pin_code, latitude, longitude, address_type, route_assignment, is_default)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            customer_id,
+            data.house_apartment_no,
+            data.written_address,
+            city_label,
+            normalized_city_code,
+            data.pin_code,
+            data.latitude,
+            data.longitude,
+            data.address_type,
+            data.route_assignment,
+            True,
+        ))
 
         db.commit()
         return {"success": True, "customer_id": customer_id}
@@ -698,6 +949,7 @@ def register_customer(data: CustomerCreate):
 class LoginRequest(BaseModel):
     phone: str
     admin_password: Optional[str]
+    city_code: Optional[str] = None
 
 
 class RoleCreateRequest(BaseModel):
@@ -770,6 +1022,30 @@ def login(data: LoginRequest, response: Response):
                 raise HTTPException(status_code=401, detail="Invalid admin password")
             admin_login = True
 
+        if not admin_password_provided and not data.city_code:
+            raise HTTPException(status_code=400, detail="Please select a city to continue.")
+
+        requested_city_code = _resolve_city_code(None, data.city_code)
+        if not admin_password_provided and not _customer_has_city(cursor, result["customer_id"], requested_city_code):
+            raise HTTPException(
+                status_code=403,
+                detail="You are not registered for this city yet. Please add an address in this city to continue.",
+            )
+
+        cursor.execute(
+            "SELECT DISTINCT city_code FROM addresses WHERE customer_id=%s",
+            (result["customer_id"],),
+        )
+        eligible_rows = cursor.fetchall() or []
+        eligible_codes = []
+        for row in eligible_rows:
+            code = row.get("city_code")
+            if not code:
+                continue
+            eligible_codes.append(normalize_city_code(code))
+        if requested_city_code not in eligible_codes:
+            eligible_codes.append(requested_city_code)
+
         base_payload = {
             "customer_id": result["customer_id"],
             "phone": result["phone_number"],
@@ -778,6 +1054,8 @@ def login(data: LoginRequest, response: Response):
             "role_codes": role_codes,
             "is_admin": has_admin_role,
             "admin_is_active": admin_is_active,
+            "city_code": requested_city_code,
+            "eligible_city_codes": eligible_codes or [requested_city_code],
         }
         if has_admin_role:
             base_payload["admin_id"] = result["customer_id"]
@@ -1073,8 +1351,21 @@ def fetch_customer(customer_id: int, db=Depends(get_db)):
     return get_customer_by_id(db, customer_id)
 
 @app.get("/get-all-customers", response_model=list)
-def fetch_all_customers(db=Depends(get_db)):
-    return get_all_customers(db)
+def fetch_all_customers(
+    city_code: Optional[str] = Query(None, description="Optional city filter"),
+    db=Depends(get_db),
+):
+    return get_all_customers(db, city_code)
+
+
+@app.get("/api/admin/customers", tags=["Admin"])
+def fetch_admin_customers(
+    city_code: Optional[str] = Query(None, description="Override city scope"),
+    user: Dict[str, Any] = Depends(admin_required),
+    db=Depends(get_db),
+):
+    resolved_city = _resolve_city_context(city_code, user)
+    return get_all_customers(db, resolved_city)
 
 @app.put("/update-customer/{customer_id}", response_model=dict)
 def modify_customer(customer_id: int, customer: CustomerUpdate, db=Depends(get_db)):
@@ -1240,53 +1531,103 @@ class ItemUpdatePayload(BaseModel):
     net_price: Optional[float] = None
     is_combo: Optional[bool] = None
     bld_ids: Optional[List[int]] = None
+    is_condiment: Optional[bool] = None
 @app.get("/api/products/items", tags=["Products"])
-def get_all_items():
+def get_all_items(
+    only_condiments: Optional[bool] = Query(
+        None, description="When true, returns only condiment items", alias="only_condiments"
+    ),
+):
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
-        try:
-            cursor.execute("""
+        cursor.execute("SHOW COLUMNS FROM items")
+        available_columns = {row["Field"] for row in cursor.fetchall()}
+
+        has_meal_specific_max = {
+            "max_qty_breakfast",
+            "max_qty_lunch",
+            "max_qty_dinner",
+        }.issubset(available_columns)
+        has_legacy_max = "max_qty" in available_columns
+        has_condiment_flag = "is_condiment" in available_columns
+
+        max_columns_sql: List[str] = []
+        if has_meal_specific_max:
+            max_columns_sql.extend(
+                [
+                    "i.max_qty_breakfast",
+                    "i.max_qty_lunch",
+                    "i.max_qty_dinner",
+                ]
+            )
+        elif has_legacy_max:
+            max_columns_sql.extend(
+                [
+                    "i.max_qty AS max_qty_breakfast",
+                    "i.max_qty AS max_qty_lunch",
+                    "i.max_qty AS max_qty_dinner",
+                ]
+            )
+        else:
+            max_columns_sql.extend(
+                [
+                    "NULL AS max_qty_breakfast",
+                    "NULL AS max_qty_lunch",
+                    "NULL AS max_qty_dinner",
+                ]
+            )
+
+        is_condiment_sql = "i.is_condiment" if has_condiment_flag else "0 AS is_condiment"
+
+        select_columns = [
+            "i.item_id",
+            "i.name",
+            "i.description",
+            "i.alias",
+            "i.category_id",
+            "c.category_name",
+            "i.uom",
+            "i.weight_factor",
+            "i.weight_uom",
+            "i.item_type",
+            "i.hsn_code",
+            "i.factor",
+            "i.quantity_portion",
+            "i.buffer_percentage",
+            *max_columns_sql,
+            "i.picture_url",
+            "i.breakfast_price",
+            "i.lunch_price",
+            "i.dinner_price",
+            "i.condiments_price",
+            "i.festival_price",
+            "i.cgst",
+            "i.sgst",
+            "i.igst",
+            "i.net_price",
+            is_condiment_sql,
+        ]
+
+        select_sql = ",\n                    ".join(select_columns)
+        cursor.execute(
+            f"""
                 SELECT 
-                    i.item_id, i.name, i.description, i.alias, i.category_id, c.category_name,
-                    i.uom, i.weight_factor, i.weight_uom, i.item_type, i.hsn_code, i.factor,
-                    i.quantity_portion,
-                    i.buffer_percentage,
-                    i.max_qty_breakfast,
-                    i.max_qty_lunch,
-                    i.max_qty_dinner,
-                    i.picture_url,
-                    i.breakfast_price, i.lunch_price, i.dinner_price, i.condiments_price, i.festival_price,
-                    i.cgst, i.sgst, i.igst, i.net_price
+                    {select_sql}
                 FROM items i
                 LEFT JOIN categories c ON i.category_id = c.category_id
-            """)
-            records = cursor.fetchall()
-        except mysql.connector.Error as err:
-            if err.errno == errorcode.ER_BAD_FIELD_ERROR:
-                cursor.execute("""
-                    SELECT 
-                        i.item_id, i.name, i.description, i.alias, i.category_id, c.category_name,
-                        i.uom, i.weight_factor, i.weight_uom, i.item_type, i.hsn_code, i.factor,
-                        i.quantity_portion,
-                        i.buffer_percentage,
-                        i.max_qty,
-                        i.picture_url,
-                        i.breakfast_price, i.lunch_price, i.dinner_price, i.condiments_price, i.festival_price,
-                        i.cgst, i.sgst, i.igst, i.net_price
-                    FROM items i
-                    LEFT JOIN categories c ON i.category_id = c.category_id
-                """)
-                records = cursor.fetchall()
-                for row in records:
-                    legacy = row.pop("max_qty", None)
-                    row["max_qty_breakfast"] = legacy
-                    row["max_qty_lunch"] = legacy
-                    row["max_qty_dinner"] = legacy
-            else:
-                raise
+            """
+        )
+        records = cursor.fetchall()
+
         attach_bld_ids(cursor, records)
-        return records
+        normalized_records = []
+        for row in records:
+            row["is_condiment"] = bool(row.get("is_condiment"))
+            if only_condiments and not row["is_condiment"]:
+                continue
+            normalized_records.append(row)
+        return normalized_records
     except mysql.connector.Error as err:
         raise HTTPException(status_code=500, detail=str(err))
     finally:
@@ -1323,6 +1664,7 @@ def update_item(item_id: int, payload: ItemUpdatePayload, user: Dict[str, Any] =
             "igst",
             "net_price",
         }
+        bool_fields = {"is_combo", "is_condiment"}
 
         cleaned: Dict[str, Any] = {}
         for field, value in data.items():
@@ -1340,7 +1682,7 @@ def update_item(item_id: int, payload: ItemUpdatePayload, user: Dict[str, Any] =
                     value = float(value)
                 except (TypeError, ValueError):
                     value = None
-            if field == "is_combo" and value is not None:
+            if field in bool_fields and value is not None:
                 value = 1 if value else 0
             cleaned[field] = value
 
@@ -1371,6 +1713,7 @@ def update_item(item_id: int, payload: ItemUpdatePayload, user: Dict[str, Any] =
             "igst": "igst",
             "net_price": "net_price",
             "is_combo": "is_combo",
+            "is_condiment": "is_condiment",
         }
 
         field_map = {field: column for field, column in field_map.items() if column in available_columns}
@@ -1424,7 +1767,8 @@ def update_item(item_id: int, payload: ItemUpdatePayload, user: Dict[str, Any] =
                     i.picture_url,
                     i.breakfast_price, i.lunch_price, i.dinner_price, i.condiments_price, i.festival_price,
                     i.cgst, i.sgst, i.igst, i.net_price,
-                    i.is_combo
+                    i.is_combo,
+                    i.is_condiment
                 FROM items i
                 LEFT JOIN categories c ON i.category_id = c.category_id
                 WHERE i.item_id = %s
@@ -1446,7 +1790,9 @@ def update_item(item_id: int, payload: ItemUpdatePayload, user: Dict[str, Any] =
                         i.max_qty_dinner,
                         i.picture_url,
                         i.breakfast_price, i.lunch_price, i.dinner_price, i.condiments_price, i.festival_price,
-                        i.cgst, i.sgst, i.igst, i.net_price
+                        i.cgst, i.sgst, i.igst, i.net_price,
+                        0 AS is_combo,
+                        0 AS is_condiment
                     FROM items i
                     LEFT JOIN categories c ON i.category_id = c.category_id
                     WHERE i.item_id = %s
@@ -1474,6 +1820,7 @@ def update_item(item_id: int, payload: ItemUpdatePayload, user: Dict[str, Any] =
             return {"success": True, "item_id": item_id, "updated_fields": updated_fields}
 
         updated_item["is_combo"] = bool(updated_item.get("is_combo", False))
+        updated_item["is_condiment"] = bool(updated_item.get("is_condiment", False))
 
         return {
             "success": True,
@@ -1586,6 +1933,8 @@ def get_available_items(bld_type: str = Query(..., description="BLD type: Breakf
     try:
         bld_id = resolve_bld_id(cursor, bld_type)
 
+        canonical_meal = normalize_meal_type(bld_type)
+        require_condiments_only = canonical_meal == CONDIMENTS_BLD_TYPE
         query = """
             SELECT 
                 i.item_id,
@@ -1622,6 +1971,8 @@ def get_available_items(bld_type: str = Query(..., description="BLD type: Breakf
                    AND map.bld_id = %s
             )
         """
+        if require_condiments_only:
+            query += " AND i.is_condiment = 1"
         legacy_mode = False
         try:
             cursor.execute(query, (bld_id,))
@@ -1663,6 +2014,8 @@ def get_available_items(bld_type: str = Query(..., description="BLD type: Breakf
                            AND map.bld_id = %s
                     )
                 """
+                if require_condiments_only:
+                    legacy_query += " AND i.is_condiment = 1"
                 cursor.execute(legacy_query, (bld_id,))
                 items = cursor.fetchall()
             else:
@@ -1687,20 +2040,40 @@ def get_available_items(bld_type: str = Query(..., description="BLD type: Breakf
 
 
 # 2. Fetch existing menu by date and BLD
-@app.get("/api/menu", tags=["Daily Menu"])
-def get_daily_menu(
-    date: str = Query(..., description="Date in YYYY-MM-DD"),
-    bld_type: str = Query(..., description="BLD type: Breakfast, Lunch, Dinner, Condiments"),
-    period_type: Optional[str] = Query(None, description="Period type: one_day, subscription, all_days, or null for festivals")
+def _get_daily_menu_internal(
+    date: Optional[str],
+    bld_type: str,
+    period_type: Optional[str],
+    city_code: CityCode,
+    menu_type: str,
 ):
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
+        _ensure_menu_type_column(db)
+        resolved_menu_type = normalize_menu_type(menu_type)
+        ensure_menu_allowed(city_code, resolved_menu_type)
         canonical_bld_type = normalize_meal_type(bld_type)
         bld_id = resolve_bld_id(cursor, canonical_bld_type)
 
-        # Fetch menu row for that date and bld_id
-        menu_query = """
+        where_clauses = [
+            "menu_type = %s",
+            "city_code = %s",
+            "bld_id = %s",
+        ]
+        params: List[Any] = [resolved_menu_type, city_code, bld_id]
+        if resolved_menu_type == MENU_TYPE_ONE_DAY:
+            if not date:
+                raise HTTPException(status_code=400, detail="date is required for ONE_DAY menus")
+            where_clauses.append("date = %s")
+            params.append(date)
+            param_period = None if period_type == "festivals" else period_type
+            where_clauses.append("((period_type IS NULL AND %s IS NULL) OR (period_type = %s))")
+            params.extend([param_period, param_period])
+        else:
+            where_clauses.append("date IS NULL")
+
+        menu_query = f"""
             SELECT
                 menu_id,
                 date,
@@ -1708,19 +2081,13 @@ def get_daily_menu(
                 is_released,
                 is_production_generated,
                 period_type,
-                bld_id
+                bld_id,
+                menu_type
             FROM menu
-            WHERE date = %s
-              AND bld_id = %s
-              AND (
-                    (period_type IS NULL AND %s IS NULL)
-                    OR (period_type = %s)
-                  )
+            WHERE {' AND '.join(where_clauses)}
             LIMIT 1
         """
-        # pass the same period_type string twice; if it’s “festivals” we expect period_type IS NULL
-        param_period = None if period_type == "festivals" else period_type
-        cursor.execute(menu_query, (date, bld_id, param_period, param_period))
+        cursor.execute(menu_query, params)
         menu_row = cursor.fetchone()
         if not menu_row:
             raise HTTPException(status_code=404, detail="Menu not found")
@@ -1800,6 +2167,8 @@ def get_daily_menu(
             "period_type": menu_row["period_type"],
             "bld_id": menu_row["bld_id"],
             "bld_type": canonical_bld_type,
+            "city_code": city_code,
+            "menu_type": resolved_menu_type,
             "items": [
                 {
                     "menu_item_id": it["menu_item_id"],
@@ -1842,15 +2211,18 @@ class MenuItemPayload(BaseModel):
     sort_order: Optional[int] = None
 
 class DailyMenuPayload(BaseModel):
-    date: str
+    date: Optional[str] = None
     bld_type: str
     is_festival: bool = False
     period_type: Optional[str] = None
     items: List[MenuItemPayload]
+    city_code: Optional[str] = None
+    menu_type: Optional[str] = None
 
 
 class AutoMenuRequest(BaseModel):
     date: Optional[str] = None
+    city_code: Optional[str] = None
 
 
 MEAL_TYPES = ["Breakfast", "Lunch", "Dinner"]
@@ -1860,12 +2232,28 @@ def upsert_daily_menu(payload: DailyMenuPayload):
     db = get_db()
     cursor = db.cursor()
     try:
+        _ensure_menu_type_column(db)
         canonical_bld_type = normalize_meal_type(payload.bld_type)
         bld_id = resolve_bld_id(cursor, canonical_bld_type)
+        city_code = normalize_city_code(payload.city_code or DEFAULT_CITY)
 
-        # Check if a menu exists for date + bld_id
-        find_query = "SELECT menu_id FROM menu WHERE date = %s AND bld_id = %s"
-        cursor.execute(find_query, (payload.date, bld_id))
+        # Check if a menu exists for date + bld_id + city
+        resolved_menu_type = normalize_menu_type(payload.menu_type)
+        ensure_menu_allowed(city_code, resolved_menu_type)
+        menu_date = payload.date if resolved_menu_type == MENU_TYPE_ONE_DAY else None
+
+        find_conditions = ["menu_type = %s", "bld_id = %s", "city_code = %s"]
+        params: List[Any] = [resolved_menu_type, bld_id, city_code]
+        if resolved_menu_type == MENU_TYPE_ONE_DAY:
+            if not menu_date:
+                raise HTTPException(status_code=400, detail="date is required for ONE_DAY menus")
+            find_conditions.append("date = %s")
+            params.append(menu_date)
+        else:
+            find_conditions.append("date IS NULL")
+
+        find_query = f"SELECT menu_id FROM menu WHERE {' AND '.join(find_conditions)}"
+        cursor.execute(find_query, tuple(params))
         existing = cursor.fetchone()
 
         if existing:
@@ -1874,17 +2262,36 @@ def upsert_daily_menu(payload: DailyMenuPayload):
             update_query = """
                 UPDATE menu
                    SET is_festival = %s,
-                       period_type = %s
+                       period_type = %s,
+                       date = %s
                  WHERE menu_id = %s
             """
-            cursor.execute(update_query, (int(payload.is_festival), payload.period_type, menu_id))
+            cursor.execute(
+                update_query,
+                (
+                    int(payload.is_festival),
+                    payload.period_type,
+                    menu_date,
+                    menu_id,
+                ),
+            )
         else:
             # Insert new menu row
             insert_query = """
-                INSERT INTO menu (date, is_festival, is_released, period_type, bld_id)
-                VALUES (%s, %s, 0, %s, %s)
+                INSERT INTO menu (date, is_festival, is_released, period_type, bld_id, city_code, menu_type)
+                VALUES (%s, %s, 0, %s, %s, %s, %s)
             """
-            cursor.execute(insert_query, (payload.date, int(payload.is_festival), payload.period_type, bld_id))
+            cursor.execute(
+                insert_query,
+                (
+                    menu_date,
+                    int(payload.is_festival),
+                    payload.period_type,
+                    bld_id,
+                    city_code,
+                    resolved_menu_type,
+                ),
+            )
             menu_id = cursor.lastrowid
 
         # Delete existing menu_items for this menu
@@ -1926,9 +2333,15 @@ def upsert_daily_menu(payload: DailyMenuPayload):
             action_type=action,
             entity_type="ITEM",
             entity_id=menu_id,
-            description=f"Upserted menu for {payload.date} ({canonical_bld_type}) with {len(payload.items)} items",
+            description=f"Upserted {resolved_menu_type} menu for {payload.date or city_code} {city_code} ({canonical_bld_type}) with {len(payload.items)} items",
         )
-        return get_daily_menu(date=payload.date, bld_type=canonical_bld_type, period_type=payload.period_type)
+        return _get_daily_menu_internal(
+            date=menu_date,
+            bld_type=canonical_bld_type,
+            period_type=payload.period_type,
+            city_code=city_code,
+            menu_type=resolved_menu_type,
+        )
     except mysql.connector.Error as err:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(err))
@@ -1972,6 +2385,7 @@ def release_menu(menu_id: int):
 @app.post("/api/dev/daily-menu/auto", tags=["Developer Tools"])
 def auto_generate_daily_menu(payload: AutoMenuRequest, _: Dict[str, Any] = Depends(developer_required)):
     target_date = _normalize_menu_date(payload.date)
+    target_city = normalize_city_code(payload.city_code or DEFAULT_CITY)
     summary: Dict[str, Any] = {}
 
     for meal in MEAL_TYPES:
@@ -2018,6 +2432,7 @@ def auto_generate_daily_menu(payload: AutoMenuRequest, _: Dict[str, Any] = Depen
             is_festival=False,
             period_type="one_day",
             items=menu_items,
+            city_code=target_city,
         )
 
         menu_data = upsert_daily_menu(menu_payload)
@@ -2044,6 +2459,7 @@ def auto_generate_daily_menu(payload: AutoMenuRequest, _: Dict[str, Any] = Depen
 @app.post("/api/dev/daily-menu/clear", tags=["Developer Tools"])
 def clear_daily_menu(payload: AutoMenuRequest, _: Dict[str, Any] = Depends(developer_required)):
     target_date = _normalize_menu_date(payload.date)
+    target_city = normalize_city_code(payload.city_code or DEFAULT_CITY)
     summary: Dict[str, Any] = {}
 
     db = get_db()
@@ -2061,8 +2477,8 @@ def clear_daily_menu(payload: AutoMenuRequest, _: Dict[str, Any] = Depends(devel
                     continue
                 raise
             cursor.execute(
-                "SELECT menu_id FROM menu WHERE date = %s AND bld_id = %s LIMIT 1",
-                (target_date, bld_id),
+                "SELECT menu_id FROM menu WHERE date = %s AND bld_id = %s AND city_code = %s LIMIT 1",
+                (target_date, bld_id, target_city),
             )
             menu_row = cursor.fetchone()
             if not menu_row:
@@ -2191,33 +2607,52 @@ def _resolve_item_rate(meal: str, item: Dict[str, Any]) -> float:
 
 
 @app.get("/api/dashboard/metrics")
-def get_dashboard_metrics():
+def get_dashboard_metrics(
+    city_code: Optional[str] = Query(None, alias="city_code"),
+    user: Dict[str, Any] = Depends(admin_required),
+):
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
         today = date.today()
         today_str = today.isoformat()
+        target_city = _resolve_city_context(city_code, user)
+        pending_status_values = tuple(
+            sorted({status.lower() for status in PENDING_ORDER_STATUS_NAMES if status})
+        )
+        pending_placeholders = ", ".join(["%s"] * len(pending_status_values)) or "'pending'"
+        status_compare_expr = "LOWER(REPLACE(COALESCE(o.status, ''), ' (Payment Due)', ''))"
 
-        total_customers = get_customer_count(db)
+        total_customers = get_customer_count(db, target_city)
 
-        cursor.execute("SELECT COUNT(*) AS total_orders FROM orders")
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS total_orders
+              FROM orders o
+              JOIN addresses a ON o.address_id = a.address_id
+             WHERE a.city_code = %s
+            """,
+            (target_city,),
+        )
         total_orders_record = cursor.fetchone() or {"total_orders": 0}
         total_orders = int(total_orders_record.get("total_orders") or 0)
 
         cursor.execute(
-            """
+            f"""
             SELECT COUNT(*) AS pending_orders
-              FROM orders
-             WHERE LOWER(COALESCE(status, '')) IN ('pending', 'in progress', 'processing')
-            """
+              FROM orders o
+              JOIN addresses a ON o.address_id = a.address_id
+             WHERE {status_compare_expr} IN ({pending_placeholders})
+               AND a.city_code = %s
+            """,
+            (*pending_status_values, target_city),
         )
         pending_record = cursor.fetchone() or {"pending_orders": 0}
         pending_orders = int(pending_record.get("pending_orders") or 0)
         completed_orders = max(total_orders - pending_orders, 0)
 
-        cursor.execute("SELECT COUNT(*) AS total_blds FROM bld")
-        bld_record = cursor.fetchone() or {"total_blds": 0}
-        total_blds = int(bld_record.get("total_blds") or 0)
+        meal_targets = get_supported_meals_for_city(target_city)
+        total_blds = len(meal_targets)
 
         cursor.execute(
             """
@@ -2227,8 +2662,9 @@ def get_dashboard_metrics():
                 SUM(CASE WHEN m.is_production_generated = 1 THEN 1 ELSE 0 END) AS production_count
             FROM menu m
             WHERE m.date = %s
+              AND m.city_code = %s
             """,
-            (today_str,),
+            (today_str, target_city),
         )
         menu_stats = cursor.fetchone() or {
             "menu_count": 0,
@@ -2245,22 +2681,35 @@ def get_dashboard_metrics():
               FROM menu_items mi
               JOIN menu m ON mi.menu_id = m.menu_id
              WHERE m.date = %s
+               AND m.city_code = %s
             """,
-            (today_str,),
+            (today_str, target_city),
         )
         menu_items_record = cursor.fetchone() or {"menu_items_count": 0}
         menu_items_count = int(menu_items_record.get("menu_items_count") or 0)
 
         cursor.execute(
-            """
+            f"""
             SELECT 
                 COUNT(*) AS total_today,
-                SUM(CASE WHEN LOWER(COALESCE(status, '')) IN ('delivered', 'completed') THEN 1 ELSE 0 END) AS delivered_today,
-                SUM(CASE WHEN LOWER(COALESCE(status, '')) IN ('pending', 'in progress', 'processing') THEN 1 ELSE 0 END) AS pending_today
-            FROM orders
-            WHERE DATE(created_at) = %s
+                SUM(
+                    CASE 
+                        WHEN LOWER(COALESCE(o.status, '')) IN ('delivered', 'completed') 
+                        THEN 1 ELSE 0 
+                    END
+                ) AS delivered_today,
+                SUM(
+                    CASE 
+                        WHEN {status_compare_expr} IN ({pending_placeholders})
+                        THEN 1 ELSE 0 
+                    END
+                ) AS pending_today
+            FROM orders o
+            JOIN addresses a ON o.address_id = a.address_id
+            WHERE DATE(o.created_at) = %s
+              AND a.city_code = %s
             """,
-            (today_str,),
+            (*pending_status_values, today_str, target_city),
         )
         daily_orders_record = cursor.fetchone() or {
             "total_today": 0,
@@ -2343,25 +2792,27 @@ def get_dashboard_metrics():
                 o.created_at,
                 o.total_price,
                 o.status,
+                o.paid,
                 c.name AS customer_name,
                 COALESCE(SUM(oi.quantity), 0) AS item_count
             FROM orders o
             JOIN customers c ON o.customer_id = c.customer_id
             LEFT JOIN order_items oi ON o.order_id = oi.order_id
+            JOIN addresses a ON o.address_id = a.address_id
+            WHERE a.city_code = %s
             GROUP BY o.order_id, o.created_at, o.total_price, o.status, c.name
             ORDER BY o.created_at DESC, o.order_id DESC
             LIMIT 5
-            """
+            """,
+            (target_city,),
         )
         recent_rows = cursor.fetchall() or []
         recent_orders = []
         for row in recent_rows:
             order_id = int(row.get("order_id") or 0)
             created_at = row.get("created_at")
-            status_raw = (row.get("status") or "Pending").strip()
-            status_formatted = " ".join(
-                word.capitalize() for word in status_raw.split()
-            ) or "Pending"
+            paid_flag = bool(row.get("paid"))
+            status_formatted = format_status_with_payment(row.get("status"), paid_flag)
             recent_orders.append(
                 {
                     "id": f"ORD-{order_id:05d}" if order_id else str(row.get("order_id") or ""),
@@ -2371,13 +2822,45 @@ def get_dashboard_metrics():
                     "total": float(row.get("total_price") or 0),
                     "status": status_formatted,
                     "createdAt": created_at.isoformat() if created_at else None,
+                    "paid": paid_flag,
                 }
             )
 
-        todays_revenue = 24850
-        monthly_revenue = 345200
+        cursor.execute(
+            """
+            SELECT COALESCE(SUM(o.total_price), 0) AS todays_revenue
+              FROM orders o
+              JOIN addresses a ON o.address_id = a.address_id
+             WHERE DATE(o.created_at) = %s
+               AND a.city_code = %s
+            """,
+            (today_str, target_city),
+        )
+        todays_revenue = float((cursor.fetchone() or {}).get("todays_revenue") or 0.0)
+
+        month_start = today.replace(day=1)
+        if month_start.month == 12:
+            next_month_start = month_start.replace(year=month_start.year + 1, month=1)
+        else:
+            next_month_start = month_start.replace(month=month_start.month + 1)
+        month_start_dt = datetime.combine(month_start, datetime.min.time())
+        next_month_dt = datetime.combine(next_month_start, datetime.min.time())
+
+        cursor.execute(
+            """
+            SELECT COALESCE(SUM(o.total_price), 0) AS monthly_revenue
+              FROM orders o
+              JOIN addresses a ON o.address_id = a.address_id
+             WHERE o.created_at >= %s
+               AND o.created_at < %s
+               AND a.city_code = %s
+            """,
+            (month_start_dt, next_month_dt, target_city),
+        )
+        monthly_revenue = float((cursor.fetchone() or {}).get("monthly_revenue") or 0.0)
 
         return {
+            "city_code": target_city,
             "totalCustomers": total_customers,
             "totalOrders": total_orders,
             "ordersCompleted": completed_orders,
@@ -2403,7 +2886,7 @@ def _apply_order_filters(
     if status:
         normalized = status.strip().lower()
         if normalized and normalized != "all":
-            base_where.append("LOWER(COALESCE(o.status, '')) = %s")
+            base_where.append("LOWER(REPLACE(COALESCE(o.status, ''), ' (Payment Due)', '')) = %s")
             params.append(normalized)
     if customer:
         term = f"%{customer.strip()}%"
@@ -2422,13 +2905,16 @@ def admin_order_history(
     status: Optional[str] = None,
     customer: Optional[str] = None,
     product: Optional[str] = None,
+    city_code: Optional[str] = Query(None, alias="city_code"),
     limit: int = Query(10, ge=1, le=200),
     offset: int = Query(0, ge=0),
     export: Optional[str] = None,
+    user: Dict[str, Any] = Depends(admin_required),
 ):
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
+        resolved_city = _resolve_city_context(city_code, user)
         where_clauses: List[str] = []
         params: List = []
 
@@ -2444,6 +2930,8 @@ def admin_order_history(
             where_clauses.append("o.created_at <= %s")
             params.append(datetime.combine(end_date_obj, datetime.max.time()))
 
+        where_clauses.append("a.city_code = %s")
+        params.append(resolved_city)
         _apply_order_filters(where_clauses, params, status, customer, product)
         where_sql = " AND ".join(where_clauses)
         where_fragment = f"WHERE {where_sql}" if where_sql else ""
@@ -2452,6 +2940,7 @@ def admin_order_history(
             SELECT COUNT(DISTINCT o.order_id) AS total
               FROM orders o
               JOIN customers c ON o.customer_id = c.customer_id
+              LEFT JOIN addresses a ON o.address_id = a.address_id
               LEFT JOIN order_items oi ON o.order_id = oi.order_id
               LEFT JOIN items i ON oi.item_id = i.item_id
              {where_fragment}
@@ -2466,6 +2955,7 @@ def admin_order_history(
                 o.created_at,
                 o.total_price,
                 o.status,
+                o.paid,
                 o.payment_method,
                 o.customer_id,
                 c.name AS customer_name,
@@ -2487,6 +2977,7 @@ def admin_order_history(
                 o.created_at,
                 o.total_price,
                 o.status,
+                o.paid,
                 o.payment_method,
                 o.customer_id,
                 c.name,
@@ -2547,6 +3038,7 @@ def admin_order_history(
                     "Phone",
                     "Status",
                     "Payment Method",
+                    "Payment Status",
                     "Item",
                     "Quantity",
                     "Price",
@@ -2556,6 +3048,9 @@ def admin_order_history(
             )
 
             for record in orders:
+                paid_flag = bool(record.get("paid"))
+                normalized_status = format_status_with_payment(record.get("status"), paid_flag)
+                payment_label = "Paid" if paid_flag else "Payment Due"
                 order_items = items_by_order.get(record["order_id"], []) or [
                     {"name": "", "quantity": 0, "price": 0.0, "line_total": 0.0}
                 ]
@@ -2566,8 +3061,9 @@ def admin_order_history(
                             record["created_at"].strftime("%Y-%m-%d %H:%M:%S") if record.get("created_at") else "",
                             record.get("customer_name") or "",
                             record.get("primary_mobile") or "",
-                            record.get("status") or "",
+                            normalized_status,
                             record.get("payment_method") or "",
+                            payment_label,
                             item["name"],
                             item["quantity"],
                             item["price"],
@@ -2588,13 +3084,16 @@ def admin_order_history(
 
         result = []
         for record in orders:
+            paid_flag = bool(record.get("paid"))
+            normalized_status = format_status_with_payment(record.get("status"), paid_flag)
             order_id = record["order_id"]
             result.append(
                 {
                     "order_id": order_id,
                     "created_at": _format_datetime(record.get("created_at")),
-                    "status": record.get("status") or "Pending",
+                    "status": normalized_status,
                     "payment_method": record.get("payment_method") or "Unknown",
+                     "paid": paid_flag,
                     "total_price": float(record.get("total_price") or 0),
                     "customer_id": int(record.get("customer_id") or 0),
                     "customer_name": record.get("customer_name") or "Customer",
@@ -2618,14 +3117,40 @@ def admin_order_history(
 
 
 @app.post("/api/admin/orders/{order_id}/status")
-def admin_update_order_status(order_id: int, payload: OrderStatusUpdate):
+def admin_update_order_status(
+    order_id: int,
+    payload: OrderStatusUpdate,
+    user: Dict[str, Any] = Depends(admin_required),
+):
     db = get_db()
     cursor = db.cursor()
     try:
-        new_status = payload.status.strip()
+        target_city = _resolve_city_context(None, user)
         cursor.execute(
-            "UPDATE orders SET status = %s WHERE order_id = %s",
-            (new_status, order_id),
+            """
+            SELECT o.paid
+              FROM orders o
+              JOIN addresses a ON o.address_id = a.address_id
+             WHERE o.order_id = %s
+               AND a.city_code = %s
+            """,
+            (order_id, target_city),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Order not found")
+        current_paid = bool(row["paid"]) if isinstance(row, dict) else bool(row[0])
+
+        new_status = normalize_order_status(payload.status)
+        paid_after = current_paid or new_status == ORDER_STATUS_DELIVERED
+        stored_status = new_status if paid_after else f"{new_status} (Payment Due)"
+        cursor.execute(
+            "UPDATE orders SET status = %s, paid = %s WHERE order_id = %s",
+            (
+                stored_status,
+                int(paid_after),
+                order_id,
+            ),
         )
         if cursor.rowcount == 0:
             db.rollback()
@@ -2643,10 +3168,15 @@ def admin_update_order_status(order_id: int, payload: OrderStatusUpdate):
 
 
 @app.get("/api/admin/orders/{order_id}/invoice")
-def admin_order_invoice(order_id: int):
+def admin_order_invoice(
+    order_id: int,
+    city_code: Optional[str] = Query(None, alias="city_code"),
+    user: Dict[str, Any] = Depends(admin_required),
+):
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
+        target_city = _resolve_city_context(city_code, user)
         cursor.execute(
             """
             SELECT 
@@ -2662,13 +3192,15 @@ def admin_order_invoice(order_id: int):
                 a.address_id,
                 a.written_address,
                 a.city,
-                a.pin_code
+                a.pin_code,
+                a.city_code
             FROM orders o
             JOIN customers c ON o.customer_id = c.customer_id
             LEFT JOIN addresses a ON o.address_id = a.address_id
             WHERE o.order_id = %s
+              AND (a.city_code = %s OR a.city_code IS NULL)
             """,
-            (order_id,),
+            (order_id, target_city),
         )
         order_row = cursor.fetchone()
         if not order_row:
@@ -2748,6 +3280,7 @@ class ProductionPlanRequest(BaseModel):
     date: str
     menu_type: str
     plans: List[ProductionPlanItem]
+    city_code: Optional[str] = None
 
 class MaxQtyUpdate(BaseModel):
     item_name: str
@@ -2757,6 +3290,47 @@ class UpdateMaxQtyRequest(BaseModel):
     date: str
     menu_type: str
     updates: List[MaxQtyUpdate]
+    city_code: Optional[str] = None
+
+
+class TripSheetRequest(BaseModel):
+    date: str
+    city_code: Optional[str] = None
+
+
+class DevOrderSeedRequest(BaseModel):
+    date: Optional[str] = None
+    city_code: Optional[str] = None
+    count: int = Field(default=10, ge=0, le=200)
+    clear_existing: bool = False
+
+
+def _purge_all_orders_impl():
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute("SELECT COUNT(*) FROM orders")
+        total_orders = int((cursor.fetchone() or [0])[0] or 0)
+        cursor.execute("DELETE FROM order_items")
+        cursor.execute("DELETE FROM orders")
+        db.commit()
+        return {"deleted_orders": total_orders}
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to purge orders: {err.msg}")
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.delete("/api/dev/orders", tags=["Developer"])
+def purge_all_orders(user: Dict[str, Any] = Depends(developer_required)):
+    return _purge_all_orders_impl()
+
+
+@app.post("/api/dev/orders/purge", tags=["Developer"])
+def purge_all_orders_post(user: Dict[str, Any] = Depends(developer_required)):
+    return _purge_all_orders_impl()
 
 class OrderItemPayload(BaseModel):
     item_id: int
@@ -2779,6 +3353,7 @@ class AddressPayload(BaseModel):
     house_apartment_no: Optional[str] = None
     written_address: str
     city: str
+    city_code: Optional[str] = None
     pin_code: str
     latitude: Optional[float] = None
     longitude: Optional[float] = None
@@ -2798,6 +3373,7 @@ def get_customer_addresses(customer_id: int):
                 house_apartment_no,
                 written_address,
                 city,
+                city_code,
                 pin_code,
                 is_default,
                 latitude,
@@ -2817,6 +3393,7 @@ def get_customer_addresses(customer_id: int):
                 "house_apartment_no": row.get("house_apartment_no"),
                 "written_address": row.get("written_address") or "",
                 "city": row.get("city") or "",
+                "city_code": row.get("city_code") or DEFAULT_CITY,
                 "pin_code": row.get("pin_code") or "",
                 "is_default": bool(row.get("is_default")),
                 "latitude": float(row["latitude"]) if row.get("latitude") is not None else None,
@@ -2865,6 +3442,8 @@ def create_customer_address(customer_id: int, payload: AddressPayload):
         if cursor.fetchone() is None:
             raise HTTPException(status_code=404, detail="Customer not found")
 
+        normalized_city_code = _resolve_city_code(payload.city, payload.city_code)
+        city_label = _normalize_city_label(payload.city, normalized_city_code)
         lat, lng = _resolve_coordinates(cursor, customer_id, payload.latitude, payload.longitude)
 
         if payload.is_default:
@@ -2877,19 +3456,21 @@ def create_customer_address(customer_id: int, payload: AddressPayload):
                 house_apartment_no,
                 written_address,
                 city,
+                city_code,
                 pin_code,
                 latitude,
                 longitude,
                 address_type,
                 route_assignment,
                 is_default
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 customer_id,
                 payload.house_apartment_no,
                 payload.written_address.strip(),
-                payload.city.strip(),
+                city_label,
+                normalized_city_code,
                 payload.pin_code.strip(),
                 lat,
                 lng,
@@ -2923,6 +3504,8 @@ def update_customer_address(customer_id: int, address_id: int, payload: AddressP
         if existing is None:
             raise HTTPException(status_code=404, detail="Address not found")
 
+        normalized_city_code = _resolve_city_code(payload.city, payload.city_code)
+        city_label = _normalize_city_label(payload.city, normalized_city_code)
         lat_input = payload.latitude if payload.latitude is not None else existing.get("latitude")
         lng_input = payload.longitude if payload.longitude is not None else existing.get("longitude")
         lat, lng = _resolve_coordinates(cursor, customer_id, lat_input, lng_input)
@@ -2939,6 +3522,7 @@ def update_customer_address(customer_id: int, address_id: int, payload: AddressP
                SET house_apartment_no=%s,
                    written_address=%s,
                    city=%s,
+                   city_code=%s,
                    pin_code=%s,
                    latitude=%s,
                    longitude=%s,
@@ -2950,7 +3534,8 @@ def update_customer_address(customer_id: int, address_id: int, payload: AddressP
             (
                 payload.house_apartment_no,
                 payload.written_address.strip(),
-                payload.city.strip(),
+                city_label,
+                normalized_city_code,
                 payload.pin_code.strip(),
                 lat,
                 lng,
@@ -3008,11 +3593,12 @@ def generate_production_plan(payload: ProductionPlanRequest):
     try:
         canonical_menu_type = normalize_meal_type(payload.menu_type)
         bld_id = resolve_bld_id(cursor, canonical_menu_type)
+        target_city = normalize_city_code(payload.city_code or DEFAULT_CITY)
 
         # Find menu_id for that date + bld_id
         cursor.execute(
-            "SELECT menu_id FROM menu WHERE date=%s AND bld_id=%s LIMIT 1",
-            (payload.date, bld_id)
+            "SELECT menu_id FROM menu WHERE date=%s AND bld_id=%s AND city_code=%s LIMIT 1",
+            (payload.date, bld_id, target_city)
         )
         menu = cursor.fetchone()
         if not menu:
@@ -3044,6 +3630,14 @@ def generate_production_plan(payload: ProductionPlanRequest):
         cursor.execute(
             "UPDATE menu SET is_production_generated = 1 WHERE menu_id=%s", (menu_id,)
         )
+
+        _bulk_update_order_status_for_date(
+            cursor,
+            payload.date,
+            target_city,
+            ORDER_STATUS_PREPARING,
+            [ORDER_STATUS_PENDING, ORDER_STATUS_CONFIRMED],
+        )
         db.commit()
 
         log_admin_action(
@@ -3052,7 +3646,7 @@ def generate_production_plan(payload: ProductionPlanRequest):
             action_type="UPDATE",
             entity_type="ITEM",
             entity_id=menu_id,
-            description=f"Generated production plan for {payload.date} ({canonical_menu_type})",
+            description=f"Generated production plan for {payload.date} {target_city} ({canonical_menu_type})",
         )
 
         return {
@@ -3080,10 +3674,11 @@ def update_max_quantities(payload: UpdateMaxQtyRequest):
     try:
         canonical_menu_type = normalize_meal_type(payload.menu_type)
         bld_id = resolve_bld_id(cursor, canonical_menu_type)
+        target_city = normalize_city_code(payload.city_code or DEFAULT_CITY)
 
         cursor.execute(
-            "SELECT menu_id FROM menu WHERE date=%s AND bld_id=%s LIMIT 1",
-            (payload.date, bld_id),
+            "SELECT menu_id FROM menu WHERE date=%s AND bld_id=%s AND city_code=%s LIMIT 1",
+            (payload.date, bld_id, target_city),
         )
         menu_row = cursor.fetchone()
         if not menu_row:
@@ -3136,7 +3731,7 @@ def update_max_quantities(payload: UpdateMaxQtyRequest):
             action_type="UPDATE",
             entity_type="ITEM",
             entity_id=menu_id,
-            description=f"Adjusted max quantities for {payload.date} ({canonical_menu_type})",
+            description=f"Adjusted max quantities for {payload.date} {target_city} ({canonical_menu_type})",
         )
 
         return {
@@ -3152,22 +3747,340 @@ def update_max_quantities(payload: UpdateMaxQtyRequest):
         db.close()
 
 
+@app.post("/api/dev/orders/seed", tags=["Developer"])
+def seed_orders_for_testing(
+    payload: DevOrderSeedRequest,
+    user: Dict[str, Any] = Depends(developer_required),
+):
+    target_date = _parse_optional_date(payload.date) or date.today()
+    target_city = _resolve_city_context(payload.city_code, user)
+
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        deleted_orders = 0
+        if payload.clear_existing:
+            cursor.execute(
+                """
+                SELECT o.order_id
+                  FROM orders o
+                  JOIN addresses a ON o.address_id = a.address_id
+                 WHERE DATE(o.created_at) = %s
+                   AND a.city_code = %s
+                """,
+                (target_date, target_city),
+            )
+            rows = cursor.fetchall() or []
+            order_ids = [row["order_id"] for row in rows]
+            if order_ids:
+                placeholders = ", ".join(["%s"] * len(order_ids))
+                cursor.execute(
+                    f"DELETE FROM order_items WHERE order_id IN ({placeholders})",
+                    tuple(order_ids),
+                )
+                cursor.execute(
+                    f"DELETE FROM orders WHERE order_id IN ({placeholders})",
+                    tuple(order_ids),
+                )
+                deleted_orders = len(order_ids)
+
+        if payload.count == 0:
+            db.commit()
+            return {
+                "date": target_date.isoformat(),
+                "city_code": target_city,
+                "cleared_orders": deleted_orders,
+                "created_orders": 0,
+                "sample_order_ids": [],
+            }
+
+        cursor.execute(
+            """
+            SELECT DISTINCT c.customer_id,
+                            c.name,
+                            a.address_id
+              FROM customers c
+              JOIN addresses a ON c.customer_id = a.customer_id
+             WHERE a.city_code = %s
+            """,
+            (target_city,),
+        )
+        candidates = cursor.fetchall() or []
+        if not candidates:
+            raise HTTPException(status_code=400, detail="No customers found for target city")
+
+        cursor.execute(
+            """
+            SELECT 
+                mi.menu_item_id,
+                mi.item_id,
+                mi.available_qty,
+                COALESCE(
+                    mi.rate,
+                    i.net_price,
+                    i.breakfast_price,
+                    i.lunch_price,
+                    i.dinner_price,
+                    i.condiments_price,
+                    0
+                ) AS price,
+                b.bld_type
+              FROM menu m
+              JOIN bld b ON m.bld_id = b.bld_id
+              JOIN menu_items mi ON m.menu_id = mi.menu_id
+              JOIN items i ON mi.item_id = i.item_id
+             WHERE m.date = %s
+               AND m.city_code = %s
+               AND COALESCE(m.is_released, 0) = 1
+            """,
+            (target_date, target_city),
+        )
+        released_rows = cursor.fetchall() or []
+        released_items = [
+            row
+            for row in released_rows
+            if row.get("price") is not None and float(row.get("price") or 0) > 0
+        ]
+        if not released_items:
+            raise HTTPException(
+                status_code=400,
+                detail="No released menus found for the selected date. Generate and release menus first.",
+            )
+
+        created_ids: List[int] = []
+        payment_methods = ["Cash", "UPI", "Card"]
+
+        for _ in range(payload.count):
+            customer = random.choice(candidates)
+            payment_method = random.choice(payment_methods)
+
+            item_count = random.randint(1, min(3, len(released_items)))
+            if item_count == 0:
+                break
+            selected_items = random.sample(released_items, item_count)
+            payload_items: List[OrderItemPayload] = []
+            for item in selected_items:
+                available_qty = item.get("available_qty")
+                max_allowed = 3
+                if isinstance(available_qty, (int, float)) and available_qty is not None:
+                    if available_qty <= 0:
+                        continue
+                    max_allowed = max(1, min(3, int(available_qty)))
+                qty = random.randint(1, max_allowed)
+                payload_items.append(
+                    OrderItemPayload(
+                        item_id=item["item_id"],
+                        quantity=qty,
+                        price=float(item["price"]),
+                        menu_item_id=item["menu_item_id"],
+                        meal_type=item["bld_type"].lower(),
+                    )
+                )
+
+            if not payload_items:
+                continue
+
+            order_payload = CreateOrderPayload(
+                customer_id=customer["customer_id"],
+                address_id=customer["address_id"],
+                payment_method=payment_method,
+                items=payload_items,
+                order_type="one_time",
+            )
+            result = create_order(order_payload)
+            order_id = result["order_id"]
+            created_time = datetime.combine(
+                target_date,
+                datetime.min.time(),
+            ) + timedelta(hours=random.randint(6, 12), minutes=random.randint(0, 59))
+            cursor.execute(
+                "UPDATE orders SET created_at = %s WHERE order_id = %s",
+                (created_time, order_id),
+            )
+            created_ids.append(order_id)
+
+        db.commit()
+        return {
+            "date": target_date.isoformat(),
+            "city_code": target_city,
+            "cleared_orders": deleted_orders,
+            "created_orders": len(created_ids),
+            "sample_order_ids": created_ids[:5],
+        }
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to seed orders: {err.msg}")
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.post("/api/logistics/trip-sheet", tags=["Logistics"])
+def generate_trip_sheet_report(
+    payload: TripSheetRequest,
+    user: Dict[str, Any] = Depends(admin_required),
+):
+    parsed_date = _parse_optional_date(payload.date)
+    if not parsed_date:
+        raise HTTPException(status_code=400, detail="Valid date required (YYYY-MM-DD)")
+    target_city = _resolve_city_context(payload.city_code, user)
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        meals_requiring_production = get_food_meals_for_city(target_city)
+        if meals_requiring_production:
+            meal_placeholders = ", ".join(["%s"] * len(meals_requiring_production))
+            cursor.execute(
+                f"""
+                SELECT 
+                    b.bld_type,
+                    MAX(COALESCE(m.is_released, 0)) AS is_released,
+                    MAX(COALESCE(m.is_production_generated, 0)) AS is_generated
+                  FROM bld b
+                  LEFT JOIN menu m
+                    ON m.bld_id = b.bld_id
+                   AND m.date = %s
+                   AND m.city_code = %s
+                 WHERE b.bld_type IN ({meal_placeholders})
+                 GROUP BY b.bld_type
+                """,
+                (parsed_date, target_city, *meals_requiring_production),
+            )
+            rows = cursor.fetchall() or []
+            missing = []
+            for row in rows:
+                meal = row["bld_type"]
+                released = bool(row.get("is_released"))
+                generated = bool(row.get("is_generated"))
+                if released and not generated:
+                    missing.append(meal)
+            if missing:
+                missing_label = ", ".join(missing)
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Generate kitchen production for {missing_label} before creating the trip sheet.",
+                )
+        cursor.execute(
+            """
+            SELECT 
+                o.order_id,
+                o.created_at,
+                o.total_price,
+                o.status,
+                o.payment_method,
+                o.paid,
+                c.customer_id,
+                c.name AS customer_name,
+                c.primary_mobile,
+                c.email,
+                a.address_id,
+                a.address_type,
+                a.house_apartment_no,
+                a.written_address,
+                a.city,
+                a.pin_code,
+                a.route_assignment
+            FROM orders o
+            JOIN customers c ON o.customer_id = c.customer_id
+            JOIN addresses a ON o.address_id = a.address_id
+           WHERE DATE(o.created_at) = %s
+             AND a.city_code = %s
+           ORDER BY COALESCE(a.route_assignment, ''), c.name
+            """,
+            (parsed_date, target_city),
+        )
+        rows = cursor.fetchall() or []
+
+        route_groups: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        updatable_statuses = {
+            ORDER_STATUS_PENDING.lower(),
+            ORDER_STATUS_CONFIRMED.lower(),
+            ORDER_STATUS_PREPARING.lower(),
+        }
+
+        for row in rows:
+            route_label = row.get("route_assignment") or "Unassigned"
+            normalized_display = normalize_status_for_response(row.get("status"))
+            if normalized_display.lower() in updatable_statuses:
+                display_status = ORDER_STATUS_ON_THE_WAY
+            else:
+                display_status = normalized_display
+            display_status = format_status_with_payment(display_status, row.get("paid"))
+            route_groups[route_label].append(
+                {
+                    "order_id": row["order_id"],
+                    "customer_id": row["customer_id"],
+                    "customer_name": row.get("customer_name"),
+                    "phone": row.get("primary_mobile"),
+                    "email": row.get("email"),
+                    "total_price": float(row.get("total_price") or 0),
+                    "payment_method": row.get("payment_method"),
+                    "paid": bool(row.get("paid")),
+                    "status": display_status,
+                    "address": {
+                        "address_id": row.get("address_id"),
+                        "label": row.get("address_type"),
+                        "house_apartment_no": row.get("house_apartment_no"),
+                        "written_address": row.get("written_address"),
+                        "city": row.get("city"),
+                        "pin_code": row.get("pin_code"),
+                    },
+                }
+            )
+
+        updated_rows = _bulk_update_order_status_for_date(
+            cursor,
+            parsed_date.isoformat(),
+            target_city,
+            ORDER_STATUS_ON_THE_WAY,
+            updatable_statuses,
+        )
+        db.commit()
+
+        routes_payload = []
+        for route, orders in route_groups.items():
+            total_amount = sum(order["total_price"] for order in orders)
+            routes_payload.append(
+                {
+                    "route": route,
+                    "total_orders": len(orders),
+                    "total_amount": total_amount,
+                    "orders": orders,
+                }
+            )
+
+        return {
+            "date": parsed_date.isoformat(),
+            "city_code": target_city,
+            "routes": routes_payload,
+            "status_updates": updated_rows,
+            "generated_at": datetime.utcnow().isoformat() + "Z",
+        }
+    finally:
+        cursor.close()
+        db.close()
+
+
 @app.get("/api/production/orders-summary", tags=["Production"])
 def get_production_orders_summary(
     date: str,
     menu_type: Optional[str] = Query(None, description="BLD type to filter (Breakfast/Lunch/Dinner/Condiments)"),
     period_type: Optional[str] = Query("one_day", description="Menu period to filter, e.g., one_day or subscription"),
+    city_code: Optional[str] = Query(None, alias="city_code"),
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user),
 ):
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
         normalized_period = None if period_type == "festivals" else period_type
+        resolved_city = _resolve_city_context(city_code, user)
 
         where_clauses = [
             "m.date = %s",
             "((m.period_type IS NULL AND %s IS NULL) OR m.period_type = %s)",
+            "m.city_code = %s",
         ]
-        params: List = [date, normalized_period, normalized_period]
+        params: List = [date, resolved_city, date, normalized_period, normalized_period, resolved_city]
 
         if menu_type:
             where_clauses.append("LOWER(b.bld_type) = LOWER(%s)")
@@ -3180,8 +4093,10 @@ def get_production_orders_summary(
                     SUM(oi.quantity) AS quantity
                 FROM orders o
                 JOIN order_items oi ON oi.order_id = o.order_id
+                JOIN addresses a ON o.address_id = a.address_id
                 WHERE DATE(o.created_at) = %s
-                  AND LOWER(COALESCE(o.status, '')) NOT IN (
+                  AND a.city_code = %s
+                  AND LOWER(REPLACE(COALESCE(o.status, ''), ' (Payment Due)', '')) NOT IN (
                     'cancelled',
                     'cancelled by customer',
                     'cancelled by admin'
@@ -3226,6 +4141,28 @@ def get_production_orders_summary(
         cursor.close()
         db.close()
 
+
+@app.get("/api/menu", tags=["Daily Menu"])
+def get_daily_menu(
+    date: Optional[str] = Query(None, description="Date in YYYY-MM-DD"),
+    bld_type: Optional[str] = Query(None, description="BLD type: Breakfast, Lunch, Dinner, Condiments"),
+    period_type: Optional[str] = Query(
+        None, description="Period type: one_day, subscription, all_days, or null for festivals"
+    ),
+    city_code: Optional[str] = Query(None, alias="city_code"),
+    menu_type: Optional[str] = Query(MENU_TYPE_ONE_DAY, alias="menu_type"),
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user),
+):
+    resolved_city = _resolve_city_context(city_code, user)
+    resolved_menu_type = normalize_menu_type(menu_type)
+    target_bld_type = bld_type or CONDIMENTS_BLD_TYPE
+    if resolved_menu_type == MENU_TYPE_ONE_DAY and not date:
+        raise HTTPException(status_code=400, detail="date is required for ONE_DAY menus")
+    if resolved_menu_type == MENU_TYPE_CONDIMENTS and not bld_type:
+        target_bld_type = CONDIMENTS_BLD_TYPE
+    ensure_menu_allowed(resolved_city, resolved_menu_type)
+    return _get_daily_menu_internal(date, target_bld_type, period_type, resolved_city, resolved_menu_type)
+
 @app.post("/api/orders/create", tags=["Orders"])
 def create_order(payload: CreateOrderPayload):
     if not payload.items:
@@ -3251,18 +4188,24 @@ def create_order(payload: CreateOrderPayload):
 
         total_price = sum(item.price * item.quantity for item in payload.items)
 
+        normalized_method = (payload.payment_method or "").strip()
+        paid_flag = 1 if normalized_method.lower() in {"upi", "card", "online"} else 0
+        initial_status = ORDER_STATUS_CONFIRMED if paid_flag else ORDER_STATUS_PENDING
+        stored_status = initial_status if paid_flag else f"{initial_status} (Payment Due)"
+
         cursor.execute(
             """
-            INSERT INTO orders (customer_id, address_id, total_price, payment_method, status, order_type)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO orders (customer_id, address_id, total_price, payment_method, status, order_type, paid)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 payload.customer_id,
                 address_id,
                 float(total_price),
                 payload.payment_method,
-                "Pending",
+                stored_status,
                 payload.order_type or "one_time",
+                paid_flag,
             ),
         )
         order_id = cursor.lastrowid
@@ -3291,7 +4234,7 @@ def create_order(payload: CreateOrderPayload):
             "message": "Order placed successfully",
             "order_id": order_id,
             "total_price": float(total_price),
-            "status": "Pending",
+            "status": initial_status,
         }
     except mysql.connector.Error as err:
         db.rollback()
@@ -3313,6 +4256,7 @@ def list_customer_orders(customer_id: int, limit: int = Query(50, ge=1, le=200))
                        o.created_at,
                        o.total_price,
                        o.status,
+                       o.paid,
                        o.payment_method,
                        o.order_type,
                        a.address_type,
@@ -3335,6 +4279,7 @@ def list_customer_orders(customer_id: int, limit: int = Query(50, ge=1, le=200))
                            o.created_at,
                            o.total_price,
                            o.status,
+                           o.paid,
                            o.payment_method,
                            NULL AS order_type,
                            a.address_type,
@@ -3387,13 +4332,15 @@ def list_customer_orders(customer_id: int, limit: int = Query(50, ge=1, le=200))
         for order in orders:
             order_id = order["order_id"]
             created = order.get("created_at")
+            paid_flag = bool(order.get("paid"))
             result.append(
                 {
                     "order_id": order_id,
                     "created_at": created.isoformat() if created else None,
                     "total_price": float(order.get("total_price") or 0),
-                    "status": order.get("status") or "Pending",
+                    "status": format_status_with_payment(order.get("status"), paid_flag),
                     "payment_method": order.get("payment_method") or "Cash",
+                    "paid": paid_flag,
                     "address": {
                         "label": order.get("address_type") or "Address",
                         "line": order.get("written_address") or "",

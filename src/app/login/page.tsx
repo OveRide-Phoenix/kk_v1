@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +14,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Eye, EyeOff } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { getCityLabel, normalizeCityCode, type CityCode } from "@/config/cities";
 import { useAuthStore } from "@/store/store";
 import CustomerNavBar from "@/components/customer-nav-bar";
 
@@ -21,6 +23,8 @@ export default function LoginPage() {
   const router = useRouter();
   const [phoneNumber, setPhoneNumber] = useState("");
   const [city, setCity] = useState("");
+  const [cityCode, setCityCode] = useState("");
+  const [cityOptions, setCityOptions] = useState<CityCode[]>([]);
   const setUser = useAuthStore((state) => state.setUser);
   const setRoleState = useAuthStore((state) => state.setRoleState);
   const [adminPassword, setAdminPassword] = useState("");
@@ -65,7 +69,23 @@ export default function LoginPage() {
         );
         const data = await response.json();
         if (response.ok) {
-          setCity(data.city);
+          const normalizedDefault = normalizeCityCode(data.city_code);
+          const eligible = Array.isArray(data.eligible_city_codes) && data.eligible_city_codes.length
+            ? data.eligible_city_codes
+            : [normalizedDefault];
+          const normalizedEligible = Array.from(
+            new Set(
+              eligible
+                .filter((code: unknown): code is string => typeof code === "string" && code.trim().length > 0)
+                .map((code: string) => normalizeCityCode(code)),
+            ),
+          );
+          setCityOptions(normalizedEligible);
+          const preferredCity =
+            normalizedEligible.includes(normalizedDefault) ? normalizedDefault : normalizedEligible[0] ?? normalizedDefault;
+          setCityCode(preferredCity);
+          setCity(getCityLabel(preferredCity));
+
           const adminEnabled = Array.isArray(data.role_codes)
             ? data.role_codes.includes("admin")
             : Boolean(data.is_admin);
@@ -79,6 +99,8 @@ export default function LoginPage() {
             data.detail || "User does not exist. Please register."
           );
           setCity("");
+          setCityCode("");
+          setCityOptions([]);
           setCanLoginAsAdmin(false);
           setAdminPassword("");
           setShowRegisterHighlight(true);
@@ -86,6 +108,8 @@ export default function LoginPage() {
       } catch {
         setErrorMessage("Unable to reach the server. Please ensure the backend is running.");
         setCity("");
+        setCityCode("");
+        setCityOptions([]);
         setCanLoginAsAdmin(false);
         setShowRegisterHighlight(false);
       } finally {
@@ -95,11 +119,18 @@ export default function LoginPage() {
       // Remove the validation message during typing
       setErrorMessage("");
       setCity("");
+      setCityCode("");
       setCanLoginAsAdmin(false);
       setAdminPassword("");
       setAdminPassword("");
     }
   };
+
+  useEffect(() => {
+    if (cityCode) {
+      setCity(getCityLabel(cityCode));
+    }
+  }, [cityCode]);
 
   const handleLogin = async (mode: "customer" | "admin") => {
     const digitsOnly = phoneNumber.replace(/\D/g, "");
@@ -107,8 +138,11 @@ export default function LoginPage() {
       setErrorMessage("Please enter a valid 10-digit phone number");
       return;
     }
-
     const isAdminAttempt = mode === "admin";
+    if (!isAdminAttempt && cityCode.trim().length === 0) {
+      setErrorMessage("Please select a city to continue.");
+      return;
+    }
     if (isAdminAttempt) {
       if (!canLoginAsAdmin) {
         setErrorMessage("This number is not enabled for admin access.");
@@ -127,10 +161,11 @@ export default function LoginPage() {
     try {
       const formattedPhone = digitsOnly.replace(/^91/, "");
 
-      const payload = {
-        phone: formattedPhone,
-        admin_password: isAdminAttempt ? adminPassword : null,
-      };
+    const payload = {
+      phone: formattedPhone,
+      admin_password: isAdminAttempt ? adminPassword : null,
+      city_code: cityCode || undefined,
+    };
 
       const response = await fetch("/api/backend/api/login", {
         method: "POST",
@@ -265,10 +300,34 @@ export default function LoginPage() {
                   required
                 />
               </div>
-              <div className="space-y-2 pt-4">
-                <Label htmlFor="city">City</Label>
-                <Input id="city" type="text" value={city} readOnly />
-              </div>
+              {cityOptions.length > 1 ? (
+                <div className="space-y-2 pt-4">
+                  <Label htmlFor="city-select">City</Label>
+                  <Select
+                    value={cityCode || cityOptions[0] || ""}
+                    onValueChange={(value) => {
+                      setCityCode(value as CityCode);
+                      setCity(getCityLabel(value));
+                    }}
+                  >
+                    <SelectTrigger id="city-select">
+                      <SelectValue placeholder="Select city" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {cityOptions.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {getCityLabel(option)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div className="space-y-2 pt-4">
+                  <Label htmlFor="city">City</Label>
+                  <Input id="city" type="text" value={city} readOnly />
+                </div>
+              )}
               {canLoginAsAdmin && (
                 <div className="space-y-2 pt-4">
                   <Label htmlFor="adminPassword">Admin Password</Label>

@@ -37,6 +37,8 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { http } from "@/lib/http";
+import { useAuthStore } from "@/store/store";
+import { getSupportedMeals } from "@/config/cities";
 
 type Category = ProductionItem["category"];
 
@@ -267,8 +269,10 @@ function buildPrintableMarkup(
   planByCategory: Record<Category, PlanItem[]>,
   dateLabel: string,
   menuAvailability: Record<Category, boolean>,
+  visibleCategories: Category[],
 ) {
-  const sections = categories
+  const categoriesToRender = visibleCategories.length ? visibleCategories : categories
+  const sections = categoriesToRender
     .map((category) => {
       if (!menuAvailability[category] || !planByCategory[category].length) {
         return "";
@@ -454,11 +458,12 @@ function exportCardLayout(
   planByCategory: Record<Category, PlanItem[]>,
   dateLabel: string,
   menuAvailability: Record<Category, boolean>,
+  visibleCategories: Category[],
 ) {
   const printableWindow = window.open("", "_blank", "noopener=yes,width=1024,height=768");
   if (!printableWindow) return;
 
-  const markup = buildPrintableMarkup(planByCategory, dateLabel, menuAvailability);
+  const markup = buildPrintableMarkup(planByCategory, dateLabel, menuAvailability, visibleCategories);
   printableWindow.document.write(markup);
   printableWindow.document.close();
   printableWindow.focus();
@@ -581,6 +586,7 @@ type PublishedMenuLookup = {
 
 async function fetchPublishedMenu(
   date: string,
+  cityCode: string,
   setPlanGeneratedState: React.Dispatch<React.SetStateAction<Record<Category, boolean>>>,
 ): Promise<PublishedMenuLookup> {
   const itemsByCategory: Record<Category, PublishedMenuItem[]> = {
@@ -590,14 +596,32 @@ async function fetchPublishedMenu(
     Condiments: [],
   };
   const releaseStatus = createCategoryBooleanState(false);
+  const supportedCategorySet = new Set(
+    getSupportedMeals(cityCode).map((meal) =>
+      meal === "condiments"
+        ? "Condiments"
+        : (meal.charAt(0).toUpperCase() + meal.slice(1)) as Category,
+    ),
+  );
 
   await Promise.all(
     categories.map(async (category) => {
+      if (!supportedCategorySet.has(category)) {
+        setPlanGeneratedState((prev) => ({
+          ...prev,
+          [category]: false,
+        }));
+        releaseStatus[category] = false;
+        itemsByCategory[category] = [];
+        return;
+      }
+
       const params = new URLSearchParams({
         date,
         bld_type: category.toLowerCase(),
         period_type: "one_day",
       });
+      params.set("city_code", cityCode);
 
       try {
         const response = await http.get(`/api/menu?${params.toString()}`);
@@ -614,7 +638,17 @@ async function fetchPublishedMenu(
         }
 
         if (!response.ok) {
-          throw new Error(`Failed to fetch published menu for ${category}`);
+          console.warn(
+            `Failed to fetch published menu for ${category}`,
+            await response.text().catch(() => ""),
+          );
+          setPlanGeneratedState((prev) => ({
+            ...prev,
+            [category]: false,
+          }));
+          releaseStatus[category] = false;
+          itemsByCategory[category] = [];
+          return;
         }
 
         const data = (await response.json()) as MenuApiResponse & {
@@ -739,6 +773,7 @@ async function fetchPublishedMenu(
 
 async function fetchOrdersSummary(
   date: string,
+  cityCode: string,
   periodType?: string,
 ): Promise<OrdersSummaryMap> {
   try {
@@ -746,6 +781,7 @@ async function fetchOrdersSummary(
     if (periodType) {
       params.set("period_type", periodType);
     }
+    params.set("city_code", cityCode);
     const response = await http.get(`/api/production/orders-summary?${params.toString()}`);
     if (!response.ok) {
       return createEmptyOrdersSummary();
@@ -820,6 +856,25 @@ function KitchenProductionPlanningContent() {
   const [planGeneratedState, setPlanGeneratedState] = useState(
   createCategoryBooleanState(false)
 );
+  const adminCity = useAuthStore((state) => state.adminCity || state.user?.city_code || "MYS");
+  const supportedMeals = useMemo(() => getSupportedMeals(adminCity), [adminCity]);
+  const visibleCategories = useMemo<Category[]>(() => {
+    const mapped = supportedMeals.map((meal) =>
+      meal === "condiments"
+        ? "Condiments"
+        : (meal.charAt(0).toUpperCase() + meal.slice(1)) as Category,
+    );
+    return mapped.length ? mapped : ["Condiments"];
+  }, [supportedMeals]);
+
+  useEffect(() => {
+    if (!visibleCategories.length) {
+      return;
+    }
+    if (!visibleCategories.includes(selectedCategory)) {
+      setSelectedCategory(visibleCategories[0]);
+    }
+  }, [selectedCategory, setSelectedCategory, visibleCategories]);
 
   const [savingCategory, setSavingCategory] = useState<Record<Category, boolean>>(
     () => createCategoryBooleanState(false),
@@ -864,11 +919,13 @@ useEffect(() => {
       // ✅ Fetch all menus for the date, and auto-update planGeneratedState
       const { itemsByCategory, releaseStatus } = await fetchPublishedMenu(
         selectedDateISO,
-        setPlanGeneratedState
+        adminCity,
+        setPlanGeneratedState,
       );
 
       const ordersSummary = await fetchOrdersSummary(
         selectedDateISO,
+        adminCity,
         "one_day",
       );
 
@@ -917,12 +974,12 @@ useEffect(() => {
   return () => {
     cancelled = true;
   };
-}, [selectedDateISO]);
+}, [selectedDateISO, adminCity, setPlanGeneratedState]);
 
 
   const flattenedPlan = useMemo(
-    () => categories.flatMap((category) => planData[category]),
-    [planData],
+    () => visibleCategories.flatMap((category) => planData[category]),
+    [planData, visibleCategories],
   );
 
   useEffect(() => {
@@ -941,14 +998,14 @@ useEffect(() => {
 
   const categorySummaries = useMemo(
     () =>
-      categories.map((category) => ({
+      visibleCategories.map((category) => ({
         category,
         items: menuAvailability[category] ? planData[category].length : 0,
         menuPublished: menuAvailability[category],
         planGenerated: planGeneratedState[category],
         editing: editingState[category],
       })),
-    [planData, menuAvailability, planGeneratedState, editingState],
+    [planData, menuAvailability, planGeneratedState, editingState, visibleCategories],
   );
 
   const quickDateOptions = useMemo(() => {
@@ -961,11 +1018,11 @@ useEffect(() => {
 
   const previewCategories = useMemo(
     () =>
-      categories.filter(
+      visibleCategories.filter(
         (category) =>
           menuAvailability[category] && planData[category].length > 0,
       ),
-    [menuAvailability, planData],
+    [menuAvailability, planData, visibleCategories],
   );
 
   const handleBufferChange = (
@@ -1095,14 +1152,11 @@ useEffect(() => {
     setIsApplyingLastMinute(true);
     setLastMinuteError(null);
     try {
-      const response = await fetch("http://localhost:8000/api/production/update-planned", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          date: selectedDateISO,
-          menu_type: selectedCategory,
-          updates,
-        }),
+      const response = await http.patch("/api/production/update-planned", {
+        date: selectedDateISO,
+        menu_type: selectedCategory,
+        updates,
+        city_code: adminCity,
       });
 
       if (!response.ok) {
@@ -1196,20 +1250,17 @@ useEffect(() => {
   };
 
   const handleExportPDF = () => {
-    exportCardLayout(planData, selectedDateLabel, menuAvailability);
+    exportCardLayout(planData, selectedDateLabel, menuAvailability, visibleCategories);
   };
 
   const handleSaveCategory = async (category: Category) => {
     setSavingCategory((prev) => ({ ...prev, [category]: true }));
     try {
-      const response = await fetch("http://localhost:8000/api/production/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          date: selectedDateISO,
-          menu_type: category,
-          plans: planData[category],
-        }),
+      const response = await http.post("/api/production/generate", {
+        date: selectedDateISO,
+        menu_type: category,
+        plans: planData[category],
+        city_code: adminCity,
       });
 
     if (!response.ok) throw new Error("Failed to save production plan");

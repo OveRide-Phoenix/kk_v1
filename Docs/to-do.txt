@@ -5,6 +5,22 @@ THEN MOVE Extension notes to here..
 #---------------------------------------------------------------------------------------------------------------
 
 
+- [] in the order history page when i view an order, show the total amount below the items table not above..
+
+- [] in kitchen production when i saw export i mean to export only the meal that is selected
+
+- [] if i try to export a kitchen production plan where nothing is there, im getting this error: Error: Failed to save production plan
+    at handleSaveCategory (http://localhost:3000/_next/static/chunks/src_f0716ca3._.js:4994:37)
+    at async onClick (http://localhost:3000/_next/static/chunks/src_f0716ca3._.js:5370:33)
+
+    but i also see error handling dialog, sont show any browswer dialogs and stuff, handle it gracefully
+
+
+
+
+- [] condiments form
+
+- [] combos concept and form and edit and logic
 
 - [✅] planned qty ->  make it max qty - revamp daily menu, no need for qty talk
 
@@ -224,7 +240,7 @@ THEN MOVE Extension notes to here..
 
 - [ ] add a menu type field in daily menu, that defaults to one day menu but allows us to set other stuff - but this is not a good way to do it, what if i want to create the condiments menu only, there needs to be a better approach
 
-- [] remove city for admin login
+- [] remove city for admin login ?
 
 - [✅] add the developer pages inside the admin routing so that auth guard and stuff works for that in addition to the regular checking if the user has develpoer roles before making any changes/actions from those pages..take role based access seriously implement it at a router level, so api's dont check for roles because you cant even be on this page if you dont have the role (unless api is checking for role then well and good)
 

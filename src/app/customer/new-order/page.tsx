@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog"
 import { useAuthStore } from "@/store/store"
 import { toast } from "@/hooks/use-toast"
+import { getSupportedMeals, citySupportsFood, citySupportsCondiments } from "@/config/cities"
 
 const CART_STORAGE_KEY = "customer_cart_items"
 const CART_CONTEXT_KEY = "customer_cart_context"
@@ -29,6 +30,12 @@ const currency = (value: number) =>
     currency: "INR",
     maximumFractionDigits: 0,
   }).format(value)
+
+const buildAuthHeaders = (): Record<string, string> => {
+  if (typeof window === "undefined") return {}
+  const token = localStorage.getItem("access_token")
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
 
 type MealType = "breakfast" | "lunch" | "dinner" | "condiments"
 
@@ -77,6 +84,7 @@ type AddressEntry = {
   house_apartment_no: string | null
   written_address: string
   city: string
+  city_code?: string
   pin_code: string
   is_default: boolean
   latitude?: number | null
@@ -129,6 +137,15 @@ export default function NewOrderPage() {
   const [exitWarningSuppressed, setExitWarningSuppressed] = useState(false)
   const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false)
   const pendingNavigationRef = useRef<null | (() => void)>(null)
+  const cityCode = useMemo(() => {
+    const raw = typeof user?.city_code === "string" ? user.city_code.trim().toUpperCase() : ""
+    return raw.length ? raw : "MYS"
+  }, [user?.city_code])
+  const userHasCityOverride = Boolean(user?.city_code && user.city_code.trim())
+  const supportsFood = citySupportsFood(cityCode)
+  const supportsCondiments = citySupportsCondiments(cityCode)
+  const availableMeals = useMemo(() => getSupportedMeals(cityCode), [cityCode])
+  const availableMealsKey = useMemo(() => availableMeals.join(","), [availableMeals])
 
   const menuItemsMap = useMemo(() => createMenuItemMap(menuByMeal), [menuByMeal])
 
@@ -158,6 +175,16 @@ export default function NewOrderPage() {
     const totalPrice = cartSelection.reduce((sum, line) => sum + line.quantity * line.price, 0)
     return { totalQuantity, totalPrice }
   }, [cartSelection])
+
+  useEffect(() => {
+    if (!activeCategory && availableMeals.length > 0) {
+      setActiveCategory(availableMeals[0])
+      return
+    }
+    if (activeCategory && !availableMeals.includes(activeCategory)) {
+      setActiveCategory(availableMeals[0] ?? null)
+    }
+  }, [activeCategory, availableMeals])
   useEffect(() => {
     if (user) return
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null
@@ -175,6 +202,10 @@ export default function NewOrderPage() {
       }
     })()
   }, [user, setUser])
+
+  useEffect(() => {
+    setHydrated(true)
+  }, [])
 
   useEffect(() => {
     try {
@@ -264,7 +295,10 @@ export default function NewOrderPage() {
       setAddressesLoading(true)
       setAddressesError(null)
       try {
-        const res = await fetch(`http://localhost:8000/api/customers/${customerId}/addresses`)
+        const headers = buildAuthHeaders()
+        const res = await fetch(`http://localhost:8000/api/customers/${customerId}/addresses`, {
+          headers,
+        })
         if (!res.ok) {
           throw new Error("Unable to fetch addresses")
         }
@@ -321,38 +355,56 @@ export default function NewOrderPage() {
     setIsMenuLoading(true)
 
     ;(async () => {
+      const headers = buildAuthHeaders()
       try {
         const nextMenu: Partial<Record<MealType, MenuItem[]>> = {}
 
-        await Promise.all(
-          MEALS.map(async (meal) => {
-            const url = new URL("http://localhost:8000/api/menu")
-            url.searchParams.set("date", orderDate)
-            url.searchParams.set("bld_type", meal)
-            url.searchParams.set("period_type", "one_day")
+        if (availableMeals.length > 0) {
+          await Promise.all(
+            availableMeals.map(async (meal) => {
+              try {
+                const url = new URL("http://localhost:8000/api/menu")
+                url.searchParams.set("bld_type", meal)
+                if (userHasCityOverride) {
+                  url.searchParams.set("city_code", cityCode)
+                }
+                if (meal === "condiments") {
+                  url.searchParams.set("menu_type", "CONDIMENTS")
+                } else {
+                  url.searchParams.set("date", orderDate)
+                  url.searchParams.set("period_type", "one_day")
+                  url.searchParams.set("menu_type", "ONE_DAY")
+                }
 
-            const response = await fetch(url.toString())
-            if (response.status === 404) {
-              nextMenu[meal] = []
-              return
-            }
-            if (!response.ok) {
-              throw new Error(`Failed to fetch ${meal}`)
-            }
-            const data = await response.json()
-            const items = (data.items ?? []) as MenuApiItem[]
-            nextMenu[meal] = items.map((item) => ({
-              menu_item_id: item.menu_item_id ?? 0,
-              item_id: item.item_id ?? 0,
-              item_name: item.item_name ?? item.name ?? "Item",
-              meal,
-              rate: item.rate ?? item.price ?? 0,
-              available_qty: normalizeQty(item.available_qty),
-              description: item.description ?? "",
-              picture_url: item.picture_url ?? null,
-            }))
-          })
-        )
+                const response = await fetch(url.toString(), { headers })
+                if (response.status === 404) {
+                  nextMenu[meal] = []
+                  return
+                }
+                if (!response.ok) {
+                  console.warn(`Failed to fetch ${meal}`, await response.text())
+                  nextMenu[meal] = []
+                  return
+                }
+                const data = await response.json()
+                const items = (data.items ?? []) as MenuApiItem[]
+                nextMenu[meal] = items.map((item) => ({
+                  menu_item_id: item.menu_item_id ?? 0,
+                  item_id: item.item_id ?? 0,
+                  item_name: item.item_name ?? item.name ?? "Item",
+                  meal,
+                  rate: item.rate ?? item.price ?? 0,
+                  available_qty: normalizeQty(item.available_qty),
+                  description: item.description ?? "",
+                  picture_url: item.picture_url ?? null,
+                }))
+              } catch (mealError) {
+                console.warn(`Unable to load ${meal}`, mealError)
+                nextMenu[meal] = []
+              }
+            })
+          )
+        }
 
         setMenuByMeal({
           breakfast: nextMenu.breakfast ?? [],
@@ -367,7 +419,7 @@ export default function NewOrderPage() {
         setIsMenuLoading(false)
       }
     })()
-  }, [orderDate])
+  }, [orderDate, availableMealsKey, cityCode])
 
   useEffect(() => {
     reloadMenu()
@@ -510,9 +562,19 @@ export default function NewOrderPage() {
             </div>
           </section>
 
+          {!supportsFood && supportsCondiments && (
+            <section className="mb-6 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-sm text-[#8d6e63] shadow-inner">
+              <p className="font-medium text-[#463028]">Condiments only in your city</p>
+              <p>
+                We&apos;re currently offering condiments in {selectedAddress?.city || "your city"} while we ramp up
+                full meals. Breakfast, Lunch, and Dinner ordering will unlock here soon.
+              </p>
+            </section>
+          )}
+
           <div className="sticky top-20 z-10 mb-6">
             <div className="flex justify-center gap-2">
-              {MEALS.map((meal) => (
+              {availableMeals.map((meal) => (
                 <button
                   key={meal}
                   onClick={() => {
@@ -530,7 +592,9 @@ export default function NewOrderPage() {
                       : "bg-brand-shell text-primary hover:bg-primary hover:text-white"
                   }`}
                 >
-                  {meal}
+                  {meal === "condiments"
+                    ? "Condiments"
+                    : meal.charAt(0).toUpperCase() + meal.slice(1)}
                 </button>
               ))}
             </div>
@@ -547,10 +611,12 @@ export default function NewOrderPage() {
           ) : (
             <div className="px-4 md:px-16">
               <div className="grid grid-cols-1 gap-16">
-                {MEALS.map((meal) => (
+                {availableMeals.map((meal) => (
                   <div key={meal} id={meal}>
                     <h2 className="text-xl font-semibold text-[#463028] mb-4 capitalize font-serif">
-                      {meal}
+                      {meal === "condiments"
+                        ? "Condiments · Till stocks last"
+                        : meal.charAt(0).toUpperCase() + meal.slice(1)}
                     </h2>
                     {menuByMeal[meal]?.length ? (
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -738,6 +804,3 @@ function createMenuItemMap(menuByMeal: Record<MealType, MenuItem[]>) {
   })
   return map
 }
-  useEffect(() => {
-    setHydrated(true)
-  }, [])

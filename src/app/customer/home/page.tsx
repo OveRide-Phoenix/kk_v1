@@ -5,7 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { format as formatDate, isSameDay, isSameMonth, parseISO } from "date-fns"
-import { Calendar, ChefHat, Info, Leaf, Loader2, Minus, Plus, Repeat, ShoppingCart, Sparkles, UtensilsCrossed } from "lucide-react"
+import { Calendar, ChefHat, Info, Leaf, Loader2, MapPin, Minus, Plus, Repeat, ShoppingCart, Sparkles, UtensilsCrossed } from "lucide-react"
 import Autoplay from "embla-carousel-autoplay"
 
 import CustomerNavBar from "@/components/customer-nav-bar"
@@ -21,6 +21,7 @@ import Footer from "@/components/footer"
 import { cn } from "@/lib/utils"
 import { MealSwitcher } from "@/components/ui/meal-switcher"
 import { Skeleton } from "@/components/ui/skeleton"
+import { getSupportedMeals, citySupportsFood, citySupportsCondiments } from "@/config/cities"
 
 type MealType = "breakfast" | "lunch" | "dinner" | "condiments"
 
@@ -67,6 +68,21 @@ type OrderSummary = {
     pin_code: string
   }
   items: OrderItem[]
+}
+
+type AddressSummary = {
+  address_id: number
+  address_type: string
+  written_address: string
+  city: string
+  city_code?: string
+  pin_code: string
+  is_default: boolean
+}
+
+const CITY_LABELS: Record<string, string> = {
+  MYS: "Mysore",
+  BLR: "Bangalore",
 }
 
 type CartLine = {
@@ -124,6 +140,12 @@ const currency = (value: number) =>
     maximumFractionDigits: 0,
   }).format(value)
 
+const buildAuthHeaders = (): Record<string, string> => {
+  if (typeof window === "undefined") return {}
+  const token = localStorage.getItem("access_token")
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 export default function CustomerHomePage() {
   const router = useRouter()
   const user = useAuthStore((state) => state.user)
@@ -149,6 +171,9 @@ export default function CustomerHomePage() {
   const [orders, setOrders] = useState<OrderSummary[]>([])
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [ordersError, setOrdersError] = useState<string | null>(null)
+  const [defaultAddress, setDefaultAddress] = useState<AddressSummary | null>(null)
+  const [defaultAddressLoading, setDefaultAddressLoading] = useState(false)
+  const [defaultAddressError, setDefaultAddressError] = useState<string | null>(null)
   const [todayCarouselApi, setTodayCarouselApi] = useState<CarouselApi | null>(null)
   const [todayCarouselIndex, setTodayCarouselIndex] = useState(0)
   const [quantities, setQuantities] = useState<Record<number, number>>({})
@@ -161,6 +186,15 @@ export default function CustomerHomePage() {
       stopOnMouseEnter: true,
     })
   )
+  const cityCode = useMemo(() => {
+    const raw = typeof user?.city_code === "string" ? user.city_code.trim().toUpperCase() : ""
+    return raw.length ? raw : "MYS"
+  }, [user?.city_code])
+  const userHasCityOverride = Boolean(user?.city_code && user.city_code.trim())
+  const supportsFood = citySupportsFood(cityCode)
+  const supportsCondiments = citySupportsCondiments(cityCode)
+  const availableMeals = useMemo(() => getSupportedMeals(cityCode), [cityCode])
+  const availableMealsKey = useMemo(() => availableMeals.join(","), [availableMeals])
 
   useEffect(() => {
     if (!hydrated) return
@@ -192,50 +226,113 @@ export default function CustomerHomePage() {
   )
 
   useEffect(() => {
+    if (!supportsFood) {
+      setActiveMeal("condiments")
+      return
+    }
+    if (!availableMeals.includes(activeMeal)) {
+      setActiveMeal(availableMeals[0] ?? "condiments")
+    }
+  }, [supportsFood, availableMeals, activeMeal])
+
+  useEffect(() => {
+    if (!hydrated || !user?.customer_id) return
+    let cancelled = false
+    setDefaultAddressLoading(true)
+    setDefaultAddressError(null)
+    fetch(`http://localhost:8000/api/customers/${user.customer_id}/addresses`)
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error("Unable to load addresses")
+        }
+        return res.json()
+      })
+      .then((data: AddressSummary[]) => {
+        if (cancelled) return
+        const nextDefault =
+          data.find((address) => address.is_default) ?? data[0] ?? null
+        setDefaultAddress(nextDefault)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setDefaultAddressError("Unable to load delivery address")
+        setDefaultAddress(null)
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setDefaultAddressLoading(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [hydrated, user?.customer_id])
+
+  useEffect(() => {
     let cancelled = false
     setIsLoading(true)
     setError(null)
 
     ;(async () => {
+      const headers = buildAuthHeaders()
       try {
         const nextMenu: Partial<Record<MealType, MenuItem[]>> = {}
         const nextRelease: Partial<Record<MealType, boolean>> = {}
 
-        await Promise.all(
-          MEALS.map(async (meal) => {
-            const url = new URL("http://localhost:8000/api/menu")
-            url.searchParams.set("date", todayISO)
-            url.searchParams.set("bld_type", meal)
-            url.searchParams.set("period_type", "one_day")
+        if (availableMeals.length > 0) {
+          await Promise.all(
+            availableMeals.map(async (meal) => {
+              try {
+                const url = new URL("http://localhost:8000/api/menu")
+                url.searchParams.set("bld_type", meal)
+                if (userHasCityOverride) {
+                  url.searchParams.set("city_code", cityCode)
+                }
+                if (meal === "condiments") {
+                  url.searchParams.set("menu_type", "CONDIMENTS")
+                } else {
+                  url.searchParams.set("date", todayISO)
+                  url.searchParams.set("period_type", "one_day")
+                  url.searchParams.set("menu_type", "ONE_DAY")
+                }
 
-            const response = await fetch(url.toString())
-            if (response.status === 404) {
-              nextMenu[meal] = []
-              nextRelease[meal] = false
-              return
-            }
-            if (!response.ok) {
-              throw new Error(`Failed to load ${meal} menu`)
-            }
+                const response = await fetch(url.toString(), { headers })
+                if (response.status === 404) {
+                  nextMenu[meal] = []
+                  nextRelease[meal] = false
+                  return
+                }
+                if (!response.ok) {
+                  console.warn(`Failed to load ${meal} menu`, await response.text())
+                  nextMenu[meal] = []
+                  nextRelease[meal] = false
+                  return
+                }
 
-            const data = await response.json()
-            const items = (data.items ?? []) as MenuApiItem[]
-            const isReleased = Boolean((data as any).is_released)
-            nextRelease[meal] = isReleased
-            nextMenu[meal] = isReleased
-              ? items.map((item) => ({
-                  menu_item_id: item.menu_item_id ?? 0,
-                  item_id: item.item_id ?? 0,
-                  item_name: item.item_name ?? item.name ?? "Item",
-                  meal,
-                  rate: item.rate ?? item.price ?? 0,
-                  available_qty: normalizeQty(item.available_qty),
-                  description: item.description ?? "",
-                  picture_url: item.picture_url ?? null,
-                }))
-              : []
-          })
-        )
+                const data = await response.json()
+                const items = (data.items ?? []) as MenuApiItem[]
+                const isReleased = Boolean((data as any).is_released)
+                nextRelease[meal] = isReleased
+                nextMenu[meal] = isReleased
+                  ? items.map((item) => ({
+                      menu_item_id: item.menu_item_id ?? 0,
+                      item_id: item.item_id ?? 0,
+                      item_name: item.item_name ?? item.name ?? "Item",
+                      meal,
+                      rate: item.rate ?? item.price ?? 0,
+                      available_qty: normalizeQty(item.available_qty),
+                      description: item.description ?? "",
+                      picture_url: item.picture_url ?? null,
+                    }))
+                  : []
+              } catch (mealError) {
+                console.warn(`Failed to load ${meal}`, mealError)
+                nextMenu[meal] = []
+                nextRelease[meal] = false
+              }
+            })
+          )
+        }
 
         if (!cancelled) {
           setMenuByMeal({
@@ -278,7 +375,7 @@ export default function CustomerHomePage() {
     return () => {
       cancelled = true
     }
-  }, [todayISO])
+  }, [todayISO, availableMealsKey, cityCode])
 
   useEffect(() => {
     if (!customerId) return
@@ -288,7 +385,10 @@ export default function CustomerHomePage() {
       setOrdersLoading(true)
       setOrdersError(null)
       try {
-        const response = await fetch(`http://localhost:8000/api/customers/${customerId}/orders`)
+        const headers = buildAuthHeaders()
+        const response = await fetch(`http://localhost:8000/api/customers/${customerId}/orders`, {
+          headers,
+        })
         if (!response.ok) {
           throw new Error("Unable to load your orders")
         }
@@ -361,9 +461,9 @@ export default function CustomerHomePage() {
     const calculateActiveMeal = () => {
       const offset = 200
       const scrollPosition = window.scrollY + offset
-      let nextActive: MealType = MEALS[0]
+      let nextActive: MealType = availableMeals[0] ?? "condiments"
 
-      MEALS.forEach((meal) => {
+      availableMeals.forEach((meal) => {
         const section = document.getElementById(meal)
         if (!section) return
         const top = section.offsetTop
@@ -394,7 +494,7 @@ export default function CustomerHomePage() {
       window.removeEventListener("scroll", handleScroll)
       window.removeEventListener("resize", handleScroll)
     }
-  }, [menuByMeal])
+  }, [menuByMeal, availableMeals])
 
   useEffect(() => {
     if (!isAuthenticated || !cartInitialized) return
@@ -424,11 +524,11 @@ export default function CustomerHomePage() {
   const menuItemsMap = useMemo(() => createMenuItemMap(menuByMeal), [menuByMeal])
   const mealSwitcherOptions = useMemo(
     () =>
-      MEALS.map((meal) => ({
+      availableMeals.map((meal) => ({
         value: meal,
-        label: MEAL_LABELS[meal],
+        label: meal === "condiments" ? "Condiments (Till stocks last)" : MEAL_LABELS[meal],
       })),
-    []
+    [availableMeals]
   )
 
   const cartSelection = useMemo<CartLine[]>(() => {
@@ -647,6 +747,16 @@ export default function CustomerHomePage() {
             />
           </div>
         </section>
+
+        {!supportsFood && supportsCondiments && (
+          <section className="mt-6 rounded-2xl border border-amber-200 bg-amber-50/70 p-5 text-sm text-brand-cocoa shadow-brand-soft">
+            <p className="font-medium">We&apos;re launching meals city by city.</p>
+            <p className="mt-1 text-brand-toast">
+              For now, {CITY_LABELS[cityCode] ?? cityCode} customers can order from the condiments bar.
+              Daily Breakfast/Lunch/Dinner menus remain exclusive to Mysore until we expand.
+            </p>
+          </section>
+        )}
 
         {!isAuthenticated && (
           <section className="mt-10 rounded-3xl border border-brand-subtle bg-brand-cream p-6 shadow-brand-soft lg:p-10">
@@ -950,11 +1060,23 @@ export default function CustomerHomePage() {
               )}
             </div>
 
-            <div className="mt-8 flex flex-col items-center gap-3">
-              <MealSwitcher options={mealSwitcherOptions} value={activeMeal} onValueChange={handleMealSelect} />
-              {!isAuthenticated && (
-                <div className="flex items-center gap-2 rounded-full bg-brand-toast/15 px-3 py-1 text-xs font-medium text-brand-toast">
-                  <Info className="h-3.5 w-3.5" />
+            <div className="mt-8 flex flex-col items-center gap-3 text-xs text-brand-toast">
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <MealSwitcher options={mealSwitcherOptions} value={activeMeal} onValueChange={handleMealSelect} />
+              </div>
+              {isAuthenticated ? (
+                <div className="flex w-full justify-center">
+                  <LocationBadge
+                    defaultAddress={defaultAddress}
+                    defaultAddressLoading={defaultAddressLoading}
+                    defaultAddressError={defaultAddressError}
+                    onManageClick={() => router.push("/customer/account")}
+                    userCityCode={userHasCityOverride ? cityCode : null}
+                  />
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 rounded-full bg-brand-toast/15 px-3 py-1 text-[11px] font-medium text-brand-toast">
+                  <Info className="h-3.5 w-3.5 shrink-0" />
                   <span>
                     <Link
                       href="/login"
@@ -962,7 +1084,7 @@ export default function CustomerHomePage() {
                     >
                       Log in
                     </Link>{" "}
-                    to see place an order or view order details.
+                    to place an order or view order details.
                   </span>
                 </div>
               )}
@@ -1000,22 +1122,24 @@ export default function CustomerHomePage() {
               </div>
             ) : (
               <div className="mt-10 space-y-12">
-                {MEALS.map((meal) => (
+                {availableMeals.map((meal) => (
                   <section key={meal} id={meal} className="scroll-mt-32">
                     <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <h3 className="text-xl font-serif font-semibold text-brand-cocoa">
-                          {MEAL_LABELS[meal]}
+                          {meal === "condiments" ? "Condiments · Till stocks last" : MEAL_LABELS[meal]}
                         </h3>
                         <p className="text-xs text-brand-toast">
                           {!isReleasedByMeal[meal]
-                            ? "Menu not released yet"
+                            ? "Menu not released yet — check back later."
                             : menuByMeal[meal]?.length
                             ? "Highlighted selections from the kitchen"
+                            : meal === "condiments"
+                            ? "No condiments available right now"
                             : "No items available right now"}
                         </p>
                       </div>
-                      {orderingForLabel && (
+                      {orderingForLabel && meal !== "condiments" && (
                         <span className="text-xs font-medium uppercase tracking-wide text-brand-toast/80">
                           Ordering for: {orderingForLabel}
                         </span>
@@ -1197,4 +1321,88 @@ function createMenuItemMap(menuByMeal: Record<MealType, MenuItem[]>) {
     })
   })
   return map
+}
+
+type LocationBadgeProps = {
+  defaultAddress: AddressSummary | null
+  defaultAddressLoading: boolean
+  defaultAddressError: string | null
+  onManageClick: () => void
+  userCityCode?: string | null
+}
+
+function LocationBadge({
+  defaultAddress,
+  defaultAddressLoading,
+  defaultAddressError,
+  onManageClick,
+  userCityCode,
+}: LocationBadgeProps) {
+  if (defaultAddressLoading) {
+    return (
+      <div className="flex items-center gap-2 rounded-full border border-dashed border-brand-subtle/70 bg-white px-3 py-1 text-xs text-brand-toast shadow-inner">
+        <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+        <span>Fetching address…</span>
+      </div>
+    )
+  }
+
+  if (defaultAddressError) {
+    return (
+      <button
+        type="button"
+        className="rounded-full border border-destructive/40 bg-white px-3 py-1 text-xs font-medium text-destructive shadow-sm transition hover:border-destructive"
+        onClick={onManageClick}
+      >
+        Unable to load address. Update profile →
+      </button>
+    )
+  }
+
+  if (!defaultAddress) {
+    return (
+      <button
+        type="button"
+        className="rounded-full border border-primary/40 bg-white px-3 py-1 text-xs font-medium text-primary shadow-sm transition hover:bg-primary/5"
+        onClick={onManageClick}
+      >
+        Add delivery address
+      </button>
+    )
+  }
+
+  const label = `${defaultAddress.address_type || "Address"} · ${defaultAddress.city}`
+  const tooltipParts = [
+    defaultAddress.house_apartment_no,
+    defaultAddress.written_address,
+    defaultAddress.city,
+    defaultAddress.pin_code,
+  ].filter(Boolean)
+  const tooltip = tooltipParts.join(", ")
+  const mismatch =
+    Boolean(userCityCode) &&
+    Boolean(defaultAddress.city_code) &&
+    defaultAddress.city_code !== userCityCode
+
+  return (
+    <div
+      className="flex flex-wrap items-center gap-2 rounded-full border border-brand-subtle bg-white px-3 py-1 text-xs font-medium text-brand-cocoa shadow-sm"
+      title={tooltip}
+    >
+      <MapPin className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+      <span>{label}</span>
+      <button
+        type="button"
+        className="text-[11px] font-semibold text-primary underline-offset-4 hover:underline"
+        onClick={onManageClick}
+      >
+        Manage
+      </button>
+      {mismatch && (
+        <span className="text-[10px] font-normal text-amber-700">
+          Switch cities next login to view {CITY_LABELS[defaultAddress.city_code || "MYS"] ?? defaultAddress.city}
+        </span>
+      )}
+    </div>
+  )
 }

@@ -32,6 +32,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { http } from "@/lib/http";
+import { useAuthStore } from "@/store/store";
 import { Loader2, Plus, KeyRound, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
 
@@ -75,6 +76,7 @@ const minPasswordLength = 6;
 
 export default function AccessControlPage() {
   const { toast } = useToast();
+  const adminCity = useAuthStore((state) => state.adminCity || state.user?.city_code || "MYS")
 
   const [roles, setRoles] = useState<Role[]>([]);
   const [rolesLoading, setRolesLoading] = useState(true);
@@ -208,7 +210,7 @@ export default function AccessControlPage() {
   const loadCustomers = useCallback(async () => {
     setCustomersLoading(true);
     try {
-      const res = await http.get("/get-all-customers");
+      const res = await http.get(`/api/admin/customers?city_code=${adminCity}`);
       const data = await res.json();
       if (!res.ok || !Array.isArray(data)) {
         throw new Error("Unable to load customers.");
@@ -224,7 +226,7 @@ export default function AccessControlPage() {
     } finally {
       setCustomersLoading(false);
     }
-  }, []);
+  }, [adminCity]);
 
   useEffect(() => {
     void loadRoles();
@@ -323,10 +325,7 @@ export default function AccessControlPage() {
 
   const handleSaveEdit = async () => {
     if (!editingMember) return;
-    if (editRoleIds.size === 0) {
-      setEditError("Select at least one role.");
-      return;
-    }
+    const removingAllRoles = editRoleIds.size === 0;
     if (editPassword && editPassword.trim().length > 0 && editPassword.trim().length < minPasswordLength) {
       setEditError(`Password must be at least ${minPasswordLength} characters.`);
       return;
@@ -349,7 +348,7 @@ export default function AccessControlPage() {
       }
       setEditingMember(null);
       await loadMembers();
-      showRoleChangeToast("Team member updated");
+      showRoleChangeToast(removingAllRoles ? "Admin access revoked" : "Team member updated");
     } catch (error) {
       setEditError(error instanceof Error ? error.message : "Failed to update member.");
     } finally {
@@ -925,6 +924,11 @@ export default function AccessControlPage() {
                     </label>
                   ))}
                 </div>
+                {editRoleIds.size === 0 && (
+                  <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    Saving without any roles will remove this member from the admin portal until roles are added again.
+                  </p>
+                )}
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">

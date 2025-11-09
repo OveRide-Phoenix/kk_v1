@@ -14,6 +14,8 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 
+from .city_config import DEFAULT_CITY
+
 Base = declarative_base()
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -48,6 +50,7 @@ class Address(Base):
     house_apartment_no = Column(String(255), nullable=True)
     written_address = Column(Text, nullable=False)
     city = Column(String(100), nullable=False)
+    city_code = Column(String(3), nullable=False, default=DEFAULT_CITY)
     pin_code = Column(String(10), nullable=False)
     latitude = Column(DECIMAL(10, 8), nullable=False)
     longitude = Column(DECIMAL(11, 8), nullable=False)
@@ -118,14 +121,16 @@ class Menu(Base):
     __tablename__ = "menu"
 
     menu_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    date = Column(Date, nullable=False)
+    date = Column(Date, nullable=True)
     is_festival = Column(Boolean, nullable=False, default=False)
     is_released = Column(Boolean, nullable=False, default=False)
     is_production_generated = Column(Boolean, nullable=False, default=False)
+    menu_type = Column(String(20), nullable=False, default="ONE_DAY")
     period_type = Column(
         Enum("one_day", "subscription", "all_days", name="period_type_enum"),
         nullable=True,
     )
+    city_code = Column(String(3), nullable=False, default=DEFAULT_CITY)
 
     bld_id = Column(Integer, ForeignKey("bld.bld_id"), nullable=False)
     bld = relationship("BLD", back_populates="menus")
@@ -174,7 +179,7 @@ class Item(Base):
     dinner_price = Column(DECIMAL(10, 2), nullable=True)
     condiments_price = Column(DECIMAL(10, 2), nullable=True)
     festival_price = Column(DECIMAL(10, 2), nullable=True)
-
+    is_condiment = Column(Boolean, nullable=False, default=False)
     cgst = Column(DECIMAL(5, 2), nullable=True)
     sgst = Column(DECIMAL(5, 2), nullable=True)
     igst = Column(DECIMAL(5, 2), nullable=True)

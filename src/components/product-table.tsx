@@ -18,7 +18,7 @@ interface ProductTableProps {
   products: (Product | ComboProduct | AddonProduct | CategoryProduct)[]
   onEdit: (product: any) => void
   onDelete: (product: any) => void
-  tableType: "items" | "combos" | "addons" | "categories"
+  tableType: "items" | "combos" | "addons" | "categories" | "condiments"
 }
 
 export default function ProductTable({ products, onEdit, onDelete, tableType }: ProductTableProps) {
@@ -77,16 +77,22 @@ export default function ProductTable({ products, onEdit, onDelete, tableType }: 
   }
 
   // Define columns for each table type
+  const isCondimentsTable = tableType === "condiments"
+
   let columns: { key: string; header: string; priority?: number }[] = []
-  if (tableType === "items") {
+  if (tableType === "items" || isCondimentsTable) {
     columns = [
       { key: "sl_no", header: "Sl.No", priority: 3 },
       { key: "name", header: "Name", priority: 1 },
       { key: "item_id", header: "ID", priority: 3 },
       { key: "category_name", header: "Category", priority: 2 },
-      { key: "breakfast_price", header: "Breakfast Price", priority: 4 },
-      { key: "lunch_price", header: "Lunch Price", priority: 4 },
-      { key: "dinner_price", header: "Dinner Price", priority: 4 },
+      ...(isCondimentsTable
+        ? [{ key: "condiments_price", header: "Condiments Price", priority: 4 }]
+        : [
+            { key: "breakfast_price", header: "Breakfast Price", priority: 4 },
+            { key: "lunch_price", header: "Lunch Price", priority: 4 },
+            { key: "dinner_price", header: "Dinner Price", priority: 4 },
+          ]),
       { key: "actions", header: "Actions", priority: 1 },
     ]
   } else if (tableType === "combos") {
@@ -194,9 +200,11 @@ export default function ProductTable({ products, onEdit, onDelete, tableType }: 
                 </TableCell>
               </TableRow>
             ) : (
-              sortedProducts.map((product: any, idx) => (
+              sortedProducts.map((product: any, idx) => {
+                const isCondimentProduct = Boolean(product?.is_condiment)
+                return (
                 <TableRow
-                  key={`${tableType}-${tableType === "items" ? product.item_id : tableType === "combos" ? product.combo_id : tableType === "addons" ? product.add_on_id : tableType === "categories" ? product.category_id : idx}-${idx}`}
+                  key={`${tableType}-${tableType === "items" || tableType === "condiments" ? product.item_id : tableType === "combos" ? product.combo_id : tableType === "addons" ? product.add_on_id : tableType === "categories" ? product.category_id : idx}-${idx}`}
                 >
                   {visibleColumns.map((column) => {
                     if (column.key === "sl_no") {
@@ -250,7 +258,8 @@ export default function ProductTable({ products, onEdit, onDelete, tableType }: 
                     if (
                       column.key === "breakfast_price" ||
                       column.key === "lunch_price" ||
-                      column.key === "dinner_price"
+                      column.key === "dinner_price" ||
+                      column.key === "condiments_price"
                     ) {
                       return (
                         <TableCell key={column.key} className={`px-4 py-3 ${isMobile ? 'text-xs' : ''}`}>
@@ -273,6 +282,20 @@ export default function ProductTable({ products, onEdit, onDelete, tableType }: 
                           {(product.includedItems && product.includedItems.length > 0)
                             ? product.includedItems.map((item: any) => item.name).join(", ")
                             : "-"}
+                        </TableCell>
+                      )
+                    }
+                    if (column.key === "name" && (tableType === "items" || tableType === "condiments")) {
+                      return (
+                        <TableCell key={column.key} className={`px-4 py-3 ${isMobile ? 'text-xs' : 'text-sm'} font-medium`}>
+                          <div className="flex flex-col gap-1">
+                            <span>{product.name ?? "-"}</span>
+                            {isCondimentProduct && (
+                              <Badge variant="secondary" className="w-max text-[10px] tracking-wide">
+                                Condiment
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
                       )
                     }
@@ -316,7 +339,7 @@ export default function ProductTable({ products, onEdit, onDelete, tableType }: 
                     )
                   })}
                 </TableRow>
-              ))
+              )})
             )}
           </TableBody>
         </Table>

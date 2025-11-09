@@ -59,6 +59,7 @@ export default function ProductDetails({ product, open, onOpenChange }: ProductD
                     {product.item_type}
                   </Badge>
                   {product.is_combo && <Badge variant="outline">Combo</Badge>}
+                  {product.is_condiment && <Badge variant="secondary">Condiment</Badge>}
                 </div>
               </div>
               

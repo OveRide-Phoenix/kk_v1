@@ -16,6 +16,7 @@ import {
   Database,
   Sparkles,
   ShieldCheck,
+  Truck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
@@ -36,6 +37,7 @@ const primaryNavigationItems = [
     { name: "Customer Management", icon: Users, href: "/admin/customermgmt", id: "customermgmt" },
     { name: "Daily Menu Setup", icon: Calendar, href: "/admin/dailymenusetup", id: "dailymenusetup" },
     { name: "Kitchen Production", icon: Utensils, href: "/admin/production", id: "production" },
+    { name: "Trip Sheets", icon: Truck, href: "/admin/trip-sheet", id: "trip-sheet" },
     { name: "Order History", icon: ShoppingCart, href: "/admin/order-history", id: "orders" },
     { name: "Access Control", icon: ShieldCheck, href: "/admin/team-members", id: "team-members" },
     { name: "Logs & Audit", icon: FileText, href: "/admin/logs", id: "logs" },

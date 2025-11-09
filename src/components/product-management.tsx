@@ -79,6 +79,7 @@ const buildItemUpdatePayload = (product: Product): Record<string, unknown> => {
     igst: normalizeFloat(product.igst),
     net_price: normalizeFloat(product.net_price),
     is_combo: Boolean(product.is_combo),
+    is_condiment: Boolean((product as any).is_condiment),
   }
 
   const pictureValue = (product as any).picture_url
@@ -104,6 +105,8 @@ const buildItemUpdatePayload = (product: Product): Record<string, unknown> => {
   )
 }
 
+type TabKey = "items" | "combos" | "addons" | "categories" | "condiments"
+
 export default function ProductManagement() {
   const { toast } = useToast()
   const [products, setProducts] = useState<Product | ComboProduct | AddonProduct | CategoryProduct[]>([])
@@ -115,7 +118,7 @@ export default function ProductManagement() {
   const [productToDelete, setProductToDelete] = useState<Product | null>(null)
   const [filterType, setFilterType] = useState<string>("All Types")
   const [filterGroup, setFilterGroup] = useState<string>("All Groups")
-  const [activeTab, setActiveTab] = useState("items")
+  const [activeTab, setActiveTab] = useState<TabKey>("items")
 
   // Get unique groups for filter dropdown
   const uniqueGroups = Array.from(new Set((products as any[]).map((product) => product.group)))
@@ -137,6 +140,9 @@ export default function ProductManagement() {
         break
       case "categories":
         url = "http://localhost:8000/api/products/categories"
+        break
+      case "condiments":
+        url = "http://localhost:8000/api/products/items?only_condiments=1"
         break
     }
 
@@ -171,6 +177,7 @@ export default function ProductManagement() {
         let name, id
         switch (activeTab) {
           case "items":
+          case "condiments":
             name = (product as Product).name
             id = (product as Product).item_id
             break
@@ -242,7 +249,7 @@ export default function ProductManagement() {
   }
 
   const handleSaveProduct = async (product: any) => {
-    if (activeTab !== "items") {
+    if (activeTab !== "items" && activeTab !== "condiments") {
       if (selectedProduct) {
         const updatedProducts = (products as any[]).map((p) => (p.id === product.id ? product : p))
         setProducts(updatedProducts)
@@ -323,11 +330,12 @@ export default function ProductManagement() {
     }
   }
 
-  const singularFormMap = {
+  const singularFormMap: Record<TabKey, string> = {
     items: "Item",
     combos: "Combo",
     addons: "Add-on",
     categories: "Category",
+    condiments: "Condiment",
   }
 
   // Reset filters when tab changes
@@ -343,20 +351,21 @@ export default function ProductManagement() {
         <Card>
           <CardHeader className="pb-2">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <CardTitle className="text-xl font-semibold">{singularFormMap[activeTab as keyof typeof singularFormMap]}s</CardTitle>
+              <CardTitle className="text-xl font-semibold">{singularFormMap[activeTab]}s</CardTitle>
               <Button onClick={handleAddProduct} className="flex items-center gap-2">
                 <Plus className="h-4 w-4" />
-                Add New {singularFormMap[activeTab as keyof typeof singularFormMap]}
+                Add New {singularFormMap[activeTab]}
               </Button>
             </div>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="items" className="mb-6" onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-4">
+            <Tabs value={activeTab} className="mb-6" onValueChange={(value) => setActiveTab(value as TabKey)}>
+              <TabsList className="grid w-full grid-cols-5">
                 <TabsTrigger value="items">Items</TabsTrigger>
                 <TabsTrigger value="combos">Combos</TabsTrigger>
                 <TabsTrigger value="addons">Add-ons</TabsTrigger>
                 <TabsTrigger value="categories">Categories</TabsTrigger>
+                <TabsTrigger value="condiments">Condiments</TabsTrigger>
               </TabsList>
             </Tabs>
 
@@ -365,7 +374,7 @@ export default function ProductManagement() {
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder={`Search ${singularFormMap[activeTab as keyof typeof singularFormMap]}s...`}
+                  placeholder={`Search ${singularFormMap[activeTab]}s...`}
                   className="pl-10 h-10 bg-background"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -411,7 +420,7 @@ export default function ProductManagement() {
                   products={filteredProducts as (Product | ComboProduct | AddonProduct | CategoryProduct)[]}
                   onEdit={handleEditProduct}
                   onDelete={handleDeleteProduct}
-                  tableType={activeTab as "items" | "combos" | "addons" | "categories"}
+                  tableType={activeTab}
                 />
               </div>
             </div>

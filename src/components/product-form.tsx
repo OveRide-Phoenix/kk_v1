@@ -37,6 +37,7 @@ const createInitialFormData = (item: Product | null) => {
   if (item) {
     return {
       ...item,
+      is_condiment: Boolean((item as any).is_condiment),
       bld_ids: Array.isArray(item.bld_ids) ? [...item.bld_ids] : [],
       max_qty_breakfast: normalizeMaxField(item.max_qty_breakfast),
       max_qty_lunch: normalizeMaxField(item.max_qty_lunch),
@@ -72,6 +73,7 @@ const createInitialFormData = (item: Product | null) => {
     igst: 0,
     net_price: 0,
     is_combo: false,
+    is_condiment: false,
   }
 }
 
@@ -228,6 +230,14 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                         </label>
                       )
                     })}
+                  </div>
+                  <div className="flex items-center gap-3 pt-2">
+                    <Switch
+                      id="is_condiment"
+                      checked={Boolean(formData.is_condiment)}
+                      onCheckedChange={(checked) => handleChange("is_condiment", checked)}
+                    />
+                    <span className="text-sm text-muted-foreground">Mark as condiment item</span>
                   </div>
                 </div>
                 <div className="space-y-2">

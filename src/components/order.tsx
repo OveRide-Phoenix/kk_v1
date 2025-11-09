@@ -8,6 +8,7 @@ import { ShoppingCart, Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { getSupportedMeals } from "@/config/cities";
 
 type MealType = "breakfast" | "lunch" | "dinner" | "condiments";
 
@@ -43,14 +44,18 @@ type CustomerDailyMenuProps = {
   onCartChange?: (cart: CartLine[], context: CartContext) => void;
   refreshSignal?: number;
   resetCartSignal?: number;
+  cityCode?: string;
 };
 
 export default function CustomerDailyMenu({
   onCartChange,
   refreshSignal,
   resetCartSignal,
+  cityCode = "MYS",
 }: CustomerDailyMenuProps = {}) {
   const router = useRouter();
+  const availableMeals = useMemo(() => getSupportedMeals(cityCode), [cityCode]);
+  const availableMealsKey = useMemo(() => availableMeals.join(","), [availableMeals]);
 
   // Date state
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -126,29 +131,45 @@ export default function CustomerDailyMenu({
         const date = formatISODate(confirmedDate);
 
         await Promise.all(
-          MEALS.map(async (meal) => {
-            const url = new URL("http://localhost:8000/api/menu");
-            url.searchParams.set("date", date);
-            url.searchParams.set("bld_type", meal);
-            url.searchParams.set("period_type", "one_day");
+          availableMeals.map(async (meal) => {
+            try {
+              const url = new URL("http://localhost:8000/api/menu");
+              url.searchParams.set("bld_type", meal);
+              url.searchParams.set("city_code", cityCode);
+              if (meal === "condiments") {
+                url.searchParams.set("menu_type", "CONDIMENTS");
+              } else {
+                url.searchParams.set("date", date);
+                url.searchParams.set("period_type", "one_day");
+                url.searchParams.set("menu_type", "ONE_DAY");
+              }
 
-            const res = await fetch(url.toString());
-            if (res.status === 404) {
+              const res = await fetch(url.toString());
+              if (res.status === 404) {
+                nextItems[meal] = [];
+                nextReleased[meal] = false;
+                return;
+              }
+              if (!res.ok) {
+                console.warn(`Failed to fetch ${meal}`, await res.text());
+                nextItems[meal] = [];
+                nextReleased[meal] = false;
+                return;
+              }
+
+              const data: MenuSectionResponse = await res.json();
+              nextItems[meal] = (data.items ?? []).map((it: any) => ({
+                ...it,
+                max_qty: normalizeQty(it.max_qty ?? it.item_max_qty),
+                available_qty: normalizeQty(it.available_qty),
+                picture_url: it.picture_url ?? null,
+              }));
+              nextReleased[meal] = data.is_released ?? false;
+            } catch (mealError) {
+              console.warn(`Failed to fetch ${meal}`, mealError);
               nextItems[meal] = [];
               nextReleased[meal] = false;
-              return;
             }
-            if (!res.ok) throw new Error(`Failed to fetch ${meal}`);
-
-            const data: MenuSectionResponse = await res.json();
-            // ✅ keep picture_url if backend returns it
-            nextItems[meal] = (data.items ?? []).map((it: any) => ({
-              ...it,
-              max_qty: normalizeQty(it.max_qty ?? it.item_max_qty),
-              available_qty: normalizeQty(it.available_qty),
-              picture_url: it.picture_url ?? null,
-            }));
-            nextReleased[meal] = data.is_released ?? false;
           })
         );
 
@@ -186,7 +207,7 @@ export default function CustomerDailyMenu({
       }
     };
     run();
-  }, [confirmedDate, refreshSignal]);
+  }, [confirmedDate, refreshSignal, availableMealsKey, cityCode]);
 
   useEffect(() => {
     if (resetCartSignal === undefined) return;
@@ -318,7 +339,7 @@ export default function CustomerDailyMenu({
 
       {/* Sections */}
       <div className="space-y-8">
-        {MEALS.map((meal) => {
+        {availableMeals.map((meal) => {
           const items = itemsByMeal[meal] ?? [];
           const released = isReleasedByMeal[meal];
           const visibleItems = released ? items : [];
@@ -326,7 +347,11 @@ export default function CustomerDailyMenu({
           return (
             <section key={meal}>
               <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-xl font-semibold capitalize">{meal}</h2>
+                <h2 className="text-xl font-semibold capitalize">
+                  {meal === "condiments"
+                    ? "Condiments · Till stocks last"
+                    : meal}
+                </h2>
                 {!released && (
                   <Badge variant="outline" className="text-xs">
                     Not released yet
@@ -340,7 +365,7 @@ export default function CustomerDailyMenu({
                 </div>
               ) : visibleItems.length === 0 ? (
                 <div className="text-sm text-muted-foreground">
-                  No items for {meal}.
+                  No items for {meal === "condiments" ? "condiments" : meal}.
                 </div>
               ) : (
                 <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">

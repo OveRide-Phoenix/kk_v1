@@ -50,6 +50,7 @@ export interface Product {
   igst?: number
   net_price?: number
   is_combo: boolean
+  is_condiment?: boolean
 }
 
 // Combo product from item_combos table

@@ -21,8 +21,9 @@ export async function getCityByPhone(phone: string): Promise<string | null> {
     return res.json();
   }
   
-export async function getDashboardMetrics() {
-  const res = await http.get("/api/dashboard/metrics");
+export async function getDashboardMetrics(cityCode?: string) {
+  const query = cityCode ? `?city_code=${cityCode}` : "";
+  const res = await http.get(`/api/dashboard/metrics${query}`);
 
   if (!res.ok) {
     throw new Error("Failed to fetch dashboard metrics")

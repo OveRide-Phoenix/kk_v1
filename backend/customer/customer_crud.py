@@ -117,36 +117,81 @@ def get_customer_by_id(db, customer_id):
     finally:
         cursor.close()
 
-def get_all_customers(db):
+def get_all_customers(db, city_code: Optional[str] = None):
     try:
         cursor = db.cursor(dictionary=True)
-        query = """
-        SELECT 
-            c.customer_id, c.referred_by, c.primary_mobile, c.alternative_mobile, 
-            c.name, c.recipient_name, c.payment_frequency, c.email, c.created_at,
-            c.roles, c.admin_is_active,
-            a.address_id, a.house_apartment_no, a.written_address, a.city, 
-            a.pin_code, a.latitude, a.longitude, a.address_type, a.route_assignment,
-            COALESCE(o.completed_orders, 0) AS completed_orders,
-            COALESCE(p.pending_orders, 0) AS pending_orders
-        FROM customers c
-        INNER JOIN addresses a ON c.customer_id = a.customer_id
-        LEFT JOIN (
-            SELECT customer_id, COUNT(*) AS completed_orders
-            FROM orders
-            WHERE status = 'Completed'
-            GROUP BY customer_id
-        ) o ON o.customer_id = c.customer_id
-        LEFT JOIN (
-            SELECT customer_id, COUNT(*) AS pending_orders
-            FROM orders
-            WHERE status = 'Pending'
-            GROUP BY customer_id
-        ) p ON p.customer_id = c.customer_id
-        WHERE a.is_default = 1
-        ORDER BY c.created_at ASC
-        """
-        cursor.execute(query)
+        params: list = []
+        if city_code:
+            query = """
+            SELECT 
+                c.customer_id, c.referred_by, c.primary_mobile, c.alternative_mobile, 
+                c.name, c.recipient_name, c.payment_frequency, c.email, c.created_at,
+                c.roles, c.admin_is_active,
+                a.address_id, a.house_apartment_no, a.written_address, a.city, 
+                a.pin_code, a.latitude, a.longitude, a.address_type, a.route_assignment,
+                COALESCE(o.completed_orders, 0) AS completed_orders,
+                COALESCE(p.pending_orders, 0) AS pending_orders
+            FROM customers c
+            INNER JOIN (
+                SELECT *
+                FROM (
+                    SELECT addr.*,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY addr.customer_id
+                               ORDER BY addr.is_default DESC, addr.address_id DESC
+                           ) AS rn
+                      FROM addresses addr
+                     WHERE addr.city_code = %s
+                ) ranked_addr
+               WHERE ranked_addr.rn = 1
+            ) a ON c.customer_id = a.customer_id
+            LEFT JOIN (
+                SELECT o.customer_id, COUNT(*) AS completed_orders
+                  FROM orders o
+                  JOIN addresses ao ON ao.address_id = o.address_id
+                 WHERE LOWER(COALESCE(o.status, '')) = 'completed'
+                   AND ao.city_code = %s
+                 GROUP BY o.customer_id
+            ) o ON o.customer_id = c.customer_id
+            LEFT JOIN (
+                SELECT o.customer_id, COUNT(*) AS pending_orders
+                  FROM orders o
+                  JOIN addresses ao ON ao.address_id = o.address_id
+                 WHERE LOWER(COALESCE(o.status, '')) IN ('pending', 'in progress', 'processing')
+                   AND ao.city_code = %s
+                 GROUP BY o.customer_id
+            ) p ON p.customer_id = c.customer_id
+            ORDER BY c.created_at ASC
+            """
+            params.extend([city_code, city_code, city_code])
+        else:
+            query = """
+            SELECT 
+                c.customer_id, c.referred_by, c.primary_mobile, c.alternative_mobile, 
+                c.name, c.recipient_name, c.payment_frequency, c.email, c.created_at,
+                c.roles, c.admin_is_active,
+                a.address_id, a.house_apartment_no, a.written_address, a.city, 
+                a.pin_code, a.latitude, a.longitude, a.address_type, a.route_assignment,
+                COALESCE(o.completed_orders, 0) AS completed_orders,
+                COALESCE(p.pending_orders, 0) AS pending_orders
+            FROM customers c
+            INNER JOIN addresses a ON c.customer_id = a.customer_id
+            LEFT JOIN (
+                SELECT customer_id, COUNT(*) AS completed_orders
+                FROM orders
+                WHERE status = 'Completed'
+                GROUP BY customer_id
+            ) o ON o.customer_id = c.customer_id
+            LEFT JOIN (
+                SELECT customer_id, COUNT(*) AS pending_orders
+                FROM orders
+                WHERE status = 'Pending'
+                GROUP BY customer_id
+            ) p ON p.customer_id = c.customer_id
+            WHERE a.is_default = 1
+            ORDER BY c.created_at ASC
+            """
+        cursor.execute(query, tuple(params))
         rows = cursor.fetchall()
 
         admin_role_id = get_role_id(cursor, "admin")
@@ -243,11 +288,19 @@ def delete_customer(db, customer_id):
     finally:
         cursor.close()
 
-def get_customer_count(db):
+def get_customer_count(db, city_code: Optional[str] = None):
     try:
         cursor = db.cursor(dictionary=True)
-        query = "SELECT COUNT(*) as total FROM customers"
-        cursor.execute(query)
+        if city_code:
+            query = """
+                SELECT COUNT(DISTINCT c.customer_id) AS total
+                  FROM customers c
+                  JOIN addresses a ON a.customer_id = c.customer_id
+                 WHERE a.city_code = %s
+            """
+            cursor.execute(query, (city_code,))
+        else:
+            cursor.execute("SELECT COUNT(*) AS total FROM customers")
         result = cursor.fetchone()
         return result["total"]
     finally:

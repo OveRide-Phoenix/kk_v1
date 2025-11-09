@@ -37,6 +37,12 @@ const currency = (value: number) =>
     maximumFractionDigits: 0,
   }).format(value)
 
+const buildAuthHeaders = (): Record<string, string> => {
+  if (typeof window === "undefined") return {}
+  const token = localStorage.getItem("access_token")
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 type MealType = "breakfast" | "lunch" | "dinner" | "condiments"
 
 type CartLine = {
@@ -61,6 +67,7 @@ type AddressEntry = {
   house_apartment_no: string | null
   written_address: string
   city: string
+  city_code?: string
   pin_code: string
   is_default: boolean
   latitude?: number | null
@@ -135,7 +142,10 @@ export default function CartPage() {
       setAddressesLoading(true)
       setAddressesError(null)
       try {
-        const response = await fetch(`http://localhost:8000/api/customers/${customerId}/addresses`)
+        const headers = buildAuthHeaders()
+        const response = await fetch(`http://localhost:8000/api/customers/${customerId}/addresses`, {
+          headers,
+        })
         if (!response.ok) {
           throw new Error("Unable to fetch addresses")
         }
@@ -210,9 +220,13 @@ export default function CartPage() {
     }
 
     try {
+      const headers = {
+        "Content-Type": "application/json",
+        ...buildAuthHeaders(),
+      }
       const response = await fetch("http://localhost:8000/api/orders/create", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(payload),
       })
 

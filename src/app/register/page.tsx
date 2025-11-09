@@ -25,6 +25,18 @@ import { Textarea } from "@/components/ui/textarea";
 import GoogleMapPicker from "@/components/gmap/GoogleMapPicker";
 import CustomerNavBar from "@/components/customer-nav-bar";
 
+const CITY_OPTIONS = [
+    { label: "Mysore", code: "MYS" },
+    { label: "Bangalore", code: "BLR" },
+];
+
+const resolveCityCode = (value: string) => {
+    const match = CITY_OPTIONS.find(
+        (option) => option.label.toLowerCase() === value.trim().toLowerCase()
+    );
+    return match ? match.code : "MYS";
+};
+
 export default function RegistrationPage() {
     // Form state
     const [formData, setFormData] = useState({
@@ -39,6 +51,7 @@ export default function RegistrationPage() {
         houseApartmentNo: "", // Matches house_apartment_no
         writtenAddress: "", // Matches written_address
         city: "", // Matches city
+        cityCode: "", // City code mapping
         pinCode: "", // Matches pin_code
         latitude: null as number | null, // Matches latitude
         longitude: null as number | null, // Matches longitude
@@ -111,6 +124,14 @@ export default function RegistrationPage() {
 
     // Handle select changes
     const handleSelectChange = (name: string, value: string) => {
+        if (name === "city") {
+            setFormData((prev) => ({
+                ...prev,
+                city: value,
+                cityCode: resolveCityCode(value),
+            }));
+            return;
+        }
         setFormData((prev) => ({ ...prev, [name]: value }));
     };
 
@@ -139,6 +160,7 @@ export default function RegistrationPage() {
             house_apartment_no: formData.houseApartmentNo || null,
             written_address: formData.writtenAddress,
             city: formData.city,
+            city_code: formData.cityCode || resolveCityCode(formData.city),
             pin_code: formData.pinCode,
             latitude:
                 formData.latitude !== null
@@ -469,12 +491,11 @@ export default function RegistrationPage() {
                                                     <SelectValue placeholder="Select city" />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    <SelectItem value="Mysore">
-                                                        Mysore
-                                                    </SelectItem>
-                                                    <SelectItem value="Bangalore">
-                                                        Bangalore
-                                                    </SelectItem>
+                                                    {CITY_OPTIONS.map((option) => (
+                                                        <SelectItem key={option.code} value={option.label}>
+                                                            {option.label}
+                                                        </SelectItem>
+                                                    ))}
                                                 </SelectContent>
                                             </Select>
                                         </div>

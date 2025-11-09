@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -10,6 +10,8 @@ import { useAuthStore } from "@/store/store"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
 import { AskDialog } from "@/components/nl/ask-dialog"
+import { getCityLabel, normalizeCityCode } from "@/config/cities"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface AdminLayoutProps {
   children: React.ReactNode
@@ -21,8 +23,34 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
   const user = useAuthStore((state) => state.user)
   const setUser = useAuthStore((state) => state.setUser)
   const setRoleState = useAuthStore((state) => state.setRoleState)
+  const adminCity = useAuthStore((state) => state.adminCity || state.user?.city_code || "MYS")
+  const setAdminCity = useAuthStore((state) => state.setAdminCity)
   const router = useRouter()
   const { toast } = useToast()
+  const normalizedAdminCity = normalizeCityCode(adminCity)
+  const adminCityLabel = getCityLabel(normalizedAdminCity)
+  const eligibleCities = useMemo(() => {
+    const raw = Array.isArray(user?.eligible_city_codes) && user?.eligible_city_codes.length
+      ? user?.eligible_city_codes
+      : user?.city_code
+        ? [user.city_code]
+        : [adminCity]
+    return Array.from(
+      new Set(
+        raw
+          .filter((code): code is string => typeof code === "string" && code.trim().length > 0)
+          .map((code) => normalizeCityCode(code)),
+      ),
+    )
+  }, [user?.eligible_city_codes, user?.city_code, adminCity])
+
+  const handleCityChange = useCallback(
+    (value: string) => {
+      if (!value) return
+      setAdminCity(value)
+    },
+    [setAdminCity],
+  )
 
   const [isHydrated, setIsHydrated] = useState(false)
   const displayName =
@@ -397,6 +425,24 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
             </div>
 
             <nav className="flex items-center space-x-4">
+              {eligibleCities.length > 1 ? (
+                <Select value={normalizedAdminCity} onValueChange={handleCityChange}>
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue placeholder="City" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {eligibleCities.map((code) => (
+                      <SelectItem key={code} value={code}>
+                        {getCityLabel(code)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="hidden sm:flex items-center rounded-full border border-primary/30 bg-primary/5 px-3 py-1 text-xs font-semibold text-primary">
+                  City: {adminCityLabel}
+                </div>
+              )}
               <Button
                 variant="ghost"
                 size="icon"

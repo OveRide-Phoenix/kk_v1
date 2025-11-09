@@ -20,6 +20,7 @@ import {
 import { useAuthStore } from "@/store/store"
 import { AdminLayout } from "@/components/admin-layout"
 import { getDashboardMetrics } from "@/lib/api"
+import { getCityLabel } from "@/config/cities"
 
 // Define types for the metrics
 type Order = {
@@ -116,21 +117,35 @@ const normalizeStatus = (status?: string | null) => {
     .join(" ")
 }
 
+const normalizeStatusKey = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/\(payment due\)/g, "")
+    .replace(/\s+-\s+payment due/g, "")
+    .replace(/[-_]/g, " ")
+    .trim()
+
 const statusBadgeClass = (status: string) => {
-  const key = status.toLowerCase().replace(/[-_]/g, " ")
-  if (key === "delivered") return "bg-green-100 text-green-800"
-  if (key === "pending") return "bg-yellow-100 text-yellow-800"
-  if (key === "in progress" || key === "processing") return "bg-blue-100 text-blue-800"
+  const raw = status.toLowerCase()
+  const key = normalizeStatusKey(status)
+  if (raw.includes("payment due")) return "bg-amber-100 text-amber-900"
+  if (key === "confirmed") return "bg-sky-100 text-sky-800"
+  if (key === "preparing") return "bg-orange-100 text-orange-800"
+  if (key === "on the way") return "bg-indigo-100 text-indigo-800"
+  if (key === "delivered" || key === "completed" || key === "done") return "bg-green-100 text-green-800"
   if (key === "cancelled") return "bg-red-100 text-red-800"
   return "bg-slate-100 text-slate-800"
 }
 
 const statusPriority = (status: string) => {
-  const key = status.toLowerCase().replace(/[-_]/g, " ")
-  if (key === "pending") return 0
-  if (key === "in progress" || key === "processing") return 1
-  if (key === "delivered" || key === "completed" || key === "done") return 2
-  return 3
+  const raw = status.toLowerCase()
+  const key = normalizeStatusKey(status)
+  if (raw.includes("payment due")) return 0
+  if (key === "confirmed") return 1
+  if (key === "preparing") return 2
+  if (key === "on the way") return 3
+  if (key === "delivered" || key === "completed" || key === "done") return 4
+  return 5
 }
 
 const checklistBadgeClass = (item: ChecklistItem) => {
@@ -203,7 +218,9 @@ const defaultDashboardMetrics: DashboardMetrics = {
 }
 
 export function Dashboard() {
-  const { isAdmin } = useAuthStore()
+  const isAdmin = useAuthStore((state) => state.isAdmin)
+  const adminCity = useAuthStore((state) => state.adminCity || state.user?.city_code || "MYS")
+  const adminCityLabel = getCityLabel(adminCity)
   const router = useRouter()
   const [dashboardMetrics, setDashboardMetrics] = useState<DashboardMetrics>(defaultDashboardMetrics)
   const [loading, setLoading] = useState(true)
@@ -242,7 +259,7 @@ export function Dashboard() {
     }
 
     // Fetch dashboard metrics
-    getDashboardMetrics()
+    getDashboardMetrics(adminCity)
       .then((data: DashboardApiResponse) => {
         const normalizedOrders: Order[] = (data.recentOrders ?? []).map((order: ApiRecentOrder) => {
           const createdAt = order.createdAt ?? order.created_at ?? null
@@ -290,7 +307,7 @@ export function Dashboard() {
         console.error("Error fetching dashboard metrics:", err)
         setLoading(false)
       })
-  }, [isAdmin, router])
+  }, [isAdmin, router, adminCity])
 
   if (!isAdmin) return null
   if (loading) {
@@ -307,6 +324,11 @@ export function Dashboard() {
 
   return (
     <AdminLayout activePage="dashboard">
+      <div className="mb-4 flex justify-end">
+        <Badge variant="outline" className="text-xs font-semibold">
+          City: {adminCityLabel}
+        </Badge>
+      </div>
       {/* Quick Actions */}
       <Card>
         <CardHeader>

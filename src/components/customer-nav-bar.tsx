@@ -23,7 +23,6 @@ export default function CustomerNavBar({ unauthLinks }: CustomerNavBarProps = {}
   const user = useAuthStore((state) => state.user)
   const setUser = useAuthStore((state) => state.setUser)
   const logout = useAuthStore((state) => state.logout)
-  const roleCodes = useAuthStore((state) => state.roleCodes)
   const router = useRouter()
   const pathname = usePathname()
   const userRecord = user as Record<string, unknown> | null
@@ -102,20 +101,20 @@ export default function CustomerNavBar({ unauthLinks }: CustomerNavBarProps = {}
       }
     }
 
-    addCodes(roleCodes)
     addCodes(userRecord?.["role_codes"])
     addCodes(userRecord?.["roleCodes"])
     addCodes(userRecord?.["role_details"])
     addCodes(userRecord?.["roleDetails"])
 
     return codes
-  }, [roleCodes, userRecord])
+  }, [userRecord])
 
   const isAdmin =
-    hydrated &&
-    (derivedRoleCodes.has("admin") ||
-      Boolean(userRecord?.["is_admin"]) ||
-      Boolean(userRecord?.["admin_is_active"]))
+    Boolean(
+      hydrated &&
+        user &&
+        (derivedRoleCodes.has("admin") || Boolean(userRecord?.["is_admin"]))
+    )
 
   const hasUser = hydrated && Boolean(user)
   const displayName =
