@@ -27,6 +27,7 @@ export default function LoginPage() {
   const [cityOptions, setCityOptions] = useState<CityCode[]>([]);
   const setUser = useAuthStore((state) => state.setUser);
   const setRoleState = useAuthStore((state) => state.setRoleState);
+  const setAdminCity = useAuthStore((state) => state.setAdminCity);
   const [adminPassword, setAdminPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [showRegisterHighlight, setShowRegisterHighlight] = useState(false);
@@ -230,6 +231,15 @@ export default function LoginPage() {
         const filteredRoleCodes = isAdminLoginRequested
           ? allRoleCodes
           : allRoleCodes.filter((code) => code !== "admin");
+
+        if (isAdminLoginRequested) {
+          const responseCityCode =
+            (resolvedUser && typeof resolvedUser.city_code === "string" ? resolvedUser.city_code : undefined) ||
+            (data?.user && typeof data.user.city_code === "string" ? data.user.city_code : undefined) ||
+            (typeof data?.city_code === "string" ? data.city_code : undefined);
+          const selectedCity = normalizeCityCode(cityCode || responseCityCode);
+          setAdminCity(selectedCity);
+        }
 
         if (baseUser) {
           const adjustedUser = isAdminLoginRequested

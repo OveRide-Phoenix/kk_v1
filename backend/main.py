@@ -3273,8 +3273,10 @@ def admin_order_invoice(
 
 class ProductionPlanItem(BaseModel):
     item_name: str
-    buffer_quantity: float
-    final_quantity: float
+    planned_quantity: Optional[float] = None
+    buffer_quantity: Optional[float] = None
+    final_quantity: Optional[float] = None
+    available_quantity: Optional[float] = None
 
 class ProductionPlanRequest(BaseModel):
     date: str
@@ -3286,6 +3288,9 @@ class ProductionPlanResetRequest(BaseModel):
     date: str
     menu_type: str
     city_code: Optional[str] = None
+
+class ProductionPlanFinalizeRequest(ProductionPlanResetRequest):
+    plans: Optional[List[ProductionPlanItem]] = None
 
 class MaxQtyUpdate(BaseModel):
     item_name: str
@@ -3610,26 +3615,7 @@ def generate_production_plan(payload: ProductionPlanRequest):
             raise HTTPException(status_code=404, detail="Menu not found for that date/type")
         menu_id = menu["menu_id"]
 
-        # Update buffer and final quantities for each menu item
-        for plan in payload.plans:
-            buffer_input = plan.buffer_quantity if plan.buffer_quantity is not None else 0
-            final_input = plan.final_quantity if plan.final_quantity is not None else 0
-            buffer_value = max(int(round(buffer_input)), 0)
-            final_value = max(float(final_input), 0.0)
-            cursor.execute(
-                """
-                UPDATE menu_items mi
-                JOIN items i ON mi.item_id = i.item_id
-                SET mi.buffer_qty = %s,
-                    mi.max_qty = %s,
-                    mi.final_qty = %s
-                WHERE mi.menu_id = %s
-                AND LOWER(i.name) = LOWER(%s)
-                """,
-                (buffer_value, final_value, final_value, menu_id, plan.item_name)
-            )
-            updated += cursor.rowcount
-
+        updated = _persist_plan_items(cursor, menu_id, payload.plans)
 
         # Keep plan marked as in-progress
         cursor.execute(
@@ -3716,7 +3702,7 @@ def reopen_production_plan(payload: ProductionPlanResetRequest):
         db.close()
 
 @app.post("/api/production/finalize", tags=["Production"])
-def finalize_production_plan(payload: ProductionPlanResetRequest):
+def finalize_production_plan(payload: ProductionPlanFinalizeRequest):
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
@@ -3741,6 +3727,8 @@ def finalize_production_plan(payload: ProductionPlanResetRequest):
         item_row = cursor.fetchone() or {"item_count": 0}
         if int(item_row.get("item_count") or 0) == 0:
             raise HTTPException(status_code=400, detail="No items available to export for this menu")
+
+        _persist_plan_items(cursor, menu_id, payload.plans)
 
         cursor.execute(
             "UPDATE menu SET is_production_generated = 1 WHERE menu_id = %s",
@@ -3803,37 +3791,85 @@ def update_max_quantities(payload: UpdateMaxQtyRequest):
         for adjustment in payload.updates:
             cursor.execute(
                 """
-                UPDATE menu_items mi
+                SELECT
+                    mi.menu_item_id,
+                    COALESCE(mi.max_qty, 0) AS max_qty,
+                    COALESCE(mi.buffer_qty, 0) AS buffer_qty,
+                    COALESCE(mi.final_qty, 0) AS final_qty,
+                    COALESCE(mi.available_qty, 0) AS available_qty,
+                    COALESCE(i.buffer_percentage, 0) AS buffer_percentage
+                FROM menu_items mi
                 JOIN items i ON mi.item_id = i.item_id
-                   SET mi.max_qty = COALESCE(mi.max_qty, 0) + %s,
-                       mi.final_qty = COALESCE(mi.final_qty, 0) + %s
-                 WHERE mi.menu_id = %s
-                   AND LOWER(i.name) = LOWER(%s)
-                """,
-                (adjustment.additional_qty, adjustment.additional_qty, menu_id, adjustment.item_name),
-            )
-            if cursor.rowcount == 0:
-                continue
-
-            cursor.execute(
-                """
-                SELECT mi.max_qty
-                  FROM menu_items mi
-                  JOIN items i ON mi.item_id = i.item_id
-                 WHERE mi.menu_id = %s
-                   AND LOWER(i.name) = LOWER(%s)
-                 LIMIT 1
+                WHERE mi.menu_id = %s
+                  AND LOWER(i.name) = LOWER(%s)
+                LIMIT 1
                 """,
                 (menu_id, adjustment.item_name),
             )
-            planned_row = cursor.fetchone()
-            if planned_row:
-                updated_items.append(
-                    {
-                        "item_name": adjustment.item_name,
-                        "new_max_qty": float(planned_row["max_qty"]),
-                    }
-                )
+            row = cursor.fetchone()
+            if not row:
+                continue
+
+            additional = float(adjustment.additional_qty or 0)
+            if additional == 0:
+                continue
+
+            current_max = float(row["max_qty"] or 0)
+            current_buffer = float(row["buffer_qty"] or 0)
+            if current_buffer <= 0:
+                inferred = float(row["final_qty"] or 0) - current_max
+                if inferred > 0:
+                    current_buffer = inferred
+            current_available = float(row["available_qty"] or 0)
+            buffer_pct = float(row["buffer_percentage"] or 0)
+
+            buffer_delta = 0.0
+            if buffer_pct > 0:
+                buffer_delta = round((abs(additional) * buffer_pct) / 100)
+                if additional < 0:
+                    buffer_delta *= -1
+
+            new_max = current_max + additional
+            if new_max < 0:
+                new_max = 0
+
+            new_buffer = current_buffer + buffer_delta
+            if new_buffer < 0:
+                new_buffer = 0
+
+            new_final = max(new_max + new_buffer, 0)
+            new_available = current_available + additional + buffer_delta
+            new_available = max(0, min(new_available, new_final, new_max))
+
+            cursor.execute(
+                """
+                UPDATE menu_items
+                   SET max_qty = %s,
+                       buffer_qty = %s,
+                       final_qty = %s,
+                       available_qty = %s
+                 WHERE menu_id = %s
+                   AND menu_item_id = %s
+                """,
+                (
+                    new_max,
+                    new_buffer,
+                    new_final,
+                    new_available,
+                    menu_id,
+                    row["menu_item_id"],
+                ),
+            )
+
+            updated_items.append(
+                {
+                    "item_name": adjustment.item_name,
+                    "new_max_qty": new_max,
+                    "new_buffer_qty": new_buffer,
+                    "new_final_qty": new_final,
+                    "new_available_qty": new_available,
+                }
+            )
 
         if not updated_items:
             raise HTTPException(status_code=404, detail="No matching menu items were updated")
@@ -3898,6 +3934,7 @@ def seed_orders_for_testing(
                     tuple(order_ids),
                 )
                 deleted_orders = len(order_ids)
+            db.commit()
 
         if payload.count == 0:
             db.commit()
@@ -4500,3 +4537,51 @@ def get_production_plan_status(date: str):
     finally:
         cursor.close()
         db.close()
+def _persist_plan_items(
+    cursor,
+    menu_id: int,
+    plans: Optional[List[ProductionPlanItem]],
+) -> int:
+    if not plans:
+        return 0
+
+    updated = 0
+    for plan in plans:
+        item_name = (plan.item_name or "").strip()
+        if not item_name:
+            continue
+
+        planned_value = max(float(plan.planned_quantity or 0), 0.0)
+        buffer_value = max(float(plan.buffer_quantity or 0), 0.0)
+        final_value = max(
+            float(plan.final_quantity if plan.final_quantity is not None else planned_value + buffer_value),
+            0.0,
+        )
+        available_input = plan.available_quantity
+        if available_input is None:
+            available_input = final_value - buffer_value
+        available_value = max(0.0, min(float(available_input), final_value))
+
+        cursor.execute(
+            """
+            UPDATE menu_items mi
+            JOIN items i ON mi.item_id = i.item_id
+               SET mi.max_qty = %s,
+                   mi.buffer_qty = %s,
+                   mi.final_qty = %s,
+                   mi.available_qty = %s
+             WHERE mi.menu_id = %s
+               AND LOWER(i.name) = LOWER(%s)
+            """,
+            (
+                planned_value,
+                buffer_value,
+                final_value,
+                available_value,
+                menu_id,
+                item_name,
+            ),
+        )
+        updated += cursor.rowcount
+
+    return updated

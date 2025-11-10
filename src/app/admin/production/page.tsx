@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addDays, format, isSameDay } from "date-fns";
 import type {
   ProductionItem,
@@ -22,6 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { http } from "@/lib/http";
 import { useAuthStore } from "@/store/store";
+import { useNotificationStore } from "@/store/notifications";
 import { getSupportedMeals } from "@/config/cities";
 
 type Category = ProductionItem["category"];
@@ -70,8 +71,17 @@ type MenuApiResponse = {
   is_released?: boolean;
 };
 
+type CapacityAlert = {
+  category: Category;
+  itemName: string;
+  plannedQuantity: number;
+  customerOrders: number;
+  ratio: number;
+};
+
 
 const categories: Category[] = ["Breakfast", "Lunch", "Dinner", "Condiments"];
+const CAPACITY_WARNING_THRESHOLD = 0.9;
 
 const createEmptyPlanState = (): Record<Category, PlanItem[]> => ({
   Breakfast: [],
@@ -642,8 +652,6 @@ async function fetchPublishedMenu(
             item.item_max_qty ??
             item.planned_qty ?? // legacy fallback
             item.planned_quantity ??
-            item.final_qty ??
-            item.final_quantity ??
             item.quantity ??
             0;
           const resolvedMax = Math.max(Number(maxRaw) || 0, 0);
@@ -685,11 +693,11 @@ async function fetchPublishedMenu(
             null;
           let availableQuantity = Number(availableRaw);
           if (!Number.isFinite(availableQuantity)) {
-            availableQuantity = finalQuantity;
+            availableQuantity = resolvedMax;
           }
           availableQuantity = Math.min(
             Math.max(availableQuantity, 0),
-            finalQuantity,
+            resolvedMax,
           );
 
           return {
@@ -858,6 +866,9 @@ function KitchenProductionPlanningContent() {
   const [isApplyingLastMinute, setIsApplyingLastMinute] = useState(false);
   const [lastMinuteError, setLastMinuteError] = useState<string | null>(null);
   const editBaselines = useRef<Record<Category, PlanItem[]>>(createEmptyPlanState());
+  const [capacityAlerts, setCapacityAlerts] = useState<CapacityAlert[]>([]);
+  const alertCacheRef = useRef<Set<string>>(new Set());
+  const addNotification = useNotificationStore((state) => state.addNotification);
 
   const selectedDateISO = useMemo(
     () => format(selectedDate, "yyyy-MM-dd"),
@@ -947,6 +958,42 @@ useEffect(() => {
 }, [selectedCategory, selectedDateISO, adminCity]);
 
   useEffect(() => {
+    alertCacheRef.current = new Set();
+  }, [selectedDateISO, adminCity]);
+
+  useEffect(() => {
+    const alerts: CapacityAlert[] = [];
+
+    visibleCategories.forEach((category) => {
+      planData[category].forEach((item) => {
+        if (!item || item.planned_quantity <= 0) return;
+        const ratio = item.customer_orders / item.planned_quantity;
+        if (ratio >= CAPACITY_WARNING_THRESHOLD) {
+          alerts.push({
+            category,
+            itemName: item.item_name,
+            plannedQuantity: item.planned_quantity,
+            customerOrders: item.customer_orders,
+            ratio,
+          });
+          const key = `${selectedDateISO}|${adminCity}|${category}|${item.item_name}`;
+          if (!alertCacheRef.current.has(key)) {
+            addNotification({
+              title: "Kitchen capacity warning",
+              message: `${item.item_name} (${category}) is at ${Math.round(ratio * 100)}% of planned quantity for ${selectedDateLabel}.`,
+              severity: "warning",
+              href: "/admin/production",
+            });
+            alertCacheRef.current.add(key);
+          }
+        }
+      });
+    });
+
+    setCapacityAlerts(alerts);
+  }, [planData, visibleCategories, addNotification, selectedDateISO, selectedDateLabel, adminCity]);
+
+  useEffect(() => {
     if (!lastMinuteDialogOpen) {
       setLastMinuteAdjustments({});
       setLastMinuteError(null);
@@ -988,37 +1035,65 @@ useEffect(() => {
     ];
   }, []);
 
-  const reopenPlanForCategory = async (category: Category): Promise<boolean> => {
-    if (planNeedsRegeneration[category] || reopenPlanPending[category]) {
-      return true;
-    }
-    if (!planGeneratedState[category]) {
-      return true;
-    }
-    setActionError(null);
-    setReopenPlanPending((prev) => ({ ...prev, [category]: true }));
-    try {
-      const response = await http.post("/api/production/reopen", {
-        date: selectedDateISO,
-        menu_type: category,
-        city_code: adminCity,
-      });
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || "Failed to reopen plan");
+  const reopenPlanForCategory = useCallback(
+    async (category: Category): Promise<boolean> => {
+      if (planNeedsRegeneration[category] || reopenPlanPending[category]) {
+        return true;
       }
-      setPlanGeneratedState((prev) => ({ ...prev, [category]: false }));
-      setPlanNeedsRegeneration((prev) => ({ ...prev, [category]: true }));
-      return true;
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to reopen plan";
-      setActionError(message);
-      return false;
-    } finally {
-      setReopenPlanPending((prev) => ({ ...prev, [category]: false }));
-    }
-  };
+      if (!planGeneratedState[category]) {
+        return true;
+      }
+      setActionError(null);
+      setReopenPlanPending((prev) => ({ ...prev, [category]: true }));
+      try {
+        const response = await http.post("/api/production/reopen", {
+          date: selectedDateISO,
+          menu_type: category,
+          city_code: adminCity,
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(errorText || "Failed to reopen plan");
+        }
+        setPlanGeneratedState((prev) => ({ ...prev, [category]: false }));
+        setPlanNeedsRegeneration((prev) => ({ ...prev, [category]: true }));
+        return true;
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Failed to reopen plan";
+        setActionError(message);
+        return false;
+      } finally {
+        setReopenPlanPending((prev) => ({ ...prev, [category]: false }));
+      }
+    },
+    [
+      planNeedsRegeneration,
+      reopenPlanPending,
+      planGeneratedState,
+      selectedDateISO,
+      adminCity,
+    ],
+  );
+
+  const beginCategoryEdit = useCallback(
+    async (category: Category) => {
+      if (editingState[category]) return;
+      editBaselines.current[category] = clonePlanItems(planData[category]);
+      setUnsavedChanges((prev) => ({ ...prev, [category]: false }));
+      setEditingState((prev) => ({ ...prev, [category]: true }));
+      if (planGeneratedState[category] && !planNeedsRegeneration[category]) {
+        await reopenPlanForCategory(category);
+      }
+    },
+    [
+      editingState,
+      planData,
+      planGeneratedState,
+      planNeedsRegeneration,
+      reopenPlanForCategory,
+    ],
+  );
 
   const markPlanAsNeedingReexport = (category: Category) => {
     setPlanNeedsRegeneration((prev) =>
@@ -1028,6 +1103,27 @@ useEffect(() => {
       void reopenPlanForCategory(category);
     }
   };
+
+  const serializePlans = (category: Category) =>
+    planData[category].map((item) => ({
+      item_name: item.item_name,
+      planned_quantity: item.planned_quantity,
+      buffer_quantity: item.buffer_quantity,
+      final_quantity: item.final_quantity,
+      available_quantity: item.available_quantity,
+    }));
+
+  const handleCapacityAlertAction = useCallback(
+    (category: Category) => {
+      void (async () => {
+        if (!editingState[category]) {
+          await beginCategoryEdit(category);
+        }
+        setLastMinuteDialogOpen(true);
+      })();
+    },
+    [beginCategoryEdit, editingState, setLastMinuteDialogOpen],
+  );
 
   const handleBufferChange = (
     category: Category,
@@ -1193,24 +1289,45 @@ useEffect(() => {
             (entry) => entry.item_name.toLowerCase() === item.item_name.toLowerCase(),
           );
           if (!updated) return item;
-          const newFinalRaw = Number(updated.new_max_qty);
+          const newMaxRaw = Number(updated.new_max_qty);
+          const newBufferRaw = Number(
+            updated.new_buffer_qty ?? item.buffer_quantity,
+          );
+          const newFinalRaw = Number(
+            updated.new_final_qty ?? newMaxRaw + newBufferRaw,
+          );
+          const newAvailableRaw = Number(
+            updated.new_available_qty ?? item.available_quantity,
+          );
+          const plannedQuantity = Number.isFinite(newMaxRaw)
+            ? Number(newMaxRaw.toFixed(2))
+            : Number(item.planned_quantity.toFixed(2));
+          const bufferQuantity = Number.isFinite(newBufferRaw)
+            ? Number(newBufferRaw.toFixed(2))
+            : Number(item.buffer_quantity.toFixed(2));
           const finalQuantity = Number.isFinite(newFinalRaw)
             ? Number(newFinalRaw.toFixed(2))
-            : Number((item.planned_quantity + item.buffer_quantity).toFixed(2));
-          const basePlan = Math.max(finalQuantity - item.buffer_quantity, 0);
-          const normalizedPlan = Number(basePlan.toFixed(2));
+            : Number((plannedQuantity + bufferQuantity).toFixed(2));
+          const availableQuantity = Number.isFinite(newAvailableRaw)
+            ? Number(
+                Math.min(
+                  Math.max(newAvailableRaw, 0),
+                  plannedQuantity,
+                ).toFixed(2),
+              )
+            : Number(item.available_quantity.toFixed(2));
           const existingOrders = Math.max(Number(item.customer_orders) || 0, 0);
-          const cappedOrders = Math.min(existingOrders, finalQuantity);
+          const cappedOrders = Math.min(existingOrders, plannedQuantity);
           const normalizedOrders = Number(cappedOrders.toFixed(2));
-          const normalizedAvailable = Number(
-            (finalQuantity - normalizedOrders).toFixed(2),
-          );
           return {
             ...item,
-            planned_quantity: normalizedPlan,
-            available_quantity: normalizedAvailable,
-            customer_orders: normalizedOrders,
+            planned_quantity: plannedQuantity,
+            buffer_quantity: bufferQuantity,
             final_quantity: finalQuantity,
+            available_quantity: Number(
+              Math.max(plannedQuantity - normalizedOrders, 0).toFixed(2),
+            ),
+            customer_orders: normalizedOrders,
           };
         });
         return nextState;
@@ -1231,23 +1348,13 @@ useEffect(() => {
     }
   };
 
-  const beginCategoryEdit = async (category: Category) => {
-    if (editingState[category]) return;
-    editBaselines.current[category] = clonePlanItems(planData[category]);
-    setUnsavedChanges((prev) => ({ ...prev, [category]: false }));
-    setEditingState((prev) => ({ ...prev, [category]: true }));
-    if (planGeneratedState[category] && !planNeedsRegeneration[category]) {
-      await reopenPlanForCategory(category);
-    }
-  };
-
   const handleSaveCategory = async (category: Category) => {
     setSavingCategory((prev) => ({ ...prev, [category]: true }));
     try {
       const response = await http.post("/api/production/generate", {
         date: selectedDateISO,
         menu_type: category,
-        plans: planData[category],
+        plans: serializePlans(category),
         city_code: adminCity,
       });
 
@@ -1283,6 +1390,7 @@ useEffect(() => {
         date: selectedDateISO,
         menu_type: category,
         city_code: adminCity,
+        plans: serializePlans(category),
       });
       if (!response.ok) {
         const errorText = await response.text();
@@ -1324,9 +1432,41 @@ useEffect(() => {
     currentItems.length > 0 &&
     !unsavedChanges[selectedCategory] &&
     !finalizingCategory[selectedCategory];
+  const activeCapacityAlerts = useMemo(
+    () => capacityAlerts.filter((alert) => alert.category === selectedCategory),
+    [capacityAlerts, selectedCategory],
+  );
 
   return (
     <div className="flex flex-col gap-6">
+      {activeCapacityAlerts.length > 0 && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-4">
+          <p className="text-sm font-semibold text-amber-900">
+            Capacity alert — Items nearing planned limit
+          </p>
+          <ul className="mt-2 space-y-2 text-sm text-amber-900">
+            {activeCapacityAlerts.map((alert) => (
+              <li key={`${alert.category}-${alert.itemName}`}>
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <span>
+                    <span className="font-semibold">{alert.itemName}</span> at{" "}
+                    {Math.round(alert.ratio * 100)}% ({alert.customerOrders}/
+                    {alert.plannedQuantity} orders)
+                  </span>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="h-auto p-0 text-amber-900 underline"
+                    onClick={() => handleCapacityAlertAction(alert.category)}
+                  >
+                    Adjust max qty
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="w-full rounded-lg border border-border bg-card/50 p-4 shadow-sm">
         <div className="space-y-2">
           <h2 className="text-xl font-semibold text-foreground">
@@ -1565,7 +1705,7 @@ useEffect(() => {
             <Input
               type="number"
               inputMode="decimal"
-              step="0.1"
+              step="1"
               value={bufferPercentInput}
               onChange={(event) => setBufferPercentInput(event.target.value)}
               placeholder="Enter percentage"
@@ -1682,7 +1822,7 @@ useEffect(() => {
                     <Input
                       type="number"
                       inputMode="decimal"
-                      step="0.1"
+                      step="1"
                       min="0"
                       placeholder="+ qty"
                       value={lastMinuteAdjustments[item.item_name] ?? ""}

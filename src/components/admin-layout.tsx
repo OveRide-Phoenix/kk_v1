@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Bell, User, Menu, Search, LogOut, SwitchCamera } from "lucide-react"
+import { Bell, User, Menu, Search, LogOut, SwitchCamera, X, BellRing, Trash2 } from "lucide-react"
 import Sidebar from "@/components/sidebar"
 import { useAuthStore } from "@/store/store"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -12,6 +12,10 @@ import { useToast } from "@/hooks/use-toast"
 import { AskDialog } from "@/components/nl/ask-dialog"
 import { getCityLabel, normalizeCityCode } from "@/config/cities"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { useNotificationStore } from "@/store/notifications"
+import { formatDistanceToNow } from "date-fns"
 
 interface AdminLayoutProps {
   children: React.ReactNode
@@ -64,6 +68,13 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
   const sessionExpiryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [tokenVersion, setTokenVersion] = useState(0)
   const [askOpen, setAskOpen] = useState(false)
+  const notifications = useNotificationStore((state) => state.notifications)
+  const markAllNotificationsAsRead = useNotificationStore((state) => state.markAllAsRead)
+  const markNotificationAsRead = useNotificationStore((state) => state.markAsRead)
+  const clearNotification = useNotificationStore((state) => state.clearNotification)
+  const clearAllNotifications = useNotificationStore((state) => state.clearAll)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const unreadNotifications = notifications.filter((notification) => !notification.read).length
 
   const clearSessionTimers = useCallback(() => {
     if (sessionWarningTimeoutRef.current) {
@@ -75,6 +86,12 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
       sessionExpiryTimeoutRef.current = null
     }
   }, [])
+
+  useEffect(() => {
+    if (notificationsOpen && unreadNotifications > 0) {
+      markAllNotificationsAsRead()
+    }
+  }, [notificationsOpen, unreadNotifications, markAllNotificationsAsRead])
 
   const handleLogout = useCallback(async () => {
     clearSessionTimers()
@@ -173,6 +190,38 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
+  const formatNotificationTimestamp = useCallback((timestamp: number) => {
+    try {
+      return formatDistanceToNow(new Date(timestamp), { addSuffix: true })
+    } catch {
+      return ""
+    }
+  }, [])
+
+  const getSeverityClasses = useCallback((severity: string) => {
+    switch (severity) {
+      case "warning":
+        return "border-amber-200 bg-amber-50"
+      case "error":
+        return "border-destructive/30 bg-destructive/10"
+      case "success":
+        return "border-emerald-200 bg-emerald-50"
+      default:
+        return "border-border bg-muted/30"
+    }
+  }, [])
+
+  const handleNotificationClick = useCallback(
+    (notificationId: string, href?: string) => {
+      markNotificationAsRead(notificationId)
+      if (href) {
+        router.push(href)
+        setNotificationsOpen(false)
+      }
+    },
+    [markNotificationAsRead, router],
+  )
+
   useEffect(() => {
     setIsHydrated(true)
   }, [])
@@ -256,7 +305,11 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
       const response = await fetch("/api/backend/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: formattedPhone, admin_password: null }),
+        body: JSON.stringify({
+          phone: formattedPhone,
+          admin_password: null,
+          city_code: normalizedAdminCity,
+        }),
       })
 
       const data = await response.json()
@@ -348,6 +401,8 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
         }
       }
 
+      setAdminCity(normalizedAdminCity)
+
       toast({
         title: "Switched to customer view",
         description: "You can return to the admin panel from the customer navigation.",
@@ -368,7 +423,7 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
         variant: "destructive",
       })
     }
-  }, [router, setRoleState, setUser, toast, user])
+  }, [normalizedAdminCity, router, setAdminCity, setRoleState, setUser, toast, user])
 
   const getPageTitle = () => {
     switch (activePage) {
@@ -459,9 +514,88 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
               >
                 <SwitchCamera className="h-5 w-5" />
               </Button>
-              <Button variant="ghost" size="icon">
-                <Bell className="h-5 w-5" />
-              </Button>
+              <Popover open={notificationsOpen} onOpenChange={setNotificationsOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="icon" className="relative" aria-label="View notifications">
+                    <Bell className="h-5 w-5" />
+                    {unreadNotifications > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-destructive" />
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-0" align="end">
+                  <div className="flex items-center justify-between border-b px-4 py-2">
+                    <p className="text-sm font-semibold flex items-center gap-2">
+                      <BellRing className="h-4 w-4 text-primary" />
+                      Notifications
+                    </p>
+                    {notifications.length > 0 && (
+                      <div className="flex items-center gap-2">
+                        {unreadNotifications > 0 && (
+                          <Button variant="ghost" size="sm" className="h-auto text-xs" onClick={markAllNotificationsAsRead}>
+                            Mark all read
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto text-xs"
+                          onClick={() => {
+                            clearAllNotifications()
+                            setNotificationsOpen(false)
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-1" />
+                          Clear all
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  {notifications.length === 0 ? (
+                    <div className="px-4 py-6 text-sm text-muted-foreground">No notifications yet.</div>
+                  ) : (
+                    <ScrollArea className="max-h-80">
+                      <ul className="divide-y">
+                        {notifications.map((notification) => (
+                          <li key={notification.id} className="px-2 py-1">
+                            <div
+                              className={`flex items-start gap-3 rounded-md border px-3 py-2 shadow-sm ${getSeverityClasses(notification.severity)}`}
+                            >
+                              <button
+                                type="button"
+                                className="flex flex-1 flex-col text-left"
+                                onClick={() => handleNotificationClick(notification.id, notification.href)}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-sm font-semibold text-foreground">
+                                    {notification.title}
+                                  </span>
+                                  <span className="text-[10px] uppercase text-muted-foreground">
+                                    {formatNotificationTimestamp(notification.timestamp)}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-muted-foreground">{notification.message}</p>
+                              </button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-muted-foreground"
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  clearNotification(notification.id)
+                                }}
+                                aria-label="Dismiss notification"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </ScrollArea>
+                  )}
+                </PopoverContent>
+              </Popover>
               <Button variant="ghost" className="flex items-center space-x-2" asChild>
                 <Link href="/admin/account">
                   <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">

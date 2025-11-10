@@ -158,13 +158,28 @@ export default function CustomerDailyMenu({
               }
 
               const data: MenuSectionResponse = await res.json();
-              nextItems[meal] = (data.items ?? []).map((it: any) => ({
-                ...it,
-                max_qty: normalizeQty(it.max_qty ?? it.item_max_qty),
-                available_qty: normalizeQty(it.available_qty),
-                picture_url: it.picture_url ?? null,
-              }));
-              nextReleased[meal] = data.is_released ?? false;
+              const releasedFlag = !!data.is_released;
+              nextReleased[meal] = releasedFlag;
+
+              if (!releasedFlag) {
+                nextItems[meal] = [];
+                return;
+              }
+
+              nextItems[meal] = (data.items ?? []).map((it: any) => {
+                const dailyMax = normalizeQty(it.max_qty);
+                const fallbackAvailable =
+                  it.available_qty !== undefined && it.available_qty !== null
+                    ? it.available_qty
+                    : it.max_qty;
+                return {
+                  ...it,
+                  max_qty: dailyMax,
+                  available_qty: normalizeQty(fallbackAvailable),
+                  picture_url: it.picture_url ?? null,
+                  item_max_qty: normalizeQty(it.item_max_qty),
+                };
+              });
             } catch (mealError) {
               console.warn(`Failed to fetch ${meal}`, mealError);
               nextItems[meal] = [];

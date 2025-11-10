@@ -572,7 +572,10 @@ export function DailyMenuSetup() {
           item_id: row.item_id,
           category_id: row.category_id,
           max_qty: row.max_qty,
-          available_qty: row.max_qty, // mirror on first save
+          available_qty:
+            typeof row.available_qty === "number" && Number.isFinite(row.available_qty)
+              ? row.available_qty
+              : row.max_qty,
           rate: row.rate,
           is_default: row.is_default,
           sort_order: row.sort_order || idx + 1,

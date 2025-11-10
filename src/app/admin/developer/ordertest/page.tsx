@@ -15,6 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { DatePickerWithPresets } from "@/components/ui/date-picker";
 import { http } from "@/lib/http";
 import { useAuthStore } from "@/store/store";
 
@@ -65,7 +66,7 @@ export default function OrderTestPage() {
   });
   const [refreshSignal, setRefreshSignal] = useState(0);
   const [resetCartSignal, setResetCartSignal] = useState(0);
-  const [seedDate, setSeedDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
+  const [seedDate, setSeedDate] = useState<Date | null>(() => new Date());
   const [seedCount, setSeedCount] = useState(12);
   const [seedClear, setSeedClear] = useState(true);
   const [seeding, setSeeding] = useState(false);
@@ -124,7 +125,7 @@ export default function OrderTestPage() {
 
     const payload = {
       customer_id: TEST_CUSTOMER_ID,
-      address_id,
+      address_id: addressId,
       payment_method: "Cash",
       order_date: cartContext.confirmedDateISO ?? format(new Date(), "yyyy-MM-dd"),
       items: cartSelection.map((item) => ({
@@ -160,8 +161,11 @@ export default function OrderTestPage() {
     setSeeding(true);
     setSeedError(null);
     try {
+      const normalizedDate = seedDate
+        ? format(seedDate, "yyyy-MM-dd")
+        : format(new Date(), "yyyy-MM-dd");
       const response = await http.post("/api/dev/orders/seed", {
-        date: seedDate,
+        date: normalizedDate,
         city_code: adminCity,
         count: seedCount,
         clear_existing: seedClear,
@@ -226,17 +230,18 @@ export default function OrderTestPage() {
               </Button>
             </div>
             <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-1">
-                <label htmlFor="seed-date" className="text-sm font-medium text-muted-foreground">
-                  Delivery date
-                </label>
-                <Input
-                  id="seed-date"
-                  type="date"
-                  value={seedDate}
-                  onChange={(event) => setSeedDate(event.target.value)}
-                />
-              </div>
+            <div className="space-y-1">
+              <label htmlFor="seed-date" className="text-sm font-medium text-muted-foreground">
+                Delivery date
+              </label>
+              <DatePickerWithPresets
+                selectedDate={seedDate ?? undefined}
+                onSelectDate={(date) => setSeedDate(date)}
+                showQuickSelect={false}
+                disablePast={false}
+                triggerClassName="w-full"
+              />
+            </div>
               <div className="space-y-1">
                 <label htmlFor="seed-count" className="text-sm font-medium text-muted-foreground">
                   Number of orders
