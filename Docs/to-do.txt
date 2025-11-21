@@ -5,6 +5,49 @@ THEN MOVE Extension notes to here..
 #---------------------------------------------------------------------------------------------------------------
 
 
+
+
+CONDIMENTS - when we added to the menu
+1. spices, pickles happla
+2. snacks 
+3. ready mixes
+4. weekend specials/sweets - orders taken till antha and delivery date..
+
+
+
+if an item is undersold then drop the planned qty
+
+
+kitchen priduction is based on revised plan qty
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 - [✅] in the order history page when i view an order, show the total amount below the items table not above..
 
 - [✅] in kitchen production when i saw export i mean to export only the meal that is selected
@@ -279,21 +322,6 @@ THEN MOVE Extension notes to here..
 
       **Proceed to implement exactly as above. Do not modify unrelated parts, types, or UI beyond what’s specified.**
 
-
-
-
-CONDIMENTS - when we added to the menu
-1. spices, pickles happla
-2. snacks 
-3. ready mixes
-4. weekend specials/sweets - orders taken till antha and delivery date..
-
-
-
-if an item is undersold then drop the planned qty
-
-
-kitchen priduction is based on revised plan qty
 
 
 
