@@ -2,22 +2,23 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Switch } from "@/components/ui/switch"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Checkbox } from "@/components/ui/checkbox"
-import { type Product } from "@/types/product"
+import { type Product, type CategoryProduct } from "@/types/product"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+
+type ProductFormScope = "items" | "condiments"
 
 interface ProductFormProps {
   product: Product | null
   onSave: (product: Product) => Promise<void> | void
   onCancel: () => void
+  formScope?: ProductFormScope
 }
 
 const normalizeMaxField = (value: unknown): number => {
@@ -27,22 +28,37 @@ const normalizeMaxField = (value: unknown): number => {
   return Math.floor(parsed);
 };
 
+const CONDIMENTS_BLD_ID = 4;
+const EMPTY_OPTION_VALUE = "__none";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+
 const MEAL_OPTIONS = [
-  { id: 1, label: "Breakfast" },
-  { id: 2, label: "Lunch" },
-  { id: 3, label: "Dinner" },
+  { id: 1, label: "Breakfast", maxField: "max_qty_breakfast" },
+  { id: 2, label: "Lunch", maxField: "max_qty_lunch" },
+  { id: 3, label: "Dinner", maxField: "max_qty_dinner" },
+  { id: CONDIMENTS_BLD_ID, label: "Condiments", maxField: "max_qty_condiments" },
 ];
 
-const createInitialFormData = (item: Product | null) => {
+const createInitialFormData = (item: Product | null, scope: ProductFormScope) => {
+  const existingMeals =
+    item && Array.isArray(item.bld_ids) ? [...item.bld_ids] : []
+  const defaultMeals =
+    scope === "condiments"
+      ? existingMeals.length > 0
+        ? existingMeals
+        : [CONDIMENTS_BLD_ID]
+      : existingMeals
+
   if (item) {
-    return {
+    const initial = {
       ...item,
-      is_condiment: Boolean((item as any).is_condiment),
-      bld_ids: Array.isArray(item.bld_ids) ? [...item.bld_ids] : [],
+      bld_ids: defaultMeals,
       max_qty_breakfast: normalizeMaxField(item.max_qty_breakfast),
       max_qty_lunch: normalizeMaxField(item.max_qty_lunch),
       max_qty_dinner: normalizeMaxField(item.max_qty_dinner),
+      max_qty_condiments: normalizeMaxField(item.max_qty_condiments),
     }
+    return initial
   }
 
   return {
@@ -53,7 +69,6 @@ const createInitialFormData = (item: Product | null) => {
     uom: "",
     weight_factor: 0,
     weight_uom: "",
-    item_type: "",
     hsn_code: "",
     factor: 1,
     quantity_portion: 0,
@@ -61,7 +76,8 @@ const createInitialFormData = (item: Product | null) => {
     max_qty_breakfast: 0,
     max_qty_lunch: 0,
     max_qty_dinner: 0,
-    bld_ids: [],
+    max_qty_condiments: 0,
+    bld_ids: defaultMeals,
     picture_url: "",
     breakfast_price: 0,
     lunch_price: 0,
@@ -72,28 +88,50 @@ const createInitialFormData = (item: Product | null) => {
     sgst: 0,
     igst: 0,
     net_price: 0,
-    is_combo: false,
-    is_condiment: false,
   }
 }
 
-export default function ProductForm({ product, onSave, onCancel }: ProductFormProps) {
+export default function ProductForm({ product, onSave, onCancel, formScope = "items" }: ProductFormProps) {
   const isEditing = !!product
-  const [formData, setFormData] = useState<any>(() => createInitialFormData(product))
+  const [formData, setFormData] = useState<any>(() => createInitialFormData(product, formScope))
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const previousMealsRef = useRef<number[]>([])
+  const isCondimentScope = formScope === "condiments"
+  const selectedMeals = Array.isArray(formData.bld_ids) ? formData.bld_ids : []
+  const isCondiment = isCondimentScope || selectedMeals.includes(CONDIMENTS_BLD_ID)
+  const [categoryOptions, setCategoryOptions] = useState<CategoryProduct[]>([])
+  const [parentItemOptions, setParentItemOptions] = useState<Array<{ item_id: number; name: string }>>([])
+  const [loadingReferences, setLoadingReferences] = useState(false)
 
   const handleChange = (field: string, value: any) => {
     setFormData((prev: any) => ({ ...prev, [field]: value }))
   }
 
-  const handleMealToggle = (mealId: number, isChecked: boolean) => {
+  const handleMealSelection = (mealId: number) => {
     setFormData((prev: any) => {
       const current: number[] = Array.isArray(prev.bld_ids) ? prev.bld_ids : []
-      const without = current.filter((id) => id !== mealId)
-      const next = isChecked ? [...without, mealId] : without
-      next.sort((a, b) => a - b)
-      return { ...prev, bld_ids: next }
+      const normalized = current.filter((id): id is number => typeof id === "number")
+      const set = new Set(normalized)
+
+      if (mealId === CONDIMENTS_BLD_ID) {
+        if (set.has(CONDIMENTS_BLD_ID)) {
+          const restored = previousMealsRef.current.length ? [...previousMealsRef.current] : []
+          return { ...prev, bld_ids: restored }
+        }
+        previousMealsRef.current = Array.from(set).filter((id) => id !== CONDIMENTS_BLD_ID)
+        return { ...prev, bld_ids: [CONDIMENTS_BLD_ID] }
+      }
+
+      const next = new Set(Array.from(set).filter((id) => id !== CONDIMENTS_BLD_ID))
+      if (next.has(mealId)) {
+        next.delete(mealId)
+      } else {
+        next.add(mealId)
+      }
+      const sorted = Array.from(next).sort((a, b) => a - b)
+      previousMealsRef.current = [...sorted]
+      return { ...prev, bld_ids: sorted }
     })
   }
 
@@ -124,10 +162,86 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
   }, [formData.name, isEditing])
 
   useEffect(() => {
-    setFormData(createInitialFormData(product))
+    setFormData(createInitialFormData(product, formScope))
     setFormError(null)
     setSubmitting(false)
-  }, [product])
+    previousMealsRef.current = []
+  }, [product, formScope])
+
+  useEffect(() => {
+    let cancelled = false
+    const fetchReferences = async () => {
+      setLoadingReferences(true)
+      try {
+        const [categoriesRes, itemsRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/products/categories`),
+          fetch(`${API_BASE_URL}/api/products/items`),
+        ])
+        if (!categoriesRes.ok) {
+          throw new Error("Failed to load categories")
+        }
+        if (!itemsRes.ok) {
+          throw new Error("Failed to load catalog items")
+        }
+        const categoriesData = await categoriesRes.json()
+        const itemsData = await itemsRes.json()
+        if (cancelled) {
+          return
+        }
+        setCategoryOptions(Array.isArray(categoriesData) ? categoriesData : [])
+        const mappedItems = Array.isArray(itemsData)
+          ? itemsData.map((entry: any) => ({
+              item_id: entry.item_id,
+              name: entry.name ?? `Item #${entry.item_id}`,
+            }))
+          : []
+        setParentItemOptions(mappedItems)
+      } catch (error) {
+        console.error("Failed to load reference data", error)
+        if (!cancelled) {
+          setCategoryOptions([])
+          setParentItemOptions([])
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingReferences(false)
+        }
+      }
+    }
+    fetchReferences()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const snacksCategoryId = useMemo(() => {
+    const match = categoryOptions.find((cat) => cat.category_name.toLowerCase() === "snacks")
+    return match?.category_id ?? null
+  }, [categoryOptions])
+
+  useEffect(() => {
+    if (isCondiment && snacksCategoryId && !formData.category_id) {
+      handleChange("category_id", snacksCategoryId)
+    }
+  }, [isCondiment, snacksCategoryId, formData.category_id])
+
+  useEffect(() => {
+    if (!isCondimentScope) {
+      return
+    }
+    const hasOnlyCondiment =
+      Array.isArray(formData.bld_ids) &&
+      formData.bld_ids.length === 1 &&
+      formData.bld_ids[0] === CONDIMENTS_BLD_ID
+    if (!hasOnlyCondiment) {
+      setFormData((prev: any) => ({ ...prev, bld_ids: [CONDIMENTS_BLD_ID] }))
+    }
+  }, [isCondimentScope, formData.bld_ids])
+
+  const selectableParentItems = useMemo(() => {
+    const currentItemId = product?.item_id
+    return parentItemOptions.filter((item) => item.item_id !== currentItemId)
+  }, [parentItemOptions, product?.item_id])
 
   return (
     <Dialog open={true} onOpenChange={() => onCancel()}>
@@ -152,21 +266,31 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
             <TabsContent value="basic">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="sub_item">Sub Item</Label>
-                  <Input
-                    id="sub_item"
-                    value={formData.sub_item || ""}
-                    onChange={(e) => handleChange("sub_item", e.target.value)}
-                    placeholder="Parent Item Name or ID"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="is_combo">Combo</Label>
-                  <Switch
-                    id="is_combo"
-                    checked={formData.is_combo}
-                    onCheckedChange={(checked) => handleChange("is_combo", checked)}
-                  />
+                  <Label htmlFor="sub_item">Parent Item</Label>
+                  <p className="text-xs text-muted-foreground">Maps to column <code>sub_item</code></p>
+                  <Select
+                    value={
+                      typeof formData.sub_item === "number" && formData.sub_item > 0
+                        ? String(formData.sub_item)
+                        : EMPTY_OPTION_VALUE
+                    }
+                    onValueChange={(value) =>
+                      handleChange("sub_item", value === EMPTY_OPTION_VALUE ? "" : Number(value))
+                    }
+                    disabled={loadingReferences}
+                  >
+                    <SelectTrigger id="sub_item">
+                      <SelectValue placeholder={loadingReferences ? "Loading…" : "Select parent item"} />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-64">
+                      <SelectItem value={EMPTY_OPTION_VALUE}>None</SelectItem>
+                      {selectableParentItems.map((item) => (
+                        <SelectItem key={item.item_id} value={String(item.item_id)}>
+                          {item.name} · #{item.item_id}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="name">Name <span className="text-red-500">*</span></Label>
@@ -196,52 +320,72 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="item_type">Item Type</Label>
-                  <Input
-                    id="item_type"
-                    value={formData.item_type ?? ""}
-                    onChange={(e) => handleChange("item_type", e.target.value)}
-                  />
+                  <Label htmlFor="category_id">Category</Label>
+                  <p className="text-xs text-muted-foreground">Stored as <code>category_id</code></p>
+                  <Select
+                    value={
+                      typeof formData.category_id === "number" && formData.category_id > 0
+                        ? String(formData.category_id)
+                        : EMPTY_OPTION_VALUE
+                    }
+                    onValueChange={(value) =>
+                      handleChange("category_id", value === EMPTY_OPTION_VALUE ? "" : Number(value))
+                    }
+                    disabled={loadingReferences}
+                  >
+                    <SelectTrigger id="category_id">
+                      <SelectValue placeholder={loadingReferences ? "Loading…" : "Select category"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={EMPTY_OPTION_VALUE}>None</SelectItem>
+                      {categoryOptions.map((category) => (
+                        <SelectItem key={category.category_id} value={String(category.category_id)}>
+                          {category.category_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="group">Group</Label>
+                  <p className="text-xs text-muted-foreground">Persists to <code>group</code> column</p>
                   <Input
                     id="group"
                     value={formData.group ?? ""}
                     onChange={(e) => handleChange("group", e.target.value)}
                   />
                 </div>
-                <div className="space-y-2 sm:col-span-2">
-                  <Label>Meals</Label>
-                  <div className="flex flex-wrap gap-4">
-                    {MEAL_OPTIONS.map((option) => {
-                      const checked =
-                        Array.isArray(formData.bld_ids) && formData.bld_ids.includes(option.id)
-                      return (
-                        <label
-                          key={option.id}
-                          className="flex items-center gap-2 text-sm font-medium text-muted-foreground"
-                        >
-                          <Checkbox
-                            checked={checked}
-                            onCheckedChange={(value) => handleMealToggle(option.id, value === true)}
-                          />
-                          <span className="text-foreground">{option.label}</span>
-                        </label>
-                      )
-                    })}
+                {!isCondimentScope && (
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label>Meal Availability (BLD/C)</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Choose the meals where this catalog item should appear. Condiments operate independently and
+                      cannot mix with breakfast/lunch/dinner.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {MEAL_OPTIONS.map((option) => {
+                        const selected = selectedMeals.includes(option.id)
+                        const disabled =
+                          isCondiment && option.id !== CONDIMENTS_BLD_ID
+                        return (
+                          <Button
+                            key={option.id}
+                            type="button"
+                            variant={selected ? "default" : "outline"}
+                            className="px-4"
+                            onClick={() => handleMealSelection(option.id)}
+                            disabled={disabled}
+                          >
+                            {option.label}
+                          </Button>
+                        )
+                      })}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 pt-2">
-                    <Switch
-                      id="is_condiment"
-                      checked={Boolean(formData.is_condiment)}
-                      onCheckedChange={(checked) => handleChange("is_condiment", checked)}
-                    />
-                    <span className="text-sm text-muted-foreground">Mark as condiment item</span>
-                  </div>
-                </div>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="uom">UOM (Unit of Measure) <span className="text-red-500">*</span></Label>
+                  <p className="text-xs text-muted-foreground">Column: <code>uom</code></p>
                   <Input
                     id="uom"
                     value={formData.uom ?? ""}
@@ -308,57 +452,48 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
                     step="0.01"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="max_qty_breakfast">Max Qty · Breakfast</Label>
-                  <Input
-                    id="max_qty_breakfast"
-                    type="number"
-                    min={0}
-                    value={formData.max_qty_breakfast ?? 0}
-                    onChange={(e) => {
-                      const parsed = Number.parseInt(e.target.value, 10)
-                      handleChange(
-                        "max_qty_breakfast",
-                        Number.isNaN(parsed) ? 0 : Math.max(parsed, 0),
-                      )
-                    }}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="max_qty_lunch">Max Qty · Lunch</Label>
-                  <Input
-                    id="max_qty_lunch"
-                    type="number"
-                    min={0}
-                    value={formData.max_qty_lunch ?? 0}
-                    onChange={(e) => {
-                      const parsed = Number.parseInt(e.target.value, 10)
-                      handleChange(
-                        "max_qty_lunch",
-                        Number.isNaN(parsed) ? 0 : Math.max(parsed, 0),
-                      )
-                    }}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="max_qty_dinner">Max Qty · Dinner</Label>
-                  <Input
-                    id="max_qty_dinner"
-                    type="number"
-                    min={0}
-                    value={formData.max_qty_dinner ?? 0}
-                    onChange={(e) => {
-                      const parsed = Number.parseInt(e.target.value, 10)
-                      handleChange(
-                        "max_qty_dinner",
-                        Number.isNaN(parsed) ? 0 : Math.max(parsed, 0),
-                      )
-                    }}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Sets the default cap when this item is auto-added to a daily menu for the selected meal.
-                  </p>
-                </div>
+                {!isCondimentScope &&
+                  MEAL_OPTIONS.filter((meal) => meal.id !== CONDIMENTS_BLD_ID).map((meal) => (
+                    selectedMeals.includes(meal.id) && (
+                      <div className="space-y-2" key={`max-field-${meal.id}`}>
+                        <Label htmlFor={meal.maxField}>Max Qty · {meal.label}</Label>
+                        <Input
+                          id={meal.maxField}
+                          type="number"
+                          min={0}
+                          value={formData[meal.maxField] ?? 0}
+                          onChange={(e) => {
+                            const parsed = Number.parseInt(e.target.value, 10)
+                            handleChange(
+                              meal.maxField,
+                              Number.isNaN(parsed) ? 0 : Math.max(parsed, 0),
+                            )
+                          }}
+                        />
+                      </div>
+                    )
+                  ))}
+                {isCondiment && (
+                  <div className="space-y-2">
+                    <Label htmlFor="max_qty_condiments">Max Qty · Condiments</Label>
+                    <Input
+                      id="max_qty_condiments"
+                      type="number"
+                      min={0}
+                      value={formData.max_qty_condiments ?? 0}
+                      onChange={(e) => {
+                        const parsed = Number.parseInt(e.target.value, 10)
+                        handleChange(
+                          "max_qty_condiments",
+                          Number.isNaN(parsed) ? 0 : Math.max(parsed, 0),
+                        )
+                      }}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Sets the cap for the condiment bar (weeklong / till-stocks-last).
+                    </p>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="picture_url">Upload Picture</Label>
                   <Input
@@ -377,39 +512,43 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
             {/* Pricing Tab */}
             <TabsContent value="pricing">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="breakfast_price">Breakfast Price</Label>
-                  <Input
-                    id="breakfast_price"
-                    type="number"
-                    value={formData.breakfast_price ?? ""}
-                    onChange={(e) => handleChange("breakfast_price", Number.parseFloat(e.target.value) || 0)}
-                    min={0}
-                    step="0.01"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="lunch_price">Lunch Price</Label>
-                  <Input
-                    id="lunch_price"
-                    type="number"
-                    value={formData.lunch_price ?? ""}
-                    onChange={(e) => handleChange("lunch_price", Number.parseFloat(e.target.value) || 0)}
-                    min={0}
-                    step="0.01"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="dinner_price">Dinner Price</Label>
-                  <Input
-                    id="dinner_price"
-                    type="number"
-                    value={formData.dinner_price ?? ""}
-                    onChange={(e) => handleChange("dinner_price", Number.parseFloat(e.target.value) || 0)}
-                    min={0}
-                    step="0.01"
-                  />
-                </div>
+                {!isCondimentScope && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="breakfast_price">Breakfast Price</Label>
+                      <Input
+                        id="breakfast_price"
+                        type="number"
+                        value={formData.breakfast_price ?? ""}
+                        onChange={(e) => handleChange("breakfast_price", Number.parseFloat(e.target.value) || 0)}
+                        min={0}
+                        step="0.01"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="lunch_price">Lunch Price</Label>
+                      <Input
+                        id="lunch_price"
+                        type="number"
+                        value={formData.lunch_price ?? ""}
+                        onChange={(e) => handleChange("lunch_price", Number.parseFloat(e.target.value) || 0)}
+                        min={0}
+                        step="0.01"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="dinner_price">Dinner Price</Label>
+                      <Input
+                        id="dinner_price"
+                        type="number"
+                        value={formData.dinner_price ?? ""}
+                        onChange={(e) => handleChange("dinner_price", Number.parseFloat(e.target.value) || 0)}
+                        min={0}
+                        step="0.01"
+                      />
+                    </div>
+                  </>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="condiments_price">Condiments Price</Label>
                   <Input

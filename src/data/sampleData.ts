@@ -1,4 +1,4 @@
-import { Item, Combo, Addon, ItemType, Category } from "@/types/product";
+import { Item, Combo, Addon, Category } from "@/types/product";
 
 export const sampleCategories: Category[] = [
   {
@@ -25,7 +25,6 @@ export const sampleItems: Item[] = [
     uom: "Plate",
     weightFactor: 0.35,
     weightUom: "kg",
-    itemType: ItemType.LUNCH,
     hsnCode: "1006",
     factor: 1,
     quantityPortion: 1,
@@ -52,7 +51,6 @@ export const sampleItems: Item[] = [
     uom: "Plate",
     weightFactor: 0.8,
     weightUom: "kg",
-    itemType: ItemType.LUNCH,
     hsnCode: "1006",
     factor: 1,
     quantityPortion: 1,

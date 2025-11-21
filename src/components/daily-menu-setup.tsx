@@ -111,7 +111,6 @@ export function DailyMenuSetup() {
       uom: string;
       weight_factor: number | null;
       weight_uom: string | null;
-      item_type: string | null;
       hsn_code: string | null;
       factor: number | null;
       quantity_portion: number | null;
@@ -119,6 +118,7 @@ export function DailyMenuSetup() {
       max_qty_breakfast: number | null;
       max_qty_lunch: number | null;
       max_qty_dinner: number | null;
+      max_qty_condiments: number | null;
       picture_url: string | null;
       breakfast_price: number | null;
       lunch_price: number | null;
@@ -426,6 +426,7 @@ export function DailyMenuSetup() {
             max_qty_breakfast: parseMaxField(item.max_qty_breakfast),
             max_qty_lunch: parseMaxField(item.max_qty_lunch),
             max_qty_dinner: parseMaxField(item.max_qty_dinner),
+            max_qty_condiments: parseMaxField(item.max_qty_condiments),
             bld_ids: Array.isArray(item.bld_ids) ? [...item.bld_ids] : [],
           })),
         );
@@ -480,8 +481,9 @@ export function DailyMenuSetup() {
           case "lunch":
             return found.max_qty_lunch;
           case "dinner":
-          case "condiments":
             return found.max_qty_dinner;
+          case "condiments":
+            return found.max_qty_condiments;
           default:
             return null;
         }

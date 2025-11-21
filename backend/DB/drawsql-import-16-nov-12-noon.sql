@@ -1,12 +1,10 @@
-
-SHOW CREATE TABLE addresses;
-
 CREATE TABLE `addresses` (
   `address_id` int NOT NULL AUTO_INCREMENT,
   `customer_id` int NOT NULL,
   `house_apartment_no` varchar(255) DEFAULT NULL,
   `written_address` text NOT NULL,
   `city` varchar(100) NOT NULL,
+  `city_code` varchar(3) NOT NULL DEFAULT 'MYS',
   `pin_code` varchar(10) NOT NULL,
   `latitude` decimal(10,8) NOT NULL,
   `longitude` decimal(11,8) NOT NULL,
@@ -16,38 +14,43 @@ CREATE TABLE `addresses` (
   PRIMARY KEY (`address_id`),
   KEY `customer_id` (`customer_id`),
   CONSTRAINT `addresses_ibfk_1` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`customer_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=43 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB AUTO_INCREMENT=49 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE `admin_logs` (
+  `log_id` int NOT NULL AUTO_INCREMENT,
+  `admin_id` int NOT NULL,
+  `action_type` enum('ADD','UPDATE','DELETE') NOT NULL,
+  `entity_type` enum('ITEM','COMBO','ADDON','CATEGORY') NOT NULL,
+  `entity_id` int NOT NULL,
+  `description` text,
+  `timestamp` datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`log_id`),
+  KEY `admin_id` (`admin_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=642 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-
-SHOW CREATE TABLE roles;
-CREATE TABLE `roles` (
-  `role_id` int NOT NULL AUTO_INCREMENT,
-  `code` varchar(50) NOT NULL,
-  `name` varchar(100) NOT NULL,
-  `description` varchar(255) DEFAULT NULL,
-  `is_system` tinyint(1) NOT NULL DEFAULT '0',
-  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`role_id`),
-  UNIQUE KEY `uq_roles_code` (`code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-
-SHOW CREATE TABLE bld;
 CREATE TABLE `bld` (
   `bld_id` int NOT NULL AUTO_INCREMENT,
   `bld_type` enum('Breakfast','Lunch','Dinner','Condiments') NOT NULL,
   PRIMARY KEY (`bld_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-SHOW CREATE TABLE categories;
 CREATE TABLE `categories` (
   `category_id` int NOT NULL AUTO_INCREMENT,
   `category_name` varchar(100) NOT NULL,
   PRIMARY KEY (`category_id`),
   UNIQUE KEY `category_name` (`category_name`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-SHOW CREATE TABLE combo_items;
+CREATE TABLE `combos` (
+  `combo_id` int NOT NULL AUTO_INCREMENT,
+  `combo_name` varchar(50) NOT NULL,
+  `price` decimal(10,2) NOT NULL,
+  `category_id` int NOT NULL,
+  PRIMARY KEY (`combo_id`),
+  KEY `category_id` (`category_id`),
+  CONSTRAINT `combos_ibfk_1` FOREIGN KEY (`category_id`) REFERENCES `categories` (`category_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE `combo_items` (
   `id` int NOT NULL AUTO_INCREMENT,
   `combo_id` int NOT NULL,
@@ -58,23 +61,8 @@ CREATE TABLE `combo_items` (
   KEY `item_id` (`item_id`),
   CONSTRAINT `combo_items_ibfk_1` FOREIGN KEY (`combo_id`) REFERENCES `combos` (`combo_id`) ON DELETE CASCADE,
   CONSTRAINT `combo_items_ibfk_2` FOREIGN KEY (`item_id`) REFERENCES `items` (`item_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-SHOW CREATE TABLE combos;
-CREATE TABLE `combos` (
-  `combo_id` int NOT NULL AUTO_INCREMENT,
-  `combo_name` varchar(50) NOT NULL,
-  `price` decimal(10,2) NOT NULL,
-  `category_id` int NOT NULL,
-  PRIMARY KEY (`combo_id`),
-  KEY `category_id` (`category_id`),
-  CONSTRAINT `combos_ibfk_1` FOREIGN KEY (`category_id`) REFERENCES `categories` (`category_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-
-SHOW CREATE TABLE customer_orders_view;
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `customer_orders_view` AS select `c`.`customer_id` AS `customer_id`,`c`.`name` AS `customer_name`,`c`.`primary_mobile` AS `customer_phone`,`c`.`email` AS `customer_email`,`a`.`written_address` AS `address`,count(`o`.`order_id`) AS `no_of_orders` from ((`customers` `c` left join `addresses` `a` on(((`c`.`customer_id` = `a`.`customer_id`) and (`a`.`is_default` = true)))) left join `orders` `o` on((`c`.`customer_id` = `o`.`customer_id`))) group by `c`.`customer_id`,`c`.`name`,`c`.`primary_mobile`,`c`.`email`,`a`.`written_address`
-
-SHOW CREATE TABLE customers;
 CREATE TABLE `customers` (
   `customer_id` int NOT NULL AUTO_INCREMENT,
   `referred_by` varchar(100) DEFAULT NULL,
@@ -85,14 +73,14 @@ CREATE TABLE `customers` (
   `payment_frequency` varchar(50) DEFAULT 'Daily',
   `email` varchar(100) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `is_admin` tinyint(1) NOT NULL DEFAULT '0',
   `roles` json DEFAULT NULL,
   `admin_password_hash` varchar(255) DEFAULT NULL,
   `admin_is_active` tinyint(1) NOT NULL DEFAULT '1',
   PRIMARY KEY (`customer_id`),
   UNIQUE KEY `primary_mobile` (`primary_mobile`)
-) ENGINE=InnoDB AUTO_INCREMENT=64 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB AUTO_INCREMENT=65 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-SHOW CREATE TABLE item_add_ons;
 CREATE TABLE `item_add_ons` (
   `add_on_id` int NOT NULL AUTO_INCREMENT,
   `main_item_id` int NOT NULL,
@@ -104,9 +92,17 @@ CREATE TABLE `item_add_ons` (
   KEY `add_on_item_id` (`add_on_item_id`),
   CONSTRAINT `item_add_ons_ibfk_1` FOREIGN KEY (`main_item_id`) REFERENCES `items` (`item_id`),
   CONSTRAINT `item_add_ons_ibfk_2` FOREIGN KEY (`add_on_item_id`) REFERENCES `items` (`item_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-SHOW CREATE TABLE item_price_history;
+CREATE TABLE `item_bld_map` (
+  `item_id` int NOT NULL,
+  `bld_id` int NOT NULL,
+  PRIMARY KEY (`item_id`,`bld_id`),
+  KEY `bld_id` (`bld_id`),
+  CONSTRAINT `item_bld_map_ibfk_1` FOREIGN KEY (`item_id`) REFERENCES `items` (`item_id`) ON DELETE CASCADE,
+  CONSTRAINT `item_bld_map_ibfk_2` FOREIGN KEY (`bld_id`) REFERENCES `bld` (`bld_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE `item_price_history` (
   `history_id` int NOT NULL AUTO_INCREMENT,
   `item_id` int NOT NULL,
@@ -123,9 +119,8 @@ CREATE TABLE `item_price_history` (
   PRIMARY KEY (`history_id`),
   KEY `item_id` (`item_id`),
   CONSTRAINT `item_price_history_ibfk_1` FOREIGN KEY (`item_id`) REFERENCES `items` (`item_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-SHOW CREATE TABLE items;
 CREATE TABLE `items` (
   `item_id` int NOT NULL AUTO_INCREMENT,
   `name` varchar(255) NOT NULL,
@@ -135,6 +130,7 @@ CREATE TABLE `items` (
   `uom` varchar(50) NOT NULL,
   `weight_factor` decimal(5,3) DEFAULT NULL,
   `weight_uom` varchar(50) DEFAULT NULL,
+  `item_type` varchar(50) DEFAULT NULL,
   `hsn_code` varchar(50) DEFAULT NULL,
   `factor` decimal(5,3) DEFAULT '1.000',
   `quantity_portion` int DEFAULT NULL,
@@ -153,29 +149,35 @@ CREATE TABLE `items` (
   `sgst` decimal(5,2) DEFAULT NULL,
   `igst` decimal(5,2) DEFAULT NULL,
   `net_price` decimal(10,2) DEFAULT NULL,
-  `bld_id` int NOT NULL,
   PRIMARY KEY (`item_id`),
   KEY `category_id` (`category_id`),
-  KEY `fk_item_bld` (`bld_id`),
-  CONSTRAINT `fk_item_bld` FOREIGN KEY (`bld_id`) REFERENCES `bld` (`bld_id`),
   CONSTRAINT `items_ibfk_1` FOREIGN KEY (`category_id`) REFERENCES `categories` (`category_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=313 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB AUTO_INCREMENT=320 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-SHOW CREATE TABLE menu;
+CREATE TABLE `legacy_combo_map` (
+  `legacy_item_id` int NOT NULL,
+  `combo_id` int NOT NULL,
+  `migrated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`legacy_item_id`),
+  KEY `fk_legacy_combo` (`combo_id`),
+  CONSTRAINT `fk_legacy_combo` FOREIGN KEY (`combo_id`) REFERENCES `combos` (`combo_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE `menu` (
   `menu_id` int NOT NULL AUTO_INCREMENT,
   `date` date NOT NULL,
   `is_festival` tinyint(1) NOT NULL DEFAULT '0',
   `is_released` tinyint(1) NOT NULL DEFAULT '0',
   `period_type` enum('one_day','subscription','all_days') DEFAULT NULL,
+  `city_code` varchar(3) NOT NULL DEFAULT 'MYS',
   `bld_id` int NOT NULL,
   `is_production_generated` tinyint(1) DEFAULT '0',
+  `menu_type` varchar(20) NOT NULL DEFAULT 'ONE_DAY',
   PRIMARY KEY (`menu_id`),
   KEY `fk_menu_bld` (`bld_id`),
   CONSTRAINT `fk_menu_bld` FOREIGN KEY (`bld_id`) REFERENCES `bld` (`bld_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB AUTO_INCREMENT=187 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-SHOW CREATE TABLE menu_items;
 CREATE TABLE `menu_items` (
   `menu_item_id` int NOT NULL AUTO_INCREMENT,
   `menu_id` int NOT NULL,
@@ -195,9 +197,26 @@ CREATE TABLE `menu_items` (
   CONSTRAINT `menu_items_ibfk_1` FOREIGN KEY (`menu_id`) REFERENCES `menu` (`menu_id`),
   CONSTRAINT `menu_items_ibfk_2` FOREIGN KEY (`item_id`) REFERENCES `items` (`item_id`),
   CONSTRAINT `menu_items_ibfk_3` FOREIGN KEY (`category_id`) REFERENCES `categories` (`category_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=326 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB AUTO_INCREMENT=2535 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-SHOW CREATE TABLE order_items;
+CREATE TABLE `orders` (
+  `order_id` int NOT NULL AUTO_INCREMENT,
+  `customer_id` int NOT NULL,
+  `address_id` int NOT NULL,
+  `total_price` decimal(10,2) NOT NULL,
+  `status` varchar(50) DEFAULT 'Pending',
+  `payment_method` varchar(50) NOT NULL,
+  `discount` decimal(10,2) DEFAULT '0.00',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `order_type` varchar(50) DEFAULT 'one_time',
+  `paid` tinyint(1) DEFAULT NULL,
+  PRIMARY KEY (`order_id`),
+  KEY `customer_id` (`customer_id`),
+  KEY `address_id` (`address_id`),
+  CONSTRAINT `orders_ibfk_1` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`customer_id`),
+  CONSTRAINT `orders_ibfk_2` FOREIGN KEY (`address_id`) REFERENCES `addresses` (`address_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=215 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE `order_items` (
   `order_item_id` int NOT NULL AUTO_INCREMENT,
   `order_id` int NOT NULL,
@@ -209,22 +228,38 @@ CREATE TABLE `order_items` (
   KEY `item_id` (`item_id`),
   CONSTRAINT `order_items_ibfk_1` FOREIGN KEY (`order_id`) REFERENCES `orders` (`order_id`),
   CONSTRAINT `order_items_ibfk_2` FOREIGN KEY (`item_id`) REFERENCES `items` (`item_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB AUTO_INCREMENT=376 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-SHOW CREATE TABLE orders;
-CREATE TABLE `orders` (
-  `order_id` int NOT NULL AUTO_INCREMENT,
-  `customer_id` int NOT NULL,
-  `address_id` int NOT NULL,
-  `total_price` decimal(10,2) NOT NULL,
-  `status` varchar(50) DEFAULT 'Pending',
-  `payment_method` varchar(50) NOT NULL,
-  `order_type` varchar(50) DEFAULT 'one_time',
-  `discount` decimal(10,2) DEFAULT '0.00',
-  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`order_id`),
-  KEY `customer_id` (`customer_id`),
-  KEY `address_id` (`address_id`),
-  CONSTRAINT `orders_ibfk_1` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`customer_id`),
-  CONSTRAINT `orders_ibfk_2` FOREIGN KEY (`address_id`) REFERENCES `addresses` (`address_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+CREATE TABLE `roles` (
+  `role_id` int NOT NULL AUTO_INCREMENT,
+  `code` varchar(50) NOT NULL,
+  `name` varchar(100) NOT NULL,
+  `description` varchar(255) DEFAULT NULL,
+  `is_system` tinyint(1) NOT NULL DEFAULT '0',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`role_id`),
+  UNIQUE KEY `code` (`code`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE OR REPLACE
+ALGORITHM=UNDEFINED
+VIEW `customer_orders_view` AS
+SELECT 
+  c.customer_id AS customer_id,
+  c.name AS customer_name,
+  c.primary_mobile AS customer_phone,
+  c.email AS customer_email,
+  a.written_address AS address,
+  COUNT(o.order_id) AS no_of_orders
+FROM customers c
+LEFT JOIN addresses a 
+  ON c.customer_id = a.customer_id 
+  AND a.is_default = TRUE
+LEFT JOIN orders o 
+  ON c.customer_id = o.customer_id
+GROUP BY 
+  c.customer_id,
+  c.name,
+  c.primary_mobile,
+  c.email,
+  a.written_address;

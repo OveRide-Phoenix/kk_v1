@@ -16,6 +16,19 @@ interface ProductDetailsProps {
 export default function ProductDetails({ product, open, onOpenChange }: ProductDetailsProps) {
   if (!product || !open) return null
 
+  const MEAL_LABELS: Record<number, string> = {
+    1: "Breakfast",
+    2: "Lunch",
+    3: "Dinner",
+    4: "Condiments",
+  }
+
+  const mealBadges = Array.from(new Set(product.bld_ids || [])).map((mealId) => (
+    <Badge key={`meal-${mealId}`} variant="outline">
+      {MEAL_LABELS[mealId] ?? `BLD ${mealId}`}
+    </Badge>
+  ))
+
   return (
     <div
       className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-auto"
@@ -46,18 +59,8 @@ export default function ProductDetails({ product, open, onOpenChange }: ProductD
             <div className="space-y-4">
               <div>
                 <h2 className="text-2xl font-bold">{product.name}</h2>
-                <div className="flex items-center gap-2 mt-2">
-                  <Badge
-                    variant={
-                      product.item_type === "Breakfast"
-                        ? "default"
-                        : product.item_type === "Lunch"
-                          ? "secondary"
-                          : "outline"
-                    }
-                  >
-                    {product.item_type}
-                  </Badge>
+                <div className="flex flex-wrap items-center gap-2 mt-2">
+                  {mealBadges}
                   {product.is_combo && <Badge variant="outline">Combo</Badge>}
                   {product.is_condiment && <Badge variant="secondary">Condiment</Badge>}
                 </div>
@@ -115,27 +118,42 @@ export default function ProductDetails({ product, open, onOpenChange }: ProductD
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <h3 className="text-sm font-medium text-gray-500">Max Qty · Breakfast</h3>
-                  <p className="mt-1">{product.max_qty_breakfast ?? "—"}</p>
+              {product.is_condiment ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500">Max Qty · Condiments</h3>
+                    <p className="mt-1">{product.max_qty_condiments ?? "—"}</p>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500">Net Price</h3>
+                    <p className="mt-1">{product.net_price}</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-sm font-medium text-gray-500">Max Qty · Lunch</h3>
-                  <p className="mt-1">{product.max_qty_lunch ?? "—"}</p>
-                </div>
-              </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-500">Max Qty · Breakfast</h3>
+                      <p className="mt-1">{product.max_qty_breakfast ?? "—"}</p>
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-500">Max Qty · Lunch</h3>
+                      <p className="mt-1">{product.max_qty_lunch ?? "—"}</p>
+                    </div>
+                  </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <h3 className="text-sm font-medium text-gray-500">Max Qty · Dinner</h3>
-                  <p className="mt-1">{product.max_qty_dinner ?? "—"}</p>
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium text-gray-500">Net Price</h3>
-                  <p className="mt-1">{product.net_price}</p>
-                </div>
-              </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-500">Max Qty · Dinner</h3>
+                      <p className="mt-1">{product.max_qty_dinner ?? "—"}</p>
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-500">Net Price</h3>
+                      <p className="mt-1">{product.net_price}</p>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </CardContent>

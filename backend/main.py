@@ -5,7 +5,7 @@ import mysql.connector
 from mysql.connector import errorcode
 from fastapi import FastAPI, HTTPException, Query, Depends
 from pydantic import BaseModel, Field
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Set
 import random
 from collections import defaultdict
 from fastapi.middleware.cors import CORSMiddleware
@@ -33,6 +33,13 @@ from .utils.rbac import (
     make_role_summary,
     parse_role_ids,
     roles_to_json,
+)
+from .utils.combos import (
+    ensure_category_exists,
+    ensure_item_ids_exist,
+    fetch_combo_detail,
+    fetch_combos_with_items,
+    normalize_combo_items,
 )
 from .city_config import DEFAULT_CITY, CityCode, normalize_city_code, city_supports_food, city_supports_condiments
 
@@ -236,6 +243,142 @@ def attach_bld_ids(cursor, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return items
 
 
+def _is_condiment_from_blds(bld_ids: Iterable[Any], condiments_bld_id: Optional[int]) -> bool:
+    if condiments_bld_id is None:
+        return False
+    try:
+        normalized = {int(bid) for bid in bld_ids or []}
+    except (TypeError, ValueError):
+        return False
+    return condiments_bld_id in normalized
+
+
+def _ensure_valid_meal_combination(bld_ids: Iterable[int], condiments_bld_id: Optional[int]) -> None:
+    if condiments_bld_id is None:
+        return
+    normalized = [int(bid) for bid in bld_ids or []]
+    if not normalized:
+        return
+    has_condiments = condiments_bld_id in normalized
+    has_other = any(bid != condiments_bld_id for bid in normalized)
+    if has_condiments and has_other:
+        raise HTTPException(
+            status_code=400,
+            detail="Condiment items cannot be assigned to breakfast/lunch/dinner meals",
+        )
+
+
+def _resolve_category_id_by_name(cursor, category_name: str) -> Optional[int]:
+    cursor.execute(
+        """
+        SELECT category_id
+          FROM categories
+         WHERE LOWER(category_name) = LOWER(%s)
+         LIMIT 1
+        """,
+        (category_name,),
+    )
+    row = cursor.fetchone()
+    return _row_value(row, "category_id", 0) if row else None
+
+
+def _build_item_detail_columns(available_columns: Set[str]) -> List[str]:
+    def col(field: str, alias: Optional[str] = None, default: str = "NULL") -> str:
+        target = alias or field
+        return f"i.{field}" if field in available_columns else f"{default} AS {target}"
+
+    columns = [
+        "i.item_id",
+        "i.name",
+        col("description"),
+        col("alias"),
+        col("category_id"),
+        "c.category_name",
+        col("uom"),
+        col("weight_factor"),
+        col("weight_uom"),
+        col("hsn_code"),
+        col("factor"),
+        col("quantity_portion"),
+        col("buffer_percentage"),
+    ]
+
+    has_meal_specific_max = {
+        "max_qty_breakfast",
+        "max_qty_lunch",
+        "max_qty_dinner",
+    }.issubset(available_columns)
+    has_legacy_max = "max_qty" in available_columns
+
+    if has_meal_specific_max:
+        columns.extend(
+            [
+                "i.max_qty_breakfast",
+                "i.max_qty_lunch",
+                "i.max_qty_dinner",
+            ]
+        )
+    elif has_legacy_max:
+        columns.extend(
+            [
+                "i.max_qty AS max_qty_breakfast",
+                "i.max_qty AS max_qty_lunch",
+                "i.max_qty AS max_qty_dinner",
+            ]
+        )
+    else:
+        columns.extend(
+            [
+                "NULL AS max_qty_breakfast",
+                "NULL AS max_qty_lunch",
+                "NULL AS max_qty_dinner",
+            ]
+        )
+
+    if "max_qty_condiments" in available_columns:
+        columns.append("i.max_qty_condiments")
+    elif has_meal_specific_max:
+        columns.append("i.max_qty_dinner AS max_qty_condiments")
+    elif has_legacy_max:
+        columns.append("i.max_qty AS max_qty_condiments")
+    else:
+        columns.append("NULL AS max_qty_condiments")
+
+    columns.extend(
+        [
+            col("picture_url"),
+            col("breakfast_price"),
+            col("lunch_price"),
+            col("dinner_price"),
+            col("condiments_price"),
+            col("festival_price"),
+            col("cgst"),
+            col("sgst"),
+            col("igst"),
+            col("net_price"),
+        ]
+    )
+
+    columns.append(col("is_combo", default="0"))
+    return columns
+
+
+def _fetch_item_detail(cursor, item_id: int, available_columns: Set[str]) -> Optional[Dict[str, Any]]:
+    select_columns = _build_item_detail_columns(available_columns)
+    select_sql = ",\n                ".join(select_columns)
+    cursor.execute(
+        f"""
+        SELECT
+            {select_sql}
+        FROM items i
+        LEFT JOIN categories c ON i.category_id = c.category_id
+        WHERE i.item_id = %s
+        """,
+        (item_id,),
+    )
+    return cursor.fetchone()
+
+
 def filter_items_by_bld(items: List[Dict[str, Any]], bld_id: int) -> List[Dict[str, Any]]:
     target = int(bld_id)
     filtered: List[Dict[str, Any]] = []
@@ -387,6 +530,15 @@ def _ensure_menu_type_column(db) -> None:
                 "ALTER TABLE menu ADD COLUMN menu_type VARCHAR(20) NOT NULL DEFAULT 'ONE_DAY'"
             )
             db.commit()
+
+        # Ensure date is nullable
+        cursor.execute("SHOW COLUMNS FROM menu LIKE 'date'")
+        row = cursor.fetchone()
+        # row format: (Field, Type, Null, Key, Default, Extra)
+        if row and row[2] == 'NO':
+            cursor.execute("ALTER TABLE menu MODIFY date DATE NULL")
+            db.commit()
+
         _MENU_HAS_TYPE_COLUMN = True
     finally:
         cursor.close()
@@ -1511,7 +1663,6 @@ class ItemUpdatePayload(BaseModel):
     uom: Optional[str] = None
     weight_factor: Optional[float] = None
     weight_uom: Optional[str] = None
-    item_type: Optional[str] = None
     hsn_code: Optional[str] = None
     factor: Optional[float] = None
     quantity_portion: Optional[int] = None
@@ -1519,6 +1670,7 @@ class ItemUpdatePayload(BaseModel):
     max_qty_breakfast: Optional[int] = None
     max_qty_lunch: Optional[int] = None
     max_qty_dinner: Optional[int] = None
+    max_qty_condiments: Optional[int] = None
     picture_url: Optional[str] = None
     breakfast_price: Optional[float] = None
     lunch_price: Optional[float] = None
@@ -1531,7 +1683,63 @@ class ItemUpdatePayload(BaseModel):
     net_price: Optional[float] = None
     is_combo: Optional[bool] = None
     bld_ids: Optional[List[int]] = None
-    is_condiment: Optional[bool] = None
+
+
+class ItemCreatePayload(BaseModel):
+    name: str
+    uom: str
+    bld_ids: List[int]
+    description: Optional[str] = None
+    alias: Optional[str] = None
+    category_id: Optional[int] = None
+    weight_factor: Optional[float] = None
+    weight_uom: Optional[str] = None
+    hsn_code: Optional[str] = None
+    factor: Optional[float] = None
+    quantity_portion: Optional[int] = None
+    buffer_percentage: Optional[float] = None
+    max_qty_breakfast: Optional[int] = None
+    max_qty_lunch: Optional[int] = None
+    max_qty_dinner: Optional[int] = None
+    max_qty_condiments: Optional[int] = None
+    picture_url: Optional[str] = None
+    breakfast_price: Optional[float] = None
+    lunch_price: Optional[float] = None
+    dinner_price: Optional[float] = None
+    condiments_price: Optional[float] = None
+    festival_price: Optional[float] = None
+    cgst: Optional[float] = None
+    sgst: Optional[float] = None
+    igst: Optional[float] = None
+    net_price: Optional[float] = None
+    is_combo: Optional[bool] = None
+
+
+class ComboItemPayload(BaseModel):
+    item_id: int
+    quantity: int = Field(1, ge=1)
+
+
+class ComboCreatePayload(BaseModel):
+    combo_name: str
+    price: float = Field(ge=0)
+    category_id: int
+    items: List[ComboItemPayload] = Field(default_factory=list)
+
+
+class ComboUpdatePayload(BaseModel):
+    combo_name: Optional[str] = None
+    price: Optional[float] = Field(default=None, ge=0)
+    category_id: Optional[int] = None
+    items: Optional[List[ComboItemPayload]] = None
+
+
+class CategoryCreatePayload(BaseModel):
+    category_name: str = Field(..., min_length=1, max_length=100)
+
+
+class CategoryUpdatePayload(BaseModel):
+    category_name: str = Field(..., min_length=1, max_length=100)
 @app.get("/api/products/items", tags=["Products"])
 def get_all_items(
     only_condiments: Optional[bool] = Query(
@@ -1543,6 +1751,14 @@ def get_all_items(
     try:
         cursor.execute("SHOW COLUMNS FROM items")
         available_columns = {row["Field"] for row in cursor.fetchall()}
+        try:
+            condiments_bld_id = resolve_bld_id(cursor, CONDIMENTS_BLD_TYPE)
+        except HTTPException:
+            condiments_bld_id = None
+        try:
+            condiments_bld_id = resolve_bld_id(cursor, CONDIMENTS_BLD_TYPE)
+        except HTTPException:
+            condiments_bld_id = None
 
         has_meal_specific_max = {
             "max_qty_breakfast",
@@ -1550,7 +1766,7 @@ def get_all_items(
             "max_qty_dinner",
         }.issubset(available_columns)
         has_legacy_max = "max_qty" in available_columns
-        has_condiment_flag = "is_condiment" in available_columns
+        has_condiment_max = "max_qty_condiments" in available_columns
 
         max_columns_sql: List[str] = []
         if has_meal_specific_max:
@@ -1578,7 +1794,14 @@ def get_all_items(
                 ]
             )
 
-        is_condiment_sql = "i.is_condiment" if has_condiment_flag else "0 AS is_condiment"
+        if has_condiment_max:
+            max_columns_sql.append("i.max_qty_condiments")
+        elif has_meal_specific_max:
+            max_columns_sql.append("i.max_qty_dinner AS max_qty_condiments")
+        elif has_legacy_max:
+            max_columns_sql.append("i.max_qty AS max_qty_condiments")
+        else:
+            max_columns_sql.append("NULL AS max_qty_condiments")
 
         select_columns = [
             "i.item_id",
@@ -1590,7 +1813,6 @@ def get_all_items(
             "i.uom",
             "i.weight_factor",
             "i.weight_uom",
-            "i.item_type",
             "i.hsn_code",
             "i.factor",
             "i.quantity_portion",
@@ -1606,7 +1828,6 @@ def get_all_items(
             "i.sgst",
             "i.igst",
             "i.net_price",
-            is_condiment_sql,
         ]
 
         select_sql = ",\n                    ".join(select_columns)
@@ -1622,8 +1843,12 @@ def get_all_items(
 
         attach_bld_ids(cursor, records)
         normalized_records = []
+        try:
+            condiments_bld_id = resolve_bld_id(cursor, CONDIMENTS_BLD_TYPE)
+        except HTTPException:
+            condiments_bld_id = None
         for row in records:
-            row["is_condiment"] = bool(row.get("is_condiment"))
+            row["is_condiment"] = _is_condiment_from_blds(row.get("bld_ids"), condiments_bld_id)
             if only_condiments and not row["is_condiment"]:
                 continue
             normalized_records.append(row)
@@ -1635,21 +1860,28 @@ def get_all_items(
         db.close()
 
 
-@app.put("/api/products/items/{item_id}", tags=["Products"])
-def update_item(item_id: int, payload: ItemUpdatePayload, user: Dict[str, Any] = Depends(admin_required)):
+@app.post("/api/products/items", tags=["Products"])
+def create_item(payload: ItemCreatePayload, user: Dict[str, Any] = Depends(admin_required)):
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
         cursor.execute("SHOW COLUMNS FROM items")
         available_columns = {row["Field"] for row in cursor.fetchall()}
 
-        data = payload.model_dump(exclude_unset=True)
+        data = payload.model_dump()
         raw_bld_ids = data.pop("bld_ids", [])
         normalized_bld_ids = _validate_bld_ids(cursor, raw_bld_ids)
 
-        string_fields = {"name", "description", "alias", "uom", "weight_uom", "item_type", "hsn_code", "picture_url"}
-        nullable_string_fields = {"description", "alias", "weight_uom", "item_type", "hsn_code", "picture_url"}
-        int_fields = {"category_id", "quantity_portion", "max_qty_breakfast", "max_qty_lunch", "max_qty_dinner"}
+        string_fields = {"name", "description", "alias", "uom", "weight_uom", "hsn_code", "picture_url"}
+        nullable_string_fields = {"description", "alias", "weight_uom", "hsn_code", "picture_url"}
+        int_fields = {
+            "category_id",
+            "quantity_portion",
+            "max_qty_breakfast",
+            "max_qty_lunch",
+            "max_qty_dinner",
+            "max_qty_condiments",
+        }
         float_fields = {
             "weight_factor",
             "factor",
@@ -1664,7 +1896,7 @@ def update_item(item_id: int, payload: ItemUpdatePayload, user: Dict[str, Any] =
             "igst",
             "net_price",
         }
-        bool_fields = {"is_combo", "is_condiment"}
+        bool_fields = {"is_combo"}
 
         cleaned: Dict[str, Any] = {}
         for field, value in data.items():
@@ -1686,6 +1918,28 @@ def update_item(item_id: int, payload: ItemUpdatePayload, user: Dict[str, Any] =
                 value = 1 if value else 0
             cleaned[field] = value
 
+        if not cleaned.get("name"):
+            raise HTTPException(status_code=400, detail="name is required")
+        if not cleaned.get("uom"):
+            raise HTTPException(status_code=400, detail="uom is required")
+
+        try:
+            condiments_bld_id = resolve_bld_id(cursor, CONDIMENTS_BLD_TYPE)
+        except HTTPException:
+            condiments_bld_id = None
+        is_condiment_item = _is_condiment_from_blds(normalized_bld_ids, condiments_bld_id)
+        _ensure_valid_meal_combination(normalized_bld_ids, condiments_bld_id)
+
+        _ensure_valid_meal_combination(normalized_bld_ids, condiments_bld_id)
+
+        if is_condiment_item and not cleaned.get("category_id"):
+            snacks_category_id = _resolve_category_id_by_name(cursor, "Snacks")
+            if snacks_category_id is not None:
+                cleaned["category_id"] = snacks_category_id
+
+        if not normalized_bld_ids:
+            raise HTTPException(status_code=400, detail="At least one meal assignment is required")
+
         field_map = {
             "name": "name",
             "description": "description",
@@ -1694,7 +1948,6 @@ def update_item(item_id: int, payload: ItemUpdatePayload, user: Dict[str, Any] =
             "uom": "uom",
             "weight_factor": "weight_factor",
             "weight_uom": "weight_uom",
-            "item_type": "item_type",
             "hsn_code": "hsn_code",
             "factor": "factor",
             "quantity_portion": "quantity_portion",
@@ -1702,6 +1955,7 @@ def update_item(item_id: int, payload: ItemUpdatePayload, user: Dict[str, Any] =
             "max_qty_breakfast": "max_qty_breakfast",
             "max_qty_lunch": "max_qty_lunch",
             "max_qty_dinner": "max_qty_dinner",
+            "max_qty_condiments": "max_qty_condiments",
             "picture_url": "picture_url",
             "breakfast_price": "breakfast_price",
             "lunch_price": "lunch_price",
@@ -1713,7 +1967,147 @@ def update_item(item_id: int, payload: ItemUpdatePayload, user: Dict[str, Any] =
             "igst": "igst",
             "net_price": "net_price",
             "is_combo": "is_combo",
-            "is_condiment": "is_condiment",
+        }
+
+        field_map = {field: column for field, column in field_map.items() if column in available_columns}
+
+        columns: List[str] = []
+        placeholders: List[str] = []
+        values: List[Any] = []
+
+        for field, column in field_map.items():
+            if field not in cleaned:
+                continue
+            columns.append(column)
+            placeholders.append("%s")
+            values.append(cleaned[field])
+
+        insert_query = f"INSERT INTO items ({', '.join(columns)}) VALUES ({', '.join(placeholders)})"
+        cursor.execute(insert_query, values)
+        item_id = cursor.lastrowid
+
+        set_item_blds(cursor, item_id, normalized_bld_ids)
+
+        created_item = _fetch_item_detail(cursor, item_id, available_columns)
+        if created_item:
+            created_item["bld_ids"] = get_item_blds(cursor, item_id)
+            created_item["is_combo"] = bool(created_item.get("is_combo", False))
+            created_item["is_condiment"] = _is_condiment_from_blds(created_item.get("bld_ids"), condiments_bld_id)
+
+        db.commit()
+        log_admin_action(
+            db,
+            admin_id=user.get("admin_id") if isinstance(user, dict) else None,
+            action_type="ADD",
+            entity_type="ITEM",
+            entity_id=item_id,
+            description=f"Created item {item_id}",
+        )
+
+        return {
+            "success": True,
+            "item_id": item_id,
+            "item": created_item,
+        }
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.put("/api/products/items/{item_id}", tags=["Products"])
+def update_item(item_id: int, payload: ItemUpdatePayload, user: Dict[str, Any] = Depends(admin_required)):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute("SHOW COLUMNS FROM items")
+        available_columns = {row["Field"] for row in cursor.fetchall()}
+
+        data = payload.model_dump(exclude_unset=True)
+        raw_bld_ids = data.pop("bld_ids", [])
+        normalized_bld_ids = _validate_bld_ids(cursor, raw_bld_ids)
+
+        string_fields = {"name", "description", "alias", "uom", "weight_uom", "hsn_code", "picture_url"}
+        nullable_string_fields = {"description", "alias", "weight_uom", "hsn_code", "picture_url"}
+        int_fields = {
+            "category_id",
+            "quantity_portion",
+            "max_qty_breakfast",
+            "max_qty_lunch",
+            "max_qty_dinner",
+            "max_qty_condiments",
+        }
+        float_fields = {
+            "weight_factor",
+            "factor",
+            "buffer_percentage",
+            "breakfast_price",
+            "lunch_price",
+            "dinner_price",
+            "condiments_price",
+            "festival_price",
+            "cgst",
+            "sgst",
+            "igst",
+            "net_price",
+        }
+        bool_fields = {"is_combo"}
+
+        cleaned: Dict[str, Any] = {}
+        for field, value in data.items():
+            if field in string_fields and isinstance(value, str):
+                value = value.strip()
+                if not value and field in nullable_string_fields:
+                    value = None
+            if field in int_fields and value is not None:
+                try:
+                    value = int(value)
+                except (TypeError, ValueError):
+                    value = None
+            if field in float_fields and value is not None:
+                try:
+                    value = float(value)
+                except (TypeError, ValueError):
+                    value = None
+            if field in bool_fields and value is not None:
+                value = 1 if value else 0
+            cleaned[field] = value
+
+        is_condiment_item = _is_condiment_from_blds(normalized_bld_ids, condiments_bld_id)
+        if is_condiment_item and not cleaned.get("category_id"):
+            snacks_category_id = _resolve_category_id_by_name(cursor, "Snacks")
+            if snacks_category_id is not None:
+                cleaned["category_id"] = snacks_category_id
+
+        field_map = {
+            "name": "name",
+            "description": "description",
+            "alias": "alias",
+            "category_id": "category_id",
+            "uom": "uom",
+            "weight_factor": "weight_factor",
+            "weight_uom": "weight_uom",
+            "hsn_code": "hsn_code",
+            "factor": "factor",
+            "quantity_portion": "quantity_portion",
+            "buffer_percentage": "buffer_percentage",
+            "max_qty_breakfast": "max_qty_breakfast",
+            "max_qty_lunch": "max_qty_lunch",
+            "max_qty_dinner": "max_qty_dinner",
+            "max_qty_condiments": "max_qty_condiments",
+            "picture_url": "picture_url",
+            "breakfast_price": "breakfast_price",
+            "lunch_price": "lunch_price",
+            "dinner_price": "dinner_price",
+            "condiments_price": "condiments_price",
+            "festival_price": "festival_price",
+            "cgst": "cgst",
+            "sgst": "sgst",
+            "igst": "igst",
+            "net_price": "net_price",
+            "is_combo": "is_combo",
         }
 
         field_map = {field: column for field, column in field_map.items() if column in available_columns}
@@ -1752,58 +2146,7 @@ def update_item(item_id: int, payload: ItemUpdatePayload, user: Dict[str, Any] =
 
         db.commit()
 
-        updated_item = None
-        try:
-            cursor.execute(
-                """
-                SELECT 
-                    i.item_id, i.name, i.description, i.alias, i.category_id, c.category_name,
-                    i.uom, i.weight_factor, i.weight_uom, i.item_type, i.hsn_code, i.factor,
-                    i.quantity_portion,
-                    i.buffer_percentage,
-                    i.max_qty_breakfast,
-                    i.max_qty_lunch,
-                    i.max_qty_dinner,
-                    i.picture_url,
-                    i.breakfast_price, i.lunch_price, i.dinner_price, i.condiments_price, i.festival_price,
-                    i.cgst, i.sgst, i.igst, i.net_price,
-                    i.is_combo,
-                    i.is_condiment
-                FROM items i
-                LEFT JOIN categories c ON i.category_id = c.category_id
-                WHERE i.item_id = %s
-                """,
-                (item_id,),
-            )
-            updated_item = cursor.fetchone()
-        except mysql.connector.Error as err:
-            if err.errno == errorcode.ER_BAD_FIELD_ERROR:
-                cursor.execute(
-                    """
-                    SELECT 
-                        i.item_id, i.name, i.description, i.alias, i.category_id, c.category_name,
-                        i.uom, i.weight_factor, i.weight_uom, i.item_type, i.hsn_code, i.factor,
-                        i.quantity_portion,
-                        i.buffer_percentage,
-                        i.max_qty_breakfast,
-                        i.max_qty_lunch,
-                        i.max_qty_dinner,
-                        i.picture_url,
-                        i.breakfast_price, i.lunch_price, i.dinner_price, i.condiments_price, i.festival_price,
-                        i.cgst, i.sgst, i.igst, i.net_price,
-                        0 AS is_combo,
-                        0 AS is_condiment
-                    FROM items i
-                    LEFT JOIN categories c ON i.category_id = c.category_id
-                    WHERE i.item_id = %s
-                    """,
-                    (item_id,),
-                )
-                updated_item = cursor.fetchone()
-                if updated_item is not None:
-                    updated_item["is_combo"] = False
-            else:
-                raise
+        updated_item = _fetch_item_detail(cursor, item_id, available_columns)
 
         log_admin_action(
             db,
@@ -1820,7 +2163,7 @@ def update_item(item_id: int, payload: ItemUpdatePayload, user: Dict[str, Any] =
             return {"success": True, "item_id": item_id, "updated_fields": updated_fields}
 
         updated_item["is_combo"] = bool(updated_item.get("is_combo", False))
-        updated_item["is_condiment"] = bool(updated_item.get("is_condiment", False))
+        updated_item["is_condiment"] = _is_condiment_from_blds(updated_item.get("bld_ids"), condiments_bld_id)
 
         return {
             "success": True,
@@ -1839,51 +2182,154 @@ def get_all_combos():
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
-        # Step 1: Get all combos and their category
-        cursor.execute("""
-            SELECT 
-                c.combo_id,
-                c.combo_name,
-                c.price,
-                c.category_id,
-                cat.category_name
-            FROM combos c
-            LEFT JOIN categories cat ON c.category_id = cat.category_id
-        """)
-        combos = cursor.fetchall()
-
-        # Step 2: Get all items in each combo
-        cursor.execute("""
-            SELECT 
-                ci.combo_id,
-                ci.item_id,
-                ci.quantity,
-                i.name AS item_name
-            FROM combo_items ci
-            LEFT JOIN items i ON ci.item_id = i.item_id
-        """)
-        combo_items = cursor.fetchall()
-
-        # Step 3: Map combo_id → list of items
-        combo_item_map = {}
-        for item in combo_items:
-            combo_id = item["combo_id"]
-            if combo_id not in combo_item_map:
-                combo_item_map[combo_id] = []
-            combo_item_map[combo_id].append({
-                "itemId": item["item_id"],
-                "name": item["item_name"],
-                "quantity": item["quantity"]
-            })
-
-        # Step 4: Attach includedItems to each combo
-        for combo in combos:
-            combo_id = combo["combo_id"]
-            combo["includedItems"] = combo_item_map.get(combo_id, [])
-
-        return combos
-
+        return fetch_combos_with_items(cursor)
     except mysql.connector.Error as err:
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.post("/api/products/combos", tags=["Products"])
+def create_combo(payload: ComboCreatePayload, user: Dict[str, Any] = Depends(admin_required)):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        normalized_name = payload.combo_name.strip()
+        if not normalized_name:
+            raise HTTPException(status_code=400, detail="combo_name is required")
+        ensure_category_exists(cursor, payload.category_id)
+        normalized_items = normalize_combo_items(payload.items)
+        ensure_item_ids_exist(cursor, (item["item_id"] for item in normalized_items))
+
+        cursor.execute(
+            "INSERT INTO combos (combo_name, price, category_id) VALUES (%s, %s, %s)",
+            (normalized_name, float(payload.price), payload.category_id),
+        )
+        combo_id = cursor.lastrowid
+
+        if normalized_items:
+            values = [
+                (combo_id, entry["item_id"], entry["quantity"])
+                for entry in normalized_items
+            ]
+            cursor.executemany(
+                "INSERT INTO combo_items (combo_id, item_id, quantity) VALUES (%s, %s, %s)",
+                values,
+            )
+
+        db.commit()
+
+        log_admin_action(
+            db,
+            admin_id=user.get("admin_id") if isinstance(user, dict) else None,
+            action_type="ADD",
+            entity_type="COMBO",
+            entity_id=combo_id,
+            description=f"Created combo {combo_id}",
+        )
+
+        combo = fetch_combo_detail(cursor, combo_id)
+        return combo or {"combo_id": combo_id}
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.put("/api/products/combos/{combo_id}", tags=["Products"])
+def update_combo(combo_id: int, payload: ComboUpdatePayload, user: Dict[str, Any] = Depends(admin_required)):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT 1 FROM combos WHERE combo_id = %s", (combo_id,))
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Combo not found")
+
+        fields: List[str] = []
+        values: List[Any] = []
+
+        if payload.combo_name is not None:
+            normalized_name = payload.combo_name.strip()
+            if not normalized_name:
+                raise HTTPException(status_code=400, detail="combo_name cannot be empty")
+            fields.append("combo_name = %s")
+            values.append(normalized_name)
+        if payload.price is not None:
+            fields.append("price = %s")
+            values.append(float(payload.price))
+        if payload.category_id is not None:
+            ensure_category_exists(cursor, payload.category_id)
+            fields.append("category_id = %s")
+            values.append(payload.category_id)
+
+        if fields:
+            values.append(combo_id)
+            cursor.execute(
+                f"UPDATE combos SET {', '.join(fields)} WHERE combo_id = %s",
+                values,
+            )
+
+        if payload.items is not None:
+            normalized_items = normalize_combo_items(payload.items)
+            ensure_item_ids_exist(cursor, (item["item_id"] for item in normalized_items))
+            cursor.execute("DELETE FROM combo_items WHERE combo_id = %s", (combo_id,))
+            values = [
+                (combo_id, entry["item_id"], entry["quantity"])
+                for entry in normalized_items
+            ]
+            cursor.executemany(
+                "INSERT INTO combo_items (combo_id, item_id, quantity) VALUES (%s, %s, %s)",
+                values,
+            )
+
+        db.commit()
+
+        log_admin_action(
+            db,
+            admin_id=user.get("admin_id") if isinstance(user, dict) else None,
+            action_type="UPDATE",
+            entity_type="COMBO",
+            entity_id=combo_id,
+            description=f"Updated combo {combo_id}",
+        )
+
+        combo = fetch_combo_detail(cursor, combo_id)
+        return combo or {"combo_id": combo_id}
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.delete("/api/products/combos/{combo_id}", tags=["Products"])
+def delete_combo(combo_id: int, user: Dict[str, Any] = Depends(admin_required)):
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute("SELECT 1 FROM combos WHERE combo_id = %s", (combo_id,))
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Combo not found")
+
+        cursor.execute("DELETE FROM combos WHERE combo_id = %s", (combo_id,))
+        db.commit()
+
+        log_admin_action(
+            db,
+            admin_id=user.get("admin_id") if isinstance(user, dict) else None,
+            action_type="DELETE",
+            entity_type="COMBO",
+            entity_id=combo_id,
+            description=f"Deleted combo {combo_id}",
+        )
+
+        return {"status": "deleted", "combo_id": combo_id}
+    except mysql.connector.Error as err:
+        db.rollback()
         raise HTTPException(status_code=500, detail=str(err))
     finally:
         cursor.close()
@@ -1925,6 +2371,113 @@ def get_all_categories():
         cursor.close()
         db.close()
 
+
+@app.post("/api/products/categories", tags=["Products"])
+def create_category(payload: CategoryCreatePayload, user: Dict[str, Any] = Depends(admin_required)):
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        normalized_name = payload.category_name.strip()
+        if not normalized_name:
+            raise HTTPException(status_code=400, detail="category_name is required")
+
+        cursor.execute(
+            "INSERT INTO categories (category_name) VALUES (%s)",
+            (normalized_name,),
+        )
+        category_id = cursor.lastrowid
+        db.commit()
+
+        log_admin_action(
+            db,
+            admin_id=user.get("admin_id") if isinstance(user, dict) else None,
+            action_type="ADD",
+            entity_type="CATEGORY",
+            entity_id=category_id,
+            description=f"Created category {category_id}",
+        )
+
+        return {"category_id": category_id, "category_name": normalized_name}
+    except mysql.connector.Error as err:
+        db.rollback()
+        if err.errno == errorcode.ER_DUP_ENTRY:
+            raise HTTPException(status_code=400, detail="Category already exists")
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.put("/api/products/categories/{category_id}", tags=["Products"])
+def update_category(category_id: int, payload: CategoryUpdatePayload, user: Dict[str, Any] = Depends(admin_required)):
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute("SELECT 1 FROM categories WHERE category_id = %s", (category_id,))
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Category not found")
+
+        normalized_name = payload.category_name.strip()
+        if not normalized_name:
+            raise HTTPException(status_code=400, detail="category_name is required")
+
+        cursor.execute(
+            "UPDATE categories SET category_name = %s WHERE category_id = %s",
+            (normalized_name, category_id),
+        )
+        db.commit()
+
+        log_admin_action(
+            db,
+            admin_id=user.get("admin_id") if isinstance(user, dict) else None,
+            action_type="UPDATE",
+            entity_type="CATEGORY",
+            entity_id=category_id,
+            description=f"Updated category {category_id}",
+        )
+
+        return {"category_id": category_id, "category_name": normalized_name}
+    except mysql.connector.Error as err:
+        db.rollback()
+        if err.errno == errorcode.ER_DUP_ENTRY:
+            raise HTTPException(status_code=400, detail="Category already exists")
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.delete("/api/products/categories/{category_id}", tags=["Products"])
+def delete_category(category_id: int, user: Dict[str, Any] = Depends(admin_required)):
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute("SELECT 1 FROM categories WHERE category_id = %s", (category_id,))
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Category not found")
+
+        cursor.execute("DELETE FROM categories WHERE category_id = %s", (category_id,))
+        db.commit()
+
+        log_admin_action(
+            db,
+            admin_id=user.get("admin_id") if isinstance(user, dict) else None,
+            action_type="DELETE",
+            entity_type="CATEGORY",
+            entity_id=category_id,
+            description=f"Deleted category {category_id}",
+        )
+
+        return {"status": "deleted", "category_id": category_id}
+    except mysql.connector.Error as err:
+        db.rollback()
+        if err.errno == errorcode.ER_ROW_IS_REFERENCED or err.errno == errorcode.ER_ROW_IS_REFERENCED_2:
+            raise HTTPException(status_code=400, detail="Category is in use and cannot be deleted")
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
 # 1. Fetch available items for a given meal (BLD)
 @app.get("/api/menu/available-items", tags=["Daily Menu"])
 def get_available_items(bld_type: str = Query(..., description="BLD type: Breakfast, Lunch, Dinner, Condiments")):
@@ -1934,7 +2487,6 @@ def get_available_items(bld_type: str = Query(..., description="BLD type: Breakf
         bld_id = resolve_bld_id(cursor, bld_type)
 
         canonical_meal = normalize_meal_type(bld_type)
-        require_condiments_only = canonical_meal == CONDIMENTS_BLD_TYPE
         query = """
             SELECT 
                 i.item_id,
@@ -1945,7 +2497,6 @@ def get_available_items(bld_type: str = Query(..., description="BLD type: Breakf
                 i.uom,
                 i.weight_factor,
                 i.weight_uom,
-                i.item_type,
                 i.hsn_code,
                 i.factor,
                 i.quantity_portion,
@@ -1953,6 +2504,7 @@ def get_available_items(bld_type: str = Query(..., description="BLD type: Breakf
                 i.max_qty_breakfast,
                 i.max_qty_lunch,
                 i.max_qty_dinner,
+                i.max_qty_condiments,
                 i.picture_url,
                 i.breakfast_price,
                 i.lunch_price,
@@ -1971,8 +2523,6 @@ def get_available_items(bld_type: str = Query(..., description="BLD type: Breakf
                    AND map.bld_id = %s
             )
         """
-        if require_condiments_only:
-            query += " AND i.is_condiment = 1"
         legacy_mode = False
         try:
             cursor.execute(query, (bld_id,))
@@ -1990,12 +2540,12 @@ def get_available_items(bld_type: str = Query(..., description="BLD type: Breakf
                         i.uom,
                         i.weight_factor,
                         i.weight_uom,
-                        i.item_type,
                         i.hsn_code,
                         i.factor,
                         i.quantity_portion,
                         i.buffer_percentage,
                         i.max_qty,
+                        i.max_qty AS max_qty_condiments,
                         i.picture_url,
                         i.breakfast_price,
                         i.lunch_price,
@@ -2014,8 +2564,6 @@ def get_available_items(bld_type: str = Query(..., description="BLD type: Breakf
                            AND map.bld_id = %s
                     )
                 """
-                if require_condiments_only:
-                    legacy_query += " AND i.is_condiment = 1"
                 cursor.execute(legacy_query, (bld_id,))
                 items = cursor.fetchall()
             else:
@@ -2027,6 +2575,7 @@ def get_available_items(bld_type: str = Query(..., description="BLD type: Breakf
                 item["max_qty_breakfast"] = legacy_value
                 item["max_qty_lunch"] = legacy_value
                 item["max_qty_dinner"] = legacy_value
+                item["max_qty_condiments"] = item.get("max_qty_condiments", legacy_value)
 
         attach_bld_ids(cursor, items)
         return filter_items_by_bld(items, bld_id)
@@ -2112,7 +2661,8 @@ def _get_daily_menu_internal(
                 mi.sort_order,
                 i.max_qty_breakfast,
                 i.max_qty_lunch,
-                i.max_qty_dinner
+                i.max_qty_dinner,
+                i.max_qty_condiments
             FROM menu_items mi
             JOIN items i ON mi.item_id = i.item_id
             WHERE mi.menu_id = %s
@@ -2155,7 +2705,7 @@ def _get_daily_menu_internal(
             "Breakfast": "max_qty_breakfast",
             "Lunch": "max_qty_lunch",
             "Dinner": "max_qty_dinner",
-            "Condiments": "max_qty_dinner",  # fallback; condiments typically align with dinner defaults
+            "Condiments": "max_qty_condiments",
         }.get(canonical_bld_type, "max_qty_breakfast")
 
         return {
@@ -2225,7 +2775,7 @@ class AutoMenuRequest(BaseModel):
     city_code: Optional[str] = None
 
 
-MEAL_TYPES = ["Breakfast", "Lunch", "Dinner"]
+MEAL_TYPES = ["Breakfast", "Lunch", "Dinner", "Condiments"]
 
 @app.post("/api/menu", tags=["Daily Menu"])
 def upsert_daily_menu(payload: DailyMenuPayload):
@@ -2402,10 +2952,11 @@ def auto_generate_daily_menu(payload: AutoMenuRequest, _: Dict[str, Any] = Depen
             "Breakfast": "max_qty_breakfast",
             "Lunch": "max_qty_lunch",
             "Dinner": "max_qty_dinner",
-            "Condiments": "max_qty_dinner",
+            "Condiments": "max_qty_condiments",
         }.get(meal, "max_qty_breakfast")
 
         allow_default = meal != "Dinner"
+        is_condiments_meal = meal == "Condiments"
         menu_items: List[MenuItemPayload] = []
         for index, item in enumerate(limited_items, start=1):
             item_max_qty = item.get(meal_field)
@@ -2427,19 +2978,20 @@ def auto_generate_daily_menu(payload: AutoMenuRequest, _: Dict[str, Any] = Depen
             )
 
         menu_payload = DailyMenuPayload(
-            date=target_date,
+            date=None if is_condiments_meal else target_date,
             bld_type=meal,
             is_festival=False,
-            period_type="one_day",
+            period_type=None if is_condiments_meal else "one_day",
             items=menu_items,
             city_code=target_city,
+            menu_type=MENU_TYPE_CONDIMENTS if is_condiments_meal else MENU_TYPE_ONE_DAY,
         )
 
         menu_data = upsert_daily_menu(menu_payload)
         menu_id = menu_data["menu_id"]
         released = False
 
-        if meal in ("Breakfast", "Lunch"):
+        if meal in ("Breakfast", "Lunch") or is_condiments_meal:
             release_menu(menu_id)
             released = True
 
@@ -2476,10 +3028,33 @@ def clear_daily_menu(payload: AutoMenuRequest, _: Dict[str, Any] = Depends(devel
                     }
                     continue
                 raise
-            cursor.execute(
-                "SELECT menu_id FROM menu WHERE date = %s AND bld_id = %s AND city_code = %s LIMIT 1",
-                (target_date, bld_id, target_city),
-            )
+            is_condiments_meal = meal == "Condiments"
+            if is_condiments_meal:
+                cursor.execute(
+                    """
+                    SELECT menu_id
+                      FROM menu
+                     WHERE bld_id = %s
+                       AND city_code = %s
+                       AND menu_type = %s
+                       AND date IS NULL
+                     LIMIT 1
+                    """,
+                    (bld_id, target_city, MENU_TYPE_CONDIMENTS),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT menu_id
+                      FROM menu
+                     WHERE date = %s
+                       AND bld_id = %s
+                       AND city_code = %s
+                       AND menu_type = %s
+                     LIMIT 1
+                    """,
+                    (target_date, bld_id, target_city, MENU_TYPE_ONE_DAY),
+                )
             menu_row = cursor.fetchone()
             if not menu_row:
                 summary[meal] = {"status": "absent"}
@@ -2561,6 +3136,7 @@ def _fetch_items_for_meal(bld_type: str) -> List[Dict[str, Any]]:
                 i.max_qty_breakfast,
                 i.max_qty_lunch,
                 i.max_qty_dinner,
+                i.max_qty_condiments,
                 i.breakfast_price,
                 i.lunch_price,
                 i.dinner_price,

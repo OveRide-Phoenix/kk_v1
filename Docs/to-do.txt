@@ -1,6 +1,6 @@
 #---------------------------------------------------------------------------------------------------------------
  ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- DO THIS FIRST- can we make the todays menu section itself the ordering page, so if the customer is logged in it shows add to cart + - buttons just like the new order page...else it shows just the menu and the register now and sign in button also sticks with the breakfast, lunch, dinner, condiments selector
-THEN DO NOTES APP - DO THIS DA!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+THEN DO NOTES APP - DO THIS DA!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ✅
 THEN MOVE Extension notes to here..
 #---------------------------------------------------------------------------------------------------------------
 
@@ -58,9 +58,13 @@ THEN MOVE Extension notes to here..
 
   im getting this for seed..so please check both these errors!
 
-- [] condiments form
+- [✅?] condiments form
 
-- [] combos concept and form and edit and logic
+✅ to the add product dialog box, there is a mark as condiment, what does that do? if not that then mark it as a condiment item, and also add a mzx qty of condiment, if i mark as a condiment then the max qty breakfast lunch dinner can be hidden only max qty for condiments will be shown..make sure you see how the backend also handles it..also remmeber that the condiments in the menu will be weeklong or till-stocks-last..so make these chagnes to handle condiments
+
+
+
+- [✅] combos concept and form and edit and logic
 
 - [✅] planned qty ->  make it max qty - revamp daily menu, no need for qty talk
 
@@ -274,6 +278,23 @@ THEN MOVE Extension notes to here..
       ---
 
       **Proceed to implement exactly as above. Do not modify unrelated parts, types, or UI beyond what’s specified.**
+
+
+
+
+CONDIMENTS - when we added to the menu
+1. spices, pickles happla
+2. snacks 
+3. ready mixes
+4. weekend specials/sweets - orders taken till antha and delivery date..
+
+
+
+if an item is undersold then drop the planned qty
+
+
+kitchen priduction is based on revised plan qty
+
 
 
 - [ ] reorderable sidebar!! give a small edit icon in the bottom right, and i hsould be able to reorder it..(store preferences in a new table?)
