@@ -18,28 +18,7 @@ CONDIMENTS - when we added to the menu
 if an item is undersold then drop the planned qty
 
 
-kitchen priduction is based on revised plan qty
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+kitchen production is based on revised plan qty
 
 
 
