@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Onboarding - Kuteera Kitchen</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "cream-bg": "#fdfaf1",
+                        "primary-brown": "#8D4925",
+                        "dark-green": "#1b4332",
+                    },
+                    fontFamily: {
+                        "display": ["Work Sans", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "ios": "16px",
+                    },
+                },
+            },
+        }
+    </script>
+<style type="text/tailwindcss">
+        :root {
+            --cream: #fdfaf1;
+            --brown: #8D4925;
+            --green: #1b4332;
+        }
+        body {
+            background-color: var(--cream);
+            min-height: 100dvh;
+        }
+        .illustration-filter {
+            filter: sepia(0.2) contrast(1.1);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-display antialiased bg-cream-bg text-primary-brown">
+<div class="relative flex min-h-screen w-full flex-col overflow-x-hidden max-w-[430px] mx-auto bg-cream-bg">
+<div class="h-12 w-full"></div>
+<header class="flex items-center justify-between px-6 pt-2 pb-2">
+<div class="w-10"></div>
+<div class="flex-1 text-center">
+<span class="text-dark-green font-bold tracking-widest text-[10px] uppercase">Kuteera Kitchen</span>
+</div>
+<button class="w-12 text-right">
+<span class="text-primary-brown/60 text-sm font-medium hover:text-primary-brown transition-colors cursor-pointer">Skip</span>
+</button>
+</header>
+<main class="flex-1 flex flex-col justify-center px-6">
+<div class="@container">
+<div class="relative w-full aspect-square max-h-[360px] mx-auto rounded-ios overflow-hidden bg-white/30 flex items-center justify-center">
+<div class="absolute inset-0 bg-gradient-to-br from-dark-green/5 to-transparent"></div>
+<div class="illustration-filter w-full h-full">
+<img alt="Home-style Meal Illustration" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDJnYvVRw9mZxHaRtRsu6XuU8F18tv1SWawJGf0qmUUKKeOnr4tsUJU0wwipBSbHaxbSiTLAaWtdMcVuczS7zEaowP7g4NSkwYgx3Ss3K_sj7-klmUhT6ecozJtK2fxPwUd3mpOac-AAPtWcVKPnCumbLAILVGTKx2_nLiLLv5wfzBmcuwmX3RbsDJfgidliKrNOV2K9Y0f9uOHz-Ag-lN6_dJFCg1BSbnzjALU8MRfsp8omLV3YHfXLv9tJ2BfmwT1G1pZAFNphvM"/>
+</div>
+</div>
+</div>
+<div class="mt-10 text-center space-y-4">
+<h1 class="text-primary-brown text-[28px] font-bold leading-tight tracking-tight px-2">
+                    Fresh Home-style Meals Delivered Daily
+                </h1>
+<p class="text-dark-green/70 text-[16px] leading-relaxed px-4">
+                    Taste the love of a home-cooked meal, prepared with health and hygiene in mind.
+                </p>
+</div>
+</main>
+<footer class="px-6 pb-10 pt-8 flex flex-col items-center gap-8">
+<div class="flex flex-row items-center justify-center gap-2.5">
+<div class="h-1.5 w-6 rounded-full bg-dark-green"></div>
+<div class="h-1.5 w-1.5 rounded-full bg-dark-green/20"></div>
+<div class="h-1.5 w-1.5 rounded-full bg-dark-green/20"></div>
+</div>
+<button class="w-full bg-primary-brown hover:bg-primary-brown/90 text-white font-bold py-4 rounded-ios shadow-lg shadow-primary-brown/15 transition-all flex items-center justify-center gap-2">
+<span class="text-[17px]">Next</span>
+<span class="material-symbols-outlined text-xl">arrow_forward</span>
+</button>
+<div class="w-32 h-1.5 bg-black/5 rounded-full mt-2"></div>
+</footer>
+</div>
+
+</body></html>

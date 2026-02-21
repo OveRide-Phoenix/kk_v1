@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Subscription Plans - Kuteera Kitchen</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@300;400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "cream": "#fdfaf1",
+                        "dark-green": "#1b4332",
+                        "bright-brown": "#8D4925",
+                        "dark-brown-text": "#3d2b1f",
+                    },
+                    fontFamily: {
+                        "display": ["Work Sans", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "ios": "16px",
+                    },
+                },
+            },
+        }
+    </script>
+<style type="text/tailwindcss">
+        :root {
+            --cream: #fdfaf1;
+            --dark-green: #1b4332;
+            --bright-brown: #8D4925;
+            --dark-brown-text: #3d2b1f;
+        }
+        body {
+            min-height: 100dvh;
+            background-color: var(--cream);
+            color: var(--dark-brown-text);
+        }
+        .fill-1 { font-variation-settings: 'FILL' 1; }
+        .ios-shadow {
+            shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-display flex flex-col">
+<header class="sticky top-0 z-50 bg-[var(--cream)]/80 backdrop-blur-md border-b border-[var(--dark-brown-text)]/5 px-4 py-4 flex items-center justify-between">
+<button class="flex items-center justify-center size-10 rounded-full hover:bg-[var(--dark-brown-text)]/5 transition-colors">
+<span class="material-symbols-outlined text-[var(--dark-brown-text)]">arrow_back_ios_new</span>
+</button>
+<h1 class="text-lg font-bold tracking-tight text-[var(--dark-brown-text)]">Subscription Plans</h1>
+<div class="size-10"></div>
+</header>
+<main class="flex-1 px-4 py-6 space-y-6">
+<div class="flex p-1 bg-[var(--bright-brown)]/10 rounded-ios max-w-sm mx-auto">
+<button class="flex-1 py-2 text-sm font-semibold rounded-[12px] bg-[var(--bright-brown)] text-[var(--cream)] shadow-sm">Monthly</button>
+<button class="flex-1 py-2 text-sm font-medium text-[var(--dark-brown-text)]/60">Weekly</button>
+</div>
+<div class="space-y-6">
+<div class="relative overflow-hidden rounded-ios border border-[var(--bright-brown)]/10 bg-white ios-shadow">
+<div class="bg-[var(--dark-green)] px-4 py-1.5 flex justify-between items-center text-[var(--cream)]">
+<span class="text-[10px] font-black uppercase tracking-widest">Active Status</span>
+<span class="material-symbols-outlined text-sm fill-1">check_circle</span>
+</div>
+<div class="p-6">
+<div class="flex justify-between items-start mb-4">
+<div>
+<h2 class="text-xl font-bold text-[var(--bright-brown)]">Monthly Veg Plan</h2>
+<p class="text-sm text-[var(--dark-brown-text)]/60">Authentic South-Indian Flavors</p>
+</div>
+<div class="text-right">
+<p class="text-3xl font-black text-[var(--dark-brown-text)]">₹2,999</p>
+<p class="text-xs font-medium text-[var(--dark-brown-text)]/40 uppercase tracking-tighter">per month</p>
+</div>
+</div>
+<ul class="space-y-3 mb-6">
+<li class="flex items-center gap-3 text-sm">
+<span class="material-symbols-outlined text-[var(--dark-green)] text-lg fill-1">check_circle</span>
+<span>Daily Lunch &amp; Dinner Delivery</span>
+</li>
+<li class="flex items-center gap-3 text-sm">
+<span class="material-symbols-outlined text-[var(--dark-green)] text-lg fill-1">check_circle</span>
+<span>100% Traditional Vegetarian</span>
+</li>
+<li class="flex items-center gap-3 text-sm">
+<span class="material-symbols-outlined text-[var(--dark-green)] text-lg fill-1">check_circle</span>
+<span>No Onion/Garlic Customization</span>
+</li>
+<li class="flex items-center gap-3 text-sm">
+<span class="material-symbols-outlined text-[var(--dark-green)] text-lg fill-1">check_circle</span>
+<span>Skip Meals with 1-click</span>
+</li>
+</ul>
+<button class="w-full py-4 bg-[var(--bright-brown)] text-[var(--cream)] font-bold rounded-ios active:scale-95 transition-transform">
+                        Subscribe Now
+                    </button>
+</div>
+</div>
+<div class="relative overflow-hidden rounded-ios border-2 border-[var(--bright-brown)] bg-white shadow-xl scale-[1.02]">
+<div class="bg-[var(--dark-green)] px-4 py-1.5 flex justify-between items-center text-[var(--cream)]">
+<span class="text-[10px] font-black uppercase tracking-widest">Popular Choice</span>
+<span class="material-symbols-outlined text-sm fill-1">star</span>
+</div>
+<div class="p-6">
+<div class="flex justify-between items-start mb-4">
+<div>
+<h2 class="text-xl font-bold text-[var(--bright-brown)]">Monthly Premium</h2>
+<p class="text-sm text-[var(--dark-brown-text)]/60">Nutritionist Approved Meals</p>
+</div>
+<div class="text-right">
+<p class="text-3xl font-black text-[var(--dark-brown-text)]">₹4,500</p>
+<p class="text-xs font-medium text-[var(--dark-brown-text)]/40 uppercase tracking-tighter">per month</p>
+</div>
+</div>
+<ul class="space-y-3 mb-6">
+<li class="flex items-center gap-3 text-sm">
+<span class="material-symbols-outlined text-[var(--dark-green)] text-lg fill-1">check_circle</span>
+<span>Includes Seasonal Special Sweets</span>
+</li>
+<li class="flex items-center gap-3 text-sm">
+<span class="material-symbols-outlined text-[var(--dark-green)] text-lg fill-1">check_circle</span>
+<span>Detailed Nutritional Breakdown</span>
+</li>
+<li class="flex items-center gap-3 text-sm">
+<span class="material-symbols-outlined text-[var(--dark-green)] text-lg fill-1">check_circle</span>
+<span>Priority Weekend Delivery</span>
+</li>
+<li class="flex items-center gap-3 text-sm">
+<span class="material-symbols-outlined text-[var(--dark-green)] text-lg fill-1">check_circle</span>
+<span>Pause for up to 10 days</span>
+</li>
+</ul>
+<button class="w-full py-4 bg-[var(--bright-brown)] text-[var(--cream)] font-bold rounded-ios shadow-lg active:scale-95 transition-transform">
+                        Subscribe Now
+                    </button>
+</div>
+</div>
+<div class="rounded-ios border border-[var(--dark-brown-text)]/10 bg-white p-6 ios-shadow">
+<div class="flex justify-between items-start mb-4">
+<div>
+<h2 class="text-xl font-bold text-[var(--bright-brown)]">Custom Plan</h2>
+<p class="text-sm text-[var(--dark-brown-text)]/60">Tailored to your schedule</p>
+</div>
+<div class="text-right">
+<p class="text-2xl font-bold text-[var(--dark-brown-text)]/80">Flexible</p>
+<p class="text-xs font-medium text-[var(--dark-brown-text)]/40 uppercase tracking-tighter">per meal</p>
+</div>
+</div>
+<p class="text-sm text-[var(--dark-brown-text)]/70 mb-6 leading-relaxed">
+                    Build your own meal calendar. Pick your favorite dishes and select specific days of the week you need delivery.
+                </p>
+<button class="w-full py-3 bg-white text-[var(--bright-brown)] font-bold rounded-ios active:scale-95 transition-transform border border-[var(--bright-brown)]">
+                    Build Your Plan
+                </button>
+</div>
+</div>
+<div class="pt-4 pb-8">
+<div class="grid grid-cols-3 gap-2">
+<div class="flex flex-col items-center text-center gap-2">
+<div class="size-10 rounded-full bg-[var(--dark-green)]/10 flex items-center justify-center text-[var(--dark-green)]">
+<span class="material-symbols-outlined">verified_user</span>
+</div>
+<p class="text-[10px] font-bold uppercase text-[var(--dark-brown-text)]/60">Secure Payment</p>
+</div>
+<div class="flex flex-col items-center text-center gap-2">
+<div class="size-10 rounded-full bg-[var(--dark-green)]/10 flex items-center justify-center text-[var(--dark-green)]">
+<span class="material-symbols-outlined">health_and_safety</span>
+</div>
+<p class="text-[10px] font-bold uppercase text-[var(--dark-brown-text)]/60">FSSAI Certified</p>
+</div>
+<div class="flex flex-col items-center text-center gap-2">
+<div class="size-10 rounded-full bg-[var(--dark-green)]/10 flex items-center justify-center text-[var(--dark-green)]">
+<span class="material-symbols-outlined">history</span>
+</div>
+<p class="text-[10px] font-bold uppercase text-[var(--dark-brown-text)]/60">Easy Cancel</p>
+</div>
+</div>
+<p class="mt-8 text-center text-xs text-[var(--dark-brown-text)]/50 px-8">
+                By subscribing, you agree to Kuteera's Terms of Service and Privacy Policy. All meals are prepared in a sanitized environment.
+            </p>
+</div>
+</main>
+<nav class="sticky bottom-0 bg-[var(--cream)]/95 backdrop-blur-md border-t border-[var(--dark-brown-text)]/5 pb-8 pt-2 px-6 flex justify-between items-center">
+<a class="flex flex-col items-center gap-1 text-[var(--dark-brown-text)]/40" href="#">
+<span class="material-symbols-outlined">home</span>
+<span class="text-[10px] font-medium">Home</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-[var(--bright-brown)]" href="#">
+<span class="material-symbols-outlined fill-1">receipt_long</span>
+<span class="text-[10px] font-bold">Plans</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-[var(--dark-brown-text)]/40" href="#">
+<span class="material-symbols-outlined">history</span>
+<span class="text-[10px] font-medium">Orders</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-[var(--dark-brown-text)]/40" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="text-[10px] font-medium">Profile</span>
+</a>
+</nav>
+
+</body></html>

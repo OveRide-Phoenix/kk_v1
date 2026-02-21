@@ -1,3 +1,9 @@
+
+alert for items selling out should not hit only when im in kitchen production it shuold be constantly hitting everytime im in the admin dashboard...and notification shuold come from any page...make it a general api that keeps checking 
+
+
+
+
 #---------------------------------------------------------------------------------------------------------------
  ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- DO THIS FIRST- can we make the todays menu section itself the ordering page, so if the customer is logged in it shows add to cart + - buttons just like the new order page...else it shows just the menu and the register now and sign in button also sticks with the breakfast, lunch, dinner, condiments selector
 THEN DO NOTES APP - DO THIS DA!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ✅

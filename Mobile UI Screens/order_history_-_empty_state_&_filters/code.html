@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Order History - Kuteera Kitchen</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#8d4a25",
+                        "background-light": "#fdfaf1",
+                        "background-dark": "#1f1713",
+                        "accent-green": "#1b4332",
+                    },
+                    fontFamily: {
+                        "display": ["Work Sans"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1rem",
+                        "xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-display bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen">
+<!-- iOS Status Bar Placeholder -->
+<div class="h-12 w-full flex items-center justify-between px-8 pt-4">
+<span class="text-sm font-semibold">9:41</span>
+<div class="flex items-center space-x-2">
+<span class="material-icons text-sm">signal_cellular_alt</span>
+<span class="material-icons text-sm">wifi</span>
+<span class="material-icons text-sm">battery_full</span>
+</div>
+</div>
+<!-- Main Mobile Container -->
+<main class="max-w-md mx-auto px-6 pt-6 pb-32">
+<!-- Header -->
+<header class="flex items-center justify-between mb-8">
+<button class="w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-slate-800 shadow-sm text-accent-green dark:text-slate-100">
+<span class="material-icons">arrow_back_ios_new</span>
+</button>
+<h1 class="text-xl font-bold text-accent-green dark:text-slate-100">Order History</h1>
+<div class="w-10"></div>
+</header>
+<!-- Filter Bar Trigger -->
+<div class="flex items-center justify-between mb-12">
+<div class="flex -space-x-1 overflow-hidden">
+<span class="inline-flex items-center px-4 py-2 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-medium">
+                    Today
+                </span>
+</div>
+<button class="flex items-center space-x-2 px-4 py-2 bg-white dark:bg-slate-800 rounded-full shadow-sm text-accent-green dark:text-slate-100 text-sm font-medium">
+<span class="material-icons text-base">tune</span>
+<span>Filters</span>
+</button>
+</div>
+<!-- Empty State Container -->
+<div class="flex flex-col items-center justify-center py-12 text-center">
+<div class="relative w-64 h-64 mb-8 flex items-center justify-center">
+<!-- Abstract Empty Tiffin Box Illustration -->
+<div class="absolute inset-0 bg-primary/5 rounded-full blur-3xl"></div>
+<img alt="Empty lunch box container" class="relative w-48 h-48 object-contain opacity-60 mix-blend-multiply dark:mix-blend-normal rounded-xl" data-alt="Minimalist empty tiffin box in muted earthy tones" src="https://lh3.googleusercontent.com/aida-public/AB6AXuABve_3SUXlG2nzfa6gyPFPkwD0hYCEqUqQE4TgdWYR7nzoj1-qVWmt9HpvnNLzXvsL0Gj8WK7IfU2DghdF-3DN15Z3IQeMc-WaZOQjp9yEYt8Llg-28xst6h5qaBjj-Ysgqqg8_6yvmh2_5NmIDsDQcR63_3OOqllt0R63SRJO5vE2pSu_NfAOTkZdV1w6vCR2194YnU560whD61fjErE5LScOZyjYx8aztSPgNo8Emtd-_AhVL_K_BN-yoR6MlvXUNbab5dlxYRI"/>
+</div>
+<h2 class="text-2xl font-bold text-accent-green dark:text-slate-100 mb-3">No orders for today</h2>
+<p class="text-slate-600 dark:text-slate-400 text-base max-w-[280px] mb-10 leading-relaxed">
+                Try changing the date filter to see your past meals.
+            </p>
+<!-- Action Button -->
+<button class="w-full max-w-xs py-4 px-8 bg-primary text-white font-semibold rounded-xl shadow-lg shadow-primary/30 transition-transform active:scale-95">
+                View All Orders
+            </button>
+</div>
+</main>
+<!-- Bottom Sheet Overlay (Simulated) -->
+<div class="fixed inset-0 bg-black/40 backdrop-blur-sm z-40"></div>
+<!-- Filter Bottom Sheet -->
+<div class="fixed bottom-0 left-0 right-0 z-50 bg-background-light dark:bg-background-dark rounded-t-xl shadow-2xl max-w-md mx-auto transform translate-y-0 transition-transform">
+<!-- Grabber Handle -->
+<div class="flex justify-center pt-4 pb-2">
+<div class="w-12 h-1.5 bg-slate-300 dark:bg-slate-600 rounded-full"></div>
+</div>
+<div class="px-6 pb-10 pt-4">
+<div class="flex justify-between items-center mb-8">
+<h3 class="text-xl font-bold text-accent-green dark:text-white">Filter &amp; Sort</h3>
+<button class="text-primary font-medium text-sm">Reset</button>
+</div>
+<!-- Date Range Section -->
+<div class="mb-8">
+<label class="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-4 block">Date Range</label>
+<div class="grid grid-cols-2 gap-3">
+<button class="flex items-center justify-center space-x-2 p-3 rounded-lg border-2 border-primary bg-primary/5 text-primary font-medium">
+<span class="material-icons text-sm">calendar_today</span>
+<span>Today</span>
+</button>
+<button class="flex items-center justify-center space-x-2 p-3 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 font-medium">
+<span class="material-icons text-sm">date_range</span>
+<span>Pick Date</span>
+</button>
+</div>
+</div>
+<!-- Order Status Section -->
+<div class="mb-8">
+<label class="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-4 block">Order Status</label>
+<div class="flex flex-wrap gap-2">
+<button class="px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-sm font-medium">Delivered</button>
+<button class="px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-sm font-medium">Pending</button>
+<button class="px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-sm font-medium">Cancelled</button>
+</div>
+</div>
+<!-- Order Type Section -->
+<div class="mb-10">
+<label class="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-4 block">Order Type</label>
+<div class="flex space-x-3">
+<button class="flex-1 py-3 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-sm font-medium">Subscription</button>
+<button class="flex-1 py-3 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-sm font-medium">One-time</button>
+</div>
+</div>
+<!-- Apply Button -->
+<button class="w-full py-4 bg-accent-green text-white font-bold rounded-xl shadow-lg shadow-accent-green/20">
+                Apply Filters
+            </button>
+</div>
+</div>
+<!-- Navigation Bar -->
+<nav class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg border-t border-slate-200 dark:border-slate-800 px-8 py-4 flex justify-between items-center z-30">
+<button class="flex flex-col items-center space-y-1 text-slate-400">
+<span class="material-icons">home</span>
+<span class="text-[10px] font-medium">Home</span>
+</button>
+<button class="flex flex-col items-center space-y-1 text-primary">
+<span class="material-icons">history</span>
+<span class="text-[10px] font-medium">History</span>
+</button>
+<button class="flex flex-col items-center space-y-1 text-slate-400">
+<span class="material-icons">restaurant_menu</span>
+<span class="text-[10px] font-medium">Menu</span>
+</button>
+<button class="flex flex-col items-center space-y-1 text-slate-400">
+<span class="material-icons">person_outline</span>
+<span class="text-[10px] font-medium">Profile</span>
+</button>
+</nav>
+</body></html>
