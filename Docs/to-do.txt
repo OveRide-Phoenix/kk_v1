@@ -80,6 +80,9 @@ kitchen production is based on revised plan qty
 
   im getting this for seed..so please check both these errors!
 
+
+  
+
 - [✅?] condiments form
 
 ✅ to the add product dialog box, there is a mark as condiment, what does that do? if not that then mark it as a condiment item, and also add a mzx qty of condiment, if i mark as a condiment then the max qty breakfast lunch dinner can be hidden only max qty for condiments will be shown..make sure you see how the backend also handles it..also remmeber that the condiments in the menu will be weeklong or till-stocks-last..so make these chagnes to handle condiments

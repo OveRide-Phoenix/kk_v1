@@ -75,6 +75,8 @@ class Order(Base):
     payment_method = Column(String(50), nullable=False)
     order_type = Column(String(50), nullable=True, default="one_time")
     discount = Column(DECIMAL(10, 2), nullable=True, default=0.00)
+    cgst = Column(DECIMAL(10, 2), nullable=True, default=0.00)
+    sgst = Column(DECIMAL(10, 2), nullable=True, default=0.00)
     created_at = Column(TIMESTAMP, nullable=True)
 
     customer = relationship("Customer", back_populates="orders")
