@@ -1,50 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import {
-  DESKTOP_UI_VERSION_COOKIE,
-  DESKTOP_UI_VERSION_QUERY_PARAM,
-  getDefaultDesktopUiVersion,
-  isDesktopUiOverrideEnabled,
-  parseDesktopUiVersion,
-} from "@/lib/desktop-ui-version";
 
 export async function middleware(req: NextRequest) {
-  const { pathname, searchParams } = req.nextUrl;
-
-  const isCustomerPath = pathname === "/customer" || pathname.startsWith("/customer/");
-
-  if (isCustomerPath) {
-    const overrideEnabled = isDesktopUiOverrideEnabled();
-    const queryVersion = overrideEnabled
-      ? parseDesktopUiVersion(searchParams.get(DESKTOP_UI_VERSION_QUERY_PARAM))
-      : null;
-    const cookieVersion = overrideEnabled
-      ? parseDesktopUiVersion(req.cookies.get(DESKTOP_UI_VERSION_COOKIE)?.value)
-      : null;
-    const selectedVersion = queryVersion ?? cookieVersion ?? getDefaultDesktopUiVersion();
-    const rewrittenPath = pathname.replace(/^\/customer(?=\/|$)/, "/customer-v2");
-
-    if (queryVersion) {
-      const canonicalUrl = req.nextUrl.clone();
-      canonicalUrl.searchParams.delete(DESKTOP_UI_VERSION_QUERY_PARAM);
-      canonicalUrl.pathname = queryVersion === "v2" ? rewrittenPath : pathname;
-
-      const response = NextResponse.redirect(canonicalUrl);
-      response.cookies.set(DESKTOP_UI_VERSION_COOKIE, queryVersion, {
-        path: "/",
-        sameSite: "lax",
-        httpOnly: false,
-      });
-      return response;
-    }
-
-    const response =
-      selectedVersion === "v2"
-        ? NextResponse.redirect(new URL(rewrittenPath, req.url))
-        : NextResponse.next();
-
-    return response;
-  }
+  const { pathname } = req.nextUrl;
 
   if (!pathname.startsWith("/admin")) return NextResponse.next();
 
@@ -68,5 +26,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/customer", "/customer/:path*"],
+  matcher: ["/admin/:path*"],
 };

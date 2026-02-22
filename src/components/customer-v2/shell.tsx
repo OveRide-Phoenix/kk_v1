@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { Playfair_Display, Plus_Jakarta_Sans } from "next/font/google"
 import { useEffect, useRef, useState } from "react"
 
+import { useAuthStore } from "@/store/store"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 const playfair = Playfair_Display({
@@ -25,6 +26,7 @@ const CART_CONTEXT_KEY = "customer_cart_context"
 export default function CustomerV2Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
+  const logout = useAuthStore((state) => state.logout)
   const [cartCount, setCartCount] = useState(0)
   const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false)
   const [pendingDestination, setPendingDestination] = useState<string | null>(null)
@@ -227,6 +229,18 @@ export default function CustomerV2Shell({ children }: { children: React.ReactNod
                     Profile
                   </span>
                 </Link>
+                <button
+                  onClick={async () => {
+                    await logout()
+                    router.replace("/login")
+                  }}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-orange-100 bg-white text-gray-600 transition-colors hover:border-[#8D4925]/40 hover:text-[#8D4925]"
+                  aria-label="Logout"
+                  title="Logout"
+                  type="button"
+                >
+                  <span className="material-symbols-outlined text-[20px]">logout</span>
+                </button>
               </div>
             </div>
           </div>
