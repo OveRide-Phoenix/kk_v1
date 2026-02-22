@@ -127,10 +127,21 @@
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
+    overflow-x: hidden;
+    overscroll-behavior-y: auto;
   }
 
   h1, h2, h3, h4, h5, h6 {
     @apply font-serif;
+  }
+}
+
+@media (pointer: coarse) {
+  html,
+  body {
+    height: auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 }
 

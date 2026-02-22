@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { format as formatDate, isSameDay, isSameMonth, subDays } from "date-fns";
 import { ArrowLeft, CheckCircle2, ChevronRight, FileText, Filter, Loader2, Package, SlidersHorizontal } from "lucide-react";
@@ -96,6 +96,7 @@ function matchesDateRange(order: OrderSummary, filters: FilterState) {
 
 export default function MobileCustomerOrdersPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const user = useAuthStore((state) => state.user);
   const setUser = useAuthStore((state) => state.setUser);
   const [orders, setOrders] = useState<OrderSummary[]>([]);
@@ -105,6 +106,7 @@ export default function MobileCustomerOrdersPage() {
   const [filters, setFilters] = useState<FilterState>(defaultFilters);
   const [draftFilters, setDraftFilters] = useState<FilterState>(defaultFilters);
   const [selectedOrder, setSelectedOrder] = useState<OrderSummary | null>(null);
+  const [deepLinkHandled, setDeepLinkHandled] = useState(false);
   const handleBack = () => {
     const canGoBack =
       typeof window !== "undefined" &&
@@ -172,6 +174,27 @@ export default function MobileCustomerOrdersPage() {
       cancelled = true;
     };
   }, [user?.customer_id]);
+
+  useEffect(() => {
+    if (deepLinkHandled) return;
+    const orderIdParam = searchParams.get("orderId");
+    if (!orderIdParam) {
+      setDeepLinkHandled(true);
+      return;
+    }
+    if (loading) return;
+    const orderId = Number(orderIdParam);
+    if (!Number.isFinite(orderId)) {
+      setDeepLinkHandled(true);
+      return;
+    }
+    const target = orders.find((order) => order.order_id === orderId);
+    if (target) {
+      setFilterOpen(false);
+      setSelectedOrder(target);
+    }
+    setDeepLinkHandled(true);
+  }, [deepLinkHandled, loading, orders, searchParams]);
 
   const statusOptions = useMemo(() => {
     const options = new Set<string>();
@@ -312,16 +335,16 @@ export default function MobileCustomerOrdersPage() {
   return (
     <main className={`${outfit.variable} ${playfairMobile.variable} min-h-screen w-full pb-28`} style={{ backgroundColor: mobilePalette.background }}>
       <div className="mx-auto w-full max-w-[448px]">
-        <header className="sticky top-0 z-20 border-b border-[#8D4925]/10 bg-[rgba(253,250,241,0.95)] px-4 pb-2 pt-6 backdrop-blur-md">
-          <div className="mb-4 flex items-center justify-between">
-            <button type="button" onClick={handleBack} className="rounded-full p-2">
+        <header className="sticky top-0 z-20 border-b border-[#8D4925]/10 bg-[rgba(253,250,241,0.95)] px-4 py-4 backdrop-blur-md">
+          <div className="relative flex items-center justify-between">
+            <button type="button" onClick={handleBack} className="flex h-9 w-9 items-center justify-center rounded-full">
               <ArrowLeft size={20} color="#8D4925" />
             </button>
-            <h1 className="text-xl font-bold tracking-tight text-[#8D4925]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>Order History</h1>
+            <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-lg font-bold text-[#8D4925]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>Order History</h1>
             <div className="h-9 w-9" />
           </div>
 
-          <div className="flex items-center gap-2 overflow-x-auto pb-2">
+          <div className="mt-4 flex items-center gap-2 overflow-x-auto pb-2">
             <button
               type="button"
               onClick={() => setFilters((prev) => ({ ...prev, dateRange: "today", customDate: "" }))}

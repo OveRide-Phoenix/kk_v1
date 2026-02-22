@@ -8,7 +8,7 @@ import { mobilePalette, playfairMobile, workSans } from "@/components/mobile/cus
 export default function MobileCustomerLoginLandingPage() {
   return (
     <main
-      className={`${workSans.variable} ${playfairMobile.variable} min-h-dvh w-full`}
+      className={`${workSans.variable} ${playfairMobile.variable} min-h-dvh w-full overflow-y-auto [-webkit-overflow-scrolling:touch]`}
       style={{ backgroundColor: mobilePalette.background, fontFamily: "var(--font-mobile-work-sans), sans-serif" }}
     >
       <div className="mx-auto flex min-h-dvh w-full max-w-[448px] flex-col px-6 pb-10 pt-12">
@@ -19,7 +19,7 @@ export default function MobileCustomerLoginLandingPage() {
           <h1 className="mt-2 text-4xl font-bold text-[#8D4A25]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>Kuteera Kitchen</h1>
         </header>
 
-        <section className="flex flex-1 flex-col items-center justify-center">
+        <section className="flex flex-1 flex-col items-center justify-start">
           <div className="relative mb-8 aspect-square w-full overflow-hidden rounded-[32px]">
             <Image
               src="/images/hero/thali.png"

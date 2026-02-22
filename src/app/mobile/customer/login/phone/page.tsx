@@ -272,7 +272,7 @@ export default function MobileCustomerLoginPage() {
 
   return (
     <main
-      className={`${workSans.variable} ${playfairMobile.variable} min-h-dvh w-full`}
+      className={`${workSans.variable} ${playfairMobile.variable} min-h-dvh w-full overflow-y-auto [-webkit-overflow-scrolling:touch]`}
       style={{ backgroundColor: mobilePalette.background, fontFamily: "var(--font-mobile-work-sans), sans-serif" }}
     >
       <div className="mx-auto flex min-h-dvh w-full max-w-[448px] flex-col px-6 pb-10 pt-12">
@@ -284,7 +284,7 @@ export default function MobileCustomerLoginPage() {
         </header>
 
         <section className="mb-8 flex flex-1 flex-col justify-center">
-          <div className="space-y-3">
+          <div className="mx-auto w-full max-w-[360px] space-y-3">
             <div>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.8px] text-[#8D4A25]">Phone Number</label>
               <input

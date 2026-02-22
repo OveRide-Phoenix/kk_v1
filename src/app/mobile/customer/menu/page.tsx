@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { format as formatDate } from "date-fns";
 import { ArrowLeft, Minus, Plus, ShoppingBasket, ShoppingCart } from "lucide-react";
 import { MobileCustomerBottomNav } from "@/components/mobile/customer/bottom-nav";
+import { LeaveCartDialog } from "@/components/mobile/customer/leave-cart-dialog";
 import { mobilePalette, playfairMobile, workSans } from "@/components/mobile/customer/theme";
 import { getSupportedMeals } from "@/config/cities";
 import { useAuthStore } from "@/store/store";
@@ -86,8 +87,17 @@ export default function MobileCustomerMenuPage() {
   const [menuError, setMenuError] = useState<string | null>(null);
   const [quantities, setQuantities] = useState<Record<number, number>>({});
   const [cartInitialized, setCartInitialized] = useState(false);
+  const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
+  const [pendingLeavePath, setPendingLeavePath] = useState<string | null>(null);
+  const [pendingGoBack, setPendingGoBack] = useState(false);
   const storedCartRef = useRef<CartLine[]>([]);
   const handleBack = () => {
+    if (cartCount > 0) {
+      setPendingGoBack(true);
+      setPendingLeavePath(null);
+      setLeaveDialogOpen(true);
+      return;
+    }
     const idx = typeof window !== "undefined" ? (window.history.state as { idx?: number } | null)?.idx : undefined;
     if (typeof idx === "number" && idx > 0) {
       router.back();
@@ -280,18 +290,60 @@ export default function MobileCustomerMenuPage() {
     }
   };
 
+  const requestLeave = (targetPath: string) => {
+    if (targetPath === "/mobile/customer/cart") return true;
+    if (targetPath === "/mobile/customer/menu") return true;
+    if (cartCount <= 0) return true;
+    setPendingGoBack(false);
+    setPendingLeavePath(targetPath);
+    setLeaveDialogOpen(true);
+    return false;
+  };
+
+  const cancelLeave = () => {
+    setLeaveDialogOpen(false);
+    setPendingLeavePath(null);
+    setPendingGoBack(false);
+  };
+
+  const confirmLeave = () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem(CART_STORAGE_KEY);
+      sessionStorage.removeItem(CART_KEEP_KEY);
+    }
+    storedCartRef.current = [];
+    setQuantities({});
+    const destination = pendingLeavePath;
+    const shouldGoBack = pendingGoBack;
+    setLeaveDialogOpen(false);
+    setPendingLeavePath(null);
+    setPendingGoBack(false);
+    if (shouldGoBack) {
+      const idx = typeof window !== "undefined" ? (window.history.state as { idx?: number } | null)?.idx : undefined;
+      if (typeof idx === "number" && idx > 0) {
+        router.back();
+      } else {
+        router.push("/mobile/customer/home");
+      }
+      return;
+    }
+    if (destination) {
+      router.push(destination);
+    }
+  };
+
   const activeItems = menuByMeal[activeMeal] ?? [];
 
   return (
     <main className={`${workSans.variable} ${playfairMobile.variable} min-h-screen pb-28`} style={{ backgroundColor: mobilePalette.background }}>
       <div className="mx-auto w-full max-w-[448px]">
         <header className="sticky top-0 z-20 bg-[rgba(253,250,241,0.95)] px-4 pb-3 pt-4 backdrop-blur-md">
-          <div className="mb-4 flex items-center justify-between">
-            <button type="button" onClick={handleBack} className="rounded-full p-2">
-              <ArrowLeft size={22} color="#8D4925" />
+          <div className="relative mb-4 flex items-center justify-between">
+            <button type="button" onClick={handleBack} className="flex h-9 w-9 items-center justify-center rounded-full">
+              <ArrowLeft size={20} color="#8D4925" />
             </button>
-            <h1 className="text-lg font-bold text-[#8D4925]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>Daily Menu</h1>
-            <Link href="/mobile/customer/cart" onClick={goToCart} className="relative rounded-full p-2">
+            <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-lg font-bold text-[#8D4925]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>Daily Menu</h1>
+            <Link href="/mobile/customer/cart" onClick={goToCart} className="relative flex h-9 w-9 items-center justify-center rounded-full">
               <ShoppingBasket size={22} color="#8D4925" />
               {cartCount > 0 ? <span className="absolute right-0 top-0 rounded-full bg-[#8D4925] px-1.5 text-[10px] font-bold text-white">{cartCount}</span> : null}
             </Link>
@@ -382,7 +434,8 @@ export default function MobileCustomerMenuPage() {
         </div>
       ) : null}
 
-      <MobileCustomerBottomNav active="orders" />
+      <MobileCustomerBottomNav active="orders" onNavigate={requestLeave} />
+      <LeaveCartDialog open={leaveDialogOpen} onCancel={cancelLeave} onConfirm={confirmLeave} />
     </main>
   );
 }

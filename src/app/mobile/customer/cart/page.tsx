@@ -409,11 +409,14 @@ export default function MobileCartPage() {
   return (
     <main className={`${workSans.variable} ${playfairMobile.variable} min-h-screen pb-44`} style={{ backgroundColor: mobilePalette.background }}>
       <header className="sticky top-0 z-30 border-b border-[#3D2B1F]/5 bg-[rgba(253,250,241,0.95)] backdrop-blur-md">
-        <div className="mx-auto flex w-full max-w-[448px] items-center justify-between p-4">
-          <button onClick={handleBack} className="rounded-full p-2">
-            <ArrowLeft size={18} color="#3D2B1F" />
+        <div className="mx-auto w-full max-w-[448px] p-4">
+          <div className="relative flex items-center justify-between">
+          <button onClick={handleBack} className="flex h-9 w-9 items-center justify-center rounded-full">
+            <ArrowLeft size={20} color="#3D2B1F" />
           </button>
-          <h1 className="flex-1 pr-10 text-center text-sm font-bold uppercase tracking-widest text-[#3D2B1F]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>Final Secure Checkout</h1>
+          <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-lg font-bold text-[#3D2B1F]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>Final Secure Checkout</h1>
+          <span className="h-9 w-9" />
+          </div>
         </div>
       </header>
 

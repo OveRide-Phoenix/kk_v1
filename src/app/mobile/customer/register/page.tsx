@@ -193,12 +193,12 @@ export default function MobileCustomerRegisterPage() {
           <button
             type="button"
             onClick={handleBack}
-            className="absolute left-4 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full"
+            className="absolute left-4 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full"
             aria-label="Back"
           >
             <ArrowLeft color="#0F172A" size={20} />
           </button>
-          <h1 className="text-center text-[18px] font-semibold text-[#0F172A]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>Create Your Account</h1>
+          <h1 className="text-center text-lg font-bold text-[#0F172A]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>Create Your Account</h1>
         </header>
 
         <section className="px-6 pb-4 pt-6">

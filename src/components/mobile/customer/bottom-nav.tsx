@@ -6,6 +6,7 @@ import { CalendarDays, Home, ReceiptText, User } from "lucide-react";
 
 type MobileCustomerBottomNavProps = {
   active: "home" | "orders" | "plans" | "profile";
+  onNavigate?: (href: string) => boolean;
 };
 
 const items = [
@@ -15,7 +16,7 @@ const items = [
   { key: "profile", label: "Profile", href: "/mobile/customer/profile", icon: User },
 ] as const;
 
-export function MobileCustomerBottomNav({ active }: MobileCustomerBottomNavProps) {
+export function MobileCustomerBottomNav({ active, onNavigate }: MobileCustomerBottomNavProps) {
   const pathname = usePathname();
 
   return (
@@ -25,7 +26,16 @@ export function MobileCustomerBottomNav({ active }: MobileCustomerBottomNavProps
         const isActive = active === item.key || pathname === item.href;
 
         return (
-          <Link key={item.key} href={item.href} className="flex flex-col items-center gap-1">
+          <Link
+            key={item.key}
+            href={item.href}
+            className="flex flex-col items-center gap-1"
+            onClick={(event) => {
+              if (!onNavigate) return;
+              const allowed = onNavigate(item.href);
+              if (!allowed) event.preventDefault();
+            }}
+          >
             <Icon size={18} color={isActive ? "#8D4925" : "rgba(141,73,37,0.35)"} />
             <span
               className="text-[10px] font-bold uppercase tracking-[0.9px]"

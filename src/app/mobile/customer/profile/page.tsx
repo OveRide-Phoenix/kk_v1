@@ -101,12 +101,14 @@ export default function MobileCustomerProfilePage() {
   return (
     <main className={`${workSans.variable} ${playfairMobile.variable} min-h-screen pb-28`} style={{ backgroundColor: mobilePalette.background }}>
       <div className="mx-auto w-full max-w-[448px]">
-        <header className="flex items-center justify-between px-4 py-2">
-          <button type="button" onClick={handleBack} className="rounded-full p-2">
+        <header className="sticky top-0 z-20 bg-[rgba(253,250,241,0.95)] px-4 py-4 backdrop-blur-md">
+          <div className="relative flex items-center justify-between">
+          <button type="button" onClick={handleBack} className="flex h-9 w-9 items-center justify-center rounded-full">
             <ArrowLeft size={20} color="#8D4925" />
           </button>
-          <h1 className="text-lg font-bold text-[#3E2723]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>Profile</h1>
-          <span className="w-8" />
+          <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-lg font-bold text-[#8D4925]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>Profile</h1>
+          <span className="h-9 w-9" />
+          </div>
         </header>
 
         <section className="mb-8 mt-6 flex flex-col items-center">

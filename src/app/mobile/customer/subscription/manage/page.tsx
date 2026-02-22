@@ -20,12 +20,14 @@ export default function MobileCustomerManageSubscriptionPage() {
   return (
     <main className={`${workSans.variable} ${playfairMobile.variable} min-h-screen pb-28`} style={{ backgroundColor: mobilePalette.background }}>
       <div className="mx-auto w-full max-w-[448px]">
-        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-[rgba(141,73,37,0.1)] bg-[rgba(253,250,241,0.95)] px-4 py-4 backdrop-blur-md">
-          <button type="button" onClick={handleBack} className="rounded-full p-2">
+        <header className="sticky top-0 z-20 border-b border-[rgba(141,73,37,0.1)] bg-[rgba(253,250,241,0.95)] px-4 py-4 backdrop-blur-md">
+          <div className="relative flex items-center justify-between">
+          <button type="button" onClick={handleBack} className="flex h-9 w-9 items-center justify-center rounded-full">
             <ArrowLeft size={20} color="#8D4925" />
           </button>
-          <h1 className="text-xl font-bold text-[#8D4925]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>Manage Subscription</h1>
-          <span className="w-8" />
+          <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-lg font-bold text-[#8D4925]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>Manage Subscription</h1>
+          <span className="h-9 w-9" />
+          </div>
         </header>
 
         <section className="space-y-6 px-4 py-6">
