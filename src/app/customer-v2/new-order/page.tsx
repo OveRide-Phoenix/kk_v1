@@ -670,22 +670,10 @@ export default function CustomerV2OrderPage() {
               </div>
 
               <div className="border-t border-orange-100 bg-orange-50/60 px-4 py-3">
-                <div className="mb-3 flex items-center justify-between">
+                <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-gray-600">Subtotal</span>
                   <span className="text-lg font-bold text-gray-900">{currency(cartTotals.totalPrice)}</span>
                 </div>
-                <button
-                  onClick={() => {
-                    if (typeof window !== "undefined") {
-                      sessionStorage.setItem(CART_KEEP_KEY, "1")
-                    }
-                    router.push("/customer-v2/cart")
-                  }}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#8D4925] py-3 text-sm font-bold text-white shadow-lg transition-colors hover:bg-[#7a3f20]"
-                >
-                  Checkout
-                  <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                </button>
               </div>
             </div>
 

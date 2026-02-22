@@ -31,7 +31,7 @@ export default function CustomerV2AuthShell({
   return (
     <div
       className={`${playfair.variable} ${plusJakarta.variable} min-h-screen bg-[#fdfaf1] text-gray-900`}
-      style={{ fontFamily: "var(--font-v2-plus-jakarta)", fontSize: "15px" }}
+      style={{ fontFamily: "var(--font-v2-plus-jakarta)", fontSize: "13.5px" }}
     >
       <style
         dangerouslySetInnerHTML={{
