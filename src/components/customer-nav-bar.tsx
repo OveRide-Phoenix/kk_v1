@@ -122,6 +122,10 @@ export default function CustomerNavBar({ unauthLinks }: CustomerNavBarProps = {}
     (typeof user?.phone === "string" && user.phone.trim()) ||
     "Customer"
 
+  if (pathname?.startsWith("/customer-v2")) {
+    return null
+  }
+
   return (
     <nav
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${

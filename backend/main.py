@@ -599,6 +599,25 @@ def _ensure_menu_type_column(db) -> None:
         cursor.close()
 
 
+def default_delivers_by_for_meal(canonical_bld_type: str) -> Optional[str]:
+    if canonical_bld_type == "Breakfast":
+        return "8:30 AM"
+    if canonical_bld_type == "Lunch":
+        return "1:00 PM"
+    if canonical_bld_type == "Dinner":
+        return "8:30 PM"
+    return None
+
+
+def resolve_delivers_by_value(
+    canonical_bld_type: str, override_value: Optional[str]
+) -> Optional[str]:
+    if override_value is not None:
+        value = override_value.strip()
+        return value or None
+    return default_delivers_by_for_meal(canonical_bld_type)
+
+
 def normalize_order_status(value: str) -> str:
     key = value.strip().lower()
     base = key.replace(" (payment due)", "")
@@ -2885,7 +2904,8 @@ def _get_daily_menu_internal(
                 is_production_generated,
                 period_type,
                 bld_id,
-                menu_type
+                menu_type,
+                delivers_by
             FROM menu
             WHERE {' AND '.join(where_clauses)}
             LIMIT 1
@@ -2973,6 +2993,9 @@ def _get_daily_menu_internal(
             "bld_type": canonical_bld_type,
             "city_code": city_code,
             "menu_type": resolved_menu_type,
+            "delivers_by": resolve_delivers_by_value(
+                canonical_bld_type, menu_row.get("delivers_by")
+            ),
             "items": [
                 {
                     "menu_item_id": it["menu_item_id"],
@@ -3023,6 +3046,7 @@ class DailyMenuPayload(BaseModel):
     items: List[MenuItemPayload]
     city_code: Optional[str] = None
     menu_type: Optional[str] = None
+    delivers_by: Optional[str] = None
 
 
 class AutoMenuRequest(BaseModel):
@@ -3047,6 +3071,9 @@ def upsert_daily_menu(payload: DailyMenuPayload):
         resolved_menu_type = normalize_menu_type(payload.menu_type)
         ensure_menu_allowed(city_code, resolved_menu_type)
         menu_date = payload.date if resolved_menu_type == MENU_TYPE_ONE_DAY else None
+        resolved_delivers_by = resolve_delivers_by_value(
+            canonical_bld_type, payload.delivers_by
+        )
 
         find_conditions = ["menu_type = %s", "bld_id = %s", "city_code = %s"]
         params: List[Any] = [resolved_menu_type, bld_id, city_code]
@@ -3071,7 +3098,8 @@ def upsert_daily_menu(payload: DailyMenuPayload):
                 UPDATE menu
                    SET is_festival = %s,
                        period_type = %s,
-                       date = %s
+                       date = %s,
+                       delivers_by = %s
                  WHERE menu_id = %s
             """
             cursor.execute(
@@ -3080,14 +3108,15 @@ def upsert_daily_menu(payload: DailyMenuPayload):
                     int(payload.is_festival),
                     payload.period_type,
                     menu_date,
+                    resolved_delivers_by,
                     menu_id,
                 ),
             )
         else:
             # Insert new menu row
             insert_query = """
-                INSERT INTO menu (date, is_festival, is_released, period_type, bld_id, city_code, menu_type)
-                VALUES (%s, %s, 0, %s, %s, %s, %s)
+                INSERT INTO menu (date, is_festival, is_released, period_type, bld_id, city_code, menu_type, delivers_by)
+                VALUES (%s, %s, 0, %s, %s, %s, %s, %s)
             """
             cursor.execute(
                 insert_query,
@@ -3098,6 +3127,7 @@ def upsert_daily_menu(payload: DailyMenuPayload):
                     bld_id,
                     city_code,
                     resolved_menu_type,
+                    resolved_delivers_by,
                 ),
             )
             menu_id = cursor.lastrowid

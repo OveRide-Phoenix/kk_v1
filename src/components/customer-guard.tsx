@@ -30,7 +30,7 @@ export default function CustomerGuard({ children }: { children: React.ReactNode 
 
         if (!token) {
           logout()
-          if (!cancelled) router.replace("/")
+          if (!cancelled) router.replace("/login")
           return
         }
 
@@ -40,7 +40,7 @@ export default function CustomerGuard({ children }: { children: React.ReactNode 
           })
           if (!response.ok) {
             logout()
-            if (!cancelled) router.replace("/")
+            if (!cancelled) router.replace("/login")
             return
           }
           const me = await response.json()
@@ -50,7 +50,7 @@ export default function CustomerGuard({ children }: { children: React.ReactNode 
       } catch (error) {
         console.error("Customer auth guard error", error)
         logout()
-        if (!cancelled) router.replace("/")
+        if (!cancelled) router.replace("/login")
         return
       } finally {
         if (!cancelled) setChecking(false)

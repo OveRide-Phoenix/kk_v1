@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Support &amp; Profile Settings | Kuteera Kitchen</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&amp;family=Outfit:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,typography,container-queries"></script>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#8B4513",
+                        "background-light": "#FDFBF4",
+                        "background-dark": "#1A1614",
+                        secondary: "#0E3E32",
+                    },
+                    fontFamily: {
+                        display: ["Playfair Display", "serif"],
+                        sans: ["Outfit", "sans-serif"],
+                    },
+                    borderRadius: {
+                        DEFAULT: "1.5rem",
+                    },
+                },
+            },
+        };
+    </script>
+<style type="text/tailwindcss">
+        body {
+            font-family: 'Outfit', sans-serif;
+        }
+        .font-display {
+            font-family: 'Playfair Display', serif;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-gray-800 dark:text-gray-100 min-h-screen flex flex-col">
+<header class="sticky top-0 z-50 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-primary/10 dark:border-white/10">
+<div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white">
+<span class="material-symbols-outlined text-2xl">restaurant</span>
+</div>
+<h1 class="text-2xl font-display text-primary dark:text-primary leading-none">Kuteera Kitchen</h1>
+</div>
+<nav class="hidden md:flex items-center gap-8">
+<a class="font-semibold text-gray-600 dark:text-gray-300 hover:text-primary transition-colors flex items-center gap-1.5" href="#">
+<span class="material-symbols-outlined text-xl">home</span> Home
+                </a>
+<a class="font-semibold text-gray-600 dark:text-gray-300 hover:text-primary transition-colors flex items-center gap-1.5" href="#">
+<span class="material-symbols-outlined text-xl">receipt_long</span> Order
+                </a>
+<a class="font-semibold text-gray-600 dark:text-gray-300 hover:text-primary transition-colors flex items-center gap-1.5" href="#">
+<span class="material-symbols-outlined text-xl">calendar_today</span> Subscription
+                </a>
+<a class="relative font-semibold text-gray-600 dark:text-gray-300 hover:text-primary transition-colors flex items-center gap-1.5" href="#">
+<span class="material-symbols-outlined text-xl">notifications</span> Notifications
+                    <span class="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+</a>
+<div class="h-6 w-px bg-primary/20"></div>
+<a class="flex items-center gap-3 group" href="#">
+<div class="text-right hidden lg:block">
+<p class="text-[10px] uppercase tracking-wider text-gray-500 font-bold">Namaste</p>
+<p class="font-bold text-sm">Shashank</p>
+</div>
+<div class="w-10 h-10 rounded-full border-2 border-primary/20 p-0.5 group-hover:border-primary transition-colors">
+<img alt="Profile" class="w-full h-full rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAjCWKUDYdNYvGDFjrzO3gBvc-wtSmsllHE8G7lkD_bc4e1LnLmxPOlR6DdwsNWlM5Z_7vtEnWQULn4Uo0J9PJdnD_zzVwMArlWZ7DgxMbfQiVVgTwTlqXoVkF6s5UhtJIZHzxjUt1dPTH0fuvmLvEw6z3r5fRwCfk8iqs4MTYBiivWlMldRmhP3kD79UQklolRFXQqCdbXePQ5n2Z8Og--b0RrearX1g8TV7f6xb1rcfiLyQHpJfNYCMB07zBAR98-nuFKyUCWXP7X"/>
+</div>
+</a>
+</nav>
+<button class="md:hidden text-primary">
+<span class="material-symbols-outlined text-3xl">menu</span>
+</button>
+</div>
+</header>
+<main class="max-w-7xl mx-auto px-6 py-10 flex-grow">
+<div class="flex flex-col lg:flex-row gap-8">
+<aside class="w-full lg:w-72 space-y-2">
+<p class="px-4 mb-4 text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500">Settings</p>
+<nav class="space-y-1">
+<a class="flex items-center gap-3 px-4 py-4 rounded-2xl bg-white dark:bg-white/5 shadow-sm text-primary font-bold border border-primary/5" href="#">
+<span class="material-symbols-outlined">person</span>
+                        Profile Info
+                    </a>
+<a class="flex items-center gap-3 px-4 py-4 rounded-2xl hover:bg-white/50 dark:hover:bg-white/5 transition-all text-gray-600 dark:text-gray-300" href="#">
+<span class="material-symbols-outlined">location_on</span>
+                        Address Book
+                    </a>
+<a class="flex items-center gap-3 px-4 py-4 rounded-2xl hover:bg-white/50 dark:hover:bg-white/5 transition-all text-gray-600 dark:text-gray-300" href="#">
+<span class="material-symbols-outlined">payments</span>
+                        Payment Methods
+                    </a>
+<a class="flex items-center gap-3 px-4 py-4 rounded-2xl hover:bg-white/50 dark:hover:bg-white/5 transition-all text-gray-600 dark:text-gray-300" href="#">
+<span class="material-symbols-outlined">history</span>
+                        Order History
+                    </a>
+<a class="flex items-center gap-3 px-4 py-4 rounded-2xl hover:bg-white/50 dark:hover:bg-white/5 transition-all text-gray-600 dark:text-gray-300" href="#">
+<span class="material-symbols-outlined">help_outline</span>
+                        Help Center
+                    </a>
+<div class="pt-8 px-4">
+<button class="flex items-center gap-2 text-red-500 font-bold hover:gap-3 transition-all">
+<span>Sign Out</span>
+<span class="material-symbols-outlined text-sm">logout</span>
+</button>
+</div>
+</nav>
+</aside>
+<section class="flex-1 space-y-8">
+<div class="bg-white dark:bg-white/5 rounded-3xl p-8 shadow-sm border border-primary/5 dark:border-white/5">
+<div class="flex items-center justify-between mb-8">
+<div>
+<h2 class="text-3xl font-display text-primary mb-1">Profile Info</h2>
+<p class="text-gray-500 dark:text-gray-400">Update your personal details and contact info</p>
+</div>
+<button class="px-6 py-2.5 bg-primary text-white font-bold rounded-full hover:opacity-90 transition-opacity">
+                            Save Changes
+                        </button>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<div class="space-y-2">
+<label class="text-sm font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider ml-1">Full Name</label>
+<input class="w-full bg-background-light dark:bg-black/20 border-none rounded-2xl py-4 px-5 focus:ring-2 focus:ring-primary/20 dark:text-white" type="text" value="Shashank Kumar"/>
+</div>
+<div class="space-y-2">
+<label class="text-sm font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider ml-1">Email Address</label>
+<input class="w-full bg-background-light dark:bg-black/20 border-none rounded-2xl py-4 px-5 focus:ring-2 focus:ring-primary/20 dark:text-white" type="email" value="shashank@example.com"/>
+</div>
+<div class="space-y-2">
+<label class="text-sm font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider ml-1">Phone Number</label>
+<div class="relative">
+<span class="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400">+91</span>
+<input class="w-full bg-background-light dark:bg-black/20 border-none rounded-2xl py-4 pl-14 pr-5 focus:ring-2 focus:ring-primary/20 dark:text-white" type="tel" value="9876543210"/>
+</div>
+</div>
+<div class="space-y-2">
+<label class="text-sm font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider ml-1">Date of Birth</label>
+<input class="w-full bg-background-light dark:bg-black/20 border-none rounded-2xl py-4 px-5 focus:ring-2 focus:ring-primary/20 dark:text-white" type="text" value="12 Oct 1994"/>
+</div>
+</div>
+</div>
+<div>
+<h2 class="text-3xl font-display text-primary mb-6">Help &amp; Support</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<div class="group cursor-pointer bg-white dark:bg-white/5 p-8 rounded-3xl shadow-sm border border-primary/5 dark:border-white/5 hover:border-primary/20 transition-all flex items-start gap-6">
+<div class="w-16 h-16 rounded-2xl bg-green-50 dark:bg-green-900/20 flex items-center justify-center text-green-600 flex-shrink-0 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-3xl">chat</span>
+</div>
+<div class="flex-1">
+<h3 class="text-xl font-bold mb-2 group-hover:text-primary transition-colors">Chat on WhatsApp</h3>
+<p class="text-gray-500 dark:text-gray-400 mb-4">Connect with our support team instantly for any queries or delivery help.</p>
+<span class="text-primary font-bold inline-flex items-center gap-1">
+                                    Start Chat <span class="material-symbols-outlined text-sm">arrow_forward</span>
+</span>
+</div>
+</div>
+<div class="group cursor-pointer bg-white dark:bg-white/5 p-8 rounded-3xl shadow-sm border border-primary/5 dark:border-white/5 hover:border-primary/20 transition-all flex items-start gap-6">
+<div class="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center text-primary flex-shrink-0 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-3xl">alternate_email</span>
+</div>
+<div class="flex-1">
+<h3 class="text-xl font-bold mb-2 group-hover:text-primary transition-colors">Email Support</h3>
+<p class="text-gray-500 dark:text-gray-400 mb-4">Send us your feedback or detailed inquiries and we'll get back within 24 hours.</p>
+<span class="text-primary font-bold inline-flex items-center gap-1">
+                                    Send Email <span class="material-symbols-outlined text-sm">arrow_forward</span>
+</span>
+</div>
+</div>
+</div>
+</div>
+<div class="bg-primary/5 dark:bg-white/5 rounded-3xl p-8">
+<h3 class="font-bold text-lg mb-4">Frequently Asked Questions</h3>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+<a class="text-gray-600 dark:text-gray-400 hover:text-primary transition-colors flex items-center gap-2" href="#">
+<span class="material-symbols-outlined text-[8px]">fiber_manual_record</span>
+                            How do I pause my subscription?
+                        </a>
+<a class="text-gray-600 dark:text-gray-400 hover:text-primary transition-colors flex items-center gap-2" href="#">
+<span class="material-symbols-outlined text-[8px]">fiber_manual_record</span>
+                            Can I change my delivery address?
+                        </a>
+<a class="text-gray-600 dark:text-gray-400 hover:text-primary transition-colors flex items-center gap-2" href="#">
+<span class="material-symbols-outlined text-[8px]">fiber_manual_record</span>
+                            What are the festive add-ons today?
+                        </a>
+<a class="text-gray-600 dark:text-gray-400 hover:text-primary transition-colors flex items-center gap-2" href="#">
+<span class="material-symbols-outlined text-[8px]">fiber_manual_record</span>
+                            Refund policy for cancelled meals
+                        </a>
+</div>
+</div>
+</section>
+</div>
+</main>
+<footer class="bg-white dark:bg-background-dark border-t border-primary/10 dark:border-white/10 pt-16 pb-8">
+<div class="max-w-7xl mx-auto px-6">
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-16">
+<div class="space-y-6">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white">
+<span class="material-symbols-outlined">restaurant</span>
+</div>
+<h2 class="text-2xl font-display text-primary leading-none">Kuteera Kitchen</h2>
+</div>
+<p class="text-gray-500 dark:text-gray-400 leading-relaxed">
+                        Authentic South Indian subscription meals delivered fresh daily to your doorstep. Healthy, hygienic, and home-cooked.
+                    </p>
+<div class="flex gap-4">
+<a class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-all" href="#">
+<span class="material-symbols-outlined text-xl">language</span>
+</a>
+<a class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-all" href="#">
+<span class="material-symbols-outlined text-xl">photo_camera</span>
+</a>
+<a class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-all" href="#">
+<span class="material-symbols-outlined text-xl">alternate_email</span>
+</a>
+</div>
+</div>
+<div>
+<h4 class="font-bold text-lg mb-6">Quick Navigation</h4>
+<ul class="space-y-4 text-gray-500 dark:text-gray-400">
+<li><a class="hover:text-primary transition-colors flex items-center gap-2" href="#"><span class="material-symbols-outlined text-sm">arrow_forward</span> Today's Menu</a></li>
+<li><a class="hover:text-primary transition-colors flex items-center gap-2" href="#"><span class="material-symbols-outlined text-sm">arrow_forward</span> Subscription Plans</a></li>
+<li><a class="hover:text-primary transition-colors flex items-center gap-2" href="#"><span class="material-symbols-outlined text-sm">arrow_forward</span> Delivery Tracker</a></li>
+<li><a class="hover:text-primary transition-colors flex items-center gap-2" href="#"><span class="material-symbols-outlined text-sm">arrow_forward</span> Refer a Friend</a></li>
+</ul>
+</div>
+<div>
+<h4 class="font-bold text-lg mb-6">Trust &amp; Safety</h4>
+<div class="space-y-4">
+<div class="flex items-center gap-3 p-3 rounded-2xl bg-background-light dark:bg-white/5 border border-primary/5">
+<span class="material-symbols-outlined text-green-600">verified_user</span>
+<span class="text-sm font-medium">FSSAI Certified Kitchen</span>
+</div>
+<div class="flex items-center gap-3 p-3 rounded-2xl bg-background-light dark:bg-white/5 border border-primary/5">
+<span class="material-symbols-outlined text-primary">eco</span>
+<span class="text-sm font-medium">Plastic-free Packaging</span>
+</div>
+<div class="flex items-center gap-3 p-3 rounded-2xl bg-background-light dark:bg-white/5 border border-primary/5">
+<span class="material-symbols-outlined text-blue-600">health_and_safety</span>
+<span class="text-sm font-medium">100% Preservative Free</span>
+</div>
+</div>
+</div>
+<div>
+<h4 class="font-bold text-lg mb-6">Get Updates</h4>
+<p class="text-gray-500 dark:text-gray-400 mb-4">Stay updated with festive special menus.</p>
+<div class="flex flex-col gap-3">
+<div class="relative">
+<input class="w-full bg-background-light dark:bg-white/5 border-none rounded-2xl py-4 px-6 focus:ring-2 focus:ring-primary/20 text-sm" placeholder="Email address" type="email"/>
+<button class="absolute right-2 top-2 bottom-2 px-4 bg-primary text-white rounded-xl hover:opacity-90">
+<span class="material-symbols-outlined">send</span>
+</button>
+</div>
+<div class="flex items-center gap-2 px-2">
+<div class="w-8 h-8 rounded-full bg-secondary/10 flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined text-lg">support_agent</span>
+</div>
+<span class="text-xs text-gray-400">Support available 24/7</span>
+</div>
+</div>
+</div>
+</div>
+<div class="pt-8 border-t border-primary/10 dark:border-white/10 flex flex-col md:flex-row justify-between items-center gap-4 text-gray-400 text-sm">
+<p>© 2024 Kuteera Kitchen. All rights reserved.</p>
+<div class="flex gap-6">
+<a class="hover:text-primary" href="#">Privacy Policy</a>
+<a class="hover:text-primary" href="#">Terms of Service</a>
+<a class="hover:text-primary" href="#">Refund Policy</a>
+</div>
+</div>
+</div>
+</footer>
+<button class="fixed bottom-10 right-10 w-12 h-12 rounded-full bg-primary text-white shadow-xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-[60]" onclick="document.documentElement.classList.toggle('dark')">
+<span class="material-symbols-outlined">contrast</span>
+</button>
+
+</body></html>
