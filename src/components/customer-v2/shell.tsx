@@ -234,12 +234,12 @@ export default function CustomerV2Shell({ children }: { children: React.ReactNod
                     await logout()
                     router.replace("/login")
                   }}
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-orange-100 bg-white text-gray-600 transition-colors hover:border-[#8D4925]/40 hover:text-[#8D4925]"
+                  className="inline-flex items-center justify-center text-gray-600 transition-colors hover:text-[#8D4925]"
                   aria-label="Logout"
                   title="Logout"
                   type="button"
                 >
-                  <span className="material-symbols-outlined text-[20px]">logout</span>
+                  <span className="material-symbols-outlined text-[18px]">logout</span>
                 </button>
               </div>
             </div>

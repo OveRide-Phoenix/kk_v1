@@ -438,10 +438,10 @@ export default function CustomerHomeV2Page() {
                         ) : null}
                       </div>
                       <button
-                        onClick={() => router.push("/customer-v2/account")}
+                        onClick={() => router.push("/customer-v2/account?section=orders")}
                         className={`rounded-xl bg-white ${showBothTopCards ? "px-6 py-2.5 text-sm" : "px-8 py-3"} font-bold text-[#8D4925] shadow-lg transition-all active:scale-95 hover:bg-orange-50`}
                       >
-                        View Order
+                        {hasMultipleTodayOrders ? "Manage Orders" : "View Order"}
                       </button>
                     </div>
                   </div>

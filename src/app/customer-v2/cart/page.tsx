@@ -311,19 +311,20 @@ export default function CustomerV2CartPage() {
     const next = couponCode.trim()
     if (!next) return
     const normalized = next.toUpperCase()
-    setCouponCode("")
     if (appliedCoupons.includes(normalized)) return
-    const updated = [...appliedCoupons, normalized]
+    const updated = [normalized]
     const ok = await fetchQuote(updated, true)
-    if (ok) setAppliedCoupons(updated)
+    if (ok) {
+      setAppliedCoupons(updated)
+      setCouponCode(normalized)
+    }
   }
 
-  const handleRemoveCoupon = (code: string) => {
-    setAppliedCoupons((prev) => {
-      const updated = prev.filter((value) => value !== code)
-      fetchQuote(updated)
-      return updated
-    })
+  const handleClearCoupon = () => {
+    setAppliedCoupons([])
+    setCouponCode("")
+    setCouponError(null)
+    fetchQuote([])
   }
 
   const handlePlaceOrder = async () => {
@@ -449,7 +450,7 @@ export default function CustomerV2CartPage() {
                 Delivery Address
               </h2>
               <button
-                onClick={() => router.push("/customer-v2/account")}
+                onClick={() => router.push("/customer-v2/account?section=addresses")}
                 className="group flex items-center gap-1.5 text-sm font-bold text-[#8D4925] transition-colors hover:text-[#7a3f20]"
               >
                 <span className="material-symbols-outlined text-base transition-transform duration-200 group-hover:scale-105">add_circle</span>
@@ -618,58 +619,59 @@ export default function CustomerV2CartPage() {
                 {quote?.discount ? (
                   <div className="flex justify-between text-gray-600">
                     <span>Discount</span>
-                    <span className="font-bold text-[#1b4332]">-{currency(quote.discount)}</span>
+                    <span className="font-bold text-[#1b4332]">- {currency(quote.discount)}</span>
                   </div>
                 ) : null}
+                <div className="mb-1 mt-3 rounded-2xl border border-[#1b4332]/20 bg-[#1b4332]/5 p-3">
+                  <div className="mb-3 flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#1b4332]/20 text-[#1b4332]">
+                      <span className="material-symbols-outlined text-base">local_offer</span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-[#1b4332]">Coupon Code</p>
+                      <p className="text-xs text-[#1b4332]/70">Save more on your healthy meals</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={couponCode}
+                      onChange={(event) => setCouponCode(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault()
+                          handleApplyCoupon()
+                        }
+                      }}
+                      placeholder="Enter coupon code"
+                      disabled={appliedCoupons.length > 0}
+                      className={`h-10 flex-1 rounded-xl border border-[#1b4332]/20 px-3 text-sm outline-none ${
+                        appliedCoupons.length > 0
+                          ? "cursor-not-allowed bg-white/60 text-[#1b4332]/70"
+                          : "bg-white"
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={appliedCoupons.length > 0 ? handleClearCoupon : handleApplyCoupon}
+                      disabled={quoteLoading || (!couponCode.trim() && appliedCoupons.length === 0)}
+                      className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#1b4332]/30 bg-white text-[#1b4332] disabled:opacity-60"
+                      aria-label={appliedCoupons.length > 0 ? "Clear coupon" : "Apply coupon"}
+                      title={appliedCoupons.length > 0 ? "Clear coupon" : "Apply coupon"}
+                    >
+                      <span className="material-symbols-outlined text-lg">
+                        {appliedCoupons.length > 0 ? "close" : "arrow_forward"}
+                      </span>
+                    </button>
+                  </div>
+                  {quoteError ? <p className="mt-2 text-xs text-red-600">{quoteError}</p> : null}
+                  {couponError ? <p className="mt-2 text-xs text-red-600">{couponError}</p> : null}
+                </div>
                 <div className="mt-2 flex justify-between border-t border-orange-100 pt-3 text-lg font-bold text-gray-900">
                   <span>Total Pay</span>
                   <span className="text-[#8D4925]">
                     {quoteLoading ? "Calculating..." : currency(quote?.total_price ?? subtotalFromCart)}
                   </span>
                 </div>
-              </div>
-
-              <div className="mb-4 rounded-2xl border border-[#1b4332]/20 bg-[#1b4332]/5 p-3">
-                <label className="mb-2 block text-[11px] font-bold uppercase tracking-widest text-[#1b4332]">
-                  Apply Coupon
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    value={couponCode}
-                    onChange={(event) => setCouponCode(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault()
-                        handleApplyCoupon()
-                      }
-                    }}
-                    placeholder="Enter code"
-                    className="h-10 flex-1 rounded-xl border border-[#1b4332]/20 bg-white px-3 text-sm outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleApplyCoupon}
-                    disabled={quoteLoading}
-                    className="h-10 rounded-xl border border-[#8D4925]/20 bg-white px-4 text-sm font-semibold text-[#8D4925]"
-                  >
-                    Apply
-                  </button>
-                </div>
-                {appliedCoupons.length ? (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {appliedCoupons.map((code) => (
-                      <span
-                        key={code}
-                        className="inline-flex items-center gap-1 rounded-full bg-[#8D4925]/10 px-2 py-0.5 text-[10px] font-bold text-[#8D4925]"
-                      >
-                        {code}
-                        <button onClick={() => handleRemoveCoupon(code)} className="leading-none">×</button>
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-                {quoteError ? <p className="mt-2 text-xs text-red-600">{quoteError}</p> : null}
-                {couponError ? <p className="mt-2 text-xs text-red-600">{couponError}</p> : null}
               </div>
 
               {errorMessage ? (
@@ -697,15 +699,6 @@ export default function CustomerV2CartPage() {
               )}
             </div>
 
-            <div className="flex cursor-pointer items-center gap-3 rounded-2xl border border-[#1b4332]/20 bg-[#1b4332]/5 p-4">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#1b4332]/20 text-[#1b4332]">
-                <span className="material-symbols-outlined text-base">local_offer</span>
-              </div>
-              <div>
-                <p className="text-sm font-bold text-[#1b4332]">Apply Coupon Code</p>
-                <p className="text-xs text-[#1b4332]/70">Save more on your healthy meals</p>
-              </div>
-            </div>
           </div>
         </div>
       </div>
