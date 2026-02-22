@@ -11,7 +11,7 @@ type MobileCustomerBottomNavProps = {
 
 const items = [
   { key: "home", label: "Home", href: "/mobile/customer/home", icon: Home },
-  { key: "orders", label: "Order", href: "/mobile/customer/menu", icon: ReceiptText },
+  { key: "orders", label: "Order", href: "/mobile/customer/order", icon: ReceiptText },
   { key: "plans", label: "Plans", href: "/mobile/customer/subscription/manage", icon: CalendarDays },
   { key: "profile", label: "Profile", href: "/mobile/customer/profile", icon: User },
 ] as const;

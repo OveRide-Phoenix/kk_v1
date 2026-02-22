@@ -300,7 +300,7 @@ export default function MobileCartPage() {
     if (typeof window !== "undefined") {
       sessionStorage.setItem(CART_KEEP_KEY, "1");
     }
-    router.push("/mobile/customer/menu");
+    router.push("/mobile/customer/order");
   };
 
   const handleBack = () => {

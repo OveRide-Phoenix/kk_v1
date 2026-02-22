@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { format as formatDate } from "date-fns";
-import { ArrowLeft, Minus, Plus, ShoppingBasket, ShoppingCart } from "lucide-react";
+import { ArrowLeft, ArrowRight, LayoutGrid, List, Minus, Plus, ShoppingBasket, ShoppingCart } from "lucide-react";
 import { MobileCustomerBottomNav } from "@/components/mobile/customer/bottom-nav";
 import { LeaveCartDialog } from "@/components/mobile/customer/leave-cart-dialog";
 import { mobilePalette, playfairMobile, workSans } from "@/components/mobile/customer/theme";
@@ -87,6 +87,7 @@ export default function MobileCustomerMenuPage() {
   const [menuError, setMenuError] = useState<string | null>(null);
   const [quantities, setQuantities] = useState<Record<number, number>>({});
   const [cartInitialized, setCartInitialized] = useState(false);
+  const [menuView, setMenuView] = useState<"grid" | "list">("grid");
   const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
   const [pendingLeavePath, setPendingLeavePath] = useState<string | null>(null);
   const [pendingGoBack, setPendingGoBack] = useState(false);
@@ -292,7 +293,7 @@ export default function MobileCustomerMenuPage() {
 
   const requestLeave = (targetPath: string) => {
     if (targetPath === "/mobile/customer/cart") return true;
-    if (targetPath === "/mobile/customer/menu") return true;
+    if (targetPath === "/mobile/customer/menu" || targetPath === "/mobile/customer/order") return true;
     if (cartCount <= 0) return true;
     setPendingGoBack(false);
     setPendingLeavePath(targetPath);
@@ -342,7 +343,7 @@ export default function MobileCustomerMenuPage() {
             <button type="button" onClick={handleBack} className="flex h-9 w-9 items-center justify-center rounded-full">
               <ArrowLeft size={20} color="#8D4925" />
             </button>
-            <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-lg font-bold text-[#8D4925]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>Daily Menu</h1>
+            <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-lg font-bold text-[#8D4925]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>Order</h1>
             <Link href="/mobile/customer/cart" onClick={goToCart} className="relative flex h-9 w-9 items-center justify-center rounded-full">
               <ShoppingBasket size={22} color="#8D4925" />
               {cartCount > 0 ? <span className="absolute right-0 top-0 rounded-full bg-[#8D4925] px-1.5 text-[10px] font-bold text-white">{cartCount}</span> : null}
@@ -364,9 +365,30 @@ export default function MobileCustomerMenuPage() {
               );
             })}
           </div>
+
+          <div className="mt-3 flex justify-end">
+            <div className="inline-flex items-center gap-1 rounded-xl border border-[#8D4925]/15 bg-white p-1">
+              <button
+                type="button"
+                aria-label="Grid view"
+                onClick={() => setMenuView("grid")}
+                className={`flex h-8 w-8 items-center justify-center rounded-lg ${menuView === "grid" ? "bg-[#8D4925] text-white" : "text-[#8D4925]"}`}
+              >
+                <LayoutGrid size={16} />
+              </button>
+              <button
+                type="button"
+                aria-label="List view"
+                onClick={() => setMenuView("list")}
+                className={`flex h-8 w-8 items-center justify-center rounded-lg ${menuView === "list" ? "bg-[#8D4925] text-white" : "text-[#8D4925]"}`}
+              >
+                <List size={16} />
+              </button>
+            </div>
+          </div>
         </header>
 
-        <section className="grid grid-cols-2 gap-3 px-4 pt-3">
+        <section className={`${menuView === "grid" ? "grid grid-cols-2 gap-3" : "space-y-3"} px-4 pt-3`}>
           {menuLoading ? (
             <>
               <div className="h-44 animate-pulse rounded-2xl bg-white/70" />
@@ -379,7 +401,31 @@ export default function MobileCustomerMenuPage() {
           ) : (
             activeItems.map((item) => {
               const qty = quantities[item.menu_item_id] ?? 0;
-              return (
+              return menuView === "list" ? (
+                <article key={`${activeMeal}-${item.menu_item_id}`} className="rounded-xl border border-[#8D4925]/8 bg-white px-3 py-3 shadow-[0_4px_12px_rgba(27,67,50,0.06)]">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0 pr-2">
+                      <h3 className="truncate text-[13px] font-bold text-[#8D4925]">{item.item_name}</h3>
+                      <span className="text-sm font-bold text-[#1B4332]">₹{Math.round(item.rate || 0)}</span>
+                    </div>
+                    {qty > 0 ? (
+                      <div className="flex items-center gap-1 rounded-lg bg-[#8D4925] px-1 py-1 text-[#FDFAF1]">
+                        <button type="button" onClick={() => setItemQty(item, qty - 1)} className="flex h-6 w-6 items-center justify-center rounded-md bg-white/15">
+                          <Minus size={14} />
+                        </button>
+                        <span className="min-w-6 text-center text-xs font-bold">{qty}</span>
+                        <button type="button" onClick={() => setItemQty(item, qty + 1)} className="flex h-6 w-6 items-center justify-center rounded-md bg-white/15">
+                          <Plus size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <button type="button" onClick={() => setItemQty(item, 1)} className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#8D4925] text-[#FDFAF1]">
+                        <Plus size={16} />
+                      </button>
+                    )}
+                  </div>
+                </article>
+              ) : (
                 <article key={`${activeMeal}-${item.menu_item_id}`} className="flex flex-col overflow-hidden rounded-2xl border border-stone-50 bg-white shadow-[0_4px_12px_rgba(27,67,50,0.06)]">
                   <div className="relative p-1.5">
                     <Image
@@ -420,16 +466,24 @@ export default function MobileCustomerMenuPage() {
       </div>
 
       {cartCount > 0 ? (
-        <div className="fixed bottom-24 left-1/2 z-40 w-[calc(100%-2rem)] max-w-[416px] -translate-x-1/2 rounded-2xl bg-[#8D4925] p-3 text-white shadow-[0px_10px_15px_-3px_rgba(141,73,37,0.35),0px_4px_6px_-4px_rgba(141,73,37,0.35)]">
+        <div className="fixed bottom-24 left-1/2 z-40 w-[calc(100%-2rem)] max-w-[398px] -translate-x-1/2">
           <Link href="/mobile/customer/cart" onClick={goToCart} className="flex w-full items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ShoppingCart size={18} />
-              <div className="text-left">
-                <p className="text-xs font-semibold">{cartCount} item{cartCount === 1 ? "" : "s"} in cart</p>
-                <p className="text-sm font-bold">₹{Math.round(cartTotal)}</p>
+            <div className="flex w-full items-center justify-between rounded-2xl border border-white/10 bg-[#8D4925] p-4 text-white shadow-[0px_10px_15px_-3px_rgba(141,73,37,0.35),0px_4px_6px_-4px_rgba(141,73,37,0.35)]">
+              <div className="flex items-center gap-2">
+                <ShoppingCart size={18} className="text-white/90" />
+                <div className="text-left">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-white/70">Selected Items</p>
+                  <p className="text-base font-bold">
+                    ₹{Math.round(cartTotal)}
+                    <span className="ml-1 text-xs font-normal text-white/70">({cartCount} item{cartCount === 1 ? "" : "s"})</span>
+                  </p>
+                </div>
               </div>
+              <span className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#1B4332] px-5 text-xs font-bold text-white">
+                View Cart
+                <ArrowRight size={14} />
+              </span>
             </div>
-            <span className="rounded-lg bg-white px-3 py-1 text-xs font-bold text-[#8D4925]">Checkout</span>
           </Link>
         </div>
       ) : null}

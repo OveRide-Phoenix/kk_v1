@@ -148,6 +148,23 @@ export default function MobileCustomerPaymentMethodsPage() {
         {message ? <p className="mb-3 rounded-xl bg-green-50 p-3 text-sm text-green-700">{message}</p> : null}
 
         <section className="space-y-3">
+          <article className="rounded-xl border border-[#8D4925]/10 bg-white p-4 shadow-[0_4px_12px_-1px_rgba(141,73,37,0.08)]">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="rounded-xl bg-[#8D4925]/5 p-2.5 text-[#8D4925]">
+                  <Wallet size={18} />
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-[#8D4925]/60">Wallet Balance</p>
+                  <p className="text-lg font-bold text-[#8D4925]">₹450.00</p>
+                </div>
+              </div>
+              <button type="button" className="rounded-xl bg-[#8D4925] px-5 py-2 text-xs font-bold text-white">
+                Top Up
+              </button>
+            </div>
+          </article>
+
           <article className="rounded-xl border border-[#8D4925]/10 bg-white p-4">
             <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#8D4925]/70">Accepted Methods</p>
             <div className="space-y-2">

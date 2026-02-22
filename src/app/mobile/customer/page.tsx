@@ -18,7 +18,7 @@ export default function MobileCustomerIndexPage() {
           <Link prefetch={false} className="rounded-xl border border-[#8D4A25]/20 px-4 py-3 text-[#8D4A25]" href="/mobile/customer/home">
             Home Dashboard
           </Link>
-          <Link prefetch={false} className="rounded-xl border border-[#8D4A25]/20 px-4 py-3 text-[#8D4A25]" href="/mobile/customer/menu">
+          <Link prefetch={false} className="rounded-xl border border-[#8D4A25]/20 px-4 py-3 text-[#8D4A25]" href="/mobile/customer/order">
             Daily Menu
           </Link>
           <Link prefetch={false} className="rounded-xl border border-[#8D4A25]/20 px-4 py-3 text-[#8D4A25]" href="/mobile/customer/subscription/manage">

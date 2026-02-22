@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Bell, CalendarDays, ChevronDown, ChevronUp, Loader2, Minus, Plus, ShoppingCart } from "lucide-react";
+import { ArrowRight, Bell, CalendarDays, ChevronDown, ChevronUp, LayoutGrid, List, Loader2, Minus, Plus, ShoppingCart } from "lucide-react";
 import { format as formatDate, isSameDay, isSameMonth } from "date-fns";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -133,6 +133,7 @@ export default function MobileCustomerHomePage() {
     dinner: true,
     condiments: true,
   });
+  const [menuView, setMenuView] = useState<"grid" | "list">("grid");
   const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
   const [pendingLeavePath, setPendingLeavePath] = useState<string | null>(null);
   const [selectedOrderDetails, setSelectedOrderDetails] = useState<OrderSummary | null>(null);
@@ -500,7 +501,7 @@ export default function MobileCustomerHomePage() {
 
   const showTodaysBookingCard = ordersLoading || Boolean(ordersError) || todaysBookings.length > 0;
   const showSubscriptionCardAboveMenu = ordersLoading || Boolean(ordersError) || Boolean(currentSubscription);
-  const bookingActionHref = hasMultipleTodayOrders ? "/mobile/customer/orders" : "/mobile/customer/menu";
+  const bookingActionHref = hasMultipleTodayOrders ? "/mobile/customer/orders" : "/mobile/customer/order";
 
   return (
     <main
@@ -615,9 +616,29 @@ export default function MobileCustomerHomePage() {
         ) : null}
 
         <section className="px-6 pb-4">
-          <h3 className="text-xl font-bold text-[#8D4925]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>
-            Today&apos;s Menu
-          </h3>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-xl font-bold text-[#8D4925]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>
+              Today&apos;s Menu
+            </h3>
+            <div className="inline-flex items-center gap-1 rounded-xl border border-[#8D4925]/15 bg-white p-1">
+              <button
+                type="button"
+                aria-label="Grid view"
+                onClick={() => setMenuView("grid")}
+                className={`flex h-8 w-8 items-center justify-center rounded-lg ${menuView === "grid" ? "bg-[#8D4925] text-white" : "text-[#8D4925]"}`}
+              >
+                <LayoutGrid size={16} />
+              </button>
+              <button
+                type="button"
+                aria-label="List view"
+                onClick={() => setMenuView("list")}
+                className={`flex h-8 w-8 items-center justify-center rounded-lg ${menuView === "list" ? "bg-[#8D4925] text-white" : "text-[#8D4925]"}`}
+              >
+                <List size={16} />
+              </button>
+            </div>
+          </div>
           <p className="text-[11px] text-[rgba(141,73,37,0.6)]">Breakfast, Lunch, Dinner, and Condiments</p>
         </section>
 
@@ -641,6 +662,54 @@ export default function MobileCustomerHomePage() {
               <p className="text-sm text-red-600">{menuError}</p>
             ) : collapsedMeals[meal] ? null : menuByMeal[meal].length === 0 ? (
               <p className="rounded-xl border border-[rgba(141,73,37,0.08)] bg-white px-4 py-3 text-sm text-[#475569]">No items available right now.</p>
+            ) : menuView === "list" ? (
+              <div className="space-y-3">
+                {menuByMeal[meal].map((item) => (
+                  <article key={`${meal}-${item.menu_item_id}`} className="rounded-xl border border-[rgba(141,73,37,0.08)] bg-white px-3 py-3 shadow-[0px_4px_12px_-1px_rgba(141,73,37,0.08)]">
+                    {(() => {
+                      const qty = Math.max(0, Number(quantities[item.menu_item_id] ?? 0));
+                      return (
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0 pr-2">
+                        <h5 className="truncate text-[13px] font-bold text-[#8D4925]">{item.item_name}</h5>
+                        <p className="text-sm font-bold text-[#1B4332]">₹{Math.round(item.rate || 0)}</p>
+                      </div>
+                      {qty > 0 ? (
+                        <div className="flex items-center gap-1 rounded-lg bg-[#8D4925] px-1 py-1 text-[#FDFAF1]">
+                          <button
+                            type="button"
+                            className="flex h-6 w-6 items-center justify-center rounded-md bg-white/15 disabled:opacity-40"
+                            onClick={() => decrementItem(item)}
+                            disabled={qty <= 0}
+                          >
+                            <Minus size={13} />
+                          </button>
+                          <span className="min-w-6 text-center text-xs font-bold">{qty}</span>
+                          <button
+                            type="button"
+                            className="flex h-6 w-6 items-center justify-center rounded-md bg-white/15 disabled:opacity-40"
+                            onClick={() => incrementItem(item)}
+                            disabled={qty >= item.available_qty}
+                          >
+                            <Plus size={13} />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#8D4925] text-[#FDFAF1]"
+                          onClick={() => incrementItem(item)}
+                          disabled={item.available_qty <= 0}
+                        >
+                          <Plus size={16} />
+                        </button>
+                      )}
+                    </div>
+                      );
+                    })()}
+                  </article>
+                ))}
+              </div>
             ) : (
               <div className="grid grid-cols-2 gap-4">
                 {menuByMeal[meal].map((item) => (
@@ -713,16 +782,24 @@ export default function MobileCustomerHomePage() {
       </div>
 
       {cartTotals.totalQuantity > 0 ? (
-        <div className="fixed bottom-24 left-1/2 z-40 w-[calc(100%-2rem)] max-w-[416px] -translate-x-1/2 rounded-2xl bg-[#8D4925] p-3 text-white shadow-[0px_10px_15px_-3px_rgba(141,73,37,0.35),0px_4px_6px_-4px_rgba(141,73,37,0.35)]">
+        <div className="fixed bottom-24 left-1/2 z-40 w-[calc(100%-2rem)] max-w-[398px] -translate-x-1/2">
           <button type="button" className="flex w-full items-center justify-between" onClick={handleReviewCart}>
-            <div className="flex items-center gap-2">
-              <ShoppingCart size={18} />
-              <div className="text-left">
-                <p className="text-xs font-semibold">{cartTotals.totalQuantity} item{cartTotals.totalQuantity === 1 ? "" : "s"} in cart</p>
-                <p className="text-sm font-bold">₹{Math.round(cartTotals.totalPrice)}</p>
+            <div className="flex w-full items-center justify-between rounded-2xl border border-white/10 bg-[#8D4925] p-4 text-white shadow-[0px_10px_15px_-3px_rgba(141,73,37,0.35),0px_4px_6px_-4px_rgba(141,73,37,0.35)]">
+              <div className="flex items-center gap-2">
+                <ShoppingCart size={18} className="text-white/90" />
+                <div className="text-left">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-white/70">Selected Items</p>
+                  <p className="text-base font-bold">
+                    ₹{Math.round(cartTotals.totalPrice)}
+                    <span className="ml-1 text-xs font-normal text-white/70">({cartTotals.totalQuantity} item{cartTotals.totalQuantity === 1 ? "" : "s"})</span>
+                  </p>
+                </div>
               </div>
+              <span className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#1B4332] px-5 text-xs font-bold text-white">
+                View Cart
+                <ArrowRight size={14} />
+              </span>
             </div>
-            <span className="rounded-lg bg-white px-3 py-1 text-xs font-bold text-[#8D4925]">Checkout</span>
           </button>
         </div>
       ) : null}
