@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Pencil, Trash2, Plus, Search, Eye, ChevronUp, MoreHorizontal, Crown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,12 +18,14 @@ import { AdminLayout } from "@/components/admin-layout"
 import { CustomerForm } from "./customer-form"
 import { toast, useToast } from "@/hooks/use-toast"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { useAuthStore } from "@/store/store"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { http } from "@/lib/http"
 
 const normaliseRoles = (value: unknown): number[] => {
   if (Array.isArray(value)) {
@@ -91,6 +93,7 @@ export default function CustomerManagement() {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const adminCity = useAuthStore((state) => state.adminCity || state.user?.city_code || "MYS")
   
   // Initialize with empty array
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -99,10 +102,14 @@ export default function CustomerManagement() {
   const [roleCatalog, setRoleCatalog] = useState<Record<number, string>>({})
   const [adminRoleId, setAdminRoleId] = useState<number | null>(null)
   
-  const refreshCustomers = async () => {
+  const refreshCustomers = useCallback(async () => {
     try {
       setIsLoading(true)
-      const response = await fetch('http://localhost:8000/get-all-customers')
+      const response = await http.get(`/api/admin/customers?city_code=${adminCity}`)
+      if (!response.ok) {
+        setCustomers([])
+        return
+      }
       const raw = await response.json()
       if (!Array.isArray(raw)) {
         setCustomers([])
@@ -126,7 +133,7 @@ export default function CustomerManagement() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [adminCity])
   const [filters, setFilters] = useState({
     orderCount: "all",
     address: "",
@@ -134,9 +141,8 @@ export default function CustomerManagement() {
 
   // Update the fetch and data handling
   useEffect(() => {
-    refreshCustomers()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    void refreshCustomers()
+  }, [refreshCustomers])
 
   useEffect(() => {
     const loadRoles = async () => {

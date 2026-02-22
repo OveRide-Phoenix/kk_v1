@@ -14,6 +14,8 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 
+from .city_config import DEFAULT_CITY
+
 Base = declarative_base()
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -48,6 +50,7 @@ class Address(Base):
     house_apartment_no = Column(String(255), nullable=True)
     written_address = Column(Text, nullable=False)
     city = Column(String(100), nullable=False)
+    city_code = Column(String(3), nullable=False, default=DEFAULT_CITY)
     pin_code = Column(String(10), nullable=False)
     latitude = Column(DECIMAL(10, 8), nullable=False)
     longitude = Column(DECIMAL(11, 8), nullable=False)
@@ -72,6 +75,8 @@ class Order(Base):
     payment_method = Column(String(50), nullable=False)
     order_type = Column(String(50), nullable=True, default="one_time")
     discount = Column(DECIMAL(10, 2), nullable=True, default=0.00)
+    cgst = Column(DECIMAL(10, 2), nullable=True, default=0.00)
+    sgst = Column(DECIMAL(10, 2), nullable=True, default=0.00)
     created_at = Column(TIMESTAMP, nullable=True)
 
     customer = relationship("Customer", back_populates="orders")
@@ -118,14 +123,16 @@ class Menu(Base):
     __tablename__ = "menu"
 
     menu_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    date = Column(Date, nullable=False)
+    date = Column(Date, nullable=True)
     is_festival = Column(Boolean, nullable=False, default=False)
     is_released = Column(Boolean, nullable=False, default=False)
     is_production_generated = Column(Boolean, nullable=False, default=False)
+    menu_type = Column(String(20), nullable=False, default="ONE_DAY")
     period_type = Column(
         Enum("one_day", "subscription", "all_days", name="period_type_enum"),
         nullable=True,
     )
+    city_code = Column(String(3), nullable=False, default=DEFAULT_CITY)
 
     bld_id = Column(Integer, ForeignKey("bld.bld_id"), nullable=False)
     bld = relationship("BLD", back_populates="menus")
@@ -159,19 +166,21 @@ class Item(Base):
     uom = Column(String(50), nullable=False)
     weight_factor = Column(DECIMAL(5, 3), nullable=True)
     weight_uom = Column(String(50), nullable=True)
-    item_type = Column(String(50), nullable=True)
     hsn_code = Column(String(50), nullable=True)
     factor = Column(DECIMAL(5, 3), nullable=True, default=1)
     quantity_portion = Column(Integer, nullable=True)
     buffer_percentage = Column(DECIMAL(5, 2), nullable=True)
     picture_url = Column(String(255), nullable=True)
+    max_qty_breakfast = Column(Integer, nullable=True)
+    max_qty_lunch = Column(Integer, nullable=True)
+    max_qty_dinner = Column(Integer, nullable=True)
+    max_qty_condiments = Column(Integer, nullable=True)
 
     breakfast_price = Column(DECIMAL(10, 2), nullable=True)
     lunch_price = Column(DECIMAL(10, 2), nullable=True)
     dinner_price = Column(DECIMAL(10, 2), nullable=True)
     condiments_price = Column(DECIMAL(10, 2), nullable=True)
     festival_price = Column(DECIMAL(10, 2), nullable=True)
-
     cgst = Column(DECIMAL(5, 2), nullable=True)
     sgst = Column(DECIMAL(5, 2), nullable=True)
     igst = Column(DECIMAL(5, 2), nullable=True)
@@ -208,7 +217,7 @@ class MenuItem(Base):
     item_id = Column(Integer, ForeignKey("items.item_id"), nullable=False)
     category_id = Column(Integer, ForeignKey("categories.category_id"), nullable=True)
 
-    planned_qty = Column(Integer, nullable=True)
+    max_qty = Column(Integer, nullable=True)
     available_qty = Column(Integer, nullable=True)
     buffer_qty = Column(DECIMAL(10, 2), nullable=True, default=0)
     final_qty = Column(DECIMAL(10, 2), nullable=True, default=0)

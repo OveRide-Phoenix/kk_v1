@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, type ComponentProps } from "react"
+import { useEffect, useMemo, useState, type ComponentProps } from "react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
 import { Crown, LogOut, User } from "lucide-react"
@@ -19,12 +19,13 @@ type CustomerNavBarProps = {
 
 export default function CustomerNavBar({ unauthLinks }: CustomerNavBarProps = {}) {
   const [isScrolled, setIsScrolled] = useState(false)
+  const [hydrated, setHydrated] = useState(false)
   const user = useAuthStore((state) => state.user)
   const setUser = useAuthStore((state) => state.setUser)
   const logout = useAuthStore((state) => state.logout)
-  const isAdmin = useAuthStore((state) => state.roleCodes.includes("admin"))
   const router = useRouter()
   const pathname = usePathname()
+  const userRecord = user as Record<string, unknown> | null
 
   const navLinkClass = (href: string, options?: { disabled?: boolean }) => {
     const disabled = options?.disabled
@@ -53,6 +54,11 @@ export default function CustomerNavBar({ unauthLinks }: CustomerNavBarProps = {}
   }, [])
 
   useEffect(() => {
+    setHydrated(true)
+  }, [])
+
+  useEffect(() => {
+    if (!hydrated) return
     if (user) return
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null
     if (!token) return
@@ -68,7 +74,57 @@ export default function CustomerNavBar({ unauthLinks }: CustomerNavBarProps = {}
         console.error("Failed to fetch user context", error)
       }
     })()
-  }, [user, setUser])
+  }, [hydrated, user, setUser])
+
+  const derivedRoleCodes = useMemo(() => {
+    const codes = new Set<string>()
+
+    const addCodes = (source: unknown) => {
+      if (!source) return
+      if (Array.isArray(source)) {
+        for (const entry of source) {
+          if (typeof entry === "string") {
+            const trimmed = entry.trim()
+            if (trimmed) {
+              codes.add(trimmed.toLowerCase())
+            }
+          } else if (entry && typeof entry === "object" && "code" in entry) {
+            const value = (entry as { code?: unknown }).code
+            if (typeof value === "string") {
+              const trimmed = value.trim()
+              if (trimmed) {
+                codes.add(trimmed.toLowerCase())
+              }
+            }
+          }
+        }
+      }
+    }
+
+    addCodes(userRecord?.["role_codes"])
+    addCodes(userRecord?.["roleCodes"])
+    addCodes(userRecord?.["role_details"])
+    addCodes(userRecord?.["roleDetails"])
+
+    return codes
+  }, [userRecord])
+
+  const isAdmin =
+    Boolean(
+      hydrated &&
+        user &&
+        (derivedRoleCodes.has("admin") || Boolean(userRecord?.["is_admin"]))
+    )
+
+  const hasUser = hydrated && Boolean(user)
+  const displayName =
+    (typeof user?.name === "string" && user.name.trim()) ||
+    (typeof user?.phone === "string" && user.phone.trim()) ||
+    "Customer"
+
+  if (pathname?.startsWith("/customer-v2")) {
+    return null
+  }
 
   return (
     <nav
@@ -98,7 +154,7 @@ export default function CustomerNavBar({ unauthLinks }: CustomerNavBarProps = {}
               <span className={navLinkClass("/customer/subscription", { disabled: true })}>Subscription</span>
             </div>
             <div className="pl-6 text-sm text-[#463028]">
-              {user ? (
+              {hasUser ? (
                 <div className="flex items-center gap-2">
                   {isAdmin && <Crown className="h-4 w-4 text-amber-500" />}
                   <Link
@@ -106,7 +162,7 @@ export default function CustomerNavBar({ unauthLinks }: CustomerNavBarProps = {}
                     className="inline-flex items-center gap-1.5 font-medium text-primary hover:underline"
                   >
                     <User className="h-4 w-4 text-[#463028]" aria-hidden="true" />
-                    <span>{user.name || user.phone || "Customer"}</span>
+                    <span>{displayName}</span>
                   </Link>
                   <Button
                     variant="ghost"

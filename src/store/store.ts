@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { DEFAULT_CITY, normalizeCityCode } from "@/config/cities";
 
 const isBrowser = typeof window !== "undefined";
 
@@ -26,7 +27,14 @@ const persistedUser = (() => {
 
 const persistedRoles = readPersistedArray<number>("auth_roles");
 const persistedRoleCodes = readPersistedArray<string>("auth_role_codes");
-
+const persistedAdminCity = (() => {
+  if (!isBrowser) return null;
+  try {
+    return localStorage.getItem("admin_city_code");
+  } catch {
+    return null;
+  }
+})();
 export type RoleSummary = {
   role_id: number;
   code: string;
@@ -40,6 +48,8 @@ type AuthUser = {
   customer_id?: number;
   phone?: string;
   name?: string | null;
+  city_code?: string;
+  eligible_city_codes?: string[];
   roles?: number[];
   role_codes?: string[];
   roleDetails?: RoleSummary[];
@@ -52,6 +62,8 @@ interface AuthStore {
   roles: number[];
   roleCodes: string[];
   isAdmin: boolean;
+  adminCity: string;
+  setAdminCity: (cityCode: string) => void;
   setRoleState: (roles: number[], roleCodes?: string[]) => void;
   setUser: (user: AuthUser) => void;
   hasRole: (roleCode: string) => boolean;
@@ -81,11 +93,43 @@ const normaliseRoleCodes = (codes: string[]): string[] => {
 
 const initialRoleCodes = normaliseRoleCodes(persistedRoleCodes);
 
+const normalizeCityPreference = (value?: string | null) => normalizeCityCode(value ?? DEFAULT_CITY);
+
+const resolveEligibleCities = (user: AuthUser): string[] => {
+  const raw = Array.isArray(user?.eligible_city_codes) && user?.eligible_city_codes.length
+    ? user?.eligible_city_codes
+    : user?.city_code
+      ? [user.city_code]
+      : [];
+  const normalized = raw
+    .map((code) => normalizeCityCode(code || DEFAULT_CITY))
+    .filter(Boolean);
+  if (normalized.length === 0 && user?.city_code) {
+    normalized.push(normalizeCityCode(user.city_code));
+  }
+  if (normalized.length === 0) {
+    normalized.push(DEFAULT_CITY);
+  }
+  return Array.from(new Set(normalized));
+};
+
 export const useAuthStore = create<AuthStore>((set, get) => ({
   user: persistedUser,
   roles: normaliseRoleIds(persistedRoles),
   roleCodes: initialRoleCodes,
   isAdmin: initialRoleCodes.includes("admin"),
+  adminCity: normalizeCityPreference(persistedAdminCity || persistedUser?.city_code),
+  setAdminCity: (cityCode: string) => {
+    const normalized = normalizeCityPreference(cityCode);
+    if (isBrowser) {
+      try {
+        localStorage.setItem("admin_city_code", normalized);
+      } catch {
+        /* ignore persistence errors */
+      }
+    }
+    set({ adminCity: normalized });
+  },
   setRoleState: (roles, roleCodes = []) => {
     const resolvedRoles = normaliseRoleIds(roles);
     const resolvedCodes = normaliseRoleCodes(roleCodes);
@@ -124,6 +168,15 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     const roles = user?.roles ?? [];
     const codes = (user?.role_codes ?? (user as Record<string, unknown> | null)?.roleCodes ?? []) as string[];
     get().setRoleState(roles, codes);
+
+    if (user) {
+      const eligibleCities = resolveEligibleCities(user);
+      const current = normalizeCityPreference(get().adminCity);
+      const nextCity = eligibleCities.includes(current)
+        ? current
+        : eligibleCities[0] ?? normalizeCityPreference(user.city_code);
+      get().setAdminCity(nextCity);
+    }
   },
   hasRole: (roleCode: string) => {
     return get().roleCodes.includes(roleCode);
@@ -136,9 +189,11 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       localStorage.removeItem("auth_user");
       localStorage.removeItem("auth_roles");
       localStorage.removeItem("auth_role_codes");
+      localStorage.removeItem("admin_city_code");
     }
 
     set({ user: null });
     get().setRoleState([], []);
+    get().setAdminCity(DEFAULT_CITY);
   },
 }));

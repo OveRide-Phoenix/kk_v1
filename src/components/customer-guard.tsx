@@ -30,7 +30,7 @@ export default function CustomerGuard({ children }: { children: React.ReactNode 
 
         if (!token) {
           logout()
-          if (!cancelled) router.replace("/")
+          if (!cancelled) router.replace("/login")
           return
         }
 
@@ -40,32 +40,17 @@ export default function CustomerGuard({ children }: { children: React.ReactNode 
           })
           if (!response.ok) {
             logout()
-            if (!cancelled) router.replace("/")
+            if (!cancelled) router.replace("/login")
             return
           }
           const me = await response.json()
           if (cancelled) return
           setUser(me)
-          const isAdmin = Array.isArray(me.role_codes) ? me.role_codes.includes("admin") : me.role === "admin"
-          if (isAdmin) {
-            logout()
-            router.replace("/")
-            return
-          }
-        } else {
-          const isAdminUser = Array.isArray((user as any)?.role_codes)
-            ? (user as any).role_codes.includes("admin")
-            : (user as any)?.role === "admin"
-          if (isAdminUser) {
-            logout()
-            router.replace("/")
-            return
-          }
         }
       } catch (error) {
         console.error("Customer auth guard error", error)
         logout()
-        if (!cancelled) router.replace("/")
+        if (!cancelled) router.replace("/login")
         return
       } finally {
         if (!cancelled) setChecking(false)
@@ -78,6 +63,16 @@ export default function CustomerGuard({ children }: { children: React.ReactNode 
       cancelled = true
     }
   }, [router, pathname, user, setUser, logout])
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        sessionStorage.removeItem("kk-switching-to-customer")
+      } catch {
+        /* ignore storage errors */
+      }
+    }
+  }, [])
 
   if (checking) {
     return <LoadingScreen />

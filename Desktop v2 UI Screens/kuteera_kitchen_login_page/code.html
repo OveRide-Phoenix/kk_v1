@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Kuteera Kitchen - Login</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Playfair+Display:wght@700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#8D4925",
+                        "admin-dark": "#3D3028",
+                        "background-light": "#fdfaf1",
+                        "background-dark": "#12110f",
+                        "card-light": "#ffffff",
+                        "card-dark": "#1c1a17",
+                    },
+                    fontFamily: {
+                        display: ["Plus Jakarta Sans", "sans-serif"],
+                        serif: ["Playfair Display", "serif"],
+                    },
+                    borderRadius: {
+                        DEFAULT: "16px",
+                    },
+                },
+            },
+        };
+    </script>
+<style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        .bg-pattern {
+            background-image: radial-gradient(circle at 2px 2px, rgba(141, 73, 37, 0.05) 1px, transparent 0);
+            background-size: 24px 24px;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark min-h-screen flex flex-col transition-colors duration-300 bg-pattern">
+<header class="w-full py-6 px-8 flex justify-between items-center bg-white/50 dark:bg-black/20 backdrop-blur-md sticky top-0 z-50 border-b border-primary/10">
+<div class="flex items-center gap-2">
+<div class="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-white">
+<span class="material-symbols-outlined">restaurant</span>
+</div>
+<span class="text-2xl font-serif font-bold text-primary">Kuteera Kitchen</span>
+</div>
+<nav class="hidden md:flex gap-8 items-center font-medium text-admin-dark dark:text-gray-300">
+<a class="hover:text-primary transition-colors" href="#">Our Menu</a>
+<a class="hover:text-primary transition-colors" href="#">Subscriptions</a>
+<a class="hover:text-primary transition-colors" href="#">About Us</a>
+<button class="p-2 rounded-full hover:bg-primary/10 transition-colors" onclick="document.documentElement.classList.toggle('dark')">
+<span class="material-symbols-outlined dark:hidden">dark_mode</span>
+<span class="material-symbols-outlined hidden dark:block text-yellow-500">light_mode</span>
+</button>
+</nav>
+</header>
+<main class="flex-grow flex items-center justify-center p-6">
+<div class="w-full max-w-[480px] bg-card-light dark:bg-card-dark rounded-DEFAULT shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)] border border-primary/5 dark:border-white/5 p-10">
+<div class="mb-8">
+<h1 class="text-3xl font-bold text-admin-dark dark:text-white mb-2">Welcome back</h1>
+<p class="text-gray-500 dark:text-gray-400">Enter your phone number and city to login or register</p>
+</div>
+<form class="space-y-6">
+<div class="space-y-2">
+<label class="block text-sm font-semibold text-admin-dark dark:text-gray-300">Phone Number</label>
+<div class="relative">
+<input class="w-full px-4 py-3.5 bg-[#EFF3FF] dark:bg-[#2A2D35] border-transparent focus:border-primary focus:ring-0 rounded-xl transition-all text-admin-dark dark:text-white" placeholder="Enter phone number" type="tel" value="+91 9108254344"/>
+<span class="absolute right-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-gray-400 text-sm">call</span>
+</div>
+</div>
+<div class="space-y-2">
+<label class="block text-sm font-semibold text-admin-dark dark:text-gray-300">City</label>
+<div class="relative">
+<select class="w-full px-4 py-3.5 bg-white dark:bg-[#2A2D35] border border-gray-200 dark:border-gray-700 focus:border-primary focus:ring-0 rounded-xl appearance-none transition-all text-admin-dark dark:text-white">
+<option>Mysore</option>
+<option>Bangalore</option>
+<option>Hubli</option>
+<option>Mangalore</option>
+</select>
+<span class="absolute right-4 top-1/2 -translate-y-1/2 material-symbols-outlined pointer-events-none text-gray-400">expand_more</span>
+</div>
+</div>
+<div class="space-y-2">
+<label class="block text-sm font-semibold text-admin-dark dark:text-gray-300">Admin Password</label>
+<div class="relative">
+<input class="w-full px-4 py-3.5 bg-[#EFF3FF] dark:bg-[#2A2D35] border-transparent focus:border-primary focus:ring-0 rounded-xl transition-all text-admin-dark dark:text-white" placeholder="••••••••" type="password" value="password123"/>
+<button class="absolute right-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-gray-400 hover:text-primary transition-colors" type="button">visibility_off</button>
+</div>
+</div>
+<div class="flex items-center">
+<input class="w-5 h-5 rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary/20 bg-transparent" id="remember" type="checkbox"/>
+<label class="ml-3 text-sm font-medium text-admin-dark dark:text-gray-300 cursor-pointer" for="remember">Remember me</label>
+</div>
+<div class="grid grid-cols-2 gap-4 pt-2">
+<button class="bg-primary hover:bg-primary/90 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-primary/20 active:scale-95" type="submit">
+                        Login as Customer
+                    </button>
+<button class="bg-admin-dark hover:bg-black text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-black/10 active:scale-95" type="submit">
+                        Login as Admin
+                    </button>
+</div>
+<div class="relative py-4">
+<div class="absolute inset-0 flex items-center">
+<div class="w-full border-t border-gray-200 dark:border-gray-800"></div>
+</div>
+<div class="relative flex justify-center text-xs uppercase">
+<span class="bg-card-light dark:bg-card-dark px-2 text-gray-500 font-bold tracking-widest">New here?</span>
+</div>
+</div>
+<button class="w-full py-4 px-6 rounded-xl border-2 border-primary/20 dark:border-white/10 text-primary dark:text-gray-300 font-bold hover:bg-primary/5 dark:hover:bg-white/5 transition-all active:scale-[0.98]" type="button">
+                    Register
+                </button>
+</form>
+</div>
+</main>
+<footer class="py-8 px-8 border-t border-primary/10 dark:border-white/5 mt-auto bg-white/50 dark:bg-black/20 backdrop-blur-md">
+<div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+<p class="text-sm text-gray-500 dark:text-gray-400">© 2024 Kuteera Kitchen Subscription Service. All rights reserved.</p>
+<div class="flex gap-6 text-sm font-medium text-admin-dark dark:text-gray-300">
+<a class="hover:text-primary" href="#">Privacy Policy</a>
+<a class="hover:text-primary" href="#">Terms of Service</a>
+<a class="hover:text-primary" href="#">Help Center</a>
+</div>
+</div>
+</footer>
+<div class="fixed bottom-6 left-6 w-10 h-10 bg-admin-dark rounded-full flex items-center justify-center text-white shadow-xl cursor-pointer hover:scale-110 transition-transform">
+<span class="font-bold text-lg">N</span>
+</div>
+
+</body></html>

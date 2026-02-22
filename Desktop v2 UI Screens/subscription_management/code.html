@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Subscription Management | Kuteera Kitchen</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,typography,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#8D4925",
+                        success: "#1b4332",
+                        "background-light": "#FDFBF3",
+                        "background-dark": "#121212",
+                        "card-light": "#FFFFFF",
+                        "card-dark": "#1E1E1E",
+                    },
+                    fontFamily: {
+                        display: ["DM Serif Display", "serif"],
+                        sans: ["Inter", "sans-serif"],
+                    },
+                    borderRadius: {
+                        DEFAULT: "1.25rem",
+                    },
+                },
+            },
+        };
+    </script>
+<style type="text/tailwindcss">
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        h1, h2, h3 {
+            font-family: 'DM Serif Display', serif;
+        }
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-800 dark:text-slate-100 min-h-screen">
+<nav class="sticky top-0 z-50 bg-white/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-slate-100 dark:border-white/5">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+<div class="flex justify-between items-center h-20">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-white">
+<span class="material-symbols-outlined">restaurant_menu</span>
+</div>
+<span class="text-xl font-display text-primary">Kuteera Kitchen</span>
+</div>
+<div class="hidden md:flex items-center space-x-8">
+<a class="text-slate-600 hover:text-primary font-medium transition-colors" href="#">Home</a>
+<a class="text-slate-600 hover:text-primary font-medium transition-colors" href="#">Order</a>
+<a class="text-primary font-bold transition-colors" href="#">Subscription</a>
+<a class="text-slate-600 hover:text-primary font-medium transition-colors flex items-center gap-1" href="#">
+                        Notifications
+                        <span class="w-2 h-2 bg-red-500 rounded-full"></span>
+</a>
+<a class="flex items-center gap-2 pl-4 border-l border-slate-200 dark:border-white/10 group" href="#">
+<div class="w-9 h-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center group-hover:bg-primary/20 transition-all">
+<span class="material-symbols-outlined text-primary text-xl">person</span>
+</div>
+<span class="font-semibold text-slate-700 dark:text-slate-200">Profile</span>
+</a>
+</div>
+</div>
+</div>
+</nav>
+<main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
+<div class="mb-8">
+<h1 class="text-4xl lg:text-5xl text-primary mb-2">Manage Subscription</h1>
+<p class="text-slate-500 dark:text-slate-400">View and manage your meal delivery schedule</p>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+<div class="lg:col-span-8 space-y-8">
+<div class="bg-card-light dark:bg-card-dark rounded-3xl p-6 lg:p-8 shadow-sm border border-slate-100 dark:border-white/5">
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+<div>
+<h2 class="text-2xl text-slate-800 dark:text-white mb-1">Delivery Calendar</h2>
+<p class="text-sm text-slate-400">Tap a date to pause or resume deliveries</p>
+</div>
+<div class="flex items-center gap-3 bg-slate-50 dark:bg-white/5 p-1 rounded-xl">
+<button class="p-2 hover:bg-white dark:hover:bg-white/10 rounded-lg transition-all">
+<span class="material-symbols-outlined text-slate-400">chevron_left</span>
+</button>
+<span class="font-bold px-4">October 2023</span>
+<button class="p-2 hover:bg-white dark:hover:bg-white/10 rounded-lg transition-all">
+<span class="material-symbols-outlined text-slate-400">chevron_right</span>
+</button>
+</div>
+</div>
+<div class="calendar-grid text-center font-semibold text-slate-400 mb-4 uppercase text-xs tracking-wider">
+<div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+</div>
+<div class="calendar-grid gap-2 sm:gap-4">
+<div class="p-4 text-slate-300">24</div>
+<div class="p-4 text-slate-300">25</div>
+<div class="p-4 text-slate-300">26</div>
+<div class="p-4 text-slate-300">27</div>
+<div class="p-4 text-slate-300">28</div>
+<div class="p-4 text-slate-300">29</div>
+<div class="p-4 text-slate-300">30</div>
+<button class="group relative aspect-square flex flex-col items-center justify-center rounded-2xl border-2 border-transparent hover:border-primary/20 bg-slate-50 dark:bg-white/5 transition-all">
+<span class="text-lg">1</span>
+<div class="w-1.5 h-1.5 rounded-full bg-success mt-1"></div>
+</button>
+<button class="group relative aspect-square flex flex-col items-center justify-center rounded-2xl border-2 border-transparent hover:border-primary/20 bg-slate-50 dark:bg-white/5 transition-all">
+<span class="text-lg">2</span>
+<div class="w-1.5 h-1.5 rounded-full bg-success mt-1"></div>
+</button>
+<button class="group relative aspect-square flex flex-col items-center justify-center rounded-2xl border-2 border-primary bg-primary/5 shadow-inner">
+<span class="text-lg font-bold text-primary">3</span>
+<div class="w-1.5 h-1.5 rounded-full bg-success mt-1"></div>
+</button>
+<button class="group relative aspect-square flex flex-col items-center justify-center rounded-2xl border-2 border-transparent hover:border-primary/20 bg-slate-50 dark:bg-white/5 transition-all opacity-50">
+<span class="text-lg line-through">4</span>
+<div class="w-1.5 h-1.5 rounded-full bg-red-400 mt-1"></div>
+<span class="absolute top-1 right-1 text-[8px] font-bold text-red-500">PAUSED</span>
+</button>
+<button class="group relative aspect-square flex flex-col items-center justify-center rounded-2xl border-2 border-transparent hover:border-primary/20 bg-slate-50 dark:bg-white/5 transition-all">
+<span class="text-lg">5</span>
+<div class="w-1.5 h-1.5 rounded-full bg-success mt-1"></div>
+</button>
+<button class="group relative aspect-square flex flex-col items-center justify-center rounded-2xl border-2 border-transparent hover:border-primary/20 bg-slate-50 dark:bg-white/5 transition-all">
+<span class="text-lg">6</span>
+<div class="w-1.5 h-1.5 rounded-full bg-success mt-1"></div>
+</button>
+<button class="group relative aspect-square flex flex-col items-center justify-center rounded-2xl border-2 border-transparent hover:border-primary/20 bg-slate-50 dark:bg-white/5 transition-all">
+<span class="text-lg">7</span>
+<div class="w-1.5 h-1.5 rounded-full bg-success mt-1"></div>
+</button>
+<button class="group relative aspect-square flex flex-col items-center justify-center rounded-2xl border-2 border-transparent hover:border-primary/20 bg-slate-50 dark:bg-white/5 transition-all">
+<span class="text-lg">8</span>
+<div class="w-1.5 h-1.5 rounded-full bg-success mt-1"></div>
+</button>
+<button class="group relative aspect-square flex flex-col items-center justify-center rounded-2xl border-2 border-transparent hover:border-primary/20 bg-slate-50 dark:bg-white/5 transition-all">
+<span class="text-lg">9</span>
+<div class="w-1.5 h-1.5 rounded-full bg-success mt-1"></div>
+</button>
+<button class="group relative aspect-square flex flex-col items-center justify-center rounded-2xl border-2 border-transparent hover:border-primary/20 bg-slate-50 dark:bg-white/5 transition-all">
+<span class="text-lg">10</span>
+<div class="w-1.5 h-1.5 rounded-full bg-success mt-1"></div>
+</button>
+</div>
+<div class="mt-8 flex flex-wrap gap-6 border-t border-slate-100 dark:border-white/5 pt-6">
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-success"></div>
+<span class="text-sm font-medium">Scheduled</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-red-400"></div>
+<span class="text-sm font-medium">Paused</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-primary"></div>
+<span class="text-sm font-medium">Today</span>
+</div>
+</div>
+</div>
+<div class="space-y-6">
+<div class="flex justify-between items-center">
+<h2 class="text-2xl text-slate-800 dark:text-white">Upcoming Deliveries</h2>
+<button class="text-primary font-bold text-sm uppercase tracking-wider hover:underline">View Monthly</button>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div class="bg-card-light dark:bg-card-dark p-4 rounded-2xl flex items-center gap-4 border border-slate-100 dark:border-white/5">
+<img alt="Idli Sambar" class="w-20 h-20 object-cover rounded-xl" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBgczlezC90f3VQ7iA7buKLBbvMD389WFi4SgxBfThYR23uUG9N_Ytl-PpkUrAaVQ6n-704BFlFfWf43NgM7Tuj9D08InyJggY_QyQHkMgchhzhj6LPVcMrnJ3nyFkj0onVUiJGRByge7DXCpvQhqeI41j4O62A0qxopRPzdNdbVh4o-arcNplRwAVScw_fkvmixMdjj-4CyKY0M22euy5JQxzco6s28vMU0Bmo7YJIVFEL7cFKKHisZVoOwPxCmukVZUu5ArKynFQC"/>
+<div class="flex-1">
+<div class="text-xs font-bold text-primary uppercase mb-1">Tomorrow, 4 Oct</div>
+<h3 class="font-bold text-lg leading-tight mb-1">Rava Idli &amp; Chutney</h3>
+<div class="flex items-center gap-1 text-slate-400 text-xs">
+<span class="material-symbols-outlined text-[14px]">lunch_dining</span>
+<span>Breakfast • 08:30 AM</span>
+</div>
+</div>
+<button class="p-2 text-primary hover:bg-primary/5 rounded-lg">
+<span class="material-symbols-outlined">edit</span>
+</button>
+</div>
+<div class="bg-card-light dark:bg-card-dark p-4 rounded-2xl flex items-center gap-4 border border-slate-100 dark:border-white/5">
+<img alt="Rice and Dal" class="w-20 h-20 object-cover rounded-xl" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC4Kmg_FuIeudlv04gF3I50BbrqTvYB4b294D8ImejzJ4mLiS93MypemwpZM_aZ5T6-ZaUSw4FsoITh22neCBThFYQWhFEUejZ2_WMd1Md7BOoBuNulipO3bVkWiQK2g7JLtUlmQLpsUlyI6Frvd9h4eDSnKcVllCD0mBBysEYF_LkBEJpL3eqYYv2BEq0Yd0spXd8LjOG4l1ewSPdu-ZllCLt82mcEubQCZF7lk6m1Oj_ExSlVyt_25SU4Lp8mEpm368bxorQ-0jSd"/>
+<div class="flex-1">
+<div class="text-xs font-bold text-primary uppercase mb-1">Thursday, 5 Oct</div>
+<h3 class="font-bold text-lg leading-tight mb-1">Traditional Thali</h3>
+<div class="flex items-center gap-1 text-slate-400 text-xs">
+<span class="material-symbols-outlined text-[14px]">lunch_dining</span>
+<span>Lunch • 12:30 PM</span>
+</div>
+</div>
+<button class="p-2 text-primary hover:bg-primary/5 rounded-lg">
+<span class="material-symbols-outlined">edit</span>
+</button>
+</div>
+<div class="bg-card-light dark:bg-card-dark p-4 rounded-2xl flex items-center gap-4 border border-slate-100 dark:border-white/5">
+<img alt="Dosa" class="w-20 h-20 object-cover rounded-xl" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCI_qwbafdIP_lc1M_vTm0FuD01g9qPh45yv4Z4wMKWeeI29MfWzm1CR_nebZDHc2Sg5bHhyw2aYHKj4hhu1DgOHIhRHbDfDfUVYf45DcT-zQ0faR-HWySFE5Cngzz1Pgyh8CKdTGN80rZ5qSDawXdXnPv2BUFCdj6K3Ut-2AQM--IcU2YObvMuVb0y9gtDAYxTdYS6ZvMIixXb46D0q2zFbzaCKtohs11uzXz4ZePMoFGkX3djDQK2PaYkLyA5MruMjkpNUd5OytjR"/>
+<div class="flex-1">
+<div class="text-xs font-bold text-primary uppercase mb-1">Friday, 6 Oct</div>
+<h3 class="font-bold text-lg leading-tight mb-1">Masala Dosa Special</h3>
+<div class="flex items-center gap-1 text-slate-400 text-xs">
+<span class="material-symbols-outlined text-[14px]">lunch_dining</span>
+<span>Breakfast • 08:30 AM</span>
+</div>
+</div>
+<button class="p-2 text-primary hover:bg-primary/5 rounded-lg">
+<span class="material-symbols-outlined">edit</span>
+</button>
+</div>
+<div class="bg-card-light dark:bg-card-dark p-4 rounded-2xl flex items-center gap-4 border border-slate-100 dark:border-white/5 opacity-60 grayscale-[0.5]">
+<div class="w-20 h-20 bg-slate-100 dark:bg-white/5 rounded-xl flex items-center justify-center">
+<span class="material-symbols-outlined text-slate-400">pause_circle</span>
+</div>
+<div class="flex-1">
+<div class="text-xs font-bold text-slate-400 uppercase mb-1">Saturday, 7 Oct</div>
+<h3 class="font-bold text-lg leading-tight mb-1">Delivery Paused</h3>
+<div class="flex items-center gap-1 text-slate-400 text-xs">
+<span class="material-symbols-outlined text-[14px]">event_busy</span>
+<span>No meal scheduled</span>
+</div>
+</div>
+<button class="px-3 py-1 bg-primary text-white text-xs font-bold rounded-lg">RESUME</button>
+</div>
+</div>
+</div>
+</div>
+<div class="lg:col-span-4 space-y-6">
+<div class="bg-card-light dark:bg-card-dark p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-white/5 flex items-center justify-between">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">account_balance_wallet</span>
+</div>
+<div>
+<p class="text-xs text-slate-400 font-medium uppercase">Wallet Balance</p>
+<p class="text-2xl font-bold">₹450.00</p>
+</div>
+</div>
+<button class="bg-primary text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:brightness-110 transition-all">Top Up</button>
+</div>
+<div class="bg-primary rounded-3xl p-8 text-white relative overflow-hidden shadow-xl shadow-primary/20">
+<div class="absolute -right-12 -bottom-12 w-48 h-48 opacity-10">
+<span class="material-symbols-outlined text-[200px]">eco</span>
+</div>
+<div class="relative z-10">
+<div class="flex justify-between items-start mb-6">
+<div>
+<p class="text-xs font-bold uppercase tracking-widest opacity-80 mb-1">Current Plan</p>
+<h3 class="text-3xl font-display">Monthly Veg Plan</h3>
+</div>
+<span class="bg-success text-[10px] font-black px-2 py-1 rounded-md tracking-widest uppercase">Active</span>
+</div>
+<div class="space-y-4 mb-8">
+<div class="flex justify-between items-end border-b border-white/20 pb-4">
+<div>
+<p class="text-xs opacity-60 mb-1">Price / Month</p>
+<p class="text-xl font-bold">₹4,200</p>
+</div>
+<div class="text-right">
+<p class="text-xs opacity-60 mb-1">Renews On</p>
+<p class="text-xl font-bold">24 Oct, 2023</p>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-success">check_circle</span>
+<span class="text-sm font-medium">Daily Breakfast &amp; Lunch included</span>
+</div>
+</div>
+<button class="w-full bg-white text-primary py-4 rounded-2xl font-bold hover:bg-background-light transition-colors">Manage Plan Details</button>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<button class="bg-card-light dark:bg-card-dark p-6 rounded-3xl flex flex-col items-center gap-3 border border-slate-100 dark:border-white/5 hover:border-primary/50 transition-all">
+<div class="w-12 h-12 bg-slate-100 dark:bg-white/5 rounded-full flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">pause_circle</span>
+</div>
+<span class="text-sm font-bold">Pause Delivery</span>
+</button>
+<button class="bg-card-light dark:bg-card-dark p-6 rounded-3xl flex flex-col items-center gap-3 border border-slate-100 dark:border-white/5 hover:border-primary/50 transition-all">
+<div class="w-12 h-12 bg-slate-100 dark:bg-white/5 rounded-full flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">swap_horiz</span>
+</div>
+<span class="text-sm font-bold">Change Plan</span>
+</button>
+</div>
+<div class="bg-[#1b4332]/5 dark:bg-success/10 p-6 rounded-3xl border border-success/20">
+<h4 class="font-bold text-success mb-2">Need help?</h4>
+<p class="text-sm text-success/80 mb-4">Our kitchen team is available from 6 AM to 9 PM for any subscription adjustments.</p>
+<button class="flex items-center gap-2 text-success font-bold text-sm">
+<span class="material-symbols-outlined text-sm">support_agent</span>
+                        Chat with Support
+                    </button>
+</div>
+</div>
+</div>
+</main>
+<footer class="bg-white dark:bg-card-dark border-t border-slate-100 dark:border-white/5 pt-16">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-16">
+<div class="space-y-6">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-white">
+<span class="material-symbols-outlined">restaurant_menu</span>
+</div>
+<span class="text-xl font-display text-primary">Kuteera Kitchen</span>
+</div>
+<p class="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">
+                        Authentic South Indian flavors delivered to your doorstep. Healthy, farm-fresh, and prepared with love in our traditional kitchen.
+                    </p>
+<div class="flex gap-4">
+<a class="w-10 h-10 rounded-full bg-slate-50 dark:bg-white/5 flex items-center justify-center text-slate-400 hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-lg">public</span>
+</a>
+<a class="w-10 h-10 rounded-full bg-slate-50 dark:bg-white/5 flex items-center justify-center text-slate-400 hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-lg">alternate_email</span>
+</a>
+<a class="w-10 h-10 rounded-full bg-slate-50 dark:bg-white/5 flex items-center justify-center text-slate-400 hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-lg">chat</span>
+</a>
+</div>
+</div>
+<div>
+<h4 class="font-bold text-slate-900 dark:text-white mb-6 uppercase text-xs tracking-[0.2em]">Quick Links</h4>
+<ul class="space-y-4">
+<li><a class="text-slate-500 dark:text-slate-400 hover:text-primary text-sm transition-colors" href="#">Home</a></li>
+<li><a class="text-slate-500 dark:text-slate-400 hover:text-primary text-sm transition-colors" href="#">Daily Menu</a></li>
+<li><a class="text-slate-500 dark:text-slate-400 hover:text-primary text-sm transition-colors" href="#">Subscription Plans</a></li>
+<li><a class="text-slate-500 dark:text-slate-400 hover:text-primary text-sm transition-colors" href="#">Refer a Friend</a></li>
+</ul>
+</div>
+<div>
+<h4 class="font-bold text-slate-900 dark:text-white mb-6 uppercase text-xs tracking-[0.2em]">Support</h4>
+<ul class="space-y-4">
+<li><a class="text-slate-500 dark:text-slate-400 hover:text-primary text-sm transition-colors" href="#">Help Center</a></li>
+<li><a class="text-slate-500 dark:text-slate-400 hover:text-primary text-sm transition-colors" href="#">Refund Policy</a></li>
+<li><a class="text-slate-500 dark:text-slate-400 hover:text-primary text-sm transition-colors" href="#">Terms of Service</a></li>
+<li><a class="text-slate-500 dark:text-slate-400 hover:text-primary text-sm transition-colors" href="#">Contact Us</a></li>
+</ul>
+</div>
+<div>
+<h4 class="font-bold text-slate-900 dark:text-white mb-6 uppercase text-xs tracking-[0.2em]">Newsletter</h4>
+<p class="text-slate-500 dark:text-slate-400 text-sm mb-4">Subscribe for healthy eating tips and special offers.</p>
+<div class="relative">
+<input class="w-full bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10 rounded-xl py-3 px-4 pr-12 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all" placeholder="Enter your email" type="email"/>
+<button class="absolute right-2 top-2 bg-primary text-white p-1.5 rounded-lg hover:brightness-110 transition-all">
+<span class="material-symbols-outlined text-sm">arrow_forward</span>
+</button>
+</div>
+<div class="mt-8 grid grid-cols-2 gap-4">
+<div class="flex items-center gap-2 bg-success/5 dark:bg-success/10 p-2 rounded-lg border border-success/10">
+<span class="material-symbols-outlined text-success text-sm">verified_user</span>
+<span class="text-[10px] font-bold text-success uppercase">100% Secure</span>
+</div>
+<div class="flex items-center gap-2 bg-primary/5 dark:bg-primary/10 p-2 rounded-lg border border-primary/10">
+<span class="material-symbols-outlined text-primary text-sm">workspace_premium</span>
+<span class="text-[10px] font-bold text-primary uppercase">Premium Quality</span>
+</div>
+</div>
+</div>
+</div>
+<div class="py-8 border-t border-slate-100 dark:border-white/5 flex flex-col md:flex-row justify-between items-center gap-4">
+<div class="flex flex-wrap justify-center md:justify-start gap-8">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">eco</span>
+<span class="text-xs font-semibold text-slate-500">Eco-friendly Packaging</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">schedule</span>
+<span class="text-xs font-semibold text-slate-500">Punctual Delivery</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">local_shipping</span>
+<span class="text-xs font-semibold text-slate-500">Contactless Delivery</span>
+</div>
+</div>
+<p class="text-[11px] font-medium text-slate-400 uppercase tracking-widest">© 2023 Kuteera Kitchen. Crafted with health in mind.</p>
+</div>
+</div>
+</footer>
+
+</body></html>

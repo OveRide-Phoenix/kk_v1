@@ -23,12 +23,38 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import GoogleMapPicker from "@/components/gmap/GoogleMapPicker"
+
+const CITY_OPTIONS = [
+  { label: "Mysore", code: "MYS" },
+  { label: "Bangalore", code: "BLR" },
+]
+
+const CITY_LABELS: Record<string, string> = {
+  MYS: "Mysore",
+  BLR: "Bangalore",
+}
+
+const resolveCityCode = (value: string) => {
+  const match = CITY_OPTIONS.find(
+    (option) => option.label.toLowerCase() === value.trim().toLowerCase(),
+  )
+  return match ? match.code : "MYS"
+}
 
 interface CustomerProfile {
   customer_id: number
@@ -60,6 +86,7 @@ interface AddressEntry {
   house_apartment_no: string | null
   written_address: string
   city: string
+  city_code: string
   pin_code: string
   is_default: boolean
   latitude?: number | null
@@ -94,6 +121,7 @@ type AddressFormState = {
   house_apartment_no: string
   written_address: string
   city: string
+  city_code: string
   pin_code: string
   latitude: string
   longitude: string
@@ -115,6 +143,7 @@ const createAddressForm = (overrides: Partial<AddressFormState> = {}): AddressFo
   house_apartment_no: overrides.house_apartment_no ?? "",
   written_address: overrides.written_address ?? "",
   city: overrides.city ?? "",
+  city_code: overrides.city_code ?? "",
   pin_code: overrides.pin_code ?? "",
   latitude: overrides.latitude ?? "",
   longitude: overrides.longitude ?? "",
@@ -147,7 +176,9 @@ export default function AccountPage() {
   const [addressForm, setAddressForm] = useState<AddressFormState>(createAddressForm())
   const [addressSubmitting, setAddressSubmitting] = useState(false)
   const [addressFormError, setAddressFormError] = useState<string | null>(null)
-
+  const [cityChangeAlert, setCityChangeAlert] = useState<{ cityCode: string; city?: string } | null>(
+    null,
+  )
   const [billOrderId, setBillOrderId] = useState<number | null>(null)
 
   // Restore user session if the store is empty
@@ -170,6 +201,10 @@ export default function AccountPage() {
   }, [user, setUser])
 
   const customerId = user?.customer_id
+  const currentCityLabel = useMemo(() => {
+    if (!user?.city_code) return "this city"
+    return CITY_LABELS[user.city_code] ?? user.city_code
+  }, [user?.city_code])
 
   const fetchProfile = useCallback(async () => {
     if (!customerId) return
@@ -180,21 +215,17 @@ export default function AccountPage() {
     const data = (await response.json()) as CustomerProfile
     setProfile(data)
     setForm(data)
-    setUser({
-      ...(user ?? {}),
-      roles: data.roles ?? [],
-      role_codes: data.role_codes ?? [],
-    })
-  }, [customerId, user, setUser])
+  }, [customerId])
 
   const fetchAddresses = useCallback(async () => {
-    if (!customerId) return
+    if (!customerId) return []
     const response = await fetch(`http://localhost:8000/api/customers/${customerId}/addresses`)
     if (!response.ok) {
       throw new Error("Unable to load addresses")
     }
     const data = (await response.json()) as AddressEntry[]
     setAddresses(data)
+    return data
   }, [customerId])
 
   const fetchOrders = useCallback(async () => {
@@ -491,6 +522,7 @@ export default function AccountPage() {
     setAddressForm(
       createAddressForm({
         city: form?.city ?? "",
+        city_code: form?.city ? resolveCityCode(form.city) : "",
         pin_code: form?.pin_code ?? "",
         latitude:
           profile?.latitude != null
@@ -519,6 +551,7 @@ export default function AccountPage() {
         house_apartment_no: entry.house_apartment_no ?? "",
         written_address: entry.written_address ?? "",
         city: entry.city ?? "",
+        city_code: entry.city_code ?? "",
         pin_code: entry.pin_code ?? "",
         latitude:
           entry.latitude !== null && entry.latitude !== undefined ? String(entry.latitude) : "",
@@ -571,6 +604,9 @@ export default function AccountPage() {
         house_apartment_no: addressForm.house_apartment_no.trim() || null,
         written_address: addressForm.written_address.trim(),
         city: addressForm.city.trim(),
+        city_code:
+          addressForm.city_code.trim() ||
+          resolveCityCode(addressForm.city),
         pin_code: addressForm.pin_code.trim(),
         latitude,
         longitude,
@@ -614,7 +650,21 @@ export default function AccountPage() {
         const data = await response.json().catch(() => ({}))
         throw new Error(data.detail || "Unable to update default address.")
       }
-      await Promise.all([fetchAddresses(), fetchProfile()])
+      const updatedAddresses = await fetchAddresses()
+      await fetchProfile()
+      const newDefault =
+        updatedAddresses?.find((address) => address.is_default) ??
+        updatedAddresses?.find((address) => address.address_id === addressId)
+      if (
+        newDefault?.city_code &&
+        user?.city_code &&
+        newDefault.city_code !== user.city_code
+      ) {
+        setCityChangeAlert({
+          cityCode: newDefault.city_code,
+          city: newDefault.city,
+        })
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to update default address.")
     }
@@ -1110,13 +1160,27 @@ export default function AccountPage() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="address_city">City</Label>
-                <Input
-                  id="address_city"
+                <Select
                   value={addressForm.city}
-                  onChange={(e) =>
-                    setAddressForm((prev) => ({ ...prev, city: e.target.value }))
+                  onValueChange={(value) =>
+                    setAddressForm((prev) => ({
+                      ...prev,
+                      city: value,
+                      city_code: resolveCityCode(value),
+                    }))
                   }
-                />
+                >
+                  <SelectTrigger id="address_city">
+                    <SelectValue placeholder="Select city" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CITY_OPTIONS.map((option) => (
+                      <SelectItem key={option.code} value={option.label}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="address_pin">PIN code</Label>
@@ -1239,6 +1303,32 @@ export default function AccountPage() {
           )}
         </DialogContent>
       </Dialog>
+      <AlertDialog
+        open={Boolean(cityChangeAlert)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCityChangeAlert(null)
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Default address updated</AlertDialogTitle>
+            <AlertDialogDescription>
+              {cityChangeAlert
+                ? `You've set your default address in ${
+                    cityChangeAlert.city ||
+                    CITY_LABELS[cityChangeAlert.cityCode] ||
+                    cityChangeAlert.cityCode
+                  }. You'll continue seeing menus for ${currentCityLabel} until you log out and sign back in.`
+                : "You'll continue seeing the current city's menu until you log out and sign in again."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setCityChangeAlert(null)}>Got it</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

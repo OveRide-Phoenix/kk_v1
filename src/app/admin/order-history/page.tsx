@@ -60,8 +60,6 @@ import {
   Filter,
   RefreshCw,
   Search,
-  ArrowLeft,
-  ArrowRight,
   Loader2,
   Eye,
   CreditCard,
@@ -77,6 +75,15 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import { useAuthStore } from "@/store/store";
 
 type OrderItem = {
   name: string;
@@ -90,6 +97,7 @@ type OrderRecord = {
   created_at: string | null;
   status: string;
   payment_method: string;
+  paid: boolean;
   total_price: number;
   customer_id: number;
   customer_name: string;
@@ -150,10 +158,11 @@ const PAGE_SIZE = 10;
 
 const statusOptions = [
   { label: "All", value: "all" },
-  { label: "Pending", value: "pending" },
-  { label: "In Progress", value: "in progress" },
+  { label: "Confirmed (Payment Due)", value: "pending" },
+  { label: "Confirmed", value: "confirmed" },
+  { label: "Preparing", value: "preparing" },
+  { label: "On the Way", value: "on the way" },
   { label: "Delivered", value: "delivered" },
-  { label: "Completed", value: "completed" },
   { label: "Cancelled", value: "cancelled" },
 ];
 
@@ -175,15 +184,25 @@ const formatDateTime = (value: string | null) => {
 };
 
 const statusBadgeClass = (status: string) => {
-  const normalized = status.toLowerCase();
+  const raw = status.toLowerCase();
+  const normalized = raw
+    .replace(/\(payment due\)/g, "")
+    .replace(/\s+-\s+payment due/g, "")
+    .trim();
+  if (raw.includes("payment due")) {
+    return "bg-amber-50 text-amber-900 border border-amber-200";
+  }
+  if (normalized === "confirmed") {
+    return "bg-sky-50 text-sky-700 border border-sky-200";
+  }
+  if (normalized === "preparing") {
+    return "bg-orange-50 text-orange-800 border border-orange-200";
+  }
+  if (normalized === "on the way") {
+    return "bg-indigo-50 text-indigo-700 border border-indigo-200";
+  }
   if (normalized === "delivered" || normalized === "completed") {
     return "bg-emerald-50 text-emerald-700 border border-emerald-200";
-  }
-  if (normalized === "pending") {
-    return "bg-amber-50 text-amber-800 border border-amber-200";
-  }
-  if (normalized === "in progress" || normalized === "processing") {
-    return "bg-blue-50 text-blue-700 border border-blue-200";
   }
   if (normalized === "cancelled" || normalized === "canceled") {
     return "bg-rose-50 text-rose-700 border border-rose-200";
@@ -305,11 +324,13 @@ export default function OrderHistoryPage() {
   const [invoiceData, setInvoiceData] = useState<InvoiceResponse | null>(null);
   const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [invoiceError, setInvoiceError] = useState<string | null>(null);
+  const adminCity = useAuthStore((state) => state.adminCity || state.user?.city_code || "MYS");
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams();
     params.set("limit", String(PAGE_SIZE));
     params.set("offset", String(page * PAGE_SIZE));
+    params.set("city_code", adminCity);
     if (filters.startDate) {
       params.set("start_date", format(filters.startDate, "yyyy-MM-dd"));
     }
@@ -326,7 +347,7 @@ export default function OrderHistoryPage() {
       params.set("product", filters.productQuery.trim());
     }
     return params.toString();
-  }, [filters, page]);
+  }, [filters, page, adminCity]);
 
   const statusUpdateOptions = statusOptions.filter((option) => option.value !== "all");
 
@@ -343,7 +364,11 @@ export default function OrderHistoryPage() {
         throw new Error("Failed to load order history");
       }
       const data = (await res.json()) as OrdersApiResponse;
-      setOrders(data.orders);
+      const normalizedOrders = (data.orders ?? []).map((order) => ({
+        ...order,
+        paid: Boolean(order.paid),
+      }));
+      setOrders(normalizedOrders);
       setTotalOrders(data.total);
     } catch (err) {
       if (err instanceof Error) {
@@ -415,7 +440,7 @@ export default function OrderHistoryPage() {
 
     setUpdatingOrderId(orderId);
     try {
-      const res = await http.post(`/api/admin/orders/${orderId}/status`, {
+      const res = await http.post(`/api/admin/orders/${orderId}/status?city_code=${adminCity}`, {
         status: trimmedStatus,
       });
       if (!res.ok) {
@@ -448,7 +473,7 @@ export default function OrderHistoryPage() {
     setInvoiceData(null);
     setInvoiceError(null);
     try {
-      const res = await http.get(`/api/admin/orders/${orderId}/invoice`);
+      const res = await http.get(`/api/admin/orders/${orderId}/invoice?city_code=${adminCity}`);
       if (!res.ok) {
         throw new Error("Unable to load invoice data");
       }
@@ -489,6 +514,37 @@ export default function OrderHistoryPage() {
   const totalPages = Math.ceil(totalOrders / PAGE_SIZE);
   const hasNextPage = page + 1 < totalPages;
   const hasPrevPage = page > 0;
+  const paginationRange = useMemo<(number | "ellipsis")[]>(() => {
+    if (totalPages <= 1) return [];
+    const currentPage = page + 1;
+    const siblings = 1;
+    const firstPage = 1;
+    const lastPage = totalPages;
+    const pages: Array<number | "ellipsis"> = [];
+
+    const startPage = Math.max(currentPage - siblings, firstPage);
+    const endPage = Math.min(currentPage + siblings, lastPage);
+
+    if (startPage > firstPage) {
+      pages.push(firstPage);
+      if (startPage > firstPage + 1) {
+        pages.push("ellipsis");
+      }
+    }
+
+    for (let index = startPage; index <= endPage; index += 1) {
+      pages.push(index);
+    }
+
+    if (endPage < lastPage) {
+      if (endPage < lastPage - 1) {
+        pages.push("ellipsis");
+      }
+      pages.push(lastPage);
+    }
+
+    return pages;
+  }, [page, totalPages]);
 
   const filtersApplied =
     filters.status !== "all" ||
@@ -666,6 +722,14 @@ export default function OrderHistoryPage() {
                               {paymentMethodIcon(order.payment_method)}
                               {normalizePaymentMethod(order.payment_method)}
                             </span>
+                            <span
+                              className={cn(
+                                "text-xs",
+                                order.paid ? "text-muted-foreground" : "text-destructive font-medium",
+                              )}
+                            >
+                              {order.paid ? "Paid" : "Payment due"}
+                            </span>
                           </div>
                         </TableCell>
                         <TableCell>{formatDateTime(order.created_at)}</TableCell>
@@ -750,29 +814,55 @@ export default function OrderHistoryPage() {
             )}
           </CardContent>
           <CardFooter className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground whitespace-nowrap">
               Page {Math.min(page + 1, Math.max(totalPages, 1))} of {Math.max(totalPages, 1)}
             </p>
-            {totalPages > 1 && (
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setPage((prev) => prev - 1)}
-                  disabled={!hasPrevPage}
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setPage((prev) => prev + 1)}
-                  disabled={!hasNextPage}
-                >
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
+            {totalPages > 1 ? (
+              <Pagination>
+                <PaginationContent>
+                  <PaginationPrevious
+                    href="#"
+                    disabled={!hasPrevPage}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      if (hasPrevPage) {
+                        setPage((prev) => prev - 1);
+                      }
+                    }}
+                  />
+                  {paginationRange.map((entry, index) => {
+                    if (entry === "ellipsis") {
+                      return <PaginationEllipsis key={`ellipsis-${index}`} />;
+                    }
+                    return (
+                      <PaginationLink
+                        key={entry}
+                        href="#"
+                        isActive={entry === page + 1}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          if (entry !== page + 1) {
+                            setPage(entry - 1);
+                          }
+                        }}
+                      >
+                        {entry}
+                      </PaginationLink>
+                    );
+                  })}
+                  <PaginationNext
+                    href="#"
+                    disabled={!hasNextPage}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      if (hasNextPage) {
+                        setPage((prev) => prev + 1);
+                      }
+                    }}
+                  />
+                </PaginationContent>
+              </Pagination>
+            ) : null}
           </CardFooter>
         </Card>
       </div>
@@ -802,6 +892,11 @@ export default function OrderHistoryPage() {
                   <Badge className={cn("capitalize", statusBadgeClass(selectedOrder.status))}>
                     {selectedOrder.status}
                   </Badge>
+                  <p className="font-semibold text-foreground">Payment</p>
+                  <p className={selectedOrder.paid ? "text-muted-foreground" : "text-destructive"}>
+                    {normalizePaymentMethod(selectedOrder.payment_method)} ·{" "}
+                    {selectedOrder.paid ? "Paid" : "Payment due"}
+                  </p>
                 </div>
               </div>
 
@@ -810,9 +905,6 @@ export default function OrderHistoryPage() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-semibold text-foreground">Items</h4>
-                  <span className="text-sm text-muted-foreground">
-                    Total: {formatCurrency(selectedOrder.total_price)}
-                  </span>
                 </div>
                 <ScrollArea className="max-h-72 rounded-md border">
                   <Table>
@@ -838,6 +930,9 @@ export default function OrderHistoryPage() {
                     </TableBody>
                   </Table>
                 </ScrollArea>
+                <div className="flex justify-end text-sm font-semibold text-foreground">
+                  <span>Total: {formatCurrency(selectedOrder.total_price)}</span>
+                </div>
               </div>
 
               <Separator />

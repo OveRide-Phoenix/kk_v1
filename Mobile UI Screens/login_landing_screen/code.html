@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Kuteera Kitchen - Login</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Epilogue:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#8d4a25",
+                        "accent-green": "#1b4332",
+                        "background-light": "#fdfaf1",
+                        "background-dark": "#1f1713",
+                    },
+                    fontFamily: {
+                        "display": ["Epilogue", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Epilogue', sans-serif;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen flex flex-col">
+<!-- Top Navigation / Logo Area -->
+<header class="flex flex-col items-center pt-12 pb-6 px-6">
+<div class="flex flex-col items-center gap-2">
+<div class="bg-primary/10 p-3 rounded-full">
+<span class="material-symbols-outlined text-primary text-4xl" style="font-variation-settings: 'FILL' 1">
+                    restaurant
+                </span>
+</div>
+<h2 class="text-primary text-2xl font-bold tracking-tight">Kuteera Kitchen</h2>
+</div>
+</header>
+<!-- Hero Illustration Section -->
+<main class="flex-grow flex flex-col items-center justify-center px-6">
+<div class="w-full max-w-md aspect-square relative mb-8 overflow-hidden rounded-xl">
+<div class="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent rounded-xl"></div>
+<img alt="Traditional Indian kitchen with clay pots and spices" class="w-full h-full object-cover rounded-xl" data-alt="Traditional Indian kitchen with clay pots and spices" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBCaOKxLi_mX_omhuS7oLLSjCT97bGjDAW111TgEk2Iy9xP_1X_D58_D21cwVCZCoxqnB94WrOdPgTJTJpP7JBdN7RRf9NgKeSpA_QkXXEZ4AG10Nwdo_tiScw53FwKjOrZM2keXKSKotEsH0wRkS8mEVbduKeB4g3quVfTNFfQQZGEeqadf2ZmPapuk0IgGlFSaQAtI9i3EnHyBRUcyM-a_emm67GKyotGZ6Mwli_0InZhkFplhxt4j3NN4OIitdypFN4XVoUsrzo"/>
+</div>
+<div class="text-center max-w-xs mb-10">
+<h1 class="text-slate-900 dark:text-slate-100 text-3xl font-bold leading-tight mb-3">
+                Homemade health, delivered.
+            </h1>
+<p class="text-slate-600 dark:text-slate-400 text-base font-medium">
+                Authentic meals from our kitchen to your doorstep.
+            </p>
+</div>
+<!-- Action Buttons -->
+<div class="w-full max-w-sm flex flex-col gap-4 mb-12">
+<button class="flex items-center justify-center bg-primary text-white h-14 rounded-full font-bold text-lg shadow-lg shadow-primary/20 active:scale-95 transition-transform">
+<span>Login with Phone</span>
+</button>
+<button class="flex items-center justify-center bg-transparent border-2 border-primary text-primary h-14 rounded-full font-bold text-lg active:bg-primary/5 transition-colors">
+<span>New? Create Account</span>
+</button>
+</div>
+</main>
+<!-- Trust Footer -->
+<footer class="pb-10 px-6">
+<div class="flex items-center justify-center gap-3 py-4 border-t border-primary/10">
+<div class="flex items-center justify-center bg-accent-green/10 rounded-full p-1.5">
+<span class="material-symbols-outlined text-accent-green text-xl" style="font-variation-settings: 'FILL' 1">
+                    verified_user
+                </span>
+</div>
+<p class="text-accent-green font-semibold text-sm tracking-wide uppercase">
+                FSSAI Certified &amp; Hygienic
+            </p>
+<div class="flex items-center">
+<div class="size-2 rounded-full bg-accent-green animate-pulse"></div>
+</div>
+</div>
+<!-- App Version/Terms minimal link -->
+<div class="text-center mt-4">
+<p class="text-slate-400 text-xs font-medium">
+                By continuing, you agree to our Terms &amp; Privacy Policy
+            </p>
+</div>
+</footer>
+</body></html>

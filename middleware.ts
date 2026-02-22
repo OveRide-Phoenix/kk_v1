@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 export async function middleware(req: NextRequest) {
-  if (!req.nextUrl.pathname.startsWith("/admin")) return NextResponse.next();
+  const { pathname } = req.nextUrl;
+
+  if (!pathname.startsWith("/admin")) return NextResponse.next();
 
   const url = new URL("/api/backend/auth/me", req.url);
   const meRes = await fetch(url, {

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently \"next dev --turbopack\" \"uvicorn backend.main:app --reload\"",
+    "dev": "BROWSERSLIST_IGNORE_OLD_DATA=1 NODE_OPTIONS=--no-deprecation concurrently \"next dev --turbopack\" \"./backend/venv/bin/python -m uvicorn backend.main:app --reload --reload-dir backend\"",
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "next lint"

@@ -26,7 +26,7 @@ sql:
       i.name AS item_name,
       mi.buffer_qty,
       mi.final_qty,
-      mi.planned_qty,
+      mi.max_qty,
       mi.available_qty
     FROM menu m
     JOIN bld b ON b.bld_id = m.bld_id
@@ -43,7 +43,7 @@ projection:
   - item_name
   - buffer_qty
   - final_qty
-  - planned_qty
+  - max_qty
   - available_qty
 responses:
   success_note: Buffer status retrieved.

@@ -5,7 +5,6 @@ import {
   Home,
   Package,
   Users,
-  UserCog,
   Calendar,
   Utensils,
   Menu,
@@ -17,6 +16,7 @@ import {
   Database,
   Sparkles,
   ShieldCheck,
+  Truck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
@@ -37,17 +37,17 @@ const primaryNavigationItems = [
     { name: "Customer Management", icon: Users, href: "/admin/customermgmt", id: "customermgmt" },
     { name: "Daily Menu Setup", icon: Calendar, href: "/admin/dailymenusetup", id: "dailymenusetup" },
     { name: "Kitchen Production", icon: Utensils, href: "/admin/production", id: "production" },
+    { name: "Trip Sheets", icon: Truck, href: "/admin/trip-sheet", id: "trip-sheet" },
     { name: "Order History", icon: ShoppingCart, href: "/admin/order-history", id: "orders" },
-    { name: "Roles", icon: ShieldCheck, href: "/admin/roles", id: "roles" },
-    { name: "Team Members", icon: UserCog, href: "/admin/team-members", id: "team-members" },
+    { name: "Access Control", icon: ShieldCheck, href: "/admin/team-members", id: "team-members" },
     { name: "Logs & Audit", icon: FileText, href: "/admin/logs", id: "logs" },
     { name: "Reports & Analytics", icon: BarChart3, href: "/admin/reports", id: "reports" },
 ];
 
 const developerNavigationItems = [
-  { name: "Place Order", icon: Code2, href: "/admin/ordertest", id: "ordertest" },
-  { name: "DB Schema", icon: Database, href: "/developer/db-schema", id: "dbschema" },
-  { name: "Auto Menu Builder", icon: Sparkles, href: "/developer/auto-menu", id: "dev-auto-menu" },
+  { name: "Auto Menu Builder", icon: Sparkles, href: "/admin/developer/auto-menu", id: "dev-auto-menu" },
+  { name: "Place Order", icon: Code2, href: "/admin/developer/ordertest", id: "ordertest" },
+  { name: "DB Schema", icon: Database, href: "/admin/developer/db-schema", id: "dbschema" },
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ 

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Meal Customization - Kuteera Kitchen</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style type="text/tailwindcss">
+        :root {
+            --cream: #fdfaf1;
+            --dark-green: #1b4332;
+            --bright-brown: #8D4925;
+            --charcoal: #36454F;
+        }
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        "cream": "#fdfaf1",
+                        "dark-green": "#1b4332",
+                        "bright-brown": "#8D4925",
+                        "charcoal": "#36454F",
+                    },
+                    fontFamily: {
+                        "display": ["Work Sans", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "custom": "16px"
+                    }
+                }
+            }
+        }
+    </style>
+<style>
+        body {
+            font-family: 'Work Sans', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            background-color: #fdfaf1;
+            color: #1b4332;
+        }
+        .ios-shadow {
+            box-shadow: 0 -4px 20px -5px rgba(27, 67, 50, 0.08);
+        }
+        .item-shadow {
+            box-shadow: 0 2px 8px rgba(141, 73, 37, 0.05);
+        }
+        input[type="checkbox"] {
+            appearance: none;
+            background-color: transparent;
+            margin: 0;
+            font: inherit;
+            color: #1b4332;
+            width: 1.5rem;
+            height: 1.5rem;
+            border: 2px solid #8D4925;
+            border-radius: 6px;
+            display: grid;
+            place-content: center;
+        }
+        input[type="checkbox"]::before {
+            content: "";
+            width: 0.65em;
+            height: 0.65em;
+            transform: scale(0);
+            transition: 120ms transform ease-in-out;
+            box-shadow: inset 1em 1em #1b4332;
+            clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+        }
+        input[type="checkbox"]:checked::before {
+            transform: scale(1);
+        }
+        input[type="checkbox"]:checked {
+            border-color: #1b4332;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-display bg-cream min-h-screen">
+<header class="sticky top-0 z-50 w-full bg-cream/95 backdrop-blur-sm px-4 h-16 flex items-center">
+<button class="w-10 h-10 flex items-center justify-start active:opacity-60 transition-opacity">
+<span class="material-symbols-outlined text-dark-green text-2xl font-semibold">arrow_back_ios</span>
+</button>
+<h1 class="flex-1 text-center text-lg font-bold text-dark-green pr-10">Customize Your Meal</h1>
+</header>
+<main class="max-w-md mx-auto pb-32">
+<div class="px-4 pt-4 pb-8 flex flex-col items-center">
+<div class="relative w-48 h-48 mb-6">
+<div class="absolute inset-0 bg-bright-brown/5 rounded-full blur-xl"></div>
+<img alt="Healthy South Indian Thali" class="relative object-cover w-48 h-48 rounded-full shadow-lg border-4 border-white" src="https://lh3.googleusercontent.com/aida-public/AB6AXuADL_XhkR9ZeVkKuZUElIqudTeL6j54cYo4-RrGRBFzkg-XJGil2wNsh04h-mT-vVtPZ_EDaUh-TEDywO2PJ1OFC9HNjIW9zjWrUqPa-u0n_Fme50-2GGptmAmLQ1QpRJsO7bEWu8jYqoanZcP9z6ap5iQJkRTTHD_aLa0ofFXtc1xN29AbH87GeT14iTwIP3WJHn3cOuzlCiXcJm9iDCbmJPpmBuRA4cdOM7t-lPLwMlj_tMiCSRtb3Vw-ZY7MX00Y3AEilwT6Ya8"/>
+</div>
+<div class="text-center">
+<h2 class="text-2xl font-bold text-dark-green mb-1">Daily Healthy Thali</h2>
+<p class="text-charcoal opacity-70 text-sm leading-relaxed px-6">
+                    Authentic homemade South-Indian flavors prepared with farm-fresh ingredients.
+                </p>
+</div>
+</div>
+<section class="px-4 mb-8">
+<h3 class="text-dark-green mb-4 px-1 text-xs font-bold uppercase tracking-widest opacity-60">Select Staples</h3>
+<div class="space-y-3">
+<div class="flex items-center justify-between bg-white p-4 rounded-custom item-shadow border border-bright-brown/5">
+<div class="flex items-center gap-4">
+<div class="flex items-center justify-center rounded-full bg-cream w-12 h-12">
+<span class="material-symbols-outlined text-dark-green">flatware</span>
+</div>
+<div>
+<p class="font-semibold text-dark-green">Number of Rotis</p>
+<p class="text-xs text-charcoal opacity-60">Whole wheat Phulkas</p>
+</div>
+</div>
+<div class="flex items-center gap-4 bg-cream/50 rounded-full p-1 border border-bright-brown/10">
+<button class="w-8 h-8 rounded-full bg-bright-brown text-white flex items-center justify-center active:scale-90 transition-transform">
+<span class="material-symbols-outlined text-sm">remove</span>
+</button>
+<span class="text-lg font-bold min-w-[20px] text-center text-dark-green">2</span>
+<button class="w-8 h-8 rounded-full bg-bright-brown text-white flex items-center justify-center active:scale-90 transition-transform">
+<span class="material-symbols-outlined text-sm">add</span>
+</button>
+</div>
+</div>
+<div class="flex items-center justify-between bg-white p-4 rounded-custom item-shadow border border-bright-brown/5">
+<div class="flex items-center gap-4">
+<div class="flex items-center justify-center rounded-full bg-cream w-12 h-12">
+<span class="material-symbols-outlined text-dark-green">rice_bowl</span>
+</div>
+<div>
+<p class="font-semibold text-dark-green">Rice Portion</p>
+<p class="text-xs text-charcoal opacity-60">Red or Sona Masuri</p>
+</div>
+</div>
+<div class="flex items-center gap-4 bg-cream/50 rounded-full p-1 border border-bright-brown/10">
+<button class="w-8 h-8 rounded-full bg-bright-brown text-white flex items-center justify-center active:scale-90 transition-transform">
+<span class="material-symbols-outlined text-sm">remove</span>
+</button>
+<span class="text-lg font-bold min-w-[20px] text-center text-dark-green">1</span>
+<button class="w-8 h-8 rounded-full bg-bright-brown text-white flex items-center justify-center active:scale-90 transition-transform">
+<span class="material-symbols-outlined text-sm">add</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<section class="px-4 mb-8">
+<h3 class="text-dark-green mb-4 px-1 text-xs font-bold uppercase tracking-widest opacity-60">Add Extras</h3>
+<div class="bg-white rounded-custom overflow-hidden item-shadow border border-bright-brown/5">
+<label class="flex items-center justify-between p-4 cursor-pointer active:bg-cream/40 transition-colors border-b border-cream">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-dark-green opacity-70">liquor</span>
+<span class="font-medium text-dark-green">Homemade Pickle</span>
+</div>
+<input checked="" type="checkbox"/>
+</label>
+<label class="flex items-center justify-between p-4 cursor-pointer active:bg-cream/40 transition-colors">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-dark-green opacity-70">soup_kitchen</span>
+<span class="font-medium text-dark-green">Fresh Curd (100g)</span>
+</div>
+<input type="checkbox"/>
+</label>
+</div>
+</section>
+<section class="px-4 mb-12">
+<h3 class="text-dark-green mb-4 px-1 text-xs font-bold uppercase tracking-widest opacity-60">Special Instructions</h3>
+<div class="bg-white rounded-custom p-1 border border-bright-brown/20 focus-within:border-dark-green/40 transition-all item-shadow">
+<textarea class="w-full p-4 bg-transparent border-none focus:ring-0 text-dark-green placeholder:text-charcoal/40 text-sm resize-none" placeholder="E.g. Less spicy, or no garlic please..." rows="3"></textarea>
+</div>
+</section>
+</main>
+<div class="fixed bottom-0 left-0 right-0 p-6 bg-cream/95 backdrop-blur-md ios-shadow z-50">
+<div class="max-w-md mx-auto">
+<button class="w-full bg-bright-brown hover:bg-bright-brown/90 text-white font-bold py-4 rounded-custom shadow-xl shadow-bright-brown/20 active:scale-[0.98] transition-all flex items-center justify-center gap-3">
+<span class="text-lg">Update Meal</span>
+<span class="material-symbols-outlined text-xl">check_circle</span>
+</button>
+</div>
+</div>
+
+</body></html>

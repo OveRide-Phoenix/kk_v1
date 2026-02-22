@@ -1,844 +1,1188 @@
+
+alert for items selling out should not hit only when im in kitchen production it shuold be constantly hitting everytime im in the admin dashboard...and notification shuold come from any page...make it a general api that keeps checking 
+
+
+
+
 #---------------------------------------------------------------------------------------------------------------
  ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- DO THIS FIRST- can we make the todays menu section itself the ordering page, so if the customer is logged in it shows add to cart + - buttons just like the new order page...else it shows just the menu and the register now and sign in button also sticks with the breakfast, lunch, dinner, condiments selector
-THEN DO NOTES APP - DO THIS DA!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+THEN DO NOTES APP - DO THIS DA!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ✅
 THEN MOVE Extension notes to here..
 #---------------------------------------------------------------------------------------------------------------
 
 
 
-- [ ] planned qty ->  make it max qty - revamp daily menu, no need for qty talk
 
+CONDIMENTS - when we added to the menu
+1. spices, pickles happla
+2. snacks 
+3. ready mixes
+4. weekend specials/sweets - orders taken till antha and delivery date..
+
+
+
+if an item is undersold then drop the planned qty
+
+
+kitchen production is based on revised plan qty
+
+
+
+
+
+
+
+
+- [✅] in the order history page when i view an order, show the total amount below the items table not above..
+
+- [✅] in kitchen production when i saw export i mean to export only the meal that is selected
+
+- [✅] In the order test page, under seed orders when i select the date, it should use the correct styling, use the same calendar as daily menu page!!
+
+- [✅] when i login as an admin, the city that I select should be the city that I see in the admin dashboard
+
+- [✅] if i try to export a kitchen production plan where nothing is there, im getting this error: Error: Failed to save production plan
+    at handleSaveCategory (http://localhost:3000/_next/static/chunks/src_f0716ca3._.js:4994:37)
+    at async onClick (http://localhost:3000/_next/static/chunks/src_f0716ca3._.js:5370:33)
+
+    but i also see error handling dialog, sont show any browswer dialogs and stuff, handle it gracefully
+
+
+- [✅] any edit in the qty must also say needs re-export..thats the whole point.. also the export button in kichen production is opening a dialog that doesnt fit in the screen, add scroll bar, and make sure that the api allows us to export only one meal's plan.... also move that button to the top next to save...and also save and export are two different things, save is to save progress if we edit the plan, export is what should hit the api and say that plan has been genereated, if required whehn we save you can update the satus of plan generated to In progress or something similar.
+
+- [✅] customer orders in the kitchen production plan shuold show the number of orders recived for that item + existing order items of subscription (not yet implemented) but why is it showing the buffer number now??
+
+- [✅] next
+  when im placing a one time order (test) im getting this error: ReferenceError: address_id is not defined
+    at handlePlaceTestOrder (http://localhost:3000/_next/static/chunks/src_3d7eb6dc._.js:4134:13)
+
+
+  and also 
+  curl -X 'POST' \
+    'http://127.0.0.1:8000/api/dev/orders/seed' \
+    -H 'accept: application/json' \
+    -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOnsiY3VzdG9tZXJfaWQiOjEzLCJwaG9uZSI6IjkxMDgyNTQzNDQiLCJuYW1lIjoiU2hhc2hhbmsgUyIsInJvbGVzIjpbMSwyXSwicm9sZV9jb2RlcyI6WyJhZG1pbiIsImRldmVsb3BlciJdLCJpc19hZG1pbiI6dHJ1ZSwiYWRtaW5faXNfYWN0aXZlIjp0cnVlLCJjaXR5X2NvZGUiOiJNWVMiLCJlbGlnaWJsZV9jaXR5X2NvZGVzIjpbIk1ZUyIsIkJMUiJdLCJhZG1pbl9pZCI6MTMsInJvbGUiOiJhZG1pbiJ9LCJ0eXBlIjoiYWNjZXNzIiwiaWF0IjoxNzYyNjY4Nzg0LCJleHAiOjE3NjI3NTUxODR9.STU3xrqzKe11bmAB4ryt2-M45LVcHvqf-4Cm_LJ2n-w' \
+    -H 'Content-Type: application/json' \
+    -d '{
+    "date": "2025-11-09",
+    "city_code": "MYS",
+    "count": 12,
+    "clear_existing": true
+  }
+  '
+  Request URL
+  http://127.0.0.1:8000/api/dev/orders/seed
+  Server response
+  Code	Details
+  500
+  Undocumented
+  Error: Internal Server Error
+
+  Response body
+  Download
+  {
+    "detail": "1205 (HY000): Lock wait timeout exceeded; try restarting transaction"
+  }
+
+  im getting this for seed..so please check both these errors!
+
+
+  
+
+- [✅?] condiments form
+
+✅ to the add product dialog box, there is a mark as condiment, what does that do? if not that then mark it as a condiment item, and also add a mzx qty of condiment, if i mark as a condiment then the max qty breakfast lunch dinner can be hidden only max qty for condiments will be shown..make sure you see how the backend also handles it..also remmeber that the condiments in the menu will be weeklong or till-stocks-last..so make these chagnes to handle condiments
+
+
+
+- [✅] combos concept and form and edit and logic
+
+- [✅] planned qty ->  make it max qty - revamp daily menu, no need for qty talk
+
+- [✅] the max qty change the max qty change that we made, i need the items table to have three parameters, maxqty for breakfast lunch dinner, suppose the item is added to dinner then it could have a different max qty, so add that also and tell me the sql changes to make and also make these changes in the product mangement forms and in the daily menu we only seee the corresponding value based on which bld menu it is added to! we made, i need the items table to have three parameters, maxqty for breakfast lunch dinner, suppose the item is added to dinner then it could have a different max qty, so add that also and tell me the sql changes to make
+
+- [✅] what is the logic for add breakfast item, add lunch item? are we checking bld_id and rendering it? if so some items can be part all three bld, breakfast, lunch and dinner, so make it an array and also handle in the backend, and the api's and the front end that we are able to crud this value...and in the daily menu when we are adding an item we check that array and then render all items that belong to the respective menu. take care of this even in the auto menu builder and stuff if required and wherever else it is used across the app.. and in the product mangement, give checkboxes to say its a breakfast item, lunch item or dinner item, that updates the bld_id array respectively..
+
+1. bld id's
+
+      ### Prompt: “KK multi-select meals via join table (drop legacy columns)”
+
+      **Goal**
+      Make meals truly multi-select using a join table `item_bld_map (item_id, bld_id)` and remove legacy columns `items.bld_id` and `items.allowed_blds`. Ensure Product Management CRUD updates the mapping, Daily Menu “Add Breakfast/Lunch/Dinner” shows only eligible items, and Auto Menu builder uses the same logic. Do not change unrelated behavior or styling.
+
+      **Tech constraints**
+
+      * Keep existing project structure and naming.
+      * Type safety: use existing `Product` interfaces; extend minimally.
+      * Don’t change FastAPI endpoint names or URL paths unless required.
+      * Sorting, tabs, dialogs, and current UI conventions must remain intact.
+
+      ---
+
+      ## Database & Migration
+
+      1. **Create join table** (idempotent):
+
+      ```sql
+      CREATE TABLE IF NOT EXISTS item_bld_map (
+        item_id INT NOT NULL,
+        bld_id  INT NOT NULL,
+        PRIMARY KEY (item_id, bld_id),
+        FOREIGN KEY (item_id) REFERENCES items(item_id) ON DELETE CASCADE,
+        FOREIGN KEY (bld_id)  REFERENCES bld(bld_id)  ON DELETE CASCADE
+      );
+      ```
+
+      2. **Backfill from legacy** (run once if legacy data exists):
+
+      ```sql
+      INSERT IGNORE INTO item_bld_map (item_id, bld_id)
+      SELECT i.item_id, i.bld_id
+      FROM items i
+      WHERE i.bld_id IS NOT NULL;
+      ```
+
+      3. **Drop legacy columns** (only after code is updated and tested):
+
+      ```sql
+      ALTER TABLE items DROP COLUMN IF EXISTS allowed_blds;
+      ALTER TABLE items DROP COLUMN IF EXISTS bld_id;
+      ```
+
+      ---
+
+      ## Backend (FastAPI)
+
+      **Files:** `backend/main.py`, `backend/models.py` (if any DB helpers), optional `backend/services/*`.
+
+      **Requirements**
+
+      * Add helpers:
+
+        * `get_item_blds(item_id) -> List[int]`
+        * `set_item_blds(item_id, bld_ids: List[int])` — transactional: delete existing rows for `item_id`, then bulk insert the new list (idempotent PUT semantics).
+        * `filter_items_by_bld(items, bld_id)` — return only items whose mapping includes `bld_id`.
+
+      * **Read endpoints** that return products/items must include a **normalized field** on each item:
+
+        * `bld_ids: number[]` (array of ints).
+        * Never return legacy columns.
+
+      * **Create/Update item endpoints** must accept:
+
+        * `bld_ids?: number[]` in payload.
+        * If provided, call `set_item_blds`.
+        * Wrap in a DB transaction with the item row insert/update.
+        * If omitted, treat as empty = clear mapping.
+
+      * **Daily menu & auto menu endpoints**:
+
+        * Wherever items are fetched for a specific meal (breakfast/lunch/dinner), use `filter_items_by_bld(..., target_bld_id)` instead of legacy checks.
+        * Centralize meal normalization so every consumer path (Daily Menu + Auto builder) relies on the same function.
+
+      * **Validation**:
+
+        * Ensure `bld_ids` only contains valid `bld.bld_id` values; ignore duplicates.
+
+      * **Backward compatibility**:
+
+        * No need to read legacy fields (we are dropping them).
+        * Ensure response shapes for non-meal fields stay unchanged.
+
+      ---
+
+      ## Frontend (Next.js / TS)
+
+      **Files likely touched**
+
+      * `src/components/product-form.tsx`
+      * `src/components/product-details.tsx`
+      * `src/components/product-management.tsx`
+      * `src/components/daily-menu-setup.tsx`
+      * `src/types/product.ts` (or wherever `Product` is defined)
+
+      **Type updates**
+
+      * Extend existing `Product` (or `Item`) type to include:
+
+      ```ts
+      bld_ids: number[]; // meal ids from bld table, e.g., [1] Breakfast, [2] Lunch, [3] Dinner
+      ```
+
+      * Do not rename existing fields; add only this array.
+
+      **Product Management (CRUD)**
+
+      * In the Product form, show **three checkboxes** (Breakfast, Lunch, Dinner).
+      * On load: map the returned `item.bld_ids` to checkbox state.
+      * On save/create: send `bld_ids` in the payload (replace semantics).
+      * Keep UI minimalist; reuse existing styles and patterns.
+
+      **Daily Menu**
+
+      * When user clicks “Add Breakfast/Lunch/Dinner Item”, the dialog must:
+
+        * Request/receive all items as before.
+        * Filter client-side to items where `item.bld_ids.includes(currentMealId)`.
+        * No changes to other dialog behavior (search/sort stay intact).
+
+      **Auto Menu Builder**
+
+      * If the frontend filters locally, ensure it uses `bld_ids`; if it relies on backend lists, no extra UI changes needed.
+
+      **No unrelated changes**
+
+      * Do not alter tab logic, sorting handlers, or existing icons.
+      * Keep dialog accessibility (title/description) as is.
+
+      ---
+
+      ## API Shapes (examples)
+
+      * **GET /api/products/items** → returns:
+
+      ```json
+      [
+        {
+          "item_id": 101,
+          "name": "Idli",
+          "...": "...",
+          "bld_ids": [1]   // Breakfast
+        },
+        {
+          "item_id": 202,
+          "name": "Veg Meals",
+          "...": "...",
+          "bld_ids": [2,3] // Lunch & Dinner
+        }
+      ]
+      ```
+
+      * **POST /api/products/items** and **PUT /api/products/items/{id}** accept:
+
+      ```json
+      {
+        "name": "Pongal",
+        "...": "...",
+        "bld_ids": [1,2]  // Breakfast & Lunch
+      }
+      ```
+
+      * **GET /api/menu/available-items?bld_id=2** (if exists) must already filter by mapping; else the frontend will filter using `bld_ids`.
+
+      ---
+
+      ## Implementation Notes
+
+      * **Transactions**: update item core fields + mapping in one transaction.
+      * **Idempotence**: `PUT` fully replaces `bld_ids`; backend clears then inserts.
+      * **Performance**: bulk insert mapping rows instead of per-row loops.
+      * **Errors**: return 400 for invalid `bld_ids`; return 200/201 with the updated item including `bld_ids`.
+      * **Testing hooks**: keep endpoint paths unchanged so existing consumers work.
+
+      ---
+
+      ## Acceptance Criteria
+
+      1. Creating or editing an item with Breakfast & Lunch ticked persists `bld_ids: [1,2]` and returns them on GET.
+      2. “Add Breakfast Item” dialog only shows items whose `bld_ids` includes Breakfast’s `bld_id`. Same for Lunch/Dinner.
+      3. Auto menu builder uses the same meal eligibility.
+      4. No references to `items.bld_id` or `items.allowed_blds` remain in code.
+      5. Lint/tests pass as before; no regressions in unrelated modules.
+
+      ---
+
+      ## Test Plan (quick)
+
+      * **Backend**
+
+        * Create item with `bld_ids: [1,3]`, GET item → `bld_ids` echoed back.
+        * Update item to `[2]`, GET list → only Lunch.
+        * Hitting available-items endpoints (or calling Daily Menu fetch) returns only eligible items for that meal.
+
+      * **Frontend**
+
+        * Product form check/uncheck persists correctly (confirm via GET).
+        * Daily Menu add dialogs change offerings as boxes are toggled and saved.
+        * Auto builder produces meal-appropriate lists.
+
+      ---
+
+      **Proceed to implement exactly as above. Do not modify unrelated parts, types, or UI beyond what’s specified.**
+
+
+
+
+- [ ] reorderable sidebar!! give a small edit icon in the bottom right, and i hsould be able to reorder it..(store preferences in a new table?)
+
+- [ ] add a menu type field in daily menu, that defaults to one day menu but allows us to set other stuff - but this is not a good way to do it, what if i want to create the condiments menu only, there needs to be a better approach
+
+- [] remove city for admin login ?
+
+- [✅] add the developer pages inside the admin routing so that auth guard and stuff works for that in addition to the regular checking if the user has develpoer roles before making any changes/actions from those pages..take role based access seriously implement it at a router level, so api's dont check for roles because you cant even be on this page if you dont have the role (unless api is checking for role then well and good)
+
+- [ ] condiments menu figure it out, it is a differnt kind of menu, its not a one day menu type, it is a weeklong/until-stocks-last kind of menu...
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- [ ] customer orders are showing same as planned qty in kitchen production
 - [ ] automatic dashboard update based on requirement of that time
 
+- [ ] how are combos delt with? it should be a collection of items..
 
-when any role change happens give a toast or a dialog or something asking the member to please log out and log back in to see the changes.. also in the team members page, make the customer ID a drop down that shows customer id - name of the customers.. also combine both the pages, roles and team memberes - create role and add new team member can be done in a dialog window with the same fields. but lets have all of it in one page with only two tables one below the other, the current team members table should be first..
+8.0. Saving stuff across application shows the toast below
+  i want you to use this instead of all the toast notification components in the admin dashboard, so whereever we have a toast notification coming, i want you to use this: You are given a task to integrate an existing React component in the codebase
 
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------in the my account page, the personal details make it a little darker, it looks wrong now...let it be a little greyed out to show its not editable but at the same time show that names and stuff correctly
-0. Enter key in login page logins in
+      The codebase should support:
+      - shadcn project structure  
+      - Tailwind CSS
+      - Typescript
 
-0.0.1. An API that deletes all the tables and then recreates all the tables and also inserts data into tables like items, categories and stuff..
+      If it doesn't, provide instructions on how to setup project via shadcn CLI, install Tailwind or Typescript.
 
-‼️‼️‼️‼️‼️‼️ the + - in the menu's (ordertest and in the home page, shuold only allow adding available number of items, so if idli has only 48 items left (available) then i shoul dbe allowed to select only 48 idli's)
+      Determine the default path for components and styles. 
+      If default path for components is not /components/ui, provide instructions on why it's important to create this folder
+      Copy-paste this component to /components/ui folder:
+      ```tsx
+      liquid-notification.tsx
+      // @ts-nocheck
+      'use client';
+      import React, { useState } from 'react';
+      import { motion } from 'motion/react';
+      import {cn} from "@/lib/utils"
 
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------0.1 i am going to introduce multiple roles based access, for example, admin who is a developer, admin who is just menu setter and stuff, so make changes accordingly such that we are always checkign roles from an Array, and for now i want you to add another role called developer..in the schema let us change it entirely, no need of an admin_users table, instead we will have a roles table and then a roles field in the customer table so that roles field is an array that contains all the roles of that user, so if admin is 1 and developer is 2, then the user will have roles field [1,2]....and similarly lets add a Roles page to the side bar which allows us to manage these roles. similartly in login and stuff, or ANYWHERE in the codebase where we were checking and depending on admin_users table, let us start using this...and also i want you to handle everywhere that we check for admin or any role, right now we are using local storage, so we will continue doing that, make sure you check all places, then create a team members page which allows us to handle RBA
-
-
-1.0 - reports make it a line graph dont show teo data pointsi n one graph, show multiple graphs, and put the geaph above the table..
-
-1.1. xxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx x Frosted glass/Liquid glass components in some places..? I think frosted glass is better - with glass reaper like shaders in the back in brown theme
-
-2. use pagination component in the order history page
-
-3. use sidebar component for the admin dashboard sidebar
-
-4. use skeleton while something is loading
-
-5. use spinner for like processing payment and other loading stuff
-
-6. use avatar for user
-
-7. use shad/cn charts in sales reports and stuff
-
-8.0. Saving stuff across application shows the toast
-8. i want you to use this instead of all the toast notification components in the admin dashboard, so whereever we have a toast notification coming, i want you to use this: You are given a task to integrate an existing React component in the codebase
-
-The codebase should support:
-- shadcn project structure  
-- Tailwind CSS
-- Typescript
-
-If it doesn't, provide instructions on how to setup project via shadcn CLI, install Tailwind or Typescript.
-
-Determine the default path for components and styles. 
-If default path for components is not /components/ui, provide instructions on why it's important to create this folder
-Copy-paste this component to /components/ui folder:
-```tsx
-liquid-notification.tsx
-// @ts-nocheck
-'use client';
-import React, { useState } from 'react';
-import { motion } from 'motion/react';
-import {cn} from "@/lib/utils"
-
-interface LiquidGlassCardProps {
-  children: React.ReactNode;
-  className?: string;
-  draggable?: boolean;
-  expandable?: boolean;
-  width?: string;
-  height?: string;
-  expandedWidth?: string;
-  expandedHeight?: string;
-  blurIntensity?: 'sm' | 'md' | 'lg' | 'xl';
-  shadowIntensity?: 'none' | 'xs' | 'sm' | 'md' | 'lg' | 'xl';
-  borderRadius?: string;
-  glowIntensity?: 'none' | 'xs' | 'sm' | 'md' | 'lg' | 'xl';
-}
-
-export const LiquidGlassCard = ({
-  children,
-  className = '',
-  draggable = true,
-  expandable = false,
-  width,
-  height,
-  expandedWidth,
-  expandedHeight,
-  blurIntensity = 'xl',
-  borderRadius = '32px',
-  glowIntensity = 'sm',
-  shadowIntensity = 'md',
-  ...props
-}: LiquidGlassCardProps) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-
-  const handleToggleExpansion = (e: {
-    target: { closest: (arg0: string) => any };
-  }) => {
-    if (!expandable) return;
-    // Don't toggle if clicking on interactive elements
-    if (e.target.closest('a, button, input, select, textarea')) return;
-    setIsExpanded(!isExpanded);
-  };
-
-  const blurClasses = {
-    sm: 'backdrop-blur-sm',
-    md: 'backdrop-blur-md',
-    lg: 'backdrop-blur-lg',
-    xl: 'backdrop-blur-xl',
-  };
-
-  const shadowStyles = {
-    none: 'inset 0 0 0 0 rgba(255, 255, 255, 0)',
-    xs: 'inset 1px 1px 1px 0 rgba(255, 255, 255, 0.3), inset -1px -1px 1px 0 rgba(255, 255, 255, 0.3)',
-    sm: 'inset 2px 2px 2px 0 rgba(255, 255, 255, 0.35), inset -2px -2px 2px 0 rgba(255, 255, 255, 0.35)',
-    md: 'inset 3px 3px 3px 0 rgba(255, 255, 255, 0.45), inset -3px -3px 3px 0 rgba(255, 255, 255, 0.45)',
-    lg: 'inset 4px 4px 4px 0 rgba(255, 255, 255, 0.5), inset -4px -4px 4px 0 rgba(255, 255, 255, 0.5)',
-    xl: 'inset 6px 6px 6px 0 rgba(255, 255, 255, 0.55), inset -6px -6px 6px 0 rgba(255, 255, 255, 0.55)',
-    '2xl':
-      'inset 8px 8px 8px 0 rgba(255, 255, 255, 0.6), inset -8px -8px 8px 0 rgba(255, 255, 255, 0.6)',
-  };
-
-  const glowStyles = {
-    none: '0 4px 4px rgba(0, 0, 0, 0.05), 0 0 12px rgba(0, 0, 0, 0.05)',
-    xs: '0 4px 4px rgba(0, 0, 0, 0.15), 0 0 12px rgba(0, 0, 0, 0.08), 0 0 16px rgba(255, 255, 255, 0.05)',
-    sm: '0 4px 4px rgba(0, 0, 0, 0.15), 0 0 12px rgba(0, 0, 0, 0.08), 0 0 24px rgba(255, 255, 255, 0.1)',
-    md: '0 4px 4px rgba(0, 0, 0, 0.15), 0 0 12px rgba(0, 0, 0, 0.08), 0 0 32px rgba(255, 255, 255, 0.15)',
-    lg: '0 4px 4px rgba(0, 0, 0, 0.15), 0 0 12px rgba(0, 0, 0, 0.08), 0 0 40px rgba(255, 255, 255, 0.2)',
-    xl: '0 4px 4px rgba(0, 0, 0, 0.15), 0 0 12px rgba(0, 0, 0, 0.08), 0 0 48px rgba(255, 255, 255, 0.25)',
-    '2xl':
-      '0 4px 4px rgba(0, 0, 0, 0.15), 0 0 12px rgba(0, 0, 0, 0.08), 0 0 60px rgba(255, 255, 255, 0.3)',
-  };
-
-  const containerVariants = expandable
-    ? {
-        collapsed: {
-          width: width || 'auto',
-          height: height || 'auto',
-          transition: {
-            duration: 0.4,
-            ease: [0.5, 1.5, 0.5, 1],
-          },
-        },
-        expanded: {
-          width: expandedWidth || 'auto',
-          height: expandedHeight || 'auto',
-          transition: {
-            duration: 0.4,
-            ease: [0.5, 1.5, 0.5, 1],
-          },
-        },
+      interface LiquidGlassCardProps {
+        children: React.ReactNode;
+        className?: string;
+        draggable?: boolean;
+        expandable?: boolean;
+        width?: string;
+        height?: string;
+        expandedWidth?: string;
+        expandedHeight?: string;
+        blurIntensity?: 'sm' | 'md' | 'lg' | 'xl';
+        shadowIntensity?: 'none' | 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+        borderRadius?: string;
+        glowIntensity?: 'none' | 'xs' | 'sm' | 'md' | 'lg' | 'xl';
       }
-    : {};
 
-  const MotionComponent = draggable || expandable ? motion.div : 'div';
+      export const LiquidGlassCard = ({
+        children,
+        className = '',
+        draggable = true,
+        expandable = false,
+        width,
+        height,
+        expandedWidth,
+        expandedHeight,
+        blurIntensity = 'xl',
+        borderRadius = '32px',
+        glowIntensity = 'sm',
+        shadowIntensity = 'md',
+        ...props
+      }: LiquidGlassCardProps) => {
+        const [isExpanded, setIsExpanded] = useState(false);
 
-  const motionProps =
-    draggable || expandable
-      ? {
-          variants: expandable ? containerVariants : undefined,
-          animate: expandable
-            ? isExpanded
-              ? 'expanded'
-              : 'collapsed'
-            : undefined,
-          onClick: expandable ? handleToggleExpansion : undefined,
-          drag: draggable,
-          dragConstraints: draggable
-            ? { left: 0, right: 0, top: 0, bottom: 0 }
-            : undefined,
-          dragElastic: draggable ? 0.3 : undefined,
-          dragTransition: draggable
+        const handleToggleExpansion = (e: {
+          target: { closest: (arg0: string) => any };
+        }) => {
+          if (!expandable) return;
+          // Don't toggle if clicking on interactive elements
+          if (e.target.closest('a, button, input, select, textarea')) return;
+          setIsExpanded(!isExpanded);
+        };
+
+        const blurClasses = {
+          sm: 'backdrop-blur-sm',
+          md: 'backdrop-blur-md',
+          lg: 'backdrop-blur-lg',
+          xl: 'backdrop-blur-xl',
+        };
+
+        const shadowStyles = {
+          none: 'inset 0 0 0 0 rgba(255, 255, 255, 0)',
+          xs: 'inset 1px 1px 1px 0 rgba(255, 255, 255, 0.3), inset -1px -1px 1px 0 rgba(255, 255, 255, 0.3)',
+          sm: 'inset 2px 2px 2px 0 rgba(255, 255, 255, 0.35), inset -2px -2px 2px 0 rgba(255, 255, 255, 0.35)',
+          md: 'inset 3px 3px 3px 0 rgba(255, 255, 255, 0.45), inset -3px -3px 3px 0 rgba(255, 255, 255, 0.45)',
+          lg: 'inset 4px 4px 4px 0 rgba(255, 255, 255, 0.5), inset -4px -4px 4px 0 rgba(255, 255, 255, 0.5)',
+          xl: 'inset 6px 6px 6px 0 rgba(255, 255, 255, 0.55), inset -6px -6px 6px 0 rgba(255, 255, 255, 0.55)',
+          '2xl':
+            'inset 8px 8px 8px 0 rgba(255, 255, 255, 0.6), inset -8px -8px 8px 0 rgba(255, 255, 255, 0.6)',
+        };
+
+        const glowStyles = {
+          none: '0 4px 4px rgba(0, 0, 0, 0.05), 0 0 12px rgba(0, 0, 0, 0.05)',
+          xs: '0 4px 4px rgba(0, 0, 0, 0.15), 0 0 12px rgba(0, 0, 0, 0.08), 0 0 16px rgba(255, 255, 255, 0.05)',
+          sm: '0 4px 4px rgba(0, 0, 0, 0.15), 0 0 12px rgba(0, 0, 0, 0.08), 0 0 24px rgba(255, 255, 255, 0.1)',
+          md: '0 4px 4px rgba(0, 0, 0, 0.15), 0 0 12px rgba(0, 0, 0, 0.08), 0 0 32px rgba(255, 255, 255, 0.15)',
+          lg: '0 4px 4px rgba(0, 0, 0, 0.15), 0 0 12px rgba(0, 0, 0, 0.08), 0 0 40px rgba(255, 255, 255, 0.2)',
+          xl: '0 4px 4px rgba(0, 0, 0, 0.15), 0 0 12px rgba(0, 0, 0, 0.08), 0 0 48px rgba(255, 255, 255, 0.25)',
+          '2xl':
+            '0 4px 4px rgba(0, 0, 0, 0.15), 0 0 12px rgba(0, 0, 0, 0.08), 0 0 60px rgba(255, 255, 255, 0.3)',
+        };
+
+        const containerVariants = expandable
+          ? {
+              collapsed: {
+                width: width || 'auto',
+                height: height || 'auto',
+                transition: {
+                  duration: 0.4,
+                  ease: [0.5, 1.5, 0.5, 1],
+                },
+              },
+              expanded: {
+                width: expandedWidth || 'auto',
+                height: expandedHeight || 'auto',
+                transition: {
+                  duration: 0.4,
+                  ease: [0.5, 1.5, 0.5, 1],
+                },
+              },
+            }
+          : {};
+
+        const MotionComponent = draggable || expandable ? motion.div : 'div';
+
+        const motionProps =
+          draggable || expandable
             ? {
-                bounceStiffness: 300,
-                bounceDamping: 10,
-                power: 0.3,
+                variants: expandable ? containerVariants : undefined,
+                animate: expandable
+                  ? isExpanded
+                    ? 'expanded'
+                    : 'collapsed'
+                  : undefined,
+                onClick: expandable ? handleToggleExpansion : undefined,
+                drag: draggable,
+                dragConstraints: draggable
+                  ? { left: 0, right: 0, top: 0, bottom: 0 }
+                  : undefined,
+                dragElastic: draggable ? 0.3 : undefined,
+                dragTransition: draggable
+                  ? {
+                      bounceStiffness: 300,
+                      bounceDamping: 10,
+                      power: 0.3,
+                    }
+                  : undefined,
+                whileDrag: draggable ? { scale: 1.02 } : undefined,
+                whileHover: { scale: 1.01 },
+                whileTap: { scale: 0.98 },
               }
-            : undefined,
-          whileDrag: draggable ? { scale: 1.02 } : undefined,
-          whileHover: { scale: 1.01 },
-          whileTap: { scale: 0.98 },
-        }
-      : {};
+            : {};
 
-  return (
-    <>
-      {/* Hidden SVG Filter */}
-      <svg className='hidden'>
-        <defs>
-          <filter
-            id='glass-blur'
-            x='0'
-            y='0'
-            width='100%'
-            height='100%'
-            filterUnits='objectBoundingBox'
-          >
-            <feTurbulence
-              type='fractalNoise'
-              baseFrequency='0.003 0.007'
-              numOctaves='1'
-              result='turbulence'
-            />
-            <feDisplacementMap
-              in='SourceGraphic'
-              in2='turbulence'
-              scale='200'
-              xChannelSelector='R'
-              yChannelSelector='G'
-            />
-          </filter>
-        </defs>
-      </svg>
-      <MotionComponent
-        className={cn(
-          `relative ${draggable ? 'cursor-grab active:cursor-grabbing' : ''} ${expandable ? 'cursor-pointer' : ''}`,
-          className
-        )}
-        style={{
-          borderRadius,
-          ...(width && !expandable && { width }),
-          ...(height && !expandable && { height }),
-        }}
-        {...motionProps}
-        {...props}
-      >
-        {/* Bend Layer (Backdrop blur with distortion) */}
-        <div
-          className={`absolute inset-0 ${blurClasses[blurIntensity]} z-0`}
-          style={{
-            borderRadius,
-            filter: 'url(#glass-blur)',
-          }}
-        />
-
-        {/* Face Layer (Main shadow and glow) */}
-        <div
-          className='absolute inset-0 z-10'
-          style={{
-            borderRadius,
-            boxShadow: glowStyles[glowIntensity],
-          }}
-        />
-
-        {/* Edge Layer (Inner highlights) */}
-        <div
-          className='absolute inset-0 z-20'
-          style={{
-            borderRadius,
-            boxShadow: shadowStyles[shadowIntensity],
-          }}
-        />
-
-        {/* Content */}
-        <div className={cn('relative z-30')}>{children}</div>
-      </MotionComponent>
-    </>
-  );
-};
-
-
-demo.tsx
-import { LiquidGlassCard } from "@/components/ui/liquid-notification";
-
-export default function DemoOne() {
-  return    <div
-        className='p-8 w-fit mx-auto gap-2 h-[40rem] flex flex-col justify-end pt-2 pb-10 rounded-xl'
-        style={{
-          background:
-            'url("https://images.unsplash.com/photo-1534259070436-a95806b8621a?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D") center / cover no-repeat',
-        }}
-      >
-        <LiquidGlassCard
-          shadowIntensity='md'
-          blurIntensity='lg'
-          borderRadius='18px'
-          glowIntensity='xl'
-          draggable={false}
-          expandable
-          expandedWidth='410px'
-          expandedHeight='325px'
-          width='410px'
-          height='90px'
-          className='z-10 flex items-start relative overflow-hidden'
-        >
-          <div className='relative flex items-center p-4  text-white h-full z-10'>
-            {/* App Icon */}
-            <div className='flex-shrink-0 mr-4'>
-              <img
-                src={'https://ui-layouts.com/apple-touch-icon.png'}
-                alt={`icon`}
-                width={56}
-                height={56}
-                className='rounded-xl'
-              />
-            </div>
-
-            <div className='flex-grow pr-4'>
-              <div className='font-semibold text-lg'>UI-Layouts</div>
-              <div className='text-sm'>
-                New components are available for you
-              </div>
-              <div className='text-sm text-gray-200'>Liquid-Glass</div>
-            </div>
-            <div className='flex-shrink-0 ml-4 text-sm text-gray-200 self-start pt-1'>
-              12:34
-            </div>
-          </div>
-          <img
-            src='https://ui-layouts.com/og.jpg'
-            alt='og'
-            width={400}
-            height={400}
-            className='rounded-xl w-[92%] mx-auto h-full z-20'
-          />
-        </LiquidGlassCard>
-        <LiquidGlassCard
-          width='410px'
-          height='90px'
-          shadowIntensity='md'
-          blurIntensity='lg'
-          borderRadius='18px'
-          glowIntensity='xl'
-          className='z-10 flex items-start relative mt-2'
-        >
-          <div className='relative flex items-center p-4 text-white z-10'>
-            {/* App Icon */}
-            <div className='flex-shrink-0 mr-4'>
-              <img
-                src={'https://ui-layouts.com/apple-touch-icon.png'}
-                alt={`icon`}
-                width={56}
-                height={56}
-                className='rounded-xl'
-              />
-            </div>
-
-            <div className='flex-grow pr-4'>
-              <div className='font-semibold text-lg'>
-                <svg
-                  width='160'
-                  height='48'
-                  className='w-20 h-8'
-                  viewBox='0 0 160 48'
-                  fill='none'
-                  xmlns='http://www.w3.org/2000/svg'
+        return (
+          <>
+            {/* Hidden SVG Filter */}
+            <svg className='hidden'>
+              <defs>
+                <filter
+                  id='glass-blur'
+                  x='0'
+                  y='0'
+                  width='100%'
+                  height='100%'
+                  filterUnits='objectBoundingBox'
                 >
-                  <path
-                    d='M23.8678 32.8457H35.6653V44.0914C35.6653 45.1429 35.2789 46.0571 34.506 46.8343C33.7331 47.6114 32.8012 48 31.7101 48H15.8891C14.798 48 13.8661 47.6114 13.0932 46.8343C12.3203 46.0571 11.9339 45.1429 11.9339 44.0914V39.2914C11.9339 38.1943 11.5475 37.2571 10.7746 36.48C10.0017 35.6571 9.0698 35.2457 7.9787 35.2457H3.887C2.8414 35.2457 1.9322 34.88 1.1593 34.1486C0.386402 33.3714 0 32.4343 0 31.3371V0H11.7975V17.6229H21.6856C22.0038 17.6229 22.2766 17.7371 22.5039 17.9657C22.7312 18.1943 22.8449 18.4686 22.8449 18.7886V29.2114C22.8449 29.5314 22.7312 29.8057 22.5039 30.0343C22.2766 30.2629 22.0038 30.3771 21.6856 30.3771H11.7975V34.0114C11.7975 34.3314 11.9112 34.6057 12.1385 34.8343C12.3658 35.0629 12.6386 35.1771 12.9568 35.1771H22.7085C23.0267 35.1771 23.2995 35.0629 23.5268 34.8343C23.7541 34.6057 23.8678 34.3314 23.8678 34.0114V32.8457Z'
-                    fill='currentColor'
+                  <feTurbulence
+                    type='fractalNoise'
+                    baseFrequency='0.003 0.007'
+                    numOctaves='1'
+                    result='turbulence'
                   />
-                  <path
-                    d='M70.6263 17.6914C71.7173 17.6914 72.6493 18.08 73.4223 18.8571C74.1953 19.6343 74.5813 20.5486 74.5813 21.6V44.0914C74.5813 45.1429 74.1953 46.0571 73.4223 46.8343C72.6493 47.6114 71.7173 48 70.6263 48H42.803C41.7574 48 40.8481 47.6114 40.0753 46.8343C39.3024 46.0571 38.916 45.1429 38.916 44.0914V21.6C38.916 20.5486 39.3024 19.6343 40.0753 18.8571C40.8481 18.08 41.7574 17.6914 42.803 17.6914H70.6263ZM62.7833 34.08V31.6114C62.7833 31.2914 62.6703 31.0171 62.4433 30.7886C62.2153 30.56 61.9423 30.4457 61.6243 30.4457H51.1909C50.8726 30.4457 50.5998 30.56 50.3725 30.7886C50.1452 31.0171 50.0316 31.2914 50.0316 31.6114V34.08C50.0316 34.4 50.1452 34.6743 50.3725 34.9029C50.5998 35.1314 50.8726 35.2457 51.1909 35.2457H61.6243C61.9423 35.2457 62.2153 35.1314 62.4433 34.9029C62.6703 34.6743 62.7833 34.4 62.7833 34.08Z'
-                    fill='currentColor'
+                  <feDisplacementMap
+                    in='SourceGraphic'
+                    in2='turbulence'
+                    scale='200'
+                    xChannelSelector='R'
+                    yChannelSelector='G'
                   />
-                  <path
-                    d='M110.782 17.6914C111.873 17.6914 112.805 18.08 113.578 18.8571C114.351 19.6343 114.737 20.5486 114.737 21.6V44.0914C114.737 45.1429 114.351 46.0571 113.578 46.8343C112.805 47.6114 111.873 48 110.782 48H82.9593C81.9133 48 81.0043 47.6114 80.2313 46.8343C79.4583 46.0571 79.0723 45.1429 79.0723 44.0914V21.6C79.0723 20.5486 79.4583 19.6343 80.2313 18.8571C81.0043 18.08 81.9133 17.6914 82.9593 17.6914H110.782ZM102.94 34.08V31.6114C102.94 31.2914 102.826 31.0171 102.599 30.7886C102.371 30.56 102.098 30.4457 101.78 30.4457H91.3473C91.0283 30.4457 90.7563 30.56 90.5283 30.7886C90.3013 31.0171 90.1873 31.2914 90.1873 31.6114V34.08C90.1873 34.4 90.3013 34.6743 90.5283 34.9029C90.7563 35.1314 91.0283 35.2457 91.3473 35.2457H101.78C102.098 35.2457 102.371 35.1314 102.599 34.9029C102.826 34.6743 102.94 34.4 102.94 34.08Z'
-                    fill='currentColor'
-                  />
-                  <path d='M132.049 48H119.365V0H132.049V48Z' fill='currentColor' />
-                  <path
-                    d='M142.953 22.2853V13.7139H160.001V22.2853H151.477V30.8567H134.428V22.2853H142.953ZM160.001 39.4282H151.477V30.8567H160.001V39.4282ZM151.477 39.4282V47.9996H134.428V39.4282H151.477Z'
-                    fill='currentColor'
-                  />
-                </svg>
-              </div>
-              <div className='text-sm'>
-                New components are available for you
-              </div>
-            </div>
-            <div className='flex-shrink-0 ml-4 text-sm text-gray-200 self-start pt-1'>
-              12:34
-            </div>
-          </div>
-        </LiquidGlassCard>
-      </div>;
-}
+                </filter>
+              </defs>
+            </svg>
+            <MotionComponent
+              className={cn(
+                `relative ${draggable ? 'cursor-grab active:cursor-grabbing' : ''} ${expandable ? 'cursor-pointer' : ''}`,
+                className
+              )}
+              style={{
+                borderRadius,
+                ...(width && !expandable && { width }),
+                ...(height && !expandable && { height }),
+              }}
+              {...motionProps}
+              {...props}
+            >
+              {/* Bend Layer (Backdrop blur with distortion) */}
+              <div
+                className={`absolute inset-0 ${blurClasses[blurIntensity]} z-0`}
+                style={{
+                  borderRadius,
+                  filter: 'url(#glass-blur)',
+                }}
+              />
 
-```
+              {/* Face Layer (Main shadow and glow) */}
+              <div
+                className='absolute inset-0 z-10'
+                style={{
+                  borderRadius,
+                  boxShadow: glowStyles[glowIntensity],
+                }}
+              />
 
-Install NPM dependencies:
-```bash
-motion
-```
+              {/* Edge Layer (Inner highlights) */}
+              <div
+                className='absolute inset-0 z-20'
+                style={{
+                  borderRadius,
+                  boxShadow: shadowStyles[shadowIntensity],
+                }}
+              />
 
-Implementation Guidelines
- 1. Analyze the component structure and identify all required dependencies
- 2. Review the component's argumens and state
- 3. Identify any required context providers or hooks and install them
- 4. Questions to Ask
- - What data/props will be passed to this component?
- - Are there any specific state management requirements?
- - Are there any required assets (images, icons, etc.)?
- - What is the expected responsive behavior?
- - What is the best place to use this component in the app?
+              {/* Content */}
+              <div className={cn('relative z-30')}>{children}</div>
+            </MotionComponent>
+          </>
+        );
+      };
 
-Steps to integrate
- 0. Copy paste all the code above in the correct directories
- 1. Install external dependencies
- 2. Fill image assets with Unsplash stock images you know exist
- 3. Use lucide-react icons for svgs or logos if component requires them
+
+      demo.tsx
+      import { LiquidGlassCard } from "@/components/ui/liquid-notification";
+
+      export default function DemoOne() {
+        return    <div
+              className='p-8 w-fit mx-auto gap-2 h-[40rem] flex flex-col justify-end pt-2 pb-10 rounded-xl'
+              style={{
+                background:
+                  'url("https://images.unsplash.com/photo-1534259070436-a95806b8621a?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D") center / cover no-repeat',
+              }}
+            >
+              <LiquidGlassCard
+                shadowIntensity='md'
+                blurIntensity='lg'
+                borderRadius='18px'
+                glowIntensity='xl'
+                draggable={false}
+                expandable
+                expandedWidth='410px'
+                expandedHeight='325px'
+                width='410px'
+                height='90px'
+                className='z-10 flex items-start relative overflow-hidden'
+              >
+                <div className='relative flex items-center p-4  text-white h-full z-10'>
+                  {/* App Icon */}
+                  <div className='flex-shrink-0 mr-4'>
+                    <img
+                      src={'https://ui-layouts.com/apple-touch-icon.png'}
+                      alt={`icon`}
+                      width={56}
+                      height={56}
+                      className='rounded-xl'
+                    />
+                  </div>
+
+                  <div className='flex-grow pr-4'>
+                    <div className='font-semibold text-lg'>UI-Layouts</div>
+                    <div className='text-sm'>
+                      New components are available for you
+                    </div>
+                    <div className='text-sm text-gray-200'>Liquid-Glass</div>
+                  </div>
+                  <div className='flex-shrink-0 ml-4 text-sm text-gray-200 self-start pt-1'>
+                    12:34
+                  </div>
+                </div>
+                <img
+                  src='https://ui-layouts.com/og.jpg'
+                  alt='og'
+                  width={400}
+                  height={400}
+                  className='rounded-xl w-[92%] mx-auto h-full z-20'
+                />
+              </LiquidGlassCard>
+              <LiquidGlassCard
+                width='410px'
+                height='90px'
+                shadowIntensity='md'
+                blurIntensity='lg'
+                borderRadius='18px'
+                glowIntensity='xl'
+                className='z-10 flex items-start relative mt-2'
+              >
+                <div className='relative flex items-center p-4 text-white z-10'>
+                  {/* App Icon */}
+                  <div className='flex-shrink-0 mr-4'>
+                    <img
+                      src={'https://ui-layouts.com/apple-touch-icon.png'}
+                      alt={`icon`}
+                      width={56}
+                      height={56}
+                      className='rounded-xl'
+                    />
+                  </div>
+
+                  <div className='flex-grow pr-4'>
+                    <div className='font-semibold text-lg'>
+                      <svg
+                        width='160'
+                        height='48'
+                        className='w-20 h-8'
+                        viewBox='0 0 160 48'
+                        fill='none'
+                        xmlns='http://www.w3.org/2000/svg'
+                      >
+                        <path
+                          d='M23.8678 32.8457H35.6653V44.0914C35.6653 45.1429 35.2789 46.0571 34.506 46.8343C33.7331 47.6114 32.8012 48 31.7101 48H15.8891C14.798 48 13.8661 47.6114 13.0932 46.8343C12.3203 46.0571 11.9339 45.1429 11.9339 44.0914V39.2914C11.9339 38.1943 11.5475 37.2571 10.7746 36.48C10.0017 35.6571 9.0698 35.2457 7.9787 35.2457H3.887C2.8414 35.2457 1.9322 34.88 1.1593 34.1486C0.386402 33.3714 0 32.4343 0 31.3371V0H11.7975V17.6229H21.6856C22.0038 17.6229 22.2766 17.7371 22.5039 17.9657C22.7312 18.1943 22.8449 18.4686 22.8449 18.7886V29.2114C22.8449 29.5314 22.7312 29.8057 22.5039 30.0343C22.2766 30.2629 22.0038 30.3771 21.6856 30.3771H11.7975V34.0114C11.7975 34.3314 11.9112 34.6057 12.1385 34.8343C12.3658 35.0629 12.6386 35.1771 12.9568 35.1771H22.7085C23.0267 35.1771 23.2995 35.0629 23.5268 34.8343C23.7541 34.6057 23.8678 34.3314 23.8678 34.0114V32.8457Z'
+                          fill='currentColor'
+                        />
+                        <path
+                          d='M70.6263 17.6914C71.7173 17.6914 72.6493 18.08 73.4223 18.8571C74.1953 19.6343 74.5813 20.5486 74.5813 21.6V44.0914C74.5813 45.1429 74.1953 46.0571 73.4223 46.8343C72.6493 47.6114 71.7173 48 70.6263 48H42.803C41.7574 48 40.8481 47.6114 40.0753 46.8343C39.3024 46.0571 38.916 45.1429 38.916 44.0914V21.6C38.916 20.5486 39.3024 19.6343 40.0753 18.8571C40.8481 18.08 41.7574 17.6914 42.803 17.6914H70.6263ZM62.7833 34.08V31.6114C62.7833 31.2914 62.6703 31.0171 62.4433 30.7886C62.2153 30.56 61.9423 30.4457 61.6243 30.4457H51.1909C50.8726 30.4457 50.5998 30.56 50.3725 30.7886C50.1452 31.0171 50.0316 31.2914 50.0316 31.6114V34.08C50.0316 34.4 50.1452 34.6743 50.3725 34.9029C50.5998 35.1314 50.8726 35.2457 51.1909 35.2457H61.6243C61.9423 35.2457 62.2153 35.1314 62.4433 34.9029C62.6703 34.6743 62.7833 34.4 62.7833 34.08Z'
+                          fill='currentColor'
+                        />
+                        <path
+                          d='M110.782 17.6914C111.873 17.6914 112.805 18.08 113.578 18.8571C114.351 19.6343 114.737 20.5486 114.737 21.6V44.0914C114.737 45.1429 114.351 46.0571 113.578 46.8343C112.805 47.6114 111.873 48 110.782 48H82.9593C81.9133 48 81.0043 47.6114 80.2313 46.8343C79.4583 46.0571 79.0723 45.1429 79.0723 44.0914V21.6C79.0723 20.5486 79.4583 19.6343 80.2313 18.8571C81.0043 18.08 81.9133 17.6914 82.9593 17.6914H110.782ZM102.94 34.08V31.6114C102.94 31.2914 102.826 31.0171 102.599 30.7886C102.371 30.56 102.098 30.4457 101.78 30.4457H91.3473C91.0283 30.4457 90.7563 30.56 90.5283 30.7886C90.3013 31.0171 90.1873 31.2914 90.1873 31.6114V34.08C90.1873 34.4 90.3013 34.6743 90.5283 34.9029C90.7563 35.1314 91.0283 35.2457 91.3473 35.2457H101.78C102.098 35.2457 102.371 35.1314 102.599 34.9029C102.826 34.6743 102.94 34.4 102.94 34.08Z'
+                          fill='currentColor'
+                        />
+                        <path d='M132.049 48H119.365V0H132.049V48Z' fill='currentColor' />
+                        <path
+                          d='M142.953 22.2853V13.7139H160.001V22.2853H151.477V30.8567H134.428V22.2853H142.953ZM160.001 39.4282H151.477V30.8567H160.001V39.4282ZM151.477 39.4282V47.9996H134.428V39.4282H151.477Z'
+                          fill='currentColor'
+                        />
+                      </svg>
+                    </div>
+                    <div className='text-sm'>
+                      New components are available for you
+                    </div>
+                  </div>
+                  <div className='flex-shrink-0 ml-4 text-sm text-gray-200 self-start pt-1'>
+                    12:34
+                  </div>
+                </div>
+              </LiquidGlassCard>
+            </div>;
+      }
+
+      ```
+
+      Install NPM dependencies:
+      ```bash
+      motion
+      ```
+
+      Implementation Guidelines
+      1. Analyze the component structure and identify all required dependencies
+      2. Review the component's argumens and state
+      3. Identify any required context providers or hooks and install them
+      4. Questions to Ask
+      - What data/props will be passed to this component?
+      - Are there any specific state management requirements?
+      - Are there any required assets (images, icons, etc.)?
+      - What is the expected responsive behavior?
+      - What is the best place to use this component in the app?
+
+      Steps to integrate
+      0. Copy paste all the code above in the correct directories
+      1. Install external dependencies
+      2. Fill image assets with Unsplash stock images you know exist
+      3. Use lucide-react icons for svgs or logos if component requires them
 
 
 9. try using this for the buttons in the admin dashboard? : You are given a task to integrate an existing React component in the codebase
 
-The codebase should support:
-- shadcn project structure  
-- Tailwind CSS
-- Typescript
+          The codebase should support:
+          - shadcn project structure  
+          - Tailwind CSS
+          - Typescript
 
-If it doesn't, provide instructions on how to setup project via shadcn CLI, install Tailwind or Typescript.
+          If it doesn't, provide instructions on how to setup project via shadcn CLI, install Tailwind or Typescript.
 
-Determine the default path for components and styles. 
-If default path for components is not /components/ui, provide instructions on why it's important to create this folder
-Copy-paste this component to /components/ui folder:
-```tsx
-liquid-glass-button.tsx
-"use client"
+          Determine the default path for components and styles. 
+          If default path for components is not /components/ui, provide instructions on why it's important to create this folder
+          Copy-paste this component to /components/ui folder:
+          ```tsx
+          liquid-glass-button.tsx
+          "use client"
 
-import * as React from "react"
-import { Slot } from "@radix-ui/react-slot"
-import { cva, type VariantProps } from "class-variance-authority"
+          import * as React from "react"
+          import { Slot } from "@radix-ui/react-slot"
+          import { cva, type VariantProps } from "class-variance-authority"
 
-import { cn } from "@/lib/utils"
+          import { cn } from "@/lib/utils"
 
-const buttonVariants = cva(
-  "inline-flex items-center cursor-pointer justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
-  {
-    variants: {
-      variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
-        destructive:
-          "bg-destructive text-primary-foreground hover:bg-destructive/90",
-        cool: "dark:inset-shadow-2xs dark:inset-shadow-white/10 bg-linear-to-t border border-b-2 border-zinc-950/40 from-primary to-primary/85 shadow-md shadow-primary/20 ring-1 ring-inset ring-white/25 transition-[filter] duration-200 hover:brightness-110 active:brightness-90 dark:border-x-0 text-primary-foreground dark:text-primary-foreground dark:border-t-0 dark:border-primary/50 dark:ring-white/5",
-        outline:
-          "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
-        secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
-      },
-      size: {
-        default: "h-9 px-4 py-2",
-        sm: "h-8 rounded-md px-3 text-xs",
-        lg: "h-10 rounded-md px-8",
-        icon: "h-9 w-9",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-      size: "default",
-    },
-  }
-)
+          const buttonVariants = cva(
+            "inline-flex items-center cursor-pointer justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+            {
+              variants: {
+                variant: {
+                  default: "bg-primary text-primary-foreground hover:bg-primary/90",
+                  destructive:
+                    "bg-destructive text-primary-foreground hover:bg-destructive/90",
+                  cool: "dark:inset-shadow-2xs dark:inset-shadow-white/10 bg-linear-to-t border border-b-2 border-zinc-950/40 from-primary to-primary/85 shadow-md shadow-primary/20 ring-1 ring-inset ring-white/25 transition-[filter] duration-200 hover:brightness-110 active:brightness-90 dark:border-x-0 text-primary-foreground dark:text-primary-foreground dark:border-t-0 dark:border-primary/50 dark:ring-white/5",
+                  outline:
+                    "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
+                  secondary:
+                    "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+                  ghost: "hover:bg-accent hover:text-accent-foreground",
+                  link: "text-primary underline-offset-4 hover:underline",
+                },
+                size: {
+                  default: "h-9 px-4 py-2",
+                  sm: "h-8 rounded-md px-3 text-xs",
+                  lg: "h-10 rounded-md px-8",
+                  icon: "h-9 w-9",
+                },
+              },
+              defaultVariants: {
+                variant: "default",
+                size: "default",
+              },
+            }
+          )
 
-export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {
-  asChild?: boolean
-}
+          export interface ButtonProps
+            extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+              VariantProps<typeof buttonVariants> {
+            asChild?: boolean
+          }
 
-const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
-    const Comp = asChild ? Slot : "button"
-    return (
-      <Comp
-        className={cn(buttonVariants({ variant, size, className }))}
-        ref={ref}
-        {...props}
-      />
-    )
-  }
-)
-Button.displayName = "Button"
+          const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+            ({ className, variant, size, asChild = false, ...props }, ref) => {
+              const Comp = asChild ? Slot : "button"
+              return (
+                <Comp
+                  className={cn(buttonVariants({ variant, size, className }))}
+                  ref={ref}
+                  {...props}
+                />
+              )
+            }
+          )
+          Button.displayName = "Button"
 
-export { Button, buttonVariants, liquidbuttonVariants, LiquidButton }
+          export { Button, buttonVariants, liquidbuttonVariants, LiquidButton }
 
-const liquidbuttonVariants = cva(
-  "inline-flex items-center transition-colors justify-center cursor-pointer gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-[color,box-shadow] disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
-  {
-    variants: {
-      variant: {
-        default: "bg-transparent hover:scale-105 duration-300 transition text-primary",
-        destructive:
-          "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40",
-        outline:
-          "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
-        secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
-      },
-      size: {
-        default: "h-9 px-4 py-2 has-[>svg]:px-3",
-        sm: "h-8 text-xs gap-1.5 px-4 has-[>svg]:px-4",
-        lg: "h-10 rounded-md px-6 has-[>svg]:px-4",
-        xl: "h-12 rounded-md px-8 has-[>svg]:px-6",
-        xxl: "h-14 rounded-md px-10 has-[>svg]:px-8",
-        icon: "size-9",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-      size: "xxl",
-    },
-  }
-)
+          const liquidbuttonVariants = cva(
+            "inline-flex items-center transition-colors justify-center cursor-pointer gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-[color,box-shadow] disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
+            {
+              variants: {
+                variant: {
+                  default: "bg-transparent hover:scale-105 duration-300 transition text-primary",
+                  destructive:
+                    "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40",
+                  outline:
+                    "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
+                  secondary:
+                    "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+                  ghost: "hover:bg-accent hover:text-accent-foreground",
+                  link: "text-primary underline-offset-4 hover:underline",
+                },
+                size: {
+                  default: "h-9 px-4 py-2 has-[>svg]:px-3",
+                  sm: "h-8 text-xs gap-1.5 px-4 has-[>svg]:px-4",
+                  lg: "h-10 rounded-md px-6 has-[>svg]:px-4",
+                  xl: "h-12 rounded-md px-8 has-[>svg]:px-6",
+                  xxl: "h-14 rounded-md px-10 has-[>svg]:px-8",
+                  icon: "size-9",
+                },
+              },
+              defaultVariants: {
+                variant: "default",
+                size: "xxl",
+              },
+            }
+          )
 
-function LiquidButton({
-  className,
-  variant,
-  size,
-  asChild = false,
-  children,
-  ...props
-}: React.ComponentProps<"button"> &
-  VariantProps<typeof liquidbuttonVariants> & {
-    asChild?: boolean
-  }) {
-  const Comp = asChild ? Slot : "button"
+          function LiquidButton({
+            className,
+            variant,
+            size,
+            asChild = false,
+            children,
+            ...props
+          }: React.ComponentProps<"button"> &
+            VariantProps<typeof liquidbuttonVariants> & {
+              asChild?: boolean
+            }) {
+            const Comp = asChild ? Slot : "button"
 
-  return (
-    <>
-      <Comp
-        data-slot="button"
-        className={cn(
-          "relative",
-          liquidbuttonVariants({ variant, size, className })
-        )}
-        {...props}
-      >
-        <div className="absolute top-0 left-0 z-0 h-full w-full rounded-full 
-            shadow-[0_0_6px_rgba(0,0,0,0.03),0_2px_6px_rgba(0,0,0,0.08),inset_3px_3px_0.5px_-3px_rgba(0,0,0,0.9),inset_-3px_-3px_0.5px_-3px_rgba(0,0,0,0.85),inset_1px_1px_1px_-0.5px_rgba(0,0,0,0.6),inset_-1px_-1px_1px_-0.5px_rgba(0,0,0,0.6),inset_0_0_6px_6px_rgba(0,0,0,0.12),inset_0_0_2px_2px_rgba(0,0,0,0.06),0_0_12px_rgba(255,255,255,0.15)] 
-        transition-all 
-        dark:shadow-[0_0_8px_rgba(0,0,0,0.03),0_2px_6px_rgba(0,0,0,0.08),inset_3px_3px_0.5px_-3.5px_rgba(255,255,255,0.09),inset_-3px_-3px_0.5px_-3.5px_rgba(255,255,255,0.85),inset_1px_1px_1px_-0.5px_rgba(255,255,255,0.6),inset_-1px_-1px_1px_-0.5px_rgba(255,255,255,0.6),inset_0_0_6px_6px_rgba(255,255,255,0.12),inset_0_0_2px_2px_rgba(255,255,255,0.06),0_0_12px_rgba(0,0,0,0.15)]" />
-        <div
-          className="absolute top-0 left-0 isolate -z-10 h-full w-full overflow-hidden rounded-md"
-          style={{ backdropFilter: 'url("#container-glass")' }}
-        />
+            return (
+              <>
+                <Comp
+                  data-slot="button"
+                  className={cn(
+                    "relative",
+                    liquidbuttonVariants({ variant, size, className })
+                  )}
+                  {...props}
+                >
+                  <div className="absolute top-0 left-0 z-0 h-full w-full rounded-full 
+                      shadow-[0_0_6px_rgba(0,0,0,0.03),0_2px_6px_rgba(0,0,0,0.08),inset_3px_3px_0.5px_-3px_rgba(0,0,0,0.9),inset_-3px_-3px_0.5px_-3px_rgba(0,0,0,0.85),inset_1px_1px_1px_-0.5px_rgba(0,0,0,0.6),inset_-1px_-1px_1px_-0.5px_rgba(0,0,0,0.6),inset_0_0_6px_6px_rgba(0,0,0,0.12),inset_0_0_2px_2px_rgba(0,0,0,0.06),0_0_12px_rgba(255,255,255,0.15)] 
+                  transition-all 
+                  dark:shadow-[0_0_8px_rgba(0,0,0,0.03),0_2px_6px_rgba(0,0,0,0.08),inset_3px_3px_0.5px_-3.5px_rgba(255,255,255,0.09),inset_-3px_-3px_0.5px_-3.5px_rgba(255,255,255,0.85),inset_1px_1px_1px_-0.5px_rgba(255,255,255,0.6),inset_-1px_-1px_1px_-0.5px_rgba(255,255,255,0.6),inset_0_0_6px_6px_rgba(255,255,255,0.12),inset_0_0_2px_2px_rgba(255,255,255,0.06),0_0_12px_rgba(0,0,0,0.15)]" />
+                  <div
+                    className="absolute top-0 left-0 isolate -z-10 h-full w-full overflow-hidden rounded-md"
+                    style={{ backdropFilter: 'url("#container-glass")' }}
+                  />
 
-        <div className="pointer-events-none z-10 ">
-          {children}
-        </div>
-        <GlassFilter />
-      </Comp>
-    </>
-  )
-}
-
-
-function GlassFilter() {
-  return (
-    <svg className="hidden">
-      <defs>
-        <filter
-          id="container-glass"
-          x="0%"
-          y="0%"
-          width="100%"
-          height="100%"
-          colorInterpolationFilters="sRGB"
-        >
-          {/* Generate turbulent noise for distortion */}
-          <feTurbulence
-            type="fractalNoise"
-            baseFrequency="0.05 0.05"
-            numOctaves="1"
-            seed="1"
-            result="turbulence"
-          />
-
-          {/* Blur the turbulence pattern slightly */}
-          <feGaussianBlur in="turbulence" stdDeviation="2" result="blurredNoise" />
-
-          {/* Displace the source graphic with the noise */}
-          <feDisplacementMap
-            in="SourceGraphic"
-            in2="blurredNoise"
-            scale="70"
-            xChannelSelector="R"
-            yChannelSelector="B"
-            result="displaced"
-          />
-
-          {/* Apply overall blur on the final result */}
-          <feGaussianBlur in="displaced" stdDeviation="4" result="finalBlur" />
-
-          {/* Output the result */}
-          <feComposite in="finalBlur" in2="finalBlur" operator="over" />
-        </filter>
-      </defs>
-    </svg>
-  );
-}
-
-type ColorVariant =
-  | "default"
-  | "primary"
-  | "success"
-  | "error"
-  | "gold"
-  | "bronze";
- 
-interface MetalButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: ColorVariant;
-}
- 
-const colorVariants: Record<
-  ColorVariant,
-  {
-    outer: string;
-    inner: string;
-    button: string;
-    textColor: string;
-    textShadow: string;
-  }
-> = {
-  default: {
-    outer: "bg-gradient-to-b from-[#000] to-[#A0A0A0]",
-    inner: "bg-gradient-to-b from-[#FAFAFA] via-[#3E3E3E] to-[#E5E5E5]",
-    button: "bg-gradient-to-b from-[#B9B9B9] to-[#969696]",
-    textColor: "text-white",
-    textShadow: "[text-shadow:_0_-1px_0_rgb(80_80_80_/_100%)]",
-  },
-  primary: {
-    outer: "bg-gradient-to-b from-[#000] to-[#A0A0A0]",
-    inner: "bg-gradient-to-b from-primary via-secondary to-muted",
-    button: "bg-gradient-to-b from-primary to-primary/40",
-    textColor: "text-white",
-    textShadow: "[text-shadow:_0_-1px_0_rgb(30_58_138_/_100%)]",
-  },
-  success: {
-    outer: "bg-gradient-to-b from-[#005A43] to-[#7CCB9B]",
-    inner: "bg-gradient-to-b from-[#E5F8F0] via-[#00352F] to-[#D1F0E6]",
-    button: "bg-gradient-to-b from-[#9ADBC8] to-[#3E8F7C]",
-    textColor: "text-[#FFF7F0]",
-    textShadow: "[text-shadow:_0_-1px_0_rgb(6_78_59_/_100%)]",
-  },
-  error: {
-    outer: "bg-gradient-to-b from-[#5A0000] to-[#FFAEB0]",
-    inner: "bg-gradient-to-b from-[#FFDEDE] via-[#680002] to-[#FFE9E9]",
-    button: "bg-gradient-to-b from-[#F08D8F] to-[#A45253]",
-    textColor: "text-[#FFF7F0]",
-    textShadow: "[text-shadow:_0_-1px_0_rgb(146_64_14_/_100%)]",
-  },
-  gold: {
-    outer: "bg-gradient-to-b from-[#917100] to-[#EAD98F]",
-    inner: "bg-gradient-to-b from-[#FFFDDD] via-[#856807] to-[#FFF1B3]",
-    button: "bg-gradient-to-b from-[#FFEBA1] to-[#9B873F]",
-    textColor: "text-[#FFFDE5]",
-    textShadow: "[text-shadow:_0_-1px_0_rgb(178_140_2_/_100%)]",
-  },
-  bronze: {
-    outer: "bg-gradient-to-b from-[#864813] to-[#E9B486]",
-    inner: "bg-gradient-to-b from-[#EDC5A1] via-[#5F2D01] to-[#FFDEC1]",
-    button: "bg-gradient-to-b from-[#FFE3C9] to-[#A36F3D]",
-    textColor: "text-[#FFF7F0]",
-    textShadow: "[text-shadow:_0_-1px_0_rgb(124_45_18_/_100%)]",
-  },
-};
- 
-const metalButtonVariants = (
-  variant: ColorVariant = "default",
-  isPressed: boolean,
-  isHovered: boolean,
-  isTouchDevice: boolean,
-) => {
-  const colors = colorVariants[variant];
-  const transitionStyle = "all 250ms cubic-bezier(0.1, 0.4, 0.2, 1)";
- 
-  return {
-    wrapper: cn(
-      "relative inline-flex transform-gpu rounded-md p-[1.25px] will-change-transform",
-      colors.outer,
-    ),
-    wrapperStyle: {
-      transform: isPressed
-        ? "translateY(2.5px) scale(0.99)"
-        : "translateY(0) scale(1)",
-      boxShadow: isPressed
-        ? "0 1px 2px rgba(0, 0, 0, 0.15)"
-        : isHovered && !isTouchDevice
-          ? "0 4px 12px rgba(0, 0, 0, 0.12)"
-          : "0 3px 8px rgba(0, 0, 0, 0.08)",
-      transition: transitionStyle,
-      transformOrigin: "center center",
-    },
-    inner: cn(
-      "absolute inset-[1px] transform-gpu rounded-lg will-change-transform",
-      colors.inner,
-    ),
-    innerStyle: {
-      transition: transitionStyle,
-      transformOrigin: "center center",
-      filter:
-        isHovered && !isPressed && !isTouchDevice ? "brightness(1.05)" : "none",
-    },
-    button: cn(
-      "relative z-10 m-[1px] rounded-md inline-flex h-11 transform-gpu cursor-pointer items-center justify-center overflow-hidden rounded-md px-6 py-2 text-sm leading-none font-semibold will-change-transform outline-none",
-      colors.button,
-      colors.textColor,
-      colors.textShadow,
-    ),
-    buttonStyle: {
-      transform: isPressed ? "scale(0.97)" : "scale(1)",
-      transition: transitionStyle,
-      transformOrigin: "center center",
-      filter:
-        isHovered && !isPressed && !isTouchDevice ? "brightness(1.02)" : "none",
-    },
-  };
-};
- 
-const ShineEffect = ({ isPressed }: { isPressed: boolean }) => {
-  return (
-    <div
-      className={cn(
-        "pointer-events-none absolute inset-0 z-20 overflow-hidden transition-opacity duration-300",
-        isPressed ? "opacity-20" : "opacity-0",
-      )}
-    >
-      <div className="absolute inset-0 rounded-md bg-gradient-to-r from-transparent via-neutral-100 to-transparent" />
-    </div>
-  );
-};
- 
-export const MetalButton = React.forwardRef<
-  HTMLButtonElement,
-  MetalButtonProps
->(({ children, className, variant = "default", ...props }, ref) => {
-  const [isPressed, setIsPressed] = React.useState(false);
-  const [isHovered, setIsHovered] = React.useState(false);
-  const [isTouchDevice, setIsTouchDevice] = React.useState(false);
- 
-  React.useEffect(() => {
-    setIsTouchDevice("ontouchstart" in window || navigator.maxTouchPoints > 0);
-  }, []);
- 
-  const buttonText = children || "Button";
-  const variants = metalButtonVariants(
-    variant,
-    isPressed,
-    isHovered,
-    isTouchDevice,
-  );
- 
-  const handleInternalMouseDown = () => {
-    setIsPressed(true);
-  };
-  const handleInternalMouseUp = () => {
-    setIsPressed(false);
-  };
-  const handleInternalMouseLeave = () => {
-    setIsPressed(false);
-    setIsHovered(false);
-  };
-  const handleInternalMouseEnter = () => {
-    if (!isTouchDevice) {
-      setIsHovered(true);
-    }
-  };
-  const handleInternalTouchStart = () => {
-    setIsPressed(true);
-  };
-  const handleInternalTouchEnd = () => {
-    setIsPressed(false);
-  };
-  const handleInternalTouchCancel = () => {
-    setIsPressed(false);
-  };
- 
-  return (
-    <div className={variants.wrapper} style={variants.wrapperStyle}>
-      <div className={variants.inner} style={variants.innerStyle}></div>
-      <button
-        ref={ref}
-        className={cn(variants.button, className)}
-        style={variants.buttonStyle}
-        {...props}
-        onMouseDown={handleInternalMouseDown}
-        onMouseUp={handleInternalMouseUp}
-        onMouseLeave={handleInternalMouseLeave}
-        onMouseEnter={handleInternalMouseEnter}
-        onTouchStart={handleInternalTouchStart}
-        onTouchEnd={handleInternalTouchEnd}
-        onTouchCancel={handleInternalTouchCancel}
-      >
-        <ShineEffect isPressed={isPressed} />
-        {buttonText}
-        {isHovered && !isPressed && !isTouchDevice && (
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t rounded-lg from-transparent to-white/5" />
-        )}
-      </button>
-    </div>
-  );
-});
- 
-MetalButton.displayName = "MetalButton";
-
-demo.tsx
-import { LiquidButton } from "@/components/ui/liquid-glass-button";
-
-export default function DemoOne() {
-  return (
-    <> 
-      <div className="relative h-[200px] w-[800px]"> 
-        <LiquidButton className="absolute top-1/2 left-1/2 z-10 -translate-x-1/2 -translate-y-1/2">
-          Liquid Glass
-        </LiquidButton> 
-      </div>
-    </>
-  )
-}
-
-```
-
-Install NPM dependencies:
-```bash
-@radix-ui/react-slot, class-variance-authority
-```
-
-Implementation Guidelines
- 1. Analyze the component structure and identify all required dependencies
- 2. Review the component's argumens and state
- 3. Identify any required context providers or hooks and install them
- 4. Questions to Ask
- - What data/props will be passed to this component?
- - Are there any specific state management requirements?
- - Are there any required assets (images, icons, etc.)?
- - What is the expected responsive behavior?
- - What is the best place to use this component in the app?
-
-Steps to integrate
- 0. Copy paste all the code above in the correct directories
- 1. Install external dependencies
- 2. Fill image assets with Unsplash stock images you know exist
- 3. Use lucide-react icons for svgs or logos if component requires them
+                  <div className="pointer-events-none z-10 ">
+                    {children}
+                  </div>
+                  <GlassFilter />
+                </Comp>
+              </>
+            )
+          }
 
 
-REMOVE DOWN
+          function GlassFilter() {
+            return (
+              <svg className="hidden">
+                <defs>
+                  <filter
+                    id="container-glass"
+                    x="0%"
+                    y="0%"
+                    width="100%"
+                    height="100%"
+                    colorInterpolationFilters="sRGB"
+                  >
+                    {/* Generate turbulent noise for distortion */}
+                    <feTurbulence
+                      type="fractalNoise"
+                      baseFrequency="0.05 0.05"
+                      numOctaves="1"
+                      seed="1"
+                      result="turbulence"
+                    />
+
+                    {/* Blur the turbulence pattern slightly */}
+                    <feGaussianBlur in="turbulence" stdDeviation="2" result="blurredNoise" />
+
+                    {/* Displace the source graphic with the noise */}
+                    <feDisplacementMap
+                      in="SourceGraphic"
+                      in2="blurredNoise"
+                      scale="70"
+                      xChannelSelector="R"
+                      yChannelSelector="B"
+                      result="displaced"
+                    />
+
+                    {/* Apply overall blur on the final result */}
+                    <feGaussianBlur in="displaced" stdDeviation="4" result="finalBlur" />
+
+                    {/* Output the result */}
+                    <feComposite in="finalBlur" in2="finalBlur" operator="over" />
+                  </filter>
+                </defs>
+              </svg>
+            );
+          }
+
+          type ColorVariant =
+            | "default"
+            | "primary"
+            | "success"
+            | "error"
+            | "gold"
+            | "bronze";
+          
+          interface MetalButtonProps
+            extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+            variant?: ColorVariant;
+          }
+          
+          const colorVariants: Record<
+            ColorVariant,
+            {
+              outer: string;
+              inner: string;
+              button: string;
+              textColor: string;
+              textShadow: string;
+            }
+          > = {
+            default: {
+              outer: "bg-gradient-to-b from-[#000] to-[#A0A0A0]",
+              inner: "bg-gradient-to-b from-[#FAFAFA] via-[#3E3E3E] to-[#E5E5E5]",
+              button: "bg-gradient-to-b from-[#B9B9B9] to-[#969696]",
+              textColor: "text-white",
+              textShadow: "[text-shadow:_0_-1px_0_rgb(80_80_80_/_100%)]",
+            },
+            primary: {
+              outer: "bg-gradient-to-b from-[#000] to-[#A0A0A0]",
+              inner: "bg-gradient-to-b from-primary via-secondary to-muted",
+              button: "bg-gradient-to-b from-primary to-primary/40",
+              textColor: "text-white",
+              textShadow: "[text-shadow:_0_-1px_0_rgb(30_58_138_/_100%)]",
+            },
+            success: {
+              outer: "bg-gradient-to-b from-[#005A43] to-[#7CCB9B]",
+              inner: "bg-gradient-to-b from-[#E5F8F0] via-[#00352F] to-[#D1F0E6]",
+              button: "bg-gradient-to-b from-[#9ADBC8] to-[#3E8F7C]",
+              textColor: "text-[#FFF7F0]",
+              textShadow: "[text-shadow:_0_-1px_0_rgb(6_78_59_/_100%)]",
+            },
+            error: {
+              outer: "bg-gradient-to-b from-[#5A0000] to-[#FFAEB0]",
+              inner: "bg-gradient-to-b from-[#FFDEDE] via-[#680002] to-[#FFE9E9]",
+              button: "bg-gradient-to-b from-[#F08D8F] to-[#A45253]",
+              textColor: "text-[#FFF7F0]",
+              textShadow: "[text-shadow:_0_-1px_0_rgb(146_64_14_/_100%)]",
+            },
+            gold: {
+              outer: "bg-gradient-to-b from-[#917100] to-[#EAD98F]",
+              inner: "bg-gradient-to-b from-[#FFFDDD] via-[#856807] to-[#FFF1B3]",
+              button: "bg-gradient-to-b from-[#FFEBA1] to-[#9B873F]",
+              textColor: "text-[#FFFDE5]",
+              textShadow: "[text-shadow:_0_-1px_0_rgb(178_140_2_/_100%)]",
+            },
+            bronze: {
+              outer: "bg-gradient-to-b from-[#864813] to-[#E9B486]",
+              inner: "bg-gradient-to-b from-[#EDC5A1] via-[#5F2D01] to-[#FFDEC1]",
+              button: "bg-gradient-to-b from-[#FFE3C9] to-[#A36F3D]",
+              textColor: "text-[#FFF7F0]",
+              textShadow: "[text-shadow:_0_-1px_0_rgb(124_45_18_/_100%)]",
+            },
+          };
+          
+          const metalButtonVariants = (
+            variant: ColorVariant = "default",
+            isPressed: boolean,
+            isHovered: boolean,
+            isTouchDevice: boolean,
+          ) => {
+            const colors = colorVariants[variant];
+            const transitionStyle = "all 250ms cubic-bezier(0.1, 0.4, 0.2, 1)";
+          
+            return {
+              wrapper: cn(
+                "relative inline-flex transform-gpu rounded-md p-[1.25px] will-change-transform",
+                colors.outer,
+              ),
+              wrapperStyle: {
+                transform: isPressed
+                  ? "translateY(2.5px) scale(0.99)"
+                  : "translateY(0) scale(1)",
+                boxShadow: isPressed
+                  ? "0 1px 2px rgba(0, 0, 0, 0.15)"
+                  : isHovered && !isTouchDevice
+                    ? "0 4px 12px rgba(0, 0, 0, 0.12)"
+                    : "0 3px 8px rgba(0, 0, 0, 0.08)",
+                transition: transitionStyle,
+                transformOrigin: "center center",
+              },
+              inner: cn(
+                "absolute inset-[1px] transform-gpu rounded-lg will-change-transform",
+                colors.inner,
+              ),
+              innerStyle: {
+                transition: transitionStyle,
+                transformOrigin: "center center",
+                filter:
+                  isHovered && !isPressed && !isTouchDevice ? "brightness(1.05)" : "none",
+              },
+              button: cn(
+                "relative z-10 m-[1px] rounded-md inline-flex h-11 transform-gpu cursor-pointer items-center justify-center overflow-hidden rounded-md px-6 py-2 text-sm leading-none font-semibold will-change-transform outline-none",
+                colors.button,
+                colors.textColor,
+                colors.textShadow,
+              ),
+              buttonStyle: {
+                transform: isPressed ? "scale(0.97)" : "scale(1)",
+                transition: transitionStyle,
+                transformOrigin: "center center",
+                filter:
+                  isHovered && !isPressed && !isTouchDevice ? "brightness(1.02)" : "none",
+              },
+            };
+          };
+          
+          const ShineEffect = ({ isPressed }: { isPressed: boolean }) => {
+            return (
+              <div
+                className={cn(
+                  "pointer-events-none absolute inset-0 z-20 overflow-hidden transition-opacity duration-300",
+                  isPressed ? "opacity-20" : "opacity-0",
+                )}
+              >
+                <div className="absolute inset-0 rounded-md bg-gradient-to-r from-transparent via-neutral-100 to-transparent" />
+              </div>
+            );
+          };
+          
+          export const MetalButton = React.forwardRef<
+            HTMLButtonElement,
+            MetalButtonProps
+          >(({ children, className, variant = "default", ...props }, ref) => {
+            const [isPressed, setIsPressed] = React.useState(false);
+            const [isHovered, setIsHovered] = React.useState(false);
+            const [isTouchDevice, setIsTouchDevice] = React.useState(false);
+          
+            React.useEffect(() => {
+              setIsTouchDevice("ontouchstart" in window || navigator.maxTouchPoints > 0);
+            }, []);
+          
+            const buttonText = children || "Button";
+            const variants = metalButtonVariants(
+              variant,
+              isPressed,
+              isHovered,
+              isTouchDevice,
+            );
+          
+            const handleInternalMouseDown = () => {
+              setIsPressed(true);
+            };
+            const handleInternalMouseUp = () => {
+              setIsPressed(false);
+            };
+            const handleInternalMouseLeave = () => {
+              setIsPressed(false);
+              setIsHovered(false);
+            };
+            const handleInternalMouseEnter = () => {
+              if (!isTouchDevice) {
+                setIsHovered(true);
+              }
+            };
+            const handleInternalTouchStart = () => {
+              setIsPressed(true);
+            };
+            const handleInternalTouchEnd = () => {
+              setIsPressed(false);
+            };
+            const handleInternalTouchCancel = () => {
+              setIsPressed(false);
+            };
+          
+            return (
+              <div className={variants.wrapper} style={variants.wrapperStyle}>
+                <div className={variants.inner} style={variants.innerStyle}></div>
+                <button
+                  ref={ref}
+                  className={cn(variants.button, className)}
+                  style={variants.buttonStyle}
+                  {...props}
+                  onMouseDown={handleInternalMouseDown}
+                  onMouseUp={handleInternalMouseUp}
+                  onMouseLeave={handleInternalMouseLeave}
+                  onMouseEnter={handleInternalMouseEnter}
+                  onTouchStart={handleInternalTouchStart}
+                  onTouchEnd={handleInternalTouchEnd}
+                  onTouchCancel={handleInternalTouchCancel}
+                >
+                  <ShineEffect isPressed={isPressed} />
+                  {buttonText}
+                  {isHovered && !isPressed && !isTouchDevice && (
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t rounded-lg from-transparent to-white/5" />
+                  )}
+                </button>
+              </div>
+            );
+          });
+          
+          MetalButton.displayName = "MetalButton";
+
+          demo.tsx
+          import { LiquidButton } from "@/components/ui/liquid-glass-button";
+
+          export default function DemoOne() {
+            return (
+              <> 
+                <div className="relative h-[200px] w-[800px]"> 
+                  <LiquidButton className="absolute top-1/2 left-1/2 z-10 -translate-x-1/2 -translate-y-1/2">
+                    Liquid Glass
+                  </LiquidButton> 
+                </div>
+              </>
+            )
+          }
+
+          ```
+
+          Install NPM dependencies:
+          ```bash
+          @radix-ui/react-slot, class-variance-authority
+          ```
+
+          Implementation Guidelines
+          1. Analyze the component structure and identify all required dependencies
+          2. Review the component's argumens and state
+          3. Identify any required context providers or hooks and install them
+          4. Questions to Ask
+          - What data/props will be passed to this component?
+          - Are there any specific state management requirements?
+          - Are there any required assets (images, icons, etc.)?
+          - What is the expected responsive behavior?
+          - What is the best place to use this component in the app?
+
+          Steps to integrate
+          0. Copy paste all the code above in the correct directories
+          1. Install external dependencies
+          2. Fill image assets with Unsplash stock images you know exist
+          3. Use lucide-react icons for svgs or logos if component requires them
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------in the my account page, the personal details make it a little darker, it looks wrong now...let it be a little greyed out to show its not editable but at the same time show that names and stuff correctly
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------0. Enter key in login page logs in
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------home page menu is showing menu if not released also
+10. (DB CONCEPT CHANGE IN BACKEND) An API that deletes all the tables and then recreates all the tables and also inserts data into tables like items, categories and stuff..or just integrate sqlalchecmy and alembic?? help me do this easily.
+
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------‼️‼️‼️‼️‼️‼️ the + - in the menu's (ordertest and in the home page, shuold only allow adding available number of items, so if idli has only 48 items left (available) then i shoul dbe allowed to select only 48 idli's)
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------0.1 i am going to introduce multiple roles based access, for example, admin who is a developer, admin who is just menu setter and stuff, so make changes accordingly such that we are always checkign roles from an Array, and for now i want you to add another role called developer..in the schema let us change it entirely, no need of an admin_users table, instead we will have a roles table and then a roles field in the customer table so that roles field is an array that contains all the roles of that user, so if admin is 1 and developer is 2, then the user will have roles field [1,2]....and similarly lets add a Roles page to the side bar which allows us to manage these roles. similartly in login and stuff, or ANYWHERE in the codebase where we were checking and depending on admin_users table, let us start using this...and also i want you to handle everywhere that we check for admin or any role, right now we are using local storage, so we will continue doing that, make sure you check all places, then create a team members page which allows us to handle RBA
+
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------1.0 - reports make it a line graph dont show two data points in one graph, show multiple graphs, and put the graph above the table..
+
+1.1. xxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx x Frosted glass/Liquid glass components in some places..? I think frosted glass is better - with glass reaper like shaders in the back in brown theme
+
+2. ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------use pagination component in the order history page
+
+3. xxx?   use sidebar component for the admin dashboard sidebar
+
+4. (DO SLOWLY) use skeleton while something is loading
+
+5. (LATER) use spinner for like processing payment and other loading stuff
+
+6. (not looking good) use avatar for user
+
+7. xxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xxxxxx xxxx xxxx xxx xxx xuse shad/cn charts in sales reports and stuff
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+CHECK & REMOVE DOWN
 10. use this for the breakfast lunch dinner condiments selector in the today's menu sections, but keep it translucent, dont make it fully transparent:
 You are given a task to integrate an existing React component in the codebase
 

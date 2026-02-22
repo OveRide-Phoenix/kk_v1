@@ -9,6 +9,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import GoogleMapPicker from "@/components/gmap/GoogleMapPicker"
 
+const CITY_OPTIONS = [
+  { label: "Mysore", code: "MYS" },
+  { label: "Bangalore", code: "BLR" },
+]
+
+const resolveCityCode = (value: string) => {
+  const match = CITY_OPTIONS.find(
+    (option) => option.label.toLowerCase() === value.trim().toLowerCase(),
+  )
+  return match ? match.code : "MYS"
+}
+
 interface AddCustomerDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -26,6 +38,7 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
     houseApartmentNo: "",
     writtenAddress: "",
     city: "",
+    cityCode: "",
     pinCode: "",
     latitude: null as number | null,
     longitude: null as number | null,
@@ -68,6 +81,10 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
   )
 
   const handleSelectChange = (name: string, value: string) => {
+    if (name === "city") {
+      setFormData((prev) => ({ ...prev, city: value, cityCode: resolveCityCode(value) }))
+      return
+    }
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
@@ -91,6 +108,7 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
       house: formData.houseApartmentNo || null,
       full_address: formData.writtenAddress,
       city: formData.city,
+      city_code: formData.cityCode || resolveCityCode(formData.city),
       pin_code: formData.pinCode,
       email: formData.email || null,
       latitude: formData.latitude !== null ? parseFloat(String(formData.latitude)) : 0,
@@ -311,14 +329,18 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
                     value={formData.city}
                     onValueChange={(value) => handleSelectChange("city", value)}
                   >
-                    <SelectTrigger id="city">
-                      <SelectValue placeholder="Select city" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Bangalore">Bangalore</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                  <SelectTrigger id="city">
+                    <SelectValue placeholder="Select city" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CITY_OPTIONS.map((option) => (
+                      <SelectItem key={option.code} value={option.label}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="pinCode">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Sidebar from "@/components/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { InputWithButton } from "@/components/ui/input-button";
@@ -43,26 +43,42 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
+import { useAuthStore } from "@/store/store";
+import { http } from "@/lib/http";
+import { citySupportsFood, citySupportsCondiments, getSupportedMeals, getCityLabel } from "@/config/cities";
 
 interface MenuItem {
   menu_item_id?: number;
   item_id: number;
   item_name: string;
   category_id: number | null;
-  planned_qty: number;
+  max_qty: number;
   available_qty: number;
   rate: number;
   is_default: boolean;
   sort_order: number;
+  item_max_qty?: number | null;
 }
+
+type MealSection = "breakfast" | "lunch" | "dinner" | "condiments"
+
+const SECTION_TO_BLD_ID: Record<MealSection, number> = {
+  breakfast: 1,
+  lunch: 2,
+  dinner: 3,
+  condiments: 4,
+};
+
+const MEALS_REQUIRING_DEFAULT = new Set<MealSection>(["breakfast", "lunch", "dinner"]);
 
 export function DailyMenuSetup() {
   // ───────────────────────────────────────────────────────────────────────
   // Local state
   // ───────────────────────────────────────────────────────────────────────
+  const adminCity = useAuthStore((state) => state.adminCity || state.user?.city_code || "MYS");
 
   // items grouped by meal section
-  const [itemsByMeal, setItemsByMeal] = useState<Record<string, MenuItem[]>>({
+  const [itemsByMeal, setItemsByMeal] = useState<Record<MealSection, MenuItem[]>>({
     breakfast: [],
     lunch: [],
     dinner: [],
@@ -88,7 +104,6 @@ export function DailyMenuSetup() {
   const [availableItems, setAvailableItems] = useState<
     {
       item_id: number;
-      bld_id: number;
       name: string;
       description: string;
       alias: string | null;
@@ -96,11 +111,14 @@ export function DailyMenuSetup() {
       uom: string;
       weight_factor: number | null;
       weight_uom: string | null;
-      item_type: string | null;
       hsn_code: string | null;
       factor: number | null;
       quantity_portion: number | null;
       buffer_percentage: number | null;
+      max_qty_breakfast: number | null;
+      max_qty_lunch: number | null;
+      max_qty_dinner: number | null;
+      max_qty_condiments: number | null;
       picture_url: string | null;
       breakfast_price: number | null;
       lunch_price: number | null;
@@ -112,14 +130,17 @@ export function DailyMenuSetup() {
       igst: number | null;
       net_price: number | null;
       is_combo: boolean;
+      bld_ids: number[];
     }[]
   >([]);
   const [selectedItems, setSelectedItems] = useState<number[]>([]);
-  const [currentSection, setCurrentSection] = useState<string>("Breakfast");
+  const [currentSection, setCurrentSection] = useState<MealSection>(() =>
+    citySupportsFood(adminCity) ? "breakfast" : "condiments",
+  );
 
   // Edit / view states
   const [editIndexByMeal, setEditIndexByMeal] = useState<
-    Record<string, number | null>
+    Record<MealSection, number | null>
   >({
     breakfast: null,
     lunch: null,
@@ -136,7 +157,7 @@ export function DailyMenuSetup() {
 
   // Menu metadata
   const [menuIdByMeal, setMenuIdByMeal] = useState<
-    Record<string, number | null>
+    Record<MealSection, number | null>
   >({
     breakfast: null,
     lunch: null,
@@ -144,13 +165,41 @@ export function DailyMenuSetup() {
     condiments: null,
   });
   const [isReleasedByMeal, setIsReleasedByMeal] = useState<
-    Record<string, boolean>
+    Record<MealSection, boolean>
   >({
     breakfast: false,
     lunch: false,
     dinner: false,
     condiments: false,
   });
+
+  const supportsFood = citySupportsFood(adminCity);
+  const supportsCondiments = citySupportsCondiments(adminCity);
+  const visibleMeals = getSupportedMeals(adminCity);
+  const adminCityLabel = getCityLabel(adminCity);
+
+  const mealLabel = (meal: MealSection) =>
+    meal.charAt(0).toUpperCase() + meal.slice(1);
+
+  const ensureDefaultSelection = (meal: MealSection) => {
+    if (!MEALS_REQUIRING_DEFAULT.has(meal)) {
+      return true;
+    }
+    const rows = itemsByMeal[meal] ?? [];
+    const hasDefault = rows.some((row) => Boolean(row.is_default));
+    if (hasDefault) {
+      return true;
+    }
+
+    toast({
+      title: "Select a default item",
+      description: `Please mark one ${mealLabel(
+        meal
+      )} item as default before continuing.`,
+      variant: "destructive",
+    });
+    return false;
+  };
 
   // ───────────────────────────────────────────────────────────────────────
   // Helpers: format date → "YYYY-MM-DD"
@@ -164,6 +213,41 @@ export function DailyMenuSetup() {
   const formatISODate = (d: Date) =>
     formatDate(normalizeToMidnight(d), "yyyy-MM-dd");
 
+  const parseMaxField = (value: unknown): number | null => {
+    if (value === null || value === undefined) return null;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return null;
+    const floored = Math.floor(parsed);
+    return floored < 0 ? 0 : floored;
+  };
+
+  useEffect(() => {
+    if (!supportsFood) {
+      setCurrentSection("condiments");
+    }
+  }, [supportsFood]);
+
+  useEffect(() => {
+    setItemsByMeal({
+      breakfast: [],
+      lunch: [],
+      dinner: [],
+      condiments: [],
+    });
+    setMenuIdByMeal({
+      breakfast: null,
+      lunch: null,
+      dinner: null,
+      condiments: null,
+    });
+    setIsReleasedByMeal({
+      breakfast: false,
+      lunch: false,
+      dinner: false,
+      condiments: false,
+    });
+  }, [adminCity]);
+
   useEffect(() => {
     if (!calendarOpen) return;
     const base = confirmedDate
@@ -172,60 +256,144 @@ export function DailyMenuSetup() {
     setDraftDate(base);
   }, [calendarOpen, confirmedDate]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const storageKey = "dailymenusetup:prefill";
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) return;
+    window.localStorage.removeItem(storageKey);
+    try {
+      const payload = JSON.parse(raw) as {
+        date?: string;
+        bld_type?: string;
+      };
+
+      if (payload?.date) {
+        const parsed = new Date(payload.date);
+        if (!Number.isNaN(parsed.getTime())) {
+          const normalized = normalizeToMidnight(parsed);
+          setDraftDate(new Date(normalized));
+          setConfirmedDate(new Date(normalized));
+        }
+      }
+
+      if (payload?.bld_type) {
+        const normalizedMeal = payload.bld_type.toLowerCase();
+        const validMeals = ["breakfast", "lunch", "dinner", "condiments"];
+        if (validMeals.includes(normalizedMeal)) {
+          setCurrentSection(normalizedMeal);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to apply daily menu prefill", error);
+    }
+  }, []);
+
   // ───────────────────────────────────────────────────────────────────────
   // 1) Fetch for all meal sections when date is confirmed
   // ───────────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!confirmedDate) return;
+  const fetchMealSection = useCallback(
+    async (meal: MealSection) => {
+      const isCondimentsSection = meal === "condiments";
+      if (!isCondimentsSection && !confirmedDate) return;
+      setLoadingMenu(true);
+      try {
+        const params = new URLSearchParams({
+          bld_type: meal,
+          city_code: adminCity,
+          menu_type: isCondimentsSection ? "CONDIMENTS" : "ONE_DAY",
+        });
+        if (!isCondimentsSection && confirmedDate) {
+          params.set("date", formatISODate(confirmedDate));
+          params.set("period_type", "one_day");
+        }
 
-    const mealTypes = ["breakfast", "lunch", "dinner", "condiments"];
-    mealTypes.forEach((meal) => {
-      fetchMealSection(meal);
-    });
-  }, [confirmedDate]);
+        const res = await http.get(`/api/menu?${params.toString()}`);
+        if (res.status === 404) {
+          setMenuIdByMeal((prev) => ({ ...prev, [meal]: null }));
+          setIsReleasedByMeal((prev) => ({ ...prev, [meal]: false }));
+          setItemsByMeal((prev) => ({ ...prev, [meal]: [] }));
+          return;
+        }
+        if (!res.ok) {
+          console.warn(`Failed to fetch ${meal} menu`, await res.text());
+          setMenuIdByMeal((prev) => ({ ...prev, [meal]: null }));
+          setIsReleasedByMeal((prev) => ({ ...prev, [meal]: false }));
+          setItemsByMeal((prev) => ({ ...prev, [meal]: [] }));
+          return;
+        }
 
-  const fetchMealSection = async (meal: string) => {
-    setLoadingMenu(true);
-    try {
-      const isoDate = formatISODate(confirmedDate!);
-      const url = new URL("http://localhost:8000/api/menu");
-      url.searchParams.set("date", isoDate);
-      url.searchParams.set("bld_type", meal);
-      url.searchParams.set("period_type", "one_day");
-
-      const res = await fetch(url.toString());
-      if (res.status === 404) {
+        const data = await res.json();
+        setMenuIdByMeal((prev) => ({ ...prev, [meal]: data.menu_id }));
+        setIsReleasedByMeal((prev) => ({ ...prev, [meal]: data.is_released }));
+        const mapped = data.items.map((it: any) => {
+          const persistedMax = parseMaxField(it.max_qty);
+          const catalogMax = parseMaxField(it.item_max_qty);
+          const resolvedMax = persistedMax ?? catalogMax ?? 0;
+          const availableQty = Number(it.available_qty);
+          return {
+            menu_item_id: it.menu_item_id,
+            item_id: it.item_id,
+            item_name: it.item_name,
+            category_id: it.category_id,
+            max_qty: resolvedMax,
+            available_qty: Number.isFinite(availableQty) ? availableQty : resolvedMax,
+            rate: Number(it.rate ?? 0),
+            is_default: Boolean(it.is_default),
+            sort_order: it.sort_order,
+            item_max_qty: catalogMax,
+          };
+        });
+        setItemsByMeal((prev) => ({ ...prev, [meal]: mapped }));
+      } catch (err) {
+        console.error(`Failed to fetch ${meal}`, err);
         setMenuIdByMeal((prev) => ({ ...prev, [meal]: null }));
         setIsReleasedByMeal((prev) => ({ ...prev, [meal]: false }));
         setItemsByMeal((prev) => ({ ...prev, [meal]: [] }));
-        return;
+      } finally {
+        setLoadingMenu(false);
       }
-      if (!res.ok) {
-        throw new Error(`Failed to fetch ${meal}`);
-      }
+    },
+    [adminCity, confirmedDate],
+  );
 
-      const data = await res.json();
-      setMenuIdByMeal((prev) => ({ ...prev, [meal]: data.menu_id }));
-      setIsReleasedByMeal((prev) => ({ ...prev, [meal]: data.is_released }));
-      const mapped = data.items.map((it: any) => ({
-        menu_item_id: it.menu_item_id,
-        item_id: it.item_id,
-        item_name: it.item_name,
-        category_id: it.category_id,
-        planned_qty: it.planned_qty,
-        available_qty: it.available_qty,
-        rate: it.rate,
-        is_default: it.is_default,
-        sort_order: it.sort_order,
+  useEffect(() => {
+    if (!supportsFood) {
+      setItemsByMeal((prev) => ({
+        ...prev,
+        breakfast: [],
+        lunch: [],
+        dinner: [],
       }));
-      setItemsByMeal((prev) => ({ ...prev, [meal]: mapped }));
-    } catch (err) {
-      console.error(err);
-      setItemsByMeal((prev) => ({ ...prev, [meal]: [] }));
-    } finally {
-      setLoadingMenu(false);
+      setMenuIdByMeal((prev) => ({
+        ...prev,
+        breakfast: null,
+        lunch: null,
+        dinner: null,
+      }));
+      setIsReleasedByMeal((prev) => ({
+        ...prev,
+        breakfast: false,
+        lunch: false,
+        dinner: false,
+      }));
+      return;
     }
-  };
+    if (!confirmedDate) return;
+    (["breakfast", "lunch", "dinner"] as MealSection[]).forEach((meal) => {
+      void fetchMealSection(meal);
+    });
+  }, [supportsFood, confirmedDate, fetchMealSection]);
+
+  useEffect(() => {
+    if (!supportsCondiments) {
+      setItemsByMeal((prev) => ({ ...prev, condiments: [] }));
+      setMenuIdByMeal((prev) => ({ ...prev, condiments: null }));
+      setIsReleasedByMeal((prev) => ({ ...prev, condiments: false }));
+      return;
+    }
+    void fetchMealSection("condiments");
+  }, [supportsCondiments, fetchMealSection]);
 
   // ───────────────────────────────────────────────────────────────────────
   // 2) Open “Add Menu Item” dialog for a given section
@@ -233,21 +401,53 @@ export function DailyMenuSetup() {
   useEffect(() => {
     if (!itemDialogOpen) return;
     setLoadingItemsAPI(true);
-    fetch(
-      `http://localhost:8000/api/menu/available-items?bld_type=${currentSection}`
-    )
-      .then(async (res) => {
-        if (!res.ok)
+    const fetchAvailable = async () => {
+      try {
+        const params = new URLSearchParams({ bld_type: currentSection });
+        const res = await http.get(`/api/menu/available-items?${params.toString()}`);
+        if (res.status === 404) {
+          setAvailableItems([]);
+          setSelectedItems([]);
+          if (currentSection === "condiments") {
+            toast({
+              title: "No condiments available",
+              description: "Please create condiment items in Product Management before adding them here.",
+            });
+          }
+          return;
+        }
+        if (!res.ok) {
           throw new Error(`Failed to load items for ${currentSection}`);
-        return res.json();
-      })
-      .then((data) => setAvailableItems(data))
-      .catch((err) => {
-        console.error(err);
+        }
+        const data = await res.json();
+        setAvailableItems(
+          data.map((item: any) => ({
+            ...item,
+            max_qty_breakfast: parseMaxField(item.max_qty_breakfast),
+            max_qty_lunch: parseMaxField(item.max_qty_lunch),
+            max_qty_dinner: parseMaxField(item.max_qty_dinner),
+            max_qty_condiments: parseMaxField(item.max_qty_condiments),
+            bld_ids: Array.isArray(item.bld_ids) ? [...item.bld_ids] : [],
+          })),
+        );
+        setSelectedItems([]);
+      } catch (err) {
+        console.error(`Failed to load available items for ${currentSection}`, err);
         setAvailableItems([]);
-      })
-      .finally(() => setLoadingItemsAPI(false));
-  }, [itemDialogOpen, currentSection]);
+        toast({
+          title: "Unable to load items",
+          description:
+            currentSection === "condiments"
+              ? "We couldn’t find any condiment items yet."
+              : `Failed to load items for ${currentSection}. Please try again.`,
+          variant: currentSection === "condiments" ? "default" : "destructive",
+        });
+      } finally {
+        setLoadingItemsAPI(false);
+      }
+    };
+    fetchAvailable();
+  }, [itemDialogOpen, currentSection, adminCity]);
 
   // ───────────────────────────────────────────────────────────────────────
   // 3) Add selected items into the correct section
@@ -274,15 +474,51 @@ export function DailyMenuSetup() {
 
     const newRows: MenuItem[] = uniqueSelections.map((id, index) => {
       const found = availableItems.find((i) => i.item_id === id)!;
+      const catalogMax = (() => {
+        switch (currentSection) {
+          case "breakfast":
+            return found.max_qty_breakfast;
+          case "lunch":
+            return found.max_qty_lunch;
+          case "dinner":
+            return found.max_qty_dinner;
+          case "condiments":
+            return found.max_qty_condiments;
+          default:
+            return null;
+        }
+      })();
+
+      const resolvedMax = (() => {
+        if (catalogMax == null) return 1;
+        const numeric = Number(catalogMax);
+        if (!Number.isFinite(numeric) || numeric <= 0) return 1;
+        return Math.floor(numeric);
+      })();
+      const resolvedRate = (() => {
+        switch (currentSection) {
+          case "breakfast":
+            return Number(found.breakfast_price ?? found.net_price ?? 0);
+          case "lunch":
+            return Number(found.lunch_price ?? found.net_price ?? 0);
+          case "dinner":
+            return Number(found.dinner_price ?? found.net_price ?? 0);
+          case "condiments":
+            return Number(found.condiments_price ?? found.net_price ?? 0);
+          default:
+            return Number(found.net_price ?? 0);
+        }
+      })();
       return {
         item_id: found.item_id,
         item_name: found.name,
         category_id: found.category_id,
-        planned_qty: 1,
-        available_qty: 1,
-        rate: found.net_price ?? 0,
+        max_qty: resolvedMax,
+        available_qty: resolvedMax,
+        rate: resolvedRate,
         is_default: false,
         sort_order: itemsByMeal[currentSection].length + index + 1,
+        item_max_qty: catalogMax ?? null,
       };
     });
 
@@ -323,8 +559,12 @@ export function DailyMenuSetup() {
   // ───────────────────────────────────────────────────────────────────────
   // 5) Save (Upsert) for a specific meal section
   // ───────────────────────────────────────────────────────────────────────
-  const handleSaveMenu = async (meal: string) => {
-    if (!confirmedDate) return;
+  const handleSaveMenu = async (meal: MealSection): Promise<boolean> => {
+    const isCondimentsSection = meal === "condiments";
+    if (!isCondimentsSection && !confirmedDate) return false;
+    if (!isCondimentsSection && !ensureDefaultSelection(meal)) {
+      return false;
+    }
     setSavingMenu(true);
 
     const rows = itemsByMeal[meal];
@@ -333,8 +573,11 @@ export function DailyMenuSetup() {
         return {
           item_id: row.item_id,
           category_id: row.category_id,
-          planned_qty: row.planned_qty,
-          available_qty: row.planned_qty, // mirror on first save
+          max_qty: row.max_qty,
+          available_qty:
+            typeof row.available_qty === "number" && Number.isFinite(row.available_qty)
+              ? row.available_qty
+              : row.max_qty,
           rate: row.rate,
           is_default: row.is_default,
           sort_order: row.sort_order || idx + 1,
@@ -343,7 +586,7 @@ export function DailyMenuSetup() {
       return {
         item_id: row.item_id,
         category_id: row.category_id,
-        planned_qty: row.planned_qty,
+        max_qty: row.max_qty,
         available_qty: row.available_qty, // keep any later adjustments
         rate: row.rate,
         is_default: row.is_default,
@@ -351,44 +594,53 @@ export function DailyMenuSetup() {
       };
     });
 
-    const payload = {
-      date: formatISODate(confirmedDate),
+    const payload: Record<string, unknown> = {
       bld_type: meal,
       is_festival: false,
-      period_type: "one_day",
+      period_type: isCondimentsSection ? null : "one_day",
       items: itemsArray,
+      city_code: adminCity,
+      menu_type: isCondimentsSection ? "CONDIMENTS" : "ONE_DAY",
     };
+    if (!isCondimentsSection && confirmedDate) {
+      payload.date = formatISODate(confirmedDate);
+    }
 
     try {
-      const res = await fetch("http://localhost:8000/api/menu", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const res = await http.post("/api/menu", payload);
 
       if (!res.ok) {
         console.error("Save failed:", await res.text());
-        return;
+        return false;
       }
 
       const data = await res.json();
       setMenuIdByMeal((prev) => ({ ...prev, [meal]: data.menu_id }));
       setIsReleasedByMeal((prev) => ({ ...prev, [meal]: data.is_released }));
 
-      const mapped = data.items.map((it: any) => ({
-        menu_item_id: it.menu_item_id,
-        item_id: it.item_id,
-        item_name: it.item_name,
-        category_id: it.category_id,
-        planned_qty: it.planned_qty,
-        available_qty: it.available_qty,
-        rate: it.rate,
-        is_default: it.is_default,
-        sort_order: it.sort_order,
-      }));
+      const mapped = data.items.map((it: any) => {
+        const persistedMax = parseMaxField(it.max_qty);
+        const catalogMax = parseMaxField(it.item_max_qty);
+        const resolvedMax = persistedMax ?? catalogMax ?? 0;
+        const availableQty = Number(it.available_qty);
+        return {
+          menu_item_id: it.menu_item_id,
+          item_id: it.item_id,
+          item_name: it.item_name,
+          category_id: it.category_id,
+          max_qty: resolvedMax,
+          available_qty: Number.isFinite(availableQty) ? availableQty : resolvedMax,
+          rate: Number(it.rate ?? 0),
+          is_default: Boolean(it.is_default),
+          sort_order: it.sort_order,
+          item_max_qty: catalogMax,
+        };
+      });
       setItemsByMeal((prev) => ({ ...prev, [meal]: mapped }));
+      return true;
     } catch (err) {
       console.error(err);
+      return false;
     } finally {
       setSavingMenu(false);
     }
@@ -397,20 +649,23 @@ export function DailyMenuSetup() {
   // ───────────────────────────────────────────────────────────────────────
   // 6) Release / Unrelease for a specific meal
   // ───────────────────────────────────────────────────────────────────────
-  const handleToggleRelease = async (meal: string, unrelease = false) => {
+  const handleToggleRelease = async (meal: MealSection, unrelease = false) => {
     if (!menuIdByMeal[meal]) return; // keep your existing guard
     setTogglingRelease(true);
     try {
       // On release, always save first so UI changes are persisted
       if (!unrelease) {
-        await handleSaveMenu(meal);
+        const saved = await handleSaveMenu(meal);
+        if (!saved) {
+          return;
+        }
       }
 
       const endpoint = unrelease
-        ? `http://localhost:8000/api/menu/${menuIdByMeal[meal]}/unrelease`
-        : `http://localhost:8000/api/menu/${menuIdByMeal[meal]}/release`;
+        ? `/api/menu/${menuIdByMeal[meal]}/unrelease`
+        : `/api/menu/${menuIdByMeal[meal]}/release`;
 
-      const res = await fetch(endpoint, { method: "PATCH" });
+      const res = await http.patch(endpoint);
       if (!res.ok) {
         console.error("Toggle release failed:", await res.text());
         return;
@@ -427,14 +682,22 @@ export function DailyMenuSetup() {
   // ───────────────────────────────────────────────────────────────────────
   // 7) Filtering for dialog tabs
   // ───────────────────────────────────────────────────────────────────────
-  const filteredItemsByQuery = (arr: typeof availableItems) =>
-    arr.filter(
+  const filteredItemsByQuery = (arr: typeof availableItems) => {
+    const mealId = SECTION_TO_BLD_ID[currentSection] ?? null;
+    const byMeal = mealId
+      ? arr.filter(
+          (item) =>
+            Array.isArray(item.bld_ids) && item.bld_ids.includes(mealId)
+        )
+      : arr;
+    return byMeal.filter(
       (it) =>
         it.name.toLowerCase().includes(itemSearchQuery.toLowerCase()) ||
         (it.description || "")
           .toLowerCase()
           .includes(itemSearchQuery.toLowerCase())
     );
+  };
 
   const displayDate = confirmedDate ?? draftDate;
   const computeMidnightTimestamp = (offsetDays = 0) => {
@@ -538,234 +801,253 @@ export function DailyMenuSetup() {
             </div>
           </div>
 
-          {/* Four Sections: Breakfast, Lunch, Dinner, Condiments temp */}
-          {["breakfast", "lunch", "dinner", "condiments"].map((meal) => {
-            const hasItems = itemsByMeal[meal].length > 0;
+          {/* Sections adapt based on city capabilities */}
+          {visibleMeals.map((meal) => {
+            const isCondimentsSection = meal === "condiments";
+            const requiresDate = !isCondimentsSection;
+            const rows = itemsByMeal[meal];
+            const hasItems = rows.length > 0;
             const hasMenuId = menuIdByMeal[meal] != null;
-            const showSaveButton = !isReadOnlyMode && hasItems;
+            const showSaveButton =
+              !isReadOnlyMode && hasItems && (!requiresDate || Boolean(confirmedDate));
             const showReleaseControls = !isReadOnlyMode && hasMenuId;
             const showButtonRow = showSaveButton || showReleaseControls;
+            const disableAdd = isReleasedByMeal[meal] || (requiresDate && !confirmedDate);
+            const showDefaultColumn = !isCondimentsSection;
 
             return (
               <section key={meal} className="mb-8">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold capitalize">{meal}</h2>
-                {!isReadOnlyMode && (
-                  <Button
-                    onClick={() => {
-                      setCurrentSection(meal);
-                      setItemDialogOpen(true);
-                    }}
-                    disabled={!confirmedDate || isReleasedByMeal[meal]}
-                  >
-                    <Plus size={16} className="mr-1" />
-                    Add {meal.slice(0, 1).toUpperCase() + meal.slice(1)} Item
-                  </Button>
-                )}
-              </div>
-
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-center">Sl.no</TableHead>
-                      <TableHead>Item Name</TableHead>
-                      <TableHead>Planned Qty</TableHead>
-                      <TableHead>Available Qty</TableHead>
-                      <TableHead>Menu Rate</TableHead>
-                      <TableHead>Default</TableHead>
-                      <TableHead className="text-center">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(!confirmedDate || itemsByMeal[meal].length === 0) && (
-                      <TableRow>
-                        <TableCell
-                          colSpan={7}
-                          className="text-center text-gray-500"
-                        >
-                          {!confirmedDate
-                            ? "Please pick a date to see or add items"
-                            : "No items added yet"}
-                        </TableCell>
-                      </TableRow>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4">
+                  <div>
+                    <h2 className="text-lg font-semibold capitalize">
+                      {isCondimentsSection ? "Condiments · Till stocks last" : mealLabel(meal)}
+                    </h2>
+                    {isCondimentsSection ? (
+                      <p className="text-sm text-muted-foreground">
+                        Applies to all future days for {adminCityLabel}. Changing the calendar date
+                        won't affect this list.
+                      </p>
+                    ) : (
+                      confirmedDate && (
+                        <p className="text-sm text-muted-foreground">
+                          Menu for {formatDate(confirmedDate, "PPP")}
+                        </p>
+                      )
                     )}
-                    {itemsByMeal[meal].map((row, index) => {
-                      const canEditRow = !isReadOnlyMode && !isReleasedByMeal[meal];
-                      const isRowEditing =
-                        canEditRow && editIndexByMeal[meal] === index;
-                      return (
-                        <TableRow key={index}>
-                          <TableCell className="text-center">
-                            {index + 1}
-                          </TableCell>
-                          <TableCell>{row.item_name}</TableCell>
-
-                          <TableCell>
-                            {canEditRow &&
-                            (row.menu_item_id == null || isRowEditing) ? (
-                              // editable
-                              <InputWithButton
-                                value={row.planned_qty}
-                                onChange={(val: number) =>
-                                  handleSave(meal, index, "planned_qty", val)
-                                }
-                              />
-                            ) : (
-                              // read-only
-                              row.planned_qty
-                            )}
-                          </TableCell>
-
-                          <TableCell>
-                            {isReadOnlyMode ? (
-                              row.available_qty
-                            ) : row.menu_item_id == null ? (
-                              // first-time setup: show what will be saved
-                              row.planned_qty
-                            ) : isReleasedByMeal[meal] ? (
-                              // released: read-only
-                              row.available_qty
-                            ) : (
-                              // existing & not released: inline-editable
-                              <InputWithButton
-                                value={row.available_qty}
-                                onChange={(val: number) =>
-                                  handleSave(meal, index, "available_qty", val)
-                                }
-                              />
-                            )}
-                          </TableCell>
-
-                          <TableCell>
-                            {isRowEditing ? (
-                              <Input
-                                type="number"
-                                value={row.rate}
-                                onChange={(e) =>
-                                  handleSave(
-                                    meal,
-                                    index,
-                                    "rate",
-                                    Number(e.target.value)
-                                  )
-                                }
-                              />
-                            ) : (
-                              `₹${row.rate}`
-                            )}
-                          </TableCell>
-
-                          <TableCell>
-                            {isRowEditing ? (
-                              <Checkbox
-                                checked={row.is_default}
-                                onCheckedChange={(checked) =>
-                                  handleSave(
-                                    meal,
-                                    index,
-                                    "is_default",
-                                    checked ? 1 : 0
-                                  )
-                                }
-                              />
-                            ) : row.is_default ? (
-                              <Badge variant="secondary">Yes</Badge>
-                            ) : (
-                              <Badge variant="outline">No</Badge>
-                            )}
-                          </TableCell>
-
-                          <TableCell className="flex justify-center gap-2">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => setViewItem(row)}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            {isRowEditing ? (
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                disabled={!canEditRow}
-                                onClick={() =>
-                                  setEditIndexByMeal((prev) => ({
-                                    ...prev,
-                                    [meal]: null,
-                                  }))
-                                }
-                              >
-                                <Check className="h-4 w-4" />
-                              </Button>
-                            ) : (
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                disabled={!canEditRow}
-                                onClick={() => handleEdit(meal, index)}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                            )}
-                            <Button
-                              size="icon"
-                              variant="destructive"
-                              disabled={!canEditRow}
-                              onClick={() => handleDelete(meal, index)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-
-              {/* Save / Release Buttons for this section */}
-              {showButtonRow && (
-                <div className="mt-4 flex justify-end gap-4">
-                  {showReleaseControls && (
+                  </div>
+                  {!isReadOnlyMode && (
                     <Button
-                      variant="destructive"
-                      onClick={() => handleToggleRelease(meal, false)}
-                      disabled={!menuIdByMeal[meal] || togglingRelease}
+                      onClick={() => {
+                        setCurrentSection(meal);
+                        setItemDialogOpen(true);
+                      }}
+                      disabled={disableAdd}
                     >
-                      {togglingRelease && !isReleasedByMeal[meal]
-                        ? "Releasing…"
-                        : `Release ${meal}`}
-                    </Button>
-                  )}
-                  {showReleaseControls && isReleasedByMeal[meal] && (
-                    <Button
-                      variant="outline"
-                      onClick={() => handleToggleRelease(meal, true)}
-                      disabled={togglingRelease}
-                    >
-                      {togglingRelease ? "Unreleasing…" : `Unrelease ${meal}`}
-                    </Button>
-                  )}
-                  {showSaveButton && (
-                    <Button
-                      onClick={() => handleSaveMenu(meal)}
-                      disabled={
-                        !confirmedDate ||
-                        itemsByMeal[meal].length === 0 ||
-                        savingMenu ||
-                        isReleasedByMeal[meal]
-                      }
-                    >
-                      {savingMenu ? "Saving…" : `Save ${meal}`}
+                      <Plus size={16} className="mr-1" />
+                      Add {isCondimentsSection ? "Condiment" : `${mealLabel(meal)} Item`}
                     </Button>
                   )}
                 </div>
-              )}
+
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-center">Sl.no</TableHead>
+                        <TableHead>Item Name</TableHead>
+                        <TableHead>Max Qty</TableHead>
+                        <TableHead>Available Qty</TableHead>
+                        <TableHead>Menu Rate</TableHead>
+                        {showDefaultColumn && <TableHead>Default</TableHead>}
+                        <TableHead className="text-center">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {rows.length === 0 ? (
+                        <TableRow>
+                          <TableCell
+                            colSpan={showDefaultColumn ? 7 : 6}
+                            className="text-center text-gray-500"
+                          >
+                            {requiresDate && !confirmedDate
+                              ? "Please pick a date to see or add items"
+                              : "No items added yet"}
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        rows.map((row, index) => {
+                          const canEditRow = !isReadOnlyMode && !isReleasedByMeal[meal];
+                          const isRowEditing = canEditRow && editIndexByMeal[meal] === index;
+                          return (
+                            <TableRow key={index}>
+                              <TableCell className="text-center">
+                                {index + 1}
+                              </TableCell>
+                              <TableCell>{row.item_name}</TableCell>
+
+                              <TableCell>
+                                {canEditRow && (row.menu_item_id == null || isRowEditing) ? (
+                                  <InputWithButton
+                                    value={row.max_qty}
+                                    onChange={(val: number) =>
+                                      handleSave(meal, index, "max_qty", val)
+                                    }
+                                  />
+                                ) : (
+                                  row.max_qty
+                                )}
+                              </TableCell>
+
+                              <TableCell>
+                                {isReadOnlyMode ? (
+                                  row.available_qty
+                                ) : row.menu_item_id == null ? (
+                                  row.max_qty
+                                ) : isReleasedByMeal[meal] ? (
+                                  row.available_qty
+                                ) : (
+                                  <InputWithButton
+                                    value={row.available_qty}
+                                    onChange={(val: number) =>
+                                      handleSave(meal, index, "available_qty", val)
+                                    }
+                                  />
+                                )}
+                              </TableCell>
+
+                              <TableCell>
+                                {isRowEditing ? (
+                                  <Input
+                                    type="number"
+                                    value={row.rate}
+                                    onChange={(e) =>
+                                      handleSave(
+                                        meal,
+                                        index,
+                                        "rate",
+                                        Number(e.target.value)
+                                      )
+                                    }
+                                  />
+                                ) : (
+                                  `₹${row.rate}`
+                                )}
+                              </TableCell>
+
+                              {showDefaultColumn && (
+                                <TableCell>
+                                  {isRowEditing ? (
+                                    <Checkbox
+                                      checked={row.is_default}
+                                      onCheckedChange={(checked) =>
+                                        handleSave(
+                                          meal,
+                                          index,
+                                          "is_default",
+                                          checked ? 1 : 0
+                                        )
+                                      }
+                                    />
+                                  ) : row.is_default ? (
+                                    <Badge variant="secondary">Yes</Badge>
+                                  ) : (
+                                    <Badge variant="outline">No</Badge>
+                                  )}
+                                </TableCell>
+                              )}
+
+                              <TableCell className="flex justify-center gap-2">
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => setViewItem(row)}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                {isRowEditing ? (
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    disabled={!canEditRow}
+                                    onClick={() =>
+                                      setEditIndexByMeal((prev) => ({
+                                        ...prev,
+                                        [meal]: null,
+                                      }))
+                                    }
+                                  >
+                                    <Check className="h-4 w-4" />
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    disabled={!canEditRow}
+                                    onClick={() => handleEdit(meal, index)}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                <Button
+                                  size="icon"
+                                  variant="destructive"
+                                  disabled={!canEditRow}
+                                  onClick={() => handleDelete(meal, index)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Save / Release Buttons for this section */}
+                {showButtonRow && (
+                  <div className="mt-4 flex justify-end gap-4">
+                    {showReleaseControls && (
+                      <Button
+                        variant="destructive"
+                        onClick={() => handleToggleRelease(meal, false)}
+                        disabled={!menuIdByMeal[meal] || togglingRelease}
+                      >
+                        {togglingRelease && !isReleasedByMeal[meal]
+                          ? "Releasing…"
+                          : `Release ${mealLabel(meal)}`}
+                      </Button>
+                    )}
+                    {showReleaseControls && isReleasedByMeal[meal] && (
+                      <Button
+                        variant="outline"
+                        onClick={() => handleToggleRelease(meal, true)}
+                        disabled={togglingRelease}
+                      >
+                        {togglingRelease ? "Unreleasing…" : `Unrelease ${mealLabel(meal)}`}
+                      </Button>
+                    )}
+                    {showSaveButton && (
+                      <Button
+                        onClick={() => handleSaveMenu(meal)}
+                        disabled={
+                          isCondimentsSection
+                            ? rows.length === 0 || savingMenu || isReleasedByMeal[meal]
+                            : !confirmedDate ||
+                              rows.length === 0 ||
+                              savingMenu ||
+                              isReleasedByMeal[meal]
+                        }
+                      >
+                        {savingMenu ? "Saving…" : `Save ${mealLabel(meal)}`}
+                      </Button>
+                    )}
+                  </div>
+                )}
               </section>
             );
           })}
-
           {/* Item Selection Dialog */}
           <Dialog open={itemDialogOpen} onOpenChange={setItemDialogOpen}>
             <DialogContent className="w-[95vw] sm:max-w-[1100px] max-h-[85vh] overflow-y-auto p-6">

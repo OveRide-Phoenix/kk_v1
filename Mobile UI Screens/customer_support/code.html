@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Customer Support - Kuteera Kitchen</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "bright-brown": "#8D4925",
+                        "cream": "#fdfaf1",
+                        "dark-green": "#1b4332",
+                    },
+                    fontFamily: {
+                        "display": ["Work Sans", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "ios": "16px",
+                    },
+                },
+            },
+        }
+    </script>
+<style type="text/tailwindcss">
+        body {
+            font-family: 'Work Sans', sans-serif;
+            background-color: #fdfaf1;
+        }
+        .ios-shadow {
+            box-shadow: 0 4px 12px rgba(141, 73, 37, 0.05);
+        }
+        input, select, textarea {
+            border-radius: 16px !important;
+        }
+    </style>
+<style>
+        body {
+            min-height: max(884px, 100dvh);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-cream text-bright-brown font-display">
+<div class="relative flex h-auto min-h-screen w-full max-w-[430px] mx-auto flex-col bg-cream overflow-x-hidden border-x border-bright-brown/5">
+<div class="sticky top-0 z-10 flex items-center bg-cream/90 backdrop-blur-md p-4 pb-2 justify-between border-b border-bright-brown/10">
+<div class="text-bright-brown flex size-10 shrink-0 items-center justify-center rounded-full hover:bg-bright-brown/5 transition-colors cursor-pointer">
+<span class="material-symbols-outlined">arrow_back_ios_new</span>
+</div>
+<h2 class="text-bright-brown text-lg font-bold leading-tight tracking-tight flex-1 text-center pr-10">Help &amp; Support</h2>
+</div>
+<div class="px-6 pt-10 pb-6">
+<h3 class="text-bright-brown tracking-tight text-3xl font-bold leading-tight text-center">How can we help?</h3>
+<p class="text-bright-brown/60 text-center mt-2 text-sm font-medium">Our support team is active 8 AM - 10 PM daily.</p>
+</div>
+<div class="flex justify-center w-full">
+<div class="flex flex-1 gap-4 flex-col items-stretch px-6 py-4">
+<button class="flex min-h-[64px] cursor-pointer items-center justify-center gap-3 overflow-hidden rounded-ios bg-bright-brown text-white text-base font-bold shadow-lg shadow-bright-brown/20 active:scale-[0.98] transition-all">
+<span class="material-symbols-outlined">chat_bubble</span>
+<span>Chat with us</span>
+</button>
+<button class="flex min-h-[64px] cursor-pointer items-center justify-center gap-3 overflow-hidden rounded-ios border-2 border-bright-brown bg-cream text-bright-brown text-base font-bold active:bg-bright-brown/5 transition-all">
+<span class="material-symbols-outlined">call</span>
+<span>Call Support</span>
+</button>
+<button class="flex min-h-[64px] cursor-pointer items-center justify-center gap-3 overflow-hidden rounded-ios bg-dark-green text-white text-base font-bold shadow-lg shadow-dark-green/20 active:scale-[0.98] transition-all">
+<span class="material-symbols-outlined">forum</span>
+<span>WhatsApp Support</span>
+</button>
+</div>
+</div>
+<div class="px-6 pt-10 pb-2">
+<h2 class="text-bright-brown text-xl font-bold leading-tight tracking-tight">Raise an Issue</h2>
+<p class="text-bright-brown/50 text-xs mt-1">Expected response time: 2-4 hours.</p>
+</div>
+<div class="px-6 py-4 flex flex-col gap-5 mb-24">
+<div class="flex flex-col gap-2">
+<label class="text-xs font-bold uppercase tracking-wider text-bright-brown/70 px-1">Issue Category</label>
+<div class="relative">
+<select class="w-full h-12 rounded-ios border-bright-brown/10 bg-white focus:border-bright-brown focus:ring-bright-brown appearance-none px-4 text-sm text-bright-brown">
+<option>Select a category</option>
+<option>Delivery Delay</option>
+<option>Food Quality/Taste</option>
+<option>Subscription Change</option>
+<option>Payment/Refund</option>
+</select>
+<div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-bright-brown/40">
+<span class="material-symbols-outlined text-sm">expand_more</span>
+</div>
+</div>
+</div>
+<div class="flex flex-col gap-2">
+<label class="text-xs font-bold uppercase tracking-wider text-bright-brown/70 px-1">Description</label>
+<textarea class="w-full rounded-ios border-bright-brown/10 bg-white focus:border-bright-brown focus:ring-bright-brown p-4 text-sm text-bright-brown resize-none" placeholder="How can we improve your experience?" rows="4"></textarea>
+</div>
+<button class="mt-2 flex h-14 w-full cursor-pointer items-center justify-center rounded-ios bg-bright-brown text-white text-lg font-bold shadow-md active:opacity-90 transition-all">
+            Submit Ticket
+        </button>
+<div class="mt-8">
+<div class="grid grid-cols-3 gap-4 border-t border-bright-brown/10 pt-8">
+<div class="flex flex-col items-center text-center gap-2">
+<div class="size-10 rounded-full bg-dark-green/5 flex items-center justify-center text-dark-green">
+<span class="material-symbols-outlined text-xl">verified_user</span>
+</div>
+<span class="text-[9px] font-bold text-bright-brown/60 uppercase tracking-widest">FSSAI</span>
+</div>
+<div class="flex flex-col items-center text-center gap-2">
+<div class="size-10 rounded-full bg-dark-green/5 flex items-center justify-center text-dark-green">
+<span class="material-symbols-outlined text-xl">favorite</span>
+</div>
+<span class="text-[9px] font-bold text-bright-brown/60 uppercase tracking-widest">Homemade</span>
+</div>
+<div class="flex flex-col items-center text-center gap-2">
+<div class="size-10 rounded-full bg-dark-green/5 flex items-center justify-center text-dark-green">
+<span class="material-symbols-outlined text-xl">eco</span>
+</div>
+<span class="text-[9px] font-bold text-bright-brown/60 uppercase tracking-widest">Natural</span>
+</div>
+</div>
+</div>
+</div>
+<div class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] flex gap-2 border-t border-bright-brown/10 bg-cream/95 backdrop-blur-md px-4 pb-8 pt-3 ios-shadow">
+<a class="flex flex-1 flex-col items-center justify-center gap-1 text-bright-brown/40" href="#">
+<span class="material-symbols-outlined">home</span>
+<p class="text-[10px] font-bold uppercase tracking-tighter">Home</p>
+</a>
+<a class="flex flex-1 flex-col items-center justify-center gap-1 text-bright-brown/40" href="#">
+<span class="material-symbols-outlined">skillet</span>
+<p class="text-[10px] font-bold uppercase tracking-tighter">Meals</p>
+</a>
+<a class="flex flex-1 flex-col items-center justify-center gap-1 text-bright-brown/40" href="#">
+<span class="material-symbols-outlined">receipt_long</span>
+<p class="text-[10px] font-bold uppercase tracking-tighter">Orders</p>
+</a>
+<a class="flex flex-1 flex-col items-center justify-center gap-1 text-bright-brown" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">support_agent</span>
+<p class="text-[10px] font-bold uppercase tracking-tighter">Support</p>
+</a>
+</div>
+</div>
+
+</body></html>

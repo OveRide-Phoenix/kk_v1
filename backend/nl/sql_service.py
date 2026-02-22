@@ -292,7 +292,7 @@ def _fetch_menu_item(db: Session, menu_item_id: int) -> List[Dict[str, Any]]:
             i.name AS item_name,
             mi.buffer_qty,
             mi.final_qty,
-            mi.planned_qty,
+            mi.max_qty,
             mi.available_qty
         FROM menu_items mi
         JOIN menu m ON m.menu_id = mi.menu_id

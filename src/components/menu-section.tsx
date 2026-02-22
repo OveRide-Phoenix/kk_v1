@@ -186,11 +186,11 @@ export default function MenuSections() {
     },
     {
       id: "d3",
-      name: "Neer Dosa with Chicken Curry",
-      description: "Thin rice crepes served with spicy chicken curry",
+      name: "Neer Dosa with Vegetable Stew",
+      description: "Thin rice crepes served with mildly spiced vegetable stew",
       price: 200,
-      image: "/placeholder.svg?height=100&width=100&text=NeerDosa",
-      tags: ["Non-Vegetarian", "Popular"],
+      image: "/placeholder.svg?height=100&width=100&text=NeerDosaVeg",
+      tags: ["Vegetarian", "Popular"],
     },
     {
       id: "d4",
@@ -278,4 +278,3 @@ export default function MenuSections() {
     </AnimatedSection>
   )
 }
-

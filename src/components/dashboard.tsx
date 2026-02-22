@@ -20,6 +20,7 @@ import {
 import { useAuthStore } from "@/store/store"
 import { AdminLayout } from "@/components/admin-layout"
 import { getDashboardMetrics } from "@/lib/api"
+import { getCityLabel } from "@/config/cities"
 
 // Define types for the metrics
 type Order = {
@@ -116,21 +117,35 @@ const normalizeStatus = (status?: string | null) => {
     .join(" ")
 }
 
+const normalizeStatusKey = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/\(payment due\)/g, "")
+    .replace(/\s+-\s+payment due/g, "")
+    .replace(/[-_]/g, " ")
+    .trim()
+
 const statusBadgeClass = (status: string) => {
-  const key = status.toLowerCase().replace(/[-_]/g, " ")
-  if (key === "delivered") return "bg-green-100 text-green-800"
-  if (key === "pending") return "bg-yellow-100 text-yellow-800"
-  if (key === "in progress" || key === "processing") return "bg-blue-100 text-blue-800"
+  const raw = status.toLowerCase()
+  const key = normalizeStatusKey(status)
+  if (raw.includes("payment due")) return "bg-amber-100 text-amber-900"
+  if (key === "confirmed") return "bg-sky-100 text-sky-800"
+  if (key === "preparing") return "bg-orange-100 text-orange-800"
+  if (key === "on the way") return "bg-indigo-100 text-indigo-800"
+  if (key === "delivered" || key === "completed" || key === "done") return "bg-green-100 text-green-800"
   if (key === "cancelled") return "bg-red-100 text-red-800"
   return "bg-slate-100 text-slate-800"
 }
 
 const statusPriority = (status: string) => {
-  const key = status.toLowerCase().replace(/[-_]/g, " ")
-  if (key === "pending") return 0
-  if (key === "in progress" || key === "processing") return 1
-  if (key === "delivered" || key === "completed" || key === "done") return 2
-  return 3
+  const raw = status.toLowerCase()
+  const key = normalizeStatusKey(status)
+  if (raw.includes("payment due")) return 0
+  if (key === "confirmed") return 1
+  if (key === "preparing") return 2
+  if (key === "on the way") return 3
+  if (key === "delivered" || key === "completed" || key === "done") return 4
+  return 5
 }
 
 const checklistBadgeClass = (item: ChecklistItem) => {
@@ -203,7 +218,9 @@ const defaultDashboardMetrics: DashboardMetrics = {
 }
 
 export function Dashboard() {
-  const { isAdmin } = useAuthStore()
+  const isAdmin = useAuthStore((state) => state.isAdmin)
+  const adminCity = useAuthStore((state) => state.adminCity || state.user?.city_code || "MYS")
+  const adminCityLabel = getCityLabel(adminCity)
   const router = useRouter()
   const [dashboardMetrics, setDashboardMetrics] = useState<DashboardMetrics>(defaultDashboardMetrics)
   const [loading, setLoading] = useState(true)
@@ -226,58 +243,71 @@ export function Dashboard() {
 
   useEffect(() => {
     if (!isAdmin) {
-      console.log("Not admin, redirecting to login")
+      if (typeof window !== "undefined") {
+        try {
+          const switching = sessionStorage.getItem("kk-switching-to-customer")
+          if (switching === "1") {
+            sessionStorage.removeItem("kk-switching-to-customer")
+            return
+          }
+        } catch {
+          /* ignore storage errors */
+        }
+      }
       router.push("/login")
-    } else {
-      // Fetch dashboard metrics
-      getDashboardMetrics()
-        .then((data: DashboardApiResponse) => {
-          const normalizedOrders: Order[] = (data.recentOrders ?? []).map((order: ApiRecentOrder) => {
-            const createdAt = order.createdAt ?? order.created_at ?? null
-            const rawItems = Number(order.items ?? order.item_count ?? 0)
-            const rawTotal = Number(order.total ?? order.total_price ?? 0)
-            return {
-              id: formatOrderId(order.id ?? order.orderId ?? order.order_id),
-              customer: order.customer ?? order.customer_name ?? "Unknown Customer",
-              items: Number.isNaN(rawItems) ? 0 : rawItems,
-              total: Number.isNaN(rawTotal) ? 0 : rawTotal,
-              status: normalizeStatus(order.status ?? order.order_status),
-              createdAt,
-            }
-          })
-
-          const checklist: ChecklistItem[] = (data.checklist ?? []).map((item, index) => {
-            const label = item.label ?? item.key ?? `Task ${index + 1}`
-            const status = item.status ? normalizeStatus(item.status) : (item.completed ? "Done" : "Pending")
-            return {
-              key: item.key ?? `${index}-${label}`,
-              label,
-              status,
-              completed: Boolean(item.completed),
-              detail: item.detail ?? null,
-            }
-          })
-
-          setDashboardMetrics({
-            ...defaultDashboardMetrics,
-            totalOrders: Number(data.totalOrders) || 0,
-            ordersCompleted: Number(data.ordersCompleted) || Math.max((Number(data.totalOrders) || 0) - (Number(data.pendingOrders) || 0), 0),
-            pendingOrders: Number(data.pendingOrders) || 0,
-            totalCustomers: Number(data.totalCustomers) || 0,
-            activeSubscriptions: Number(data.activeSubscriptions) || 0,
-            todayRevenue: Number(data.todaysRevenue) || 0,
-            monthlyRevenue: Number(data.monthlyRevenue) || 0,
-            recentOrders: normalizedOrders,
-            checklist,
-          })
-          setLoading(false)
-        })
-        .catch(err => {
-          console.error("Error fetching dashboard metrics:", err)
-          setLoading(false)
-        })
+      return
     }
-  }, [isAdmin, router])
+
+    // Fetch dashboard metrics
+    getDashboardMetrics(adminCity)
+      .then((data: DashboardApiResponse) => {
+        const normalizedOrders: Order[] = (data.recentOrders ?? []).map((order: ApiRecentOrder) => {
+          const createdAt = order.createdAt ?? order.created_at ?? null
+          const rawItems = Number(order.items ?? order.item_count ?? 0)
+          const rawTotal = Number(order.total ?? order.total_price ?? 0)
+          return {
+            id: formatOrderId(order.id ?? order.orderId ?? order.order_id),
+            customer: order.customer ?? order.customer_name ?? "Unknown Customer",
+            items: Number.isNaN(rawItems) ? 0 : rawItems,
+            total: Number.isNaN(rawTotal) ? 0 : rawTotal,
+            status: normalizeStatus(order.status ?? order.order_status),
+            createdAt,
+          }
+        })
+
+        const checklist: ChecklistItem[] = (data.checklist ?? []).map((item, index) => {
+          const label = item.label ?? item.key ?? `Task ${index + 1}`
+          const status = item.status ? normalizeStatus(item.status) : (item.completed ? "Done" : "Pending")
+          return {
+            key: item.key ?? `${index}-${label}`,
+            label,
+            status,
+            completed: Boolean(item.completed),
+            detail: item.detail ?? null,
+          }
+        })
+
+        setDashboardMetrics({
+          ...defaultDashboardMetrics,
+          totalOrders: Number(data.totalOrders) || 0,
+          ordersCompleted:
+            Number(data.ordersCompleted) ||
+            Math.max((Number(data.totalOrders) || 0) - (Number(data.pendingOrders) || 0), 0),
+          pendingOrders: Number(data.pendingOrders) || 0,
+          totalCustomers: Number(data.totalCustomers) || 0,
+          activeSubscriptions: Number(data.activeSubscriptions) || 0,
+          todayRevenue: Number(data.todaysRevenue) || 0,
+          monthlyRevenue: Number(data.monthlyRevenue) || 0,
+          recentOrders: normalizedOrders,
+          checklist,
+        })
+        setLoading(false)
+      })
+      .catch((err) => {
+        console.error("Error fetching dashboard metrics:", err)
+        setLoading(false)
+      })
+  }, [isAdmin, router, adminCity])
 
   if (!isAdmin) return null
   if (loading) {
@@ -294,6 +324,11 @@ export function Dashboard() {
 
   return (
     <AdminLayout activePage="dashboard">
+      <div className="mb-4 flex justify-end">
+        <Badge variant="outline" className="text-xs font-semibold">
+          City: {adminCityLabel}
+        </Badge>
+      </div>
       {/* Quick Actions */}
       <Card>
         <CardHeader>

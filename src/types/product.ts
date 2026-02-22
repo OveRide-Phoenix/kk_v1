@@ -1,21 +1,3 @@
-export enum ProductType {
-  BREAKFAST = "BREAKFAST",
-  LUNCH = "LUNCH",
-  DINNER = "DINNER",
-  SNACK = "SNACK",
-  CONDIMENTS = "CONDIMENTS",
-  OTHER = "OTHER"
-}
-
-export enum ItemType {
-  BREAKFAST = "Breakfast",
-  LUNCH = "Lunch",
-  DINNER = "Dinner",
-  SNACK = "Snack",
-  CONDIMENTS = "Condiments",
-  OTHER = "Other"
-}
-
 // Item product from items table
 export interface Product {
   isSubItem: boolean // Changed from any
@@ -30,11 +12,15 @@ export interface Product {
   uom: string
   weight_factor?: number
   weight_uom?: string
-  item_type: ItemType | string
+  bld_ids: number[]
   hsn_code?: string
   factor?: number
   quantity_portion?: number
   buffer_percentage?: number
+  max_qty_breakfast?: number
+  max_qty_lunch?: number
+  max_qty_dinner?: number
+  max_qty_condiments?: number
   picture_url?: string
   breakfast_price?: number
   lunch_price?: number
@@ -46,16 +32,21 @@ export interface Product {
   igst?: number
   net_price?: number
   is_combo: boolean
+  is_condiment?: boolean
 }
 
-// Combo product from item_combos table
+// Combo product from combos/combo_items tables
 export interface ComboProduct {
   combo_id: number
-  combo_item_id: number
-  combo_name: string | null
-  included_category_id: number | null
-  included_item_id: number | null
-  quantity: number
+  combo_name: string
+  price: number
+  category_id: number | null
+  category_name?: string | null
+  includedItems: Array<{
+    itemId: number
+    name?: string | null
+    quantity: number
+  }>
 }
 
 // Addon product from item_add_ons
@@ -91,11 +82,11 @@ export interface Item {
   uom: string
   weightFactor?: number
   weightUom?: string
-  itemType: ItemType
   hsnCode?: string
   factor?: number
   quantityPortion?: number
   bufferPercentage?: number
+  maxQtyCondiments?: number
   pictureUrl?: string
   breakfastPrice?: number
   lunchPrice?: number

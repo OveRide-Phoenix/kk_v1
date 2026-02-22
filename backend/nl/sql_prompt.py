@@ -29,10 +29,10 @@ ALLOWED_TABLE_COLUMNS = {
         "uom",
         "weight_factor",
         "weight_uom",
-        "item_type",
         "factor",
         "quantity_portion",
         "buffer_percentage",
+        "max_qty",
         "picture_url",
         "cgst",
         "sgst",
@@ -53,7 +53,7 @@ ALLOWED_TABLE_COLUMNS = {
         "menu_id",
         "item_id",
         "category_id",
-        "planned_qty",
+        "max_qty",
         "rate",
         "is_default",
         "sort_order",
@@ -123,7 +123,7 @@ ALLOWED_UPDATE_RULES = {
     "menu_items": {
         "can_update": [
             "buffer_qty",       # kitchen override
-            "planned_qty",      # planning
+            "max_qty",          # planning
             "available_qty",    # stock
             "final_qty",        # production decision
             "rate",             # menu-level pricing if you use it
@@ -218,7 +218,6 @@ ALLOWED_UPDATE_RULES = {
             "uom",
             "weight_factor",
             "weight_uom",
-            "item_type",
             "factor",
             "quantity_portion",
             "buffer_percentage",
@@ -359,7 +358,7 @@ def build_system_prompt(*, today: str, allow_update: bool) -> str:
 
         8) Show buffer for today's dinner:
         ```sql
-        SELECT mi.menu_item_id, i.name, b.bld_type, mi.buffer_qty, mi.final_qty, mi.planned_qty, mi.available_qty
+        SELECT mi.menu_item_id, i.name, b.bld_type, mi.buffer_qty, mi.final_qty, mi.max_qty, mi.available_qty
         FROM menu m
         JOIN bld b ON b.bld_id = m.bld_id
         JOIN menu_items mi ON mi.menu_id = m.menu_id
