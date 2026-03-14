@@ -36,7 +36,8 @@ type SeedResponse = {
 
 type CartLine = {
   meal: string;
-  item_id: number;
+  item_id?: number | null;
+  combo_id?: number | null;
   menu_item_id?: number;
   item_name: string;
   qty: number;
@@ -129,7 +130,8 @@ export default function OrderTestPage() {
       payment_method: "Cash",
       order_date: cartContext.confirmedDateISO ?? format(new Date(), "yyyy-MM-dd"),
       items: cartSelection.map((item) => ({
-        item_id: item.item_id,
+        item_id: item.item_id ?? null,
+        combo_id: item.combo_id ?? null,
         quantity: item.qty,
         price: item.rate,
         menu_item_id: item.menu_item_id ?? null,
@@ -322,7 +324,7 @@ export default function OrderTestPage() {
               ) : (
                 <ul className="mt-2 space-y-1 text-muted-foreground">
                   {cartSelection.map((item) => (
-                    <li key={`${item.meal}-${item.item_id}`}>
+                    <li key={`${item.meal}-${item.menu_item_id ?? item.combo_id ?? item.item_id ?? item.item_name}`}>
                       <span className="font-medium text-foreground">{item.item_name}</span> · {item.meal} · qty {item.qty}{" "}
                       (₹{(item.rate * item.qty).toFixed(2)})
                     </li>

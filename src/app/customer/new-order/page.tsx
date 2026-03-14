@@ -41,7 +41,8 @@ type MealType = "breakfast" | "lunch" | "dinner" | "condiments"
 
 type MenuItem = {
   menu_item_id: number
-  item_id: number
+  item_id?: number | null
+  combo_id?: number | null
   item_name: string
   meal: MealType
   rate: number
@@ -52,7 +53,8 @@ type MenuItem = {
 
 type MenuApiItem = {
   menu_item_id?: number
-  item_id?: number
+  item_id?: number | null
+  combo_id?: number | null
   item_name?: string
   name?: string
   rate?: number
@@ -64,7 +66,8 @@ type MenuApiItem = {
 
 type CartLine = {
   menu_item_id: number
-  item_id: number
+  item_id?: number | null
+  combo_id?: number | null
   meal: MealType
   item_name: string
   price: number
@@ -160,6 +163,7 @@ export default function NewOrderPage() {
       lines.push({
         menu_item_id: menuItemId,
         item_id: menuItem.item_id,
+        combo_id: menuItem.combo_id,
         meal: menuItem.meal,
         item_name: menuItem.item_name,
         price: menuItem.rate,
@@ -365,6 +369,7 @@ export default function NewOrderPage() {
               try {
                 const url = new URL("http://localhost:8000/api/menu")
                 url.searchParams.set("bld_type", meal)
+                url.searchParams.set("include_combos", "1")
                 if (userHasCityOverride) {
                   url.searchParams.set("city_code", cityCode)
                 }
@@ -390,7 +395,8 @@ export default function NewOrderPage() {
                 const items = (data.items ?? []) as MenuApiItem[]
                 nextMenu[meal] = items.map((item) => ({
                   menu_item_id: item.menu_item_id ?? 0,
-                  item_id: item.item_id ?? 0,
+                  item_id: item.item_id ?? null,
+                  combo_id: item.combo_id ?? null,
                   item_name: item.item_name ?? item.name ?? "Item",
                   meal,
                   rate: item.rate ?? item.price ?? 0,

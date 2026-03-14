@@ -27,7 +27,8 @@ type MealType = "breakfast" | "lunch" | "dinner" | "condiments"
 
 type MenuApiItem = {
   menu_item_id?: number
-  item_id?: number
+  item_id?: number | null
+  combo_id?: number | null
   item_name?: string
   name?: string
   rate?: number
@@ -39,7 +40,8 @@ type MenuApiItem = {
 
 type MenuItem = {
   menu_item_id: number
-  item_id: number
+  item_id?: number | null
+  combo_id?: number | null
   item_name: string
   meal: MealType
   rate: number
@@ -87,7 +89,8 @@ const CITY_LABELS: Record<string, string> = {
 
 type CartLine = {
   menu_item_id: number
-  item_id: number
+  item_id?: number | null
+  combo_id?: number | null
   meal: MealType
   item_name: string
   price: number
@@ -295,6 +298,7 @@ export default function CustomerHomePage() {
                   url.searchParams.set("period_type", "one_day")
                   url.searchParams.set("menu_type", "ONE_DAY")
                 }
+                url.searchParams.set("include_combos", "1")
 
                 const response = await fetch(url.toString(), { headers })
                 if (response.status === 404) {
@@ -316,7 +320,8 @@ export default function CustomerHomePage() {
                 nextMenu[meal] = isReleased
                   ? items.map((item) => ({
                       menu_item_id: item.menu_item_id ?? 0,
-                      item_id: item.item_id ?? 0,
+                      item_id: item.item_id ?? null,
+                      combo_id: item.combo_id ?? null,
                       item_name: item.item_name ?? item.name ?? "Item",
                       meal,
                       rate: item.rate ?? item.price ?? 0,
@@ -544,6 +549,7 @@ export default function CustomerHomePage() {
       lines.push({
         menu_item_id: menuItemId,
         item_id: item.item_id,
+        combo_id: item.combo_id,
         meal: item.meal,
         item_name: item.item_name,
         price: item.rate,

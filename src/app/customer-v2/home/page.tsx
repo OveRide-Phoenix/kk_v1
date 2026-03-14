@@ -11,7 +11,8 @@ type MealType = "breakfast" | "lunch" | "dinner" | "condiments"
 
 type MenuApiItem = {
   menu_item_id?: number
-  item_id?: number
+  item_id?: number | null
+  combo_id?: number | null
   item_name?: string
   name?: string
   rate?: number
@@ -29,7 +30,8 @@ type MenuApiResponse = {
 
 type MenuItem = {
   menu_item_id: number
-  item_id: number
+  item_id?: number | null
+  combo_id?: number | null
   item_name: string
   meal: MealType
   rate: number
@@ -160,6 +162,7 @@ export default function CustomerHomeV2Page() {
           MEAL_ORDER.map(async (meal) => {
             const url = new URL("http://localhost:8000/api/menu")
             url.searchParams.set("bld_type", meal)
+            url.searchParams.set("include_combos", "1")
             if (userHasCityOverride) {
               url.searchParams.set("city_code", cityCode)
             }
@@ -185,7 +188,8 @@ export default function CustomerHomeV2Page() {
             nextMenu[meal] = isReleased
               ? items.map((item) => ({
                   menu_item_id: item.menu_item_id ?? 0,
-                  item_id: item.item_id ?? 0,
+                  item_id: item.item_id ?? null,
+                  combo_id: item.combo_id ?? null,
                   item_name: item.item_name ?? item.name ?? "Item",
                   meal,
                   rate: item.rate ?? item.price ?? 0,

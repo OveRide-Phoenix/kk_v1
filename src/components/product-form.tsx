@@ -12,6 +12,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { type Product, type CategoryProduct } from "@/types/product"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 
+interface ComponentTypeOption {
+  component_type_id: number
+  name: string
+  description?: string | null
+}
+
 type ProductFormScope = "items" | "condiments"
 
 interface ProductFormProps {
@@ -66,12 +72,13 @@ const createInitialFormData = (item: Product | null, scope: ProductFormScope) =>
     description: "",
     alias: "",
     category_id: "",
-    uom: "",
-    weight_factor: 0,
-    weight_uom: "",
+    component_type_id: "",
+    uom_customer: "",
+    unit_packing: 0,
+    uom_packing: "",
     hsn_code: "",
-    factor: 1,
-    quantity_portion: 0,
+    uom_production: "",
+    packing_to_production_rate: 1,
     buffer_percentage: 0,
     max_qty_breakfast: 0,
     max_qty_lunch: 0,
@@ -101,6 +108,7 @@ export default function ProductForm({ product, onSave, onCancel, formScope = "it
   const selectedMeals = Array.isArray(formData.bld_ids) ? formData.bld_ids : []
   const isCondiment = isCondimentScope || selectedMeals.includes(CONDIMENTS_BLD_ID)
   const [categoryOptions, setCategoryOptions] = useState<CategoryProduct[]>([])
+  const [componentTypeOptions, setComponentTypeOptions] = useState<ComponentTypeOption[]>([])
   const [parentItemOptions, setParentItemOptions] = useState<Array<{ item_id: number; name: string }>>([])
   const [loadingReferences, setLoadingReferences] = useState(false)
 
@@ -139,6 +147,17 @@ export default function ProductForm({ product, onSave, onCancel, formScope = "it
     e.preventDefault()
     setSubmitting(true)
     setFormError(null)
+    if (!isCondiment) {
+      const componentTypeId =
+        typeof formData.component_type_id === "number" && formData.component_type_id > 0
+          ? formData.component_type_id
+          : null
+      if (componentTypeId == null) {
+        setFormError("Component type is required for non-condiment items.")
+        setSubmitting(false)
+        return
+      }
+    }
     try {
       await Promise.resolve(onSave(formData))
     } catch (error) {
@@ -173,9 +192,10 @@ export default function ProductForm({ product, onSave, onCancel, formScope = "it
     const fetchReferences = async () => {
       setLoadingReferences(true)
       try {
-        const [categoriesRes, itemsRes] = await Promise.all([
+        const [categoriesRes, itemsRes, componentTypesRes] = await Promise.all([
           fetch(`${API_BASE_URL}/api/products/categories`),
           fetch(`${API_BASE_URL}/api/products/items`),
+          fetch(`${API_BASE_URL}/api/products/component-types`),
         ])
         if (!categoriesRes.ok) {
           throw new Error("Failed to load categories")
@@ -183,12 +203,19 @@ export default function ProductForm({ product, onSave, onCancel, formScope = "it
         if (!itemsRes.ok) {
           throw new Error("Failed to load catalog items")
         }
-        const categoriesData = await categoriesRes.json()
-        const itemsData = await itemsRes.json()
+        if (!componentTypesRes.ok) {
+          throw new Error("Failed to load component types")
+        }
+        const [categoriesData, itemsData, componentTypesData] = await Promise.all([
+          categoriesRes.json(),
+          itemsRes.json(),
+          componentTypesRes.json(),
+        ])
         if (cancelled) {
           return
         }
         setCategoryOptions(Array.isArray(categoriesData) ? categoriesData : [])
+        setComponentTypeOptions(Array.isArray(componentTypesData) ? componentTypesData : [])
         const mappedItems = Array.isArray(itemsData)
           ? itemsData.map((entry: any) => ({
               item_id: entry.item_id,
@@ -200,6 +227,7 @@ export default function ProductForm({ product, onSave, onCancel, formScope = "it
         console.error("Failed to load reference data", error)
         if (!cancelled) {
           setCategoryOptions([])
+          setComponentTypeOptions([])
           setParentItemOptions([])
         }
       } finally {
@@ -355,6 +383,40 @@ export default function ProductForm({ product, onSave, onCancel, formScope = "it
                     onChange={(e) => handleChange("group", e.target.value)}
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="component_type_id">
+                    Component Type {!isCondiment && <span className="text-red-500">*</span>}
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Use this when the item fulfills a generic slot, for example Paneer Curry to Curry.
+                  </p>
+                  <Select
+                    value={
+                      typeof formData.component_type_id === "number" && formData.component_type_id > 0
+                        ? String(formData.component_type_id)
+                        : EMPTY_OPTION_VALUE
+                    }
+                    onValueChange={(value) =>
+                      handleChange("component_type_id", value === EMPTY_OPTION_VALUE ? "" : Number(value))
+                    }
+                    disabled={loadingReferences}
+                  >
+                    <SelectTrigger id="component_type_id">
+                      <SelectValue placeholder={loadingReferences ? "Loading…" : "Select component type"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {isCondiment ? <SelectItem value={EMPTY_OPTION_VALUE}>None</SelectItem> : null}
+                      {componentTypeOptions.map((componentType) => (
+                        <SelectItem
+                          key={componentType.component_type_id}
+                          value={String(componentType.component_type_id)}
+                        >
+                          {componentType.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 {!isCondimentScope && (
                   <div className="space-y-2 sm:col-span-2">
                     <Label>Meal Availability (BLD/C)</Label>
@@ -384,32 +446,32 @@ export default function ProductForm({ product, onSave, onCancel, formScope = "it
                   </div>
                 )}
                 <div className="space-y-2">
-                  <Label htmlFor="uom">UOM (Unit of Measure) <span className="text-red-500">*</span></Label>
-                  <p className="text-xs text-muted-foreground">Column: <code>uom</code></p>
+                  <Label htmlFor="uom_customer">Customer UOM <span className="text-red-500">*</span></Label>
+                  <p className="text-xs text-muted-foreground">Column: <code>uom_customer</code></p>
                   <Input
-                    id="uom"
-                    value={formData.uom ?? ""}
-                    onChange={(e) => handleChange("uom", e.target.value)}
+                    id="uom_customer"
+                    value={formData.uom_customer ?? ""}
+                    onChange={(e) => handleChange("uom_customer", e.target.value)}
                     required
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="weight_factor">Weight Factor</Label>
+                  <Label htmlFor="unit_packing">Unit Packing</Label>
                   <Input
-                    id="weight_factor"
+                    id="unit_packing"
                     type="number"
-                    value={formData.weight_factor ?? ""}
-                    onChange={(e) => handleChange("weight_factor", Number.parseFloat(e.target.value) || 0)}
+                    value={formData.unit_packing ?? ""}
+                    onChange={(e) => handleChange("unit_packing", Number.parseFloat(e.target.value) || 0)}
                     step="0.001"
                     min={0}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="weight_uom">Weight UOM</Label>
+                  <Label htmlFor="uom_packing">Packing UOM</Label>
                   <Input
-                    id="weight_uom"
-                    value={formData.weight_uom ?? ""}
-                    onChange={(e) => handleChange("weight_uom", e.target.value)}
+                    id="uom_packing"
+                    value={formData.uom_packing ?? ""}
+                    onChange={(e) => handleChange("uom_packing", e.target.value)}
                   />
                 </div>
                 <div className="space-y-2">
@@ -421,23 +483,22 @@ export default function ProductForm({ product, onSave, onCancel, formScope = "it
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="factor">Factor</Label>
+                  <Label htmlFor="uom_production">Production UOM</Label>
                   <Input
-                    id="factor"
-                    type="number"
-                    value={formData.factor ?? ""}
-                    onChange={(e) => handleChange("factor", Number.parseFloat(e.target.value) || 1)}
-                    min={0.001}
-                    step="0.001"
+                    id="uom_production"
+                    value={formData.uom_production ?? ""}
+                    onChange={(e) => handleChange("uom_production", e.target.value)}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="quantity_portion">Quantity/Portion</Label>
+                  <Label htmlFor="packing_to_production_rate">Packing to Production Rate</Label>
                   <Input
-                    id="quantity_portion"
+                    id="packing_to_production_rate"
                     type="number"
-                    value={formData.quantity_portion ?? ""}
-                    onChange={(e) => handleChange("quantity_portion", Number.parseInt(e.target.value) || 0)}
+                    value={formData.packing_to_production_rate ?? ""}
+                    onChange={(e) => handleChange("packing_to_production_rate", Number.parseFloat(e.target.value) || 1)}
+                    min={0}
+                    step="0.000001"
                   />
                 </div>
                 <div className="space-y-2">

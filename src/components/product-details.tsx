@@ -4,11 +4,10 @@ import { X, Edit } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import type { Product } from "@/types/product"
+import type { ComboProduct, PlatedProduct, Product } from "@/types/product"
 
 interface ProductDetailsProps {
-  product: Product | null
+  product: Product | PlatedProduct | ComboProduct | null
   open: boolean
   onOpenChange: (open: boolean) => void
 }
@@ -23,11 +22,13 @@ export default function ProductDetails({ product, open, onOpenChange }: ProductD
     4: "Condiments",
   }
 
-  const mealBadges = Array.from(new Set(product.bld_ids || [])).map((mealId) => (
+  const mealBadges = Array.from(new Set((product as any).bld_ids || [])).map((mealId) => (
     <Badge key={`meal-${mealId}`} variant="outline">
       {MEAL_LABELS[mealId] ?? `BLD ${mealId}`}
     </Badge>
   ))
+  const isComboProduct = typeof (product as any).combo_id === "number"
+  const displayName = isComboProduct ? (product as any).combo_name : (product as any).name
 
   return (
     <div
@@ -51,82 +52,145 @@ export default function ProductDetails({ product, open, onOpenChange }: ProductD
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <img
-                src={product.picture_url || "/placeholder.svg"}
-                alt={product.name}
+                src={(product as any).picture_url || "/placeholder.svg"}
+                alt={displayName}
                 className="w-full aspect-square object-cover rounded-md border"
               />
             </div>
             <div className="space-y-4">
               <div>
-                <h2 className="text-2xl font-bold">{product.name}</h2>
+                <h2 className="text-2xl font-bold">{displayName}</h2>
                 <div className="flex flex-wrap items-center gap-2 mt-2">
                   {mealBadges}
-                  {product.is_combo && <Badge variant="outline">Combo</Badge>}
-                  {product.is_condiment && <Badge variant="secondary">Condiment</Badge>}
+                  {(product as any).is_combo && <Badge variant="outline">Combo</Badge>}
+                  {isComboProduct && <Badge variant="outline">Combo</Badge>}
+                  {(product as any).is_plated && <Badge variant="outline">Plated</Badge>}
+                  {(product as any).is_condiment && <Badge variant="secondary">Condiment</Badge>}
                 </div>
               </div>
               
 
               <div>
                 <h3 className="text-sm font-medium text-gray-500">Description</h3>
-                <p className="mt-1">{product.description}</p>
+                <p className="mt-1">{(product as any).description ?? "—"}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <h3 className="text-sm font-medium text-gray-500">Alias</h3>
-                  <p className="mt-1">{product.alias}</p>
+                  <p className="mt-1">{(product as any).alias ?? "—"}</p>
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-gray-500">Category</h3>
-                  <p className="mt-1">{product.category_name}</p>
+                  <p className="mt-1">{(product as any).category_name ?? "—"}</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500">UOM</h3>
-                  <p className="mt-1">{product.uom}</p>
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium text-gray-500">Weight</h3>
-                  <p className="mt-1">
-                    {product.weight_factor} {product.weight_uom}
-                  </p>
+                  <h3 className="text-sm font-medium text-gray-500">Component Type</h3>
+                  <p className="mt-1">{(product as any).component_type_name ?? "—"}</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500">Customer UOM</h3>
+                  <p className="mt-1">{product.uom_customer ?? product.uom}</p>
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500">Unit Packing</h3>
+                  <p className="mt-1">{product.unit_packing ?? "—"}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500">Packing UOM</h3>
+                  <p className="mt-1">{product.uom_packing ?? "—"}</p>
+                </div>
                 <div>
                   <h3 className="text-sm font-medium text-gray-500">HSN Code</h3>
                   <p className="mt-1">{product.hsn_code}</p>
                 </div>
-                <div>
-                  <h3 className="text-sm font-medium text-gray-500">Factor</h3>
-                  <p className="mt-1">{product.factor}</p>
-                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500">Quantity/Portion</h3>
-                  <p className="mt-1">{product.quantity_portion}</p>
+                  <h3 className="text-sm font-medium text-gray-500">Production UOM</h3>
+                  <p className="mt-1">{product.uom_production ?? "—"}</p>
                 </div>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500">Conversion Rate</h3>
+                  <p className="mt-1">{product.packing_to_production_rate ?? "—"}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <h3 className="text-sm font-medium text-gray-500">Buffer Percentage</h3>
                   <p className="mt-1">{product.buffer_percentage}%</p>
                 </div>
               </div>
 
-              {product.is_condiment ? (
+              {Array.isArray((product as any).platedComponents) && (product as any).platedComponents.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500">Plated Components</h3>
+                  <div className="mt-2 space-y-2">
+                    {(product as any).platedComponents.map((component: any) => (
+                      <div key={`component-${component.itemId}`} className="rounded-md border p-3">
+                        <p className="font-medium">{component.name ?? `Item #${component.itemId}`}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Qty: {component.quantity}
+                        </p>
+                        {component.kind === "type" && (
+                          <p className="text-xs text-muted-foreground">
+                            Resolves from component type: {component.componentTypeName ?? "Generic slot"}
+                          </p>
+                        )}
+                        <p className="text-xs text-muted-foreground">
+                          {component.kind === "type"
+                            ? "Resolved to the item of the day"
+                            : component.unitPacking != null && component.uomPacking
+                            ? `1 qty = ${component.unitPacking} ${component.uomPacking}`
+                            : component.uomCustomer
+                              ? `1 qty = 1 ${component.uomCustomer}`
+                              : "1 qty"}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {Array.isArray((product as any).includedItems) && (product as any).includedItems.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500">Combo Components</h3>
+                  <div className="mt-2 space-y-2">
+                    {(product as any).includedItems.map((component: any, index: number) => (
+                      <div key={`combo-component-${component.itemId ?? component.componentTypeId ?? index}`} className="rounded-md border p-3">
+                        <p className="font-medium">{component.name ?? (component.kind === "type" ? "Generic Component" : `Item #${component.itemId}`)}</p>
+                        <p className="text-sm text-muted-foreground">Qty: {component.quantity}</p>
+                        {component.kind === "type" && (
+                          <p className="text-xs text-muted-foreground">
+                            Resolves from component type: {component.componentTypeName ?? "Generic slot"}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {(product as any).is_condiment ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <h3 className="text-sm font-medium text-gray-500">Max Qty · Condiments</h3>
-                    <p className="mt-1">{product.max_qty_condiments ?? "—"}</p>
+                    <p className="mt-1">{(product as any).max_qty_condiments ?? "—"}</p>
                   </div>
                   <div>
                     <h3 className="text-sm font-medium text-gray-500">Net Price</h3>
-                    <p className="mt-1">{product.net_price}</p>
+                    <p className="mt-1">{(product as any).net_price ?? (product as any).price ?? "—"}</p>
                   </div>
                 </div>
               ) : (
@@ -134,22 +198,22 @@ export default function ProductDetails({ product, open, onOpenChange }: ProductD
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <h3 className="text-sm font-medium text-gray-500">Max Qty · Breakfast</h3>
-                      <p className="mt-1">{product.max_qty_breakfast ?? "—"}</p>
+                      <p className="mt-1">{(product as any).max_qty_breakfast ?? "—"}</p>
                     </div>
                     <div>
                       <h3 className="text-sm font-medium text-gray-500">Max Qty · Lunch</h3>
-                      <p className="mt-1">{product.max_qty_lunch ?? "—"}</p>
+                      <p className="mt-1">{(product as any).max_qty_lunch ?? "—"}</p>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <h3 className="text-sm font-medium text-gray-500">Max Qty · Dinner</h3>
-                      <p className="mt-1">{product.max_qty_dinner ?? "—"}</p>
+                      <p className="mt-1">{(product as any).max_qty_dinner ?? "—"}</p>
                     </div>
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500">Net Price</h3>
-                      <p className="mt-1">{product.net_price}</p>
+                      <h3 className="text-sm font-medium text-gray-500">{isComboProduct ? "Price" : "Net Price"}</h3>
+                      <p className="mt-1">{(product as any).net_price ?? (product as any).price ?? "—"}</p>
                     </div>
                   </div>
                 </>

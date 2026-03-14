@@ -45,12 +45,12 @@ CREATE TABLE items (
     description TEXT NULL,
     alias VARCHAR(100) NULL,
     category_id INT NULL,
-    uom VARCHAR(50) NOT NULL,
-    weight_factor DECIMAL(5,3) NULL,
-    weight_uom VARCHAR(50) NULL,
+    uom_customer VARCHAR(50) NOT NULL,
+    unit_packing DECIMAL(10,3) NULL,
+    uom_packing VARCHAR(50) NULL,
     hsn_code VARCHAR(50) NULL,
-    factor DECIMAL(5,3) NULL DEFAULT 1,
-    quantity_portion INT NULL,
+    uom_production VARCHAR(50) NULL,
+    packing_to_production_rate DECIMAL(10,6) NULL DEFAULT 1,
     buffer_percentage DECIMAL(5,2) NULL,
     max_qty_breakfast INT NULL,
     max_qty_lunch INT NULL,
@@ -137,6 +137,27 @@ CREATE TABLE item_combos (
     FOREIGN KEY (combo_item_id) REFERENCES items(item_id),
     FOREIGN KEY (included_item_id) REFERENCES items(item_id),
     FOREIGN KEY (included_category_id) REFERENCES categories(category_id)
+);
+
+-- Plated Items Table
+CREATE TABLE plated_items (
+    plated_item_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    item_id INT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_plated_items_item_id (item_id),
+    FOREIGN KEY (item_id) REFERENCES items(item_id) ON DELETE CASCADE
+);
+
+-- Plated Item Components Table
+CREATE TABLE plated_item_components (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    plated_item_id INT NOT NULL,
+    component_item_id INT NOT NULL,
+    quantity DECIMAL(10,3) NOT NULL DEFAULT 1.000,
+    sort_order INT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (plated_item_id) REFERENCES plated_items(plated_item_id) ON DELETE CASCADE,
+    FOREIGN KEY (component_item_id) REFERENCES items(item_id)
 );
 
 -- Add-On Table

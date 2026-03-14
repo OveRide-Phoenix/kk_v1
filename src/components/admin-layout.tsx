@@ -437,6 +437,8 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
         return "Daily Menu Setup"
       case "production":
         return "Kitchen Production Planning"
+      case "packing":
+        return "Packing Plan"
       case "reports":
         return "Reports & Analytics"
       case "ordertest":

@@ -14,7 +14,8 @@ type MealType = "breakfast" | "lunch" | "dinner" | "condiments";
 
 interface MenuItem {
   menu_item_id?: number;
-  item_id: number;
+  item_id?: number | null;
+  combo_id?: number | null;
   item_name: string;
   category_id: number | null;
   max_qty: number;
@@ -81,7 +82,8 @@ export default function CustomerDailyMenu({
   // Cart
   type CartLine = {
     meal: MealType;
-    item_id: number;
+    item_id?: number | null;
+    combo_id?: number | null;
     menu_item_id?: number;
     item_name: string;
     qty: number;
@@ -143,6 +145,7 @@ export default function CustomerDailyMenu({
                 url.searchParams.set("period_type", "one_day");
                 url.searchParams.set("menu_type", "ONE_DAY");
               }
+              url.searchParams.set("include_combos", "1");
 
               const res = await fetch(url.toString());
               if (res.status === 404) {
@@ -242,8 +245,8 @@ export default function CustomerDailyMenu({
   }, [cart, confirmedDate, onCartChange]);
 
   // Cart ops
-  const qtyInCart = (meal: MealType, item_id: number) =>
-    cart.find((l) => l.meal === meal && l.item_id === item_id)?.qty ?? 0;
+  const qtyInCart = (meal: MealType, menu_item_id?: number) =>
+    cart.find((l) => l.meal === meal && l.menu_item_id === menu_item_id)?.qty ?? 0;
 
   const getLimit = (item: MenuItem) => Math.max(0, Number(item.available_qty ?? 0));
 
@@ -251,7 +254,7 @@ export default function CustomerDailyMenu({
     const limit = getLimit(item);
     if (limit <= 0) return false;
     const line = cart.find(
-      (l) => l.meal === meal && l.item_id === item.item_id
+      (l) => l.meal === meal && l.menu_item_id === item.menu_item_id
     );
     const already = line?.qty ?? 0;
     return already < limit;
@@ -263,7 +266,7 @@ export default function CustomerDailyMenu({
     if (!canAdd(meal, item)) return;
     setCart((prev) => {
       const i = prev.findIndex(
-        (l) => l.meal === meal && l.item_id === item.item_id
+        (l) => l.meal === meal && l.menu_item_id === item.menu_item_id
       );
       if (i === -1)
         return [
@@ -271,6 +274,7 @@ export default function CustomerDailyMenu({
           {
             meal,
             item_id: item.item_id,
+            combo_id: item.combo_id,
             menu_item_id: item.menu_item_id,
             item_name: item.item_name,
             qty: Math.min(1, limit),
@@ -287,7 +291,7 @@ export default function CustomerDailyMenu({
   const removeOne = (meal: MealType, item: MenuItem) => {
     setCart((prev) => {
       const i = prev.findIndex(
-        (l) => l.meal === meal && l.item_id === item.item_id
+        (l) => l.meal === meal && l.menu_item_id === item.menu_item_id
       );
       if (i === -1) return prev;
       const copy = [...prev];
@@ -385,13 +389,13 @@ export default function CustomerDailyMenu({
               ) : (
                 <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                   {visibleItems.map((it) => {
-                    const qty = qtyInCart(meal, it.item_id);
+                    const qty = qtyInCart(meal, it.menu_item_id);
                     const limit = getLimit(it);
                     const soldOut = limit <= 0;
                     const reachedLimit = limit > 0 && qty >= limit;
                     return (
                       <Card
-                        key={`${meal}-${it.item_id}`}
+                        key={`${meal}-${it.menu_item_id}`}
                         className={
                           soldOut
                             ? "overflow-hidden bg-muted/70 border-dashed"

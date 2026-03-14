@@ -7,15 +7,23 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import type { ComboProduct, Product, CategoryProduct } from "@/types/product"
+
+interface ComponentTypeOption {
+  component_type_id: number
+  name: string
+  description?: string | null
+}
 
 export interface ComboFormValues {
   combo_id?: number
   combo_name: string
   price: number
   category_id: number
-  items: Array<{ item_id: number; quantity: number }>
+  bld_ids: number[]
+  items: Array<{ item_id?: number; component_type_id?: number; quantity: number }>
 }
 
 interface ComboFormProps {
@@ -25,7 +33,10 @@ interface ComboFormProps {
 }
 
 interface SelectedComboItem {
-  itemId: number
+  kind: "item" | "type"
+  itemId?: number
+  componentTypeId?: number
+  name: string
   quantity: number
 }
 
@@ -39,20 +50,26 @@ const MEAL_LABELS: Record<number, string> = {
 export default function ComboForm({ onSave, onCancel, combo }: ComboFormProps) {
   const [availableItems, setAvailableItems] = useState<Product[]>([])
   const [categories, setCategories] = useState<CategoryProduct[]>([])
+  const [componentTypes, setComponentTypes] = useState<ComponentTypeOption[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const [comboName, setComboName] = useState(combo?.combo_name ?? "")
   const [categoryId, setCategoryId] = useState<string>(combo?.category_id ? String(combo.category_id) : "")
   const [price, setPrice] = useState(combo?.price?.toString() ?? "")
+  const [selectedMeals, setSelectedMeals] = useState<number[]>(combo?.bld_ids ?? [])
   const [selectedItems, setSelectedItems] = useState<SelectedComboItem[]>(
     () =>
       combo?.includedItems?.map((item) => ({
-        itemId: item.itemId,
+        kind: item.kind === "type" ? "type" : "item",
+        itemId: item.itemId ?? undefined,
+        componentTypeId: item.componentTypeId ?? undefined,
+        name: item.name ?? (item.kind === "type" ? item.componentTypeName ?? "Generic Component" : `Item #${item.itemId}`),
         quantity: item.quantity ?? 1,
       })) ?? []
   )
   const [itemSearch, setItemSearch] = useState("")
+  const [typeSearch, setTypeSearch] = useState("")
   const [formError, setFormError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -63,9 +80,10 @@ export default function ComboForm({ onSave, onCancel, combo }: ComboFormProps) {
       setIsLoading(true)
       setLoadError(null)
       try {
-        const [itemsResponse, categoriesResponse] = await Promise.all([
+        const [itemsResponse, categoriesResponse, componentTypesResponse] = await Promise.all([
           fetch("http://localhost:8000/api/products/items", { signal: controller.signal }),
           fetch("http://localhost:8000/api/products/categories", { signal: controller.signal }),
+          fetch("http://localhost:8000/api/products/component-types", { signal: controller.signal }),
         ])
 
         if (!itemsResponse.ok) {
@@ -74,13 +92,21 @@ export default function ComboForm({ onSave, onCancel, combo }: ComboFormProps) {
         if (!categoriesResponse.ok) {
           throw new Error("Failed to fetch categories")
         }
-        const [itemsData, categoriesData] = await Promise.all([itemsResponse.json(), categoriesResponse.json()])
+        if (!componentTypesResponse.ok) {
+          throw new Error("Failed to fetch component types")
+        }
+        const [itemsData, categoriesData, componentTypesData] = await Promise.all([
+          itemsResponse.json(),
+          categoriesResponse.json(),
+          componentTypesResponse.json(),
+        ])
 
         if (!isMounted) {
           return
         }
         setAvailableItems(Array.isArray(itemsData) ? itemsData.filter((item) => !item.is_combo) : [])
         setCategories(Array.isArray(categoriesData) ? categoriesData : [])
+        setComponentTypes(Array.isArray(componentTypesData) ? componentTypesData : [])
       } catch (error) {
         if (!controller.signal.aborted) {
           setLoadError(error instanceof Error ? error.message : "Failed to load combo dependencies")
@@ -104,9 +130,13 @@ export default function ComboForm({ onSave, onCancel, combo }: ComboFormProps) {
     setComboName(combo?.combo_name ?? "")
     setCategoryId(combo?.category_id ? String(combo.category_id) : "")
     setPrice(combo?.price?.toString() ?? "")
+    setSelectedMeals(combo?.bld_ids ?? [])
     setSelectedItems(
       combo?.includedItems?.map((item) => ({
-        itemId: item.itemId,
+        kind: item.kind === "type" ? "type" : "item",
+        itemId: item.itemId ?? undefined,
+        componentTypeId: item.componentTypeId ?? undefined,
+        name: item.name ?? (item.kind === "type" ? item.componentTypeName ?? "Generic Component" : `Item #${item.itemId}`),
         quantity: item.quantity ?? 1,
       })) ?? []
     )
@@ -128,10 +158,21 @@ export default function ComboForm({ onSave, onCancel, combo }: ComboFormProps) {
     return availableItems.filter((item) => {
       if (!item.name) return false
       const matchesSearch = item.name.toLowerCase().includes(query) || !query
-      const alreadySelected = selectedItems.some((entry) => entry.itemId === item.item_id)
+      const alreadySelected = selectedItems.some((entry) => entry.kind === "item" && entry.itemId === item.item_id)
       return matchesSearch && !alreadySelected
     })
   }, [availableItems, itemSearch, selectedItems])
+
+  const filteredComponentTypes = useMemo(() => {
+    const query = typeSearch.trim().toLowerCase()
+    return componentTypes.filter((componentType) => {
+      const matchesSearch = componentType.name.toLowerCase().includes(query) || !query
+      const alreadySelected = selectedItems.some(
+        (entry) => entry.kind === "type" && entry.componentTypeId === componentType.component_type_id
+      )
+      return matchesSearch && !alreadySelected
+    })
+  }, [componentTypes, typeSearch, selectedItems])
 
   const resolveItemName = (itemId: number): string => {
     const item = itemsMap.get(itemId)
@@ -141,10 +182,14 @@ export default function ComboForm({ onSave, onCancel, combo }: ComboFormProps) {
     return `Item #${itemId}`
   }
 
-  const handleQuantityChange = (itemId: number, value: string) => {
+  const handleQuantityChange = (target: SelectedComboItem, value: string) => {
     setSelectedItems((prev) =>
       prev.map((entry) => {
-        if (entry.itemId !== itemId) return entry
+        const isSameEntry =
+          entry.kind === target.kind &&
+          entry.itemId === target.itemId &&
+          entry.componentTypeId === target.componentTypeId
+        if (!isSameEntry) return entry
         const parsed = Number(value)
         return {
           ...entry,
@@ -152,6 +197,18 @@ export default function ComboForm({ onSave, onCancel, combo }: ComboFormProps) {
         }
       })
     )
+  }
+
+  const toggleMeal = (mealId: number) => {
+    setSelectedMeals((prev) => {
+      const next = new Set(prev)
+      if (next.has(mealId)) {
+        next.delete(mealId)
+      } else {
+        next.add(mealId)
+      }
+      return Array.from(next).sort((a, b) => a - b)
+    })
   }
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -172,6 +229,10 @@ export default function ComboForm({ onSave, onCancel, combo }: ComboFormProps) {
       setFormError("Enter a valid price.")
       return
     }
+    if (selectedMeals.length === 0) {
+      setFormError("Select at least one meal.")
+      return
+    }
     if (selectedItems.length === 0) {
       setFormError("Add at least one item to the combo.")
       return
@@ -183,8 +244,10 @@ export default function ComboForm({ onSave, onCancel, combo }: ComboFormProps) {
       combo_name: trimmedName,
       category_id: parsedCategory,
       price: parsedPrice,
+      bld_ids: selectedMeals,
       items: selectedItems.map((item) => ({
-        item_id: item.itemId,
+        item_id: item.kind === "item" ? item.itemId : undefined,
+        component_type_id: item.kind === "type" ? item.componentTypeId : undefined,
         quantity: item.quantity,
       })),
     })
@@ -260,12 +323,27 @@ export default function ComboForm({ onSave, onCancel, combo }: ComboFormProps) {
             />
           </div>
         </div>
+
+        <div className="space-y-2">
+          <Label>Meals</Label>
+          <div className="flex flex-wrap gap-4 rounded-md border p-3">
+            {[1, 2, 3].map((mealId) => (
+              <label key={mealId} className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={selectedMeals.includes(mealId)}
+                  onCheckedChange={() => toggleMeal(mealId)}
+                />
+                <span>{MEAL_LABELS[mealId]}</span>
+              </label>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-3">
           <div>
-            <Label htmlFor="combo-search">Add Items</Label>
+            <Label htmlFor="combo-search">Add Concrete Items</Label>
             <div className="relative mt-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -288,7 +366,7 @@ export default function ComboForm({ onSave, onCancel, combo }: ComboFormProps) {
                     type="button"
                     className="w-full text-left px-4 py-3 hover:bg-muted/70"
                     onClick={() => {
-                      setSelectedItems((prev) => [...prev, { itemId: item.item_id, quantity: 1 }])
+                      setSelectedItems((prev) => [...prev, { kind: "item", itemId: item.item_id, name: item.name, quantity: 1 }])
                       setItemSearch("")
                     }}
                   >
@@ -308,11 +386,56 @@ export default function ComboForm({ onSave, onCancel, combo }: ComboFormProps) {
               </div>
             )}
           </ScrollArea>
+          <div>
+            <Label htmlFor="combo-type-search">Add Generic Component Types</Label>
+            <div className="relative mt-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="combo-type-search"
+                value={typeSearch}
+                onChange={(event) => setTypeSearch(event.target.value)}
+                placeholder="Search component types"
+                className="pl-9"
+              />
+            </div>
+          </div>
+          <ScrollArea className="max-h-[220px] rounded-md border">
+            {filteredComponentTypes.length === 0 ? (
+              <p className="py-10 text-center text-muted-foreground">No component types match that search.</p>
+            ) : (
+              <div className="divide-y">
+                {filteredComponentTypes.map((componentType) => (
+                  <button
+                    key={componentType.component_type_id}
+                    type="button"
+                    className="w-full text-left px-4 py-3 hover:bg-muted/70"
+                    onClick={() => {
+                      setSelectedItems((prev) => [
+                        ...prev,
+                        {
+                          kind: "type",
+                          componentTypeId: componentType.component_type_id,
+                          name: componentType.name,
+                          quantity: 1,
+                        },
+                      ])
+                      setTypeSearch("")
+                    }}
+                  >
+                    <p className="font-medium">{componentType.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {componentType.description ?? "Resolves to the item of the day"}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
         </div>
 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <Label>Selected Items</Label>
+            <Label>Selected Components</Label>
             {selectedItems.length > 0 && (
               <span className="text-xs text-muted-foreground">{selectedItems.length} item(s)</span>
             )}
@@ -323,11 +446,13 @@ export default function ComboForm({ onSave, onCancel, combo }: ComboFormProps) {
             ) : (
               <div className="divide-y">
                 {selectedItems.map((entry) => (
-                  <div key={entry.itemId} className="flex items-center gap-3 px-4 py-3">
+                  <div key={`${entry.kind}-${entry.itemId ?? entry.componentTypeId}`} className="flex items-center gap-3 px-4 py-3">
                     <div className="flex-1">
-                      <p className="font-medium">{resolveItemName(entry.itemId)}</p>
+                      <p className="font-medium">{entry.kind === "item" ? resolveItemName(entry.itemId ?? 0) : entry.name}</p>
                       <p className="text-xs text-muted-foreground uppercase tracking-wide">
-                        #{entry.itemId.toString().padStart(3, "0")}
+                        {entry.kind === "item"
+                          ? `#${(entry.itemId ?? 0).toString().padStart(3, "0")}`
+                          : `TYPE #${(entry.componentTypeId ?? 0).toString().padStart(3, "0")}`}
                       </p>
                     </div>
                     <div className="w-24">
@@ -336,7 +461,7 @@ export default function ComboForm({ onSave, onCancel, combo }: ComboFormProps) {
                         type="number"
                         min="1"
                         value={entry.quantity}
-                        onChange={(event) => handleQuantityChange(entry.itemId, event.target.value)}
+                        onChange={(event) => handleQuantityChange(entry, event.target.value)}
                       />
                     </div>
                     <Button
@@ -345,7 +470,16 @@ export default function ComboForm({ onSave, onCancel, combo }: ComboFormProps) {
                       variant="ghost"
                       className="text-destructive"
                       onClick={() =>
-                        setSelectedItems((prev) => prev.filter((item) => item.itemId !== entry.itemId))
+                        setSelectedItems((prev) =>
+                          prev.filter(
+                            (item) =>
+                              !(
+                                item.kind === entry.kind &&
+                                item.itemId === entry.itemId &&
+                                item.componentTypeId === entry.componentTypeId
+                              )
+                          )
+                        )
                       }
                     >
                       <Trash2 className="h-4 w-4" />

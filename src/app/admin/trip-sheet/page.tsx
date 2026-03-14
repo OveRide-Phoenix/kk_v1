@@ -8,10 +8,14 @@ import { Button } from "@/components/ui/button"
 import { DatePickerWithPresets } from "@/components/ui/date-picker"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { http } from "@/lib/http"
 import { useAuthStore } from "@/store/store"
-import { Info, Loader2, MapPin, Route, Truck, Wallet } from "lucide-react"
+import { Info, Loader2, MapPin, Plus, Route, Truck, Wallet, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 type TripSheetOrder = {
@@ -47,6 +51,15 @@ type TripSheetResponse = {
   routes: TripSheetRoute[]
   status_updates: number
   generated_at: string
+}
+
+type DeliveryRouteConfig = {
+  route_id?: number | null
+  route_code: string
+  route_name: string
+  notes?: string | null
+  is_active?: boolean
+  sort_order: number
 }
 
 const formatCurrency = (value: number) =>
@@ -90,10 +103,128 @@ export default function TripSheetPage() {
   const [statusUpdates, setStatusUpdates] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [routePlannerOpen, setRoutePlannerOpen] = useState(false)
+  const [routePlannerLoading, setRoutePlannerLoading] = useState(false)
+  const [routePlannerSaving, setRoutePlannerSaving] = useState(false)
+  const [routePlannerError, setRoutePlannerError] = useState<string | null>(null)
+  const [routeConfigs, setRouteConfigs] = useState<DeliveryRouteConfig[]>([])
   const { toast } = useToast()
 
   const isoDate = useMemo(() => format(selectedDate, "yyyy-MM-dd"), [selectedDate])
   const dateLabel = useMemo(() => format(selectedDate, "PPP"), [selectedDate])
+
+  const loadRouteConfigs = async () => {
+    setRoutePlannerLoading(true)
+    setRoutePlannerError(null)
+    try {
+      const response = await http.get(`/api/logistics/routes?city_code=${adminCity}`)
+      const data = (await response.json()) as DeliveryRouteConfig[] | { detail?: string }
+      if (!response.ok) {
+        throw new Error("detail" in data && data.detail ? data.detail : "Failed to load routes")
+      }
+      const rows = Array.isArray(data) ? data : []
+      setRouteConfigs(
+        rows.map((route, index) => ({
+          route_id: route.route_id ?? null,
+          route_code: route.route_code ?? "",
+          route_name: route.route_name ?? "",
+          notes: route.notes ?? "",
+          is_active: route.is_active ?? true,
+          sort_order: Number.isFinite(route.sort_order) ? route.sort_order : index,
+        })),
+      )
+    } catch (err) {
+      setRoutePlannerError(err instanceof Error ? err.message : "Unable to load routes")
+      setRouteConfigs([])
+    } finally {
+      setRoutePlannerLoading(false)
+    }
+  }
+
+  const openRoutePlanner = async () => {
+    setRoutePlannerOpen(true)
+    await loadRouteConfigs()
+  }
+
+  const addRouteRow = () => {
+    setRouteConfigs((prev) => [
+      ...prev,
+      {
+        route_id: null,
+        route_code: "",
+        route_name: "",
+        notes: "",
+        is_active: true,
+        sort_order: prev.length,
+      },
+    ])
+  }
+
+  const updateRouteRow = (index: number, field: keyof DeliveryRouteConfig, value: string | number | boolean | null) => {
+    setRouteConfigs((prev) =>
+      prev.map((route, routeIndex) =>
+        routeIndex === index
+          ? {
+              ...route,
+              [field]: value,
+            }
+          : route,
+      ),
+    )
+  }
+
+  const removeRouteRow = (index: number) => {
+    setRouteConfigs((prev) =>
+      prev
+        .filter((_, routeIndex) => routeIndex !== index)
+        .map((route, routeIndex) => ({
+          ...route,
+          sort_order: routeIndex,
+        })),
+    )
+  }
+
+  const saveRouteConfigs = async () => {
+    setRoutePlannerSaving(true)
+    setRoutePlannerError(null)
+    try {
+      const payload = {
+        city_code: adminCity,
+        routes: routeConfigs.map((route, index) => ({
+          route_id: route.route_id ?? undefined,
+          route_code: route.route_code.trim(),
+          route_name: route.route_name.trim(),
+          notes: route.notes?.trim() || null,
+          is_active: route.is_active ?? true,
+          sort_order: index,
+        })),
+      }
+      const response = await http.post("/api/logistics/routes/bulk-save", payload)
+      const data = (await response.json()) as { routes?: DeliveryRouteConfig[]; detail?: string }
+      if (!response.ok) {
+        throw new Error(data?.detail || "Failed to save route plan")
+      }
+      setRouteConfigs(
+        (data.routes ?? []).map((route, index) => ({
+          route_id: route.route_id ?? null,
+          route_code: route.route_code ?? "",
+          route_name: route.route_name ?? "",
+          notes: route.notes ?? "",
+          is_active: route.is_active ?? true,
+          sort_order: Number.isFinite(route.sort_order) ? route.sort_order : index,
+        })),
+      )
+      toast({
+        title: "Route plan saved",
+        description: `Saved ${data.routes?.length ?? 0} routes for ${adminCity}.`,
+      })
+      setRoutePlannerOpen(false)
+    } catch (err) {
+      setRoutePlannerError(err instanceof Error ? err.message : "Unable to save routes")
+    } finally {
+      setRoutePlannerSaving(false)
+    }
+  }
 
   const handleGenerate = async () => {
     setLoading(true)
@@ -153,15 +284,20 @@ export default function TripSheetPage() {
               “Preparing” will move to “On the Way”.
             </p>
           </div>
-          <Button onClick={handleGenerate} disabled={loading}>
-            {loading ? (
-              <span className="flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" /> Generating…
-              </span>
-            ) : (
-              "Generate Trip Sheet"
-            )}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={() => void openRoutePlanner()}>
+              Route Planning
+            </Button>
+            <Button onClick={handleGenerate} disabled={loading}>
+              {loading ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Generating…
+                </span>
+              ) : (
+                "Generate Trip Sheet"
+              )}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -252,6 +388,90 @@ export default function TripSheetPage() {
           ))}
         </div>
       )}
+
+      <Dialog open={routePlannerOpen} onOpenChange={setRoutePlannerOpen}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Route Planning</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Define reusable delivery routes for {adminCity}. Later, customers can be assigned to these routes from Customer Management.
+            </p>
+
+            {routePlannerError ? (
+              <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                {routePlannerError}
+              </div>
+            ) : null}
+
+            {routePlannerLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading routes…
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {routeConfigs.length === 0 ? (
+                  <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                    No routes configured yet. Add your first route below.
+                  </div>
+                ) : null}
+
+                {routeConfigs.map((route, index) => (
+                  <div key={`${route.route_id ?? "new"}-${index}`} className="rounded-lg border p-4">
+                    <div className="grid gap-4 md:grid-cols-[140px_minmax(0,1fr)_auto]">
+                      <div className="space-y-2">
+                        <Label>Route Code</Label>
+                        <Input
+                          value={route.route_code}
+                          onChange={(event) => updateRouteRow(index, "route_code", event.target.value)}
+                          placeholder="Route A"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Route Name</Label>
+                        <Input
+                          value={route.route_name}
+                          onChange={(event) => updateRouteRow(index, "route_name", event.target.value)}
+                          placeholder="Vijayanagar and Gokulam"
+                        />
+                      </div>
+                      <div className="flex items-end">
+                        <Button type="button" variant="ghost" size="icon" onClick={() => removeRouteRow(index)}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="mt-4 space-y-2">
+                      <Label>Notes</Label>
+                      <Textarea
+                        value={route.notes ?? ""}
+                        onChange={(event) => updateRouteRow(index, "notes", event.target.value)}
+                        placeholder="Optional notes for this route"
+                        rows={2}
+                      />
+                    </div>
+                  </div>
+                ))}
+
+                <Button type="button" variant="outline" onClick={addRouteRow}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Route
+                </Button>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRoutePlannerOpen(false)} disabled={routePlannerSaving}>
+              Cancel
+            </Button>
+            <Button onClick={saveRouteConfigs} disabled={routePlannerLoading || routePlannerSaving}>
+              {routePlannerSaving ? "Saving…" : "Save Routes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AdminLayout>
   )
 }

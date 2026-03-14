@@ -49,9 +49,15 @@ import { citySupportsFood, citySupportsCondiments, getSupportedMeals, getCityLab
 
 interface MenuItem {
   menu_item_id?: number;
-  item_id: number;
+  item_id?: number | null;
+  combo_id?: number | null;
   item_name: string;
   category_id: number | null;
+  component_type_id?: number | null;
+  component_type_name?: string | null;
+  is_combo?: boolean;
+  is_plated?: boolean;
+  is_condiment?: boolean;
   max_qty: number;
   available_qty: number;
   rate: number;
@@ -70,6 +76,9 @@ const SECTION_TO_BLD_ID: Record<MealSection, number> = {
 };
 
 const MEALS_REQUIRING_DEFAULT = new Set<MealSection>(["breakfast", "lunch", "dinner"]);
+
+const buildMenuEntryKey = (entry: { item_id?: number | null; combo_id?: number | null }) =>
+  entry.combo_id != null ? `combo:${entry.combo_id}` : `item:${entry.item_id}`;
 
 export function DailyMenuSetup() {
   // ───────────────────────────────────────────────────────────────────────
@@ -103,11 +112,14 @@ export function DailyMenuSetup() {
   const [itemSearchQuery, setItemSearchQuery] = useState("");
   const [availableItems, setAvailableItems] = useState<
     {
-      item_id: number;
+      item_id?: number | null;
+      combo_id?: number | null;
       name: string;
       description: string;
       alias: string | null;
       category_id: number | null;
+      component_type_id?: number | null;
+      component_type_name?: string | null;
       uom: string;
       weight_factor: number | null;
       weight_uom: string | null;
@@ -130,10 +142,12 @@ export function DailyMenuSetup() {
       igst: number | null;
       net_price: number | null;
       is_combo: boolean;
+      is_plated?: boolean;
+      is_condiment?: boolean;
       bld_ids: number[];
     }[]
   >([]);
-  const [selectedItems, setSelectedItems] = useState<number[]>([]);
+  const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [currentSection, setCurrentSection] = useState<MealSection>(() =>
     citySupportsFood(adminCity) ? "breakfast" : "condiments",
   );
@@ -302,6 +316,7 @@ export function DailyMenuSetup() {
           bld_type: meal,
           city_code: adminCity,
           menu_type: isCondimentsSection ? "CONDIMENTS" : "ONE_DAY",
+          include_combos: "1",
         });
         if (!isCondimentsSection && confirmedDate) {
           params.set("date", formatISODate(confirmedDate));
@@ -334,8 +349,14 @@ export function DailyMenuSetup() {
           return {
             menu_item_id: it.menu_item_id,
             item_id: it.item_id,
+            combo_id: it.combo_id ?? null,
             item_name: it.item_name,
             category_id: it.category_id,
+            component_type_id: it.component_type_id ?? null,
+            component_type_name: it.component_type_name ?? null,
+            is_combo: Boolean(it.is_combo),
+            is_plated: Boolean(it.is_plated),
+            is_condiment: isCondimentsSection,
             max_qty: resolvedMax,
             available_qty: Number.isFinite(availableQty) ? availableQty : resolvedMax,
             rate: Number(it.rate ?? 0),
@@ -403,7 +424,7 @@ export function DailyMenuSetup() {
     setLoadingItemsAPI(true);
     const fetchAvailable = async () => {
       try {
-        const params = new URLSearchParams({ bld_type: currentSection });
+        const params = new URLSearchParams({ bld_type: currentSection, include_combos: "1" });
         const res = await http.get(`/api/menu/available-items?${params.toString()}`);
         if (res.status === 404) {
           setAvailableItems([]);
@@ -454,7 +475,7 @@ export function DailyMenuSetup() {
   // ───────────────────────────────────────────────────────────────────────
   const handleItemSelection = () => {
     const existingIds = new Set(
-      itemsByMeal[currentSection].map((row) => row.item_id)
+      itemsByMeal[currentSection].map((row) => buildMenuEntryKey(row))
     );
 
     const uniqueSelections = selectedItems.filter((id) => !existingIds.has(id));
@@ -472,8 +493,8 @@ export function DailyMenuSetup() {
       return;
     }
 
-    const newRows: MenuItem[] = uniqueSelections.map((id, index) => {
-      const found = availableItems.find((i) => i.item_id === id)!;
+    const newRows: MenuItem[] = uniqueSelections.map((selectedKey, index) => {
+      const found = availableItems.find((i) => buildMenuEntryKey(i) === selectedKey)!;
       const catalogMax = (() => {
         switch (currentSection) {
           case "breakfast":
@@ -511,8 +532,14 @@ export function DailyMenuSetup() {
       })();
       return {
         item_id: found.item_id,
+        combo_id: found.combo_id ?? null,
         item_name: found.name,
         category_id: found.category_id,
+        component_type_id: found.component_type_id ?? null,
+        component_type_name: found.component_type_name ?? null,
+        is_combo: Boolean(found.is_combo),
+        is_plated: Boolean(found.is_plated),
+        is_condiment: Boolean(found.is_condiment),
         max_qty: resolvedMax,
         available_qty: resolvedMax,
         rate: resolvedRate,
@@ -571,7 +598,8 @@ export function DailyMenuSetup() {
     const itemsArray = rows.map((row, idx) => {
       if (row.menu_item_id == null) {
         return {
-          item_id: row.item_id,
+          item_id: row.item_id ?? undefined,
+          combo_id: row.combo_id ?? undefined,
           category_id: row.category_id,
           max_qty: row.max_qty,
           available_qty:
@@ -584,7 +612,8 @@ export function DailyMenuSetup() {
         };
       }
       return {
-        item_id: row.item_id,
+        item_id: row.item_id ?? undefined,
+        combo_id: row.combo_id ?? undefined,
         category_id: row.category_id,
         max_qty: row.max_qty,
         available_qty: row.available_qty, // keep any later adjustments
@@ -626,8 +655,14 @@ export function DailyMenuSetup() {
         return {
           menu_item_id: it.menu_item_id,
           item_id: it.item_id,
+          combo_id: it.combo_id ?? null,
           item_name: it.item_name,
           category_id: it.category_id,
+          component_type_id: it.component_type_id ?? null,
+          component_type_name: it.component_type_name ?? null,
+          is_combo: Boolean(it.is_combo),
+          is_plated: Boolean(it.is_plated),
+          is_condiment: isCondimentsSection,
           max_qty: resolvedMax,
           available_qty: Number.isFinite(availableQty) ? availableQty : resolvedMax,
           rate: Number(it.rate ?? 0),
@@ -855,7 +890,7 @@ export function DailyMenuSetup() {
                       <TableRow>
                         <TableHead className="text-center">Sl.no</TableHead>
                         <TableHead>Item Name</TableHead>
-                        <TableHead>Max Qty</TableHead>
+                        <TableHead>Item Threshold</TableHead>
                         <TableHead>Available Qty</TableHead>
                         <TableHead>Menu Rate</TableHead>
                         {showDefaultColumn && <TableHead>Default</TableHead>}
@@ -883,7 +918,17 @@ export function DailyMenuSetup() {
                               <TableCell className="text-center">
                                 {index + 1}
                               </TableCell>
-                              <TableCell>{row.item_name}</TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <span>{row.item_name}</span>
+                                  {row.is_plated ? (
+                                    <Badge variant="secondary">Plated</Badge>
+                                  ) : null}
+                                  {row.component_type_name ? (
+                                    <Badge variant="outline">{row.component_type_name}</Badge>
+                                  ) : null}
+                                </div>
+                              </TableCell>
 
                               <TableCell>
                                 {canEditRow && (row.menu_item_id == null || isRowEditing) ? (
@@ -1076,10 +1121,11 @@ export function DailyMenuSetup() {
               {/* Grid like the sketch: NO grouping, NO ScrollArea */}
               <div className="mt-4 grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {filteredItemsByQuery(availableItems).map((it) => {
-                  const checked = selectedItems.includes(it.item_id);
+                  const entryKey = buildMenuEntryKey(it);
+                  const checked = selectedItems.includes(entryKey);
                   return (
                     <label
-                      key={it.item_id}
+                      key={entryKey}
                       className={[
                         "flex items-center gap-3 rounded-xl",
                         "border border-border/60 bg-amber-50/70 hover:bg-amber-50",
@@ -1091,20 +1137,28 @@ export function DailyMenuSetup() {
                         onCheckedChange={(isChecked) => {
                           if (isChecked) {
                             setSelectedItems((prev) =>
-                              prev.includes(it.item_id)
+                              prev.includes(entryKey)
                                 ? prev
-                                : [...prev, it.item_id]
+                                : [...prev, entryKey]
                             );
                           } else {
                             setSelectedItems((prev) =>
-                              prev.filter((id) => id !== it.item_id)
+                              prev.filter((id) => id !== entryKey)
                             );
                           }
                         }}
                         className="shrink-0"
                       />
                       <div className="min-w-0">
-                        <div className="font-medium truncate">{it.name}</div>
+                        <div className="flex items-center gap-2">
+                          <div className="font-medium truncate">{it.name}</div>
+                          {it.is_plated ? (
+                            <Badge variant="secondary">Plated</Badge>
+                          ) : null}
+                          {it.component_type_name ? (
+                            <Badge variant="outline">{it.component_type_name}</Badge>
+                          ) : null}
+                        </div>
                         {it.description ? (
                           <div className="text-xs text-muted-foreground line-clamp-2">
                             {it.description}

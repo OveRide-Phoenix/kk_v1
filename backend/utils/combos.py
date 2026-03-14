@@ -52,29 +52,60 @@ def normalize_combo_items(
     items: Optional[Iterable[Any]],
     *,
     require_items: bool = True,
-) -> List[Dict[str, int]]:
-    """Sanitize combo items, ensuring unique item_ids and positive quantities."""
+) -> List[Dict[str, Any]]:
+    """Sanitize combo items, ensuring a unique concrete item or generic component type per row."""
     if items is None:
         return []
 
-    normalized: List[Dict[str, int]] = []
-    seen: set[int] = set()
+    normalized: List[Dict[str, Any]] = []
+    seen: set[tuple[str, int]] = set()
 
     for index, entry in enumerate(items):
         item_id = _resolve_value(entry, "item_id")
+        component_type_id = _resolve_value(entry, "component_type_id")
         quantity = _resolve_value(entry, "quantity")
-        normalized_item_id = _parse_positive_int(item_id, f"items[{index}].item_id")
+        has_item_id = item_id is not None
+        has_component_type_id = component_type_id is not None
+        if has_item_id == has_component_type_id:
+            raise HTTPException(
+                status_code=400,
+                detail=f"items[{index}] must include exactly one of item_id or component_type_id",
+            )
         normalized_quantity = _parse_positive_int(
             1 if quantity is None else quantity,
             f"items[{index}].quantity",
         )
-        if normalized_item_id in seen:
+        if has_item_id:
+            normalized_item_id = _parse_positive_int(item_id, f"items[{index}].item_id")
+            dedupe_key = ("item", normalized_item_id)
+            if dedupe_key in seen:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Duplicate item_id {normalized_item_id} in combo payload",
+                )
+            seen.add(dedupe_key)
+            normalized.append(
+                {"item_id": normalized_item_id, "component_type_id": None, "quantity": normalized_quantity}
+            )
+            continue
+
+        normalized_component_type_id = _parse_positive_int(
+            component_type_id, f"items[{index}].component_type_id"
+        )
+        dedupe_key = ("type", normalized_component_type_id)
+        if dedupe_key in seen:
             raise HTTPException(
                 status_code=400,
-                detail=f"Duplicate item_id {normalized_item_id} in combo payload",
+                detail=f"Duplicate component_type_id {normalized_component_type_id} in combo payload",
             )
-        seen.add(normalized_item_id)
-        normalized.append({"item_id": normalized_item_id, "quantity": normalized_quantity})
+        seen.add(dedupe_key)
+        normalized.append(
+            {
+                "item_id": None,
+                "component_type_id": normalized_component_type_id,
+                "quantity": normalized_quantity,
+            }
+        )
 
     if not normalized and require_items:
         raise HTTPException(status_code=400, detail="A combo must include at least one item")
@@ -90,10 +121,13 @@ def _fetch_combo_items(cursor, combo_ids: Sequence[int]) -> Dict[int, List[Dict[
         f"""
         SELECT ci.combo_id,
                ci.item_id,
+               ci.component_type_id,
                ci.quantity,
-               i.name AS item_name
+               i.name AS item_name,
+               ct.name AS component_type_name
           FROM combo_items ci
           LEFT JOIN items i ON ci.item_id = i.item_id
+          LEFT JOIN component_types ct ON ci.component_type_id = ct.component_type_id
          WHERE ci.combo_id IN ({placeholders})
          ORDER BY ci.combo_id ASC, ci.id ASC
         """,
@@ -104,12 +138,16 @@ def _fetch_combo_items(cursor, combo_ids: Sequence[int]) -> Dict[int, List[Dict[
     for row in rows:
         combo_id = row.get("combo_id")
         item_id = row.get("item_id")
-        if combo_id is None or item_id is None:
+        component_type_id = row.get("component_type_id")
+        if combo_id is None:
             continue
         combo_item_map.setdefault(combo_id, []).append(
             {
+                "kind": "item" if item_id is not None else "type",
                 "itemId": item_id,
-                "name": row.get("item_name"),
+                "componentTypeId": component_type_id,
+                "componentTypeName": row.get("component_type_name"),
+                "name": row.get("item_name") or row.get("component_type_name"),
                 "quantity": row.get("quantity", 1),
             }
         )

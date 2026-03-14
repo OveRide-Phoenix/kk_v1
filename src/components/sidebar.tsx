@@ -37,6 +37,7 @@ const primaryNavigationItems = [
     { name: "Customer Management", icon: Users, href: "/admin/customermgmt", id: "customermgmt" },
     { name: "Daily Menu Setup", icon: Calendar, href: "/admin/dailymenusetup", id: "dailymenusetup" },
     { name: "Kitchen Production", icon: Utensils, href: "/admin/production", id: "production" },
+    { name: "Packing Plan", icon: Package, href: "/admin/packing", id: "packing" },
     { name: "Trip Sheets", icon: Truck, href: "/admin/trip-sheet", id: "trip-sheet" },
     { name: "Order History", icon: ShoppingCart, href: "/admin/order-history", id: "orders" },
     { name: "Access Control", icon: ShieldCheck, href: "/admin/team-members", id: "team-members" },

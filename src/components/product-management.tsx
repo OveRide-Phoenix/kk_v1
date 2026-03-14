@@ -10,13 +10,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import ProductTable from "@/components/product-table"
 import ProductForm from "@/components/product-form"
 import DeleteConfirmationDialog from "@/components/delete-confirmation-dialog"
-import { type Product, type ComboProduct, type AddonProduct, type CategoryProduct } from "@/types/product"
+import { type Product, type ComboProduct, type AddonProduct, type CategoryProduct, type PlatedProduct, type ComponentTypeProduct } from "@/types/product"
 import { AdminLayout } from "./admin-layout"
 import ComboForm, { type ComboFormValues } from "@/components/combo-form"
 import CategoryForm, { type CategoryFormValues } from "@/components/category-form"
 import AddonForm from "@/components/addon-form"
 import { useToast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import PlatedItemForm, { type PlatedItemFormValues } from "@/components/plated-item-form"
+import ComponentTypeForm, { type ComponentTypeFormValues } from "@/components/component-type-form"
 
 const normalizeOptionalString = (value: unknown): string | null => {
   if (value === null || value === undefined) return null
@@ -60,12 +62,13 @@ const buildItemUpdatePayload = (product: Product): Record<string, unknown> => {
     description: normalizeOptionalString(product.description),
     alias: normalizeOptionalString(product.alias),
     category_id: normalizeInt((product as any).category_id),
-    uom: normalizeRequiredString(product.uom),
-    weight_factor: normalizeFloat(product.weight_factor),
-    weight_uom: normalizeOptionalString(product.weight_uom),
+    component_type_id: normalizeInt((product as any).component_type_id),
+    uom_customer: normalizeRequiredString((product as any).uom_customer ?? product.uom),
+    unit_packing: normalizeFloat((product as any).unit_packing),
+    uom_packing: normalizeOptionalString((product as any).uom_packing),
     hsn_code: normalizeOptionalString(product.hsn_code),
-    factor: normalizeFloat(product.factor),
-    quantity_portion: normalizeInt(product.quantity_portion),
+    uom_production: normalizeOptionalString((product as any).uom_production),
+    packing_to_production_rate: normalizeFloat((product as any).packing_to_production_rate),
     buffer_percentage: normalizeFloat(product.buffer_percentage),
     max_qty_breakfast: normalizeInt((product as any).max_qty_breakfast),
     max_qty_lunch: normalizeInt((product as any).max_qty_lunch),
@@ -105,20 +108,20 @@ const buildItemUpdatePayload = (product: Product): Record<string, unknown> => {
   )
 }
 
-type TabKey = "items" | "combos" | "addons" | "categories" | "condiments"
+type TabKey = "items" | "plated" | "combos" | "addons" | "categories" | "component-types" | "condiments"
 
 export default function ProductManagement() {
   const { toast } = useToast()
-  const [products, setProducts] = useState<(Product | ComboProduct | AddonProduct | CategoryProduct)[]>([])
-  const [filteredProducts, setFilteredProducts] = useState<(Product | ComboProduct | AddonProduct | CategoryProduct)[]>([])
+  const [products, setProducts] = useState<(Product | ComboProduct | AddonProduct | CategoryProduct | PlatedProduct | ComponentTypeProduct)[]>([])
+  const [filteredProducts, setFilteredProducts] = useState<(Product | ComboProduct | AddonProduct | CategoryProduct | PlatedProduct | ComponentTypeProduct)[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<
-    Product | ComboProduct | AddonProduct | CategoryProduct | null
+    Product | ComboProduct | AddonProduct | CategoryProduct | PlatedProduct | ComponentTypeProduct | null
   >(null)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [productToDelete, setProductToDelete] = useState<
-    Product | ComboProduct | AddonProduct | CategoryProduct | null
+    Product | ComboProduct | AddonProduct | CategoryProduct | PlatedProduct | ComponentTypeProduct | null
   >(null)
   const [mealFilter, setMealFilter] = useState<string>("all")
   const [filterGroup, setFilterGroup] = useState<string>("All Groups")
@@ -136,7 +139,7 @@ export default function ProductManagement() {
   }
 
   const resolveProductName = (
-    product: Product | ComboProduct | AddonProduct | CategoryProduct | null
+    product: Product | ComboProduct | AddonProduct | CategoryProduct | PlatedProduct | ComponentTypeProduct | null
   ): string => {
     if (!product) return ""
     const candidate: any = product
@@ -151,6 +154,9 @@ export default function ProductManagement() {
     }
     if (typeof candidate.category_name === "string" && candidate.category_name.trim().length > 0) {
       return candidate.category_name
+    }
+    if (typeof candidate.name === "string" && candidate.name.trim().length > 0) {
+      return candidate.name
     }
     if (candidate.combo_id) return `Combo #${candidate.combo_id}`
     if (candidate.item_id) return `Item #${candidate.item_id}`
@@ -177,11 +183,17 @@ export default function ProductManagement() {
       case "combos":
         url = "http://localhost:8000/api/products/combos"
         break
+      case "plated":
+        url = "http://localhost:8000/api/products/plated-items"
+        break
       case "addons":
         url = "http://localhost:8000/api/products/addons"
         break
       case "categories":
         url = "http://localhost:8000/api/products/categories"
+        break
+      case "component-types":
+        url = "http://localhost:8000/api/products/component-types"
         break
       case "condiments":
         url = "http://localhost:8000/api/products/items?only_condiments=1"
@@ -227,6 +239,10 @@ export default function ProductManagement() {
             name = (product as ComboProduct).combo_name
             id = (product as ComboProduct).combo_id
             break
+          case "plated":
+            name = (product as PlatedProduct).name
+            id = (product as PlatedProduct).item_id
+            break
           case "addons":
             name = (product as AddonProduct).add_on_item_name
             id = (product as AddonProduct).add_on_id
@@ -234,6 +250,10 @@ export default function ProductManagement() {
           case "categories":
             name = (product as CategoryProduct).category_name
             id = (product as CategoryProduct).category_id
+            break
+          case "component-types":
+            name = (product as ComponentTypeProduct).name
+            id = (product as ComponentTypeProduct).component_type_id
             break
         }
         
@@ -281,12 +301,12 @@ export default function ProductManagement() {
     }
   }
 
-  const handleEditProduct = (product: Product | ComboProduct | AddonProduct | CategoryProduct) => {
+  const handleEditProduct = (product: Product | ComboProduct | AddonProduct | CategoryProduct | PlatedProduct | ComponentTypeProduct) => {
     setSelectedProduct(product)
     setIsFormOpen(true)
   }
 
-  const handleDeleteProduct = (product: Product | ComboProduct | AddonProduct | CategoryProduct) => {
+  const handleDeleteProduct = (product: Product | ComboProduct | AddonProduct | CategoryProduct | PlatedProduct | ComponentTypeProduct) => {
     setProductToDelete(product)
     setIsDeleteDialogOpen(true)
   }
@@ -392,6 +412,102 @@ export default function ProductManagement() {
       return
     }
 
+    if (activeTab === "component-types" && (productToDelete as ComponentTypeProduct).component_type_id) {
+      const componentTypeId = (productToDelete as ComponentTypeProduct).component_type_id
+      const headers = buildAuthHeaders()
+      try {
+        const response = await fetch(`http://localhost:8000/api/products/component-types/${componentTypeId}`, {
+          method: "DELETE",
+          headers,
+          credentials: "include",
+        })
+        if (!response.ok) {
+          let detail = "Failed to delete generic component"
+          try {
+            const body = await response.json()
+            if (typeof body?.detail === "string" && body.detail.trim().length > 0) {
+              detail = body.detail
+            }
+          } catch {
+            const text = await response.text()
+            if (text.trim().length > 0) {
+              detail = text
+            }
+          }
+          toast({
+            title: "Delete failed",
+            description: detail,
+            variant: "destructive",
+          })
+          return
+        }
+
+        toast({
+          title: "Generic component deleted",
+          description: `Generic component #${componentTypeId} removed successfully.`,
+        })
+        await fetchProducts()
+      } catch (error) {
+        toast({
+          title: "Delete failed",
+          description: error instanceof Error ? error.message : "Unexpected error while deleting generic component.",
+          variant: "destructive",
+        })
+      } finally {
+        setIsDeleteDialogOpen(false)
+        setProductToDelete(null)
+      }
+      return
+    }
+
+    if (activeTab === "plated" && (productToDelete as PlatedProduct).item_id) {
+      const itemId = (productToDelete as PlatedProduct).item_id
+      const headers = buildAuthHeaders()
+      try {
+        const response = await fetch(`http://localhost:8000/api/products/plated-items/${itemId}`, {
+          method: "DELETE",
+          headers,
+          credentials: "include",
+        })
+        if (!response.ok) {
+          let detail = "Failed to delete plated item"
+          try {
+            const body = await response.json()
+            if (typeof body?.detail === "string" && body.detail.trim().length > 0) {
+              detail = body.detail
+            }
+          } catch {
+            const text = await response.text()
+            if (text.trim().length > 0) {
+              detail = text
+            }
+          }
+          toast({
+            title: "Delete failed",
+            description: detail,
+            variant: "destructive",
+          })
+          return
+        }
+
+        toast({
+          title: "Plated item deleted",
+          description: `Plated item #${itemId} removed successfully.`,
+        })
+        await fetchProducts()
+      } catch (error) {
+        toast({
+          title: "Delete failed",
+          description: error instanceof Error ? error.message : "Unexpected error while deleting plated item.",
+          variant: "destructive",
+        })
+      } finally {
+        setIsDeleteDialogOpen(false)
+        setProductToDelete(null)
+      }
+      return
+    }
+
     const deletionId = (productToDelete as any)?.id
     const updatedProducts = Number.isFinite(deletionId)
       ? (products as any[]).filter((p) => (p as any)?.id !== deletionId)
@@ -413,6 +529,7 @@ export default function ProductManagement() {
       combo_name: payload.combo_name,
       category_id: payload.category_id,
       price: payload.price,
+      bld_ids: payload.bld_ids,
       items: payload.items,
     }
 
@@ -458,6 +575,60 @@ export default function ProductManagement() {
       toast({
         title: "Combo save failed",
         description: error instanceof Error ? error.message : "Unexpected error while saving combo.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const savePlatedItem = async (payload: PlatedItemFormValues) => {
+    const isUpdating = Boolean(payload.item_id)
+    const endpoint = isUpdating
+      ? `http://localhost:8000/api/products/plated-items/${payload.item_id}`
+      : "http://localhost:8000/api/products/plated-items"
+    const headers = buildAuthHeaders()
+
+    try {
+      const response = await fetch(endpoint, {
+        method: isUpdating ? "PUT" : "POST",
+        headers,
+        body: JSON.stringify(payload),
+        credentials: "include",
+      })
+
+      if (!response.ok) {
+        let detail = isUpdating ? "Failed to update plated item" : "Failed to create plated item"
+        try {
+          const data = await response.json()
+          if (typeof data?.detail === "string" && data.detail.trim().length > 0) {
+            detail = data.detail
+          }
+        } catch {
+          const text = await response.text()
+          if (text.trim().length > 0) {
+            detail = text
+          }
+        }
+
+        toast({
+          title: "Plated item save failed",
+          description: detail,
+          variant: "destructive",
+        })
+        return
+      }
+
+      toast({
+        title: isUpdating ? "Plated item updated" : "Plated item created",
+        description: `${payload.name} saved successfully.`,
+      })
+
+      await fetchProducts()
+      setIsFormOpen(false)
+      setSelectedProduct(null)
+    } catch (error) {
+      toast({
+        title: "Plated item save failed",
+        description: error instanceof Error ? error.message : "Unexpected error while saving plated item.",
         variant: "destructive",
       })
     }
@@ -517,13 +688,75 @@ export default function ProductManagement() {
     }
   }
 
+  const saveComponentType = async (payload: ComponentTypeFormValues) => {
+    const isUpdating = Boolean(payload.component_type_id)
+    const endpoint = isUpdating
+      ? `http://localhost:8000/api/products/component-types/${payload.component_type_id}`
+      : "http://localhost:8000/api/products/component-types"
+    const headers = buildAuthHeaders()
+
+    try {
+      const response = await fetch(endpoint, {
+        method: isUpdating ? "PUT" : "POST",
+        headers,
+        body: JSON.stringify({ name: payload.name, description: payload.description }),
+        credentials: "include",
+      })
+
+      if (!response.ok) {
+        let detail = isUpdating ? "Failed to update generic component" : "Failed to create generic component"
+        try {
+          const data = await response.json()
+          if (typeof data?.detail === "string" && data.detail.trim().length > 0) {
+            detail = data.detail
+          }
+        } catch {
+          const text = await response.text()
+          if (text.trim().length > 0) {
+            detail = text
+          }
+        }
+
+        toast({
+          title: "Generic component save failed",
+          description: detail,
+          variant: "destructive",
+        })
+        return
+      }
+
+      toast({
+        title: isUpdating ? "Generic component updated" : "Generic component created",
+        description: `${payload.name} saved successfully.`,
+      })
+
+      await fetchProducts()
+      setIsFormOpen(false)
+      setSelectedProduct(null)
+    } catch (error) {
+      toast({
+        title: "Generic component save failed",
+        description: error instanceof Error ? error.message : "Unexpected error while saving generic component.",
+        variant: "destructive",
+      })
+    }
+  }
+
   const handleSaveProduct = async (product: any) => {
     if (activeTab === "combos") {
       await saveCombo(product as ComboFormValues)
       return
     }
+    if (activeTab === "plated") {
+      await savePlatedItem(product as PlatedItemFormValues)
+      return
+    }
     if (activeTab === "categories") {
       await saveCategory(product as CategoryFormValues)
+      return
+    }
+    if (activeTab === "component-types") {
+      await saveComponentType(product as ComponentTypeFormValues)
       return
     }
 
@@ -600,9 +833,11 @@ export default function ProductManagement() {
 
   const singularFormMap: Record<TabKey, string> = {
     items: "Item",
+    plated: "Plated Item",
     combos: "Combo",
     addons: "Add-on",
     categories: "Category",
+    "component-types": "Generic Component",
     condiments: "Condiment",
   }
 
@@ -616,6 +851,16 @@ export default function ProductManagement() {
   const selectedCombo =
     activeTab === "combos" && selectedProduct && (selectedProduct as ComboProduct).combo_id
       ? (selectedProduct as ComboProduct)
+      : null
+
+  const selectedPlatedItem =
+    activeTab === "plated" && selectedProduct && (selectedProduct as PlatedProduct).plated_item_id
+      ? (selectedProduct as PlatedProduct)
+      : null
+
+  const selectedComponentType =
+    activeTab === "component-types" && selectedProduct && (selectedProduct as ComponentTypeProduct).component_type_id
+      ? (selectedProduct as ComponentTypeProduct)
       : null
 
   return (
@@ -633,11 +878,13 @@ export default function ProductManagement() {
           </CardHeader>
           <CardContent>
             <Tabs value={activeTab} className="mb-6" onValueChange={(value) => setActiveTab(value as TabKey)}>
-              <TabsList className="grid w-full grid-cols-5">
+              <TabsList className="grid w-full grid-cols-7">
                 <TabsTrigger value="items">Items</TabsTrigger>
+                <TabsTrigger value="plated">Plated</TabsTrigger>
                 <TabsTrigger value="combos">Combos</TabsTrigger>
                 <TabsTrigger value="addons">Add-ons</TabsTrigger>
                 <TabsTrigger value="categories">Categories</TabsTrigger>
+                <TabsTrigger value="component-types">Generic</TabsTrigger>
                 <TabsTrigger value="condiments">Condiments</TabsTrigger>
               </TabsList>
             </Tabs>
@@ -692,7 +939,7 @@ export default function ProductManagement() {
             <div className="rounded-md border overflow-hidden">
               <div className="overflow-x-auto w-full">
                 <ProductTable
-                  products={filteredProducts as (Product | ComboProduct | AddonProduct | CategoryProduct)[]}
+                  products={filteredProducts as (Product | ComboProduct | AddonProduct | CategoryProduct | PlatedProduct | ComponentTypeProduct)[]}
                   onEdit={handleEditProduct}
                   onDelete={handleDeleteProduct}
                   tableType={activeTab}
@@ -712,6 +959,20 @@ export default function ProductManagement() {
                 key={selectedCombo ? `combo-${selectedCombo.combo_id}` : "combo-new"}
                 combo={selectedCombo}
                 onSave={handleSaveProduct}
+              onCancel={() => setIsFormOpen(false)}
+            />
+          </DialogContent>
+          </Dialog>
+        ) : isFormOpen && activeTab === "plated" ? (
+          <Dialog open onOpenChange={(open) => { if (!open) setIsFormOpen(false) }}>
+            <DialogContent className="sm:max-w-[1000px] max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>{selectedProduct ? "Edit Plated Item" : "Create Plated Item"}</DialogTitle>
+              </DialogHeader>
+              <PlatedItemForm
+                key={selectedPlatedItem ? `plated-${selectedPlatedItem.item_id}` : "plated-new"}
+                platedItem={selectedPlatedItem}
+                onSave={handleSaveProduct}
                 onCancel={() => setIsFormOpen(false)}
               />
             </DialogContent>
@@ -725,6 +986,12 @@ export default function ProductManagement() {
         ) : isFormOpen && activeTab === "categories" ? (
           <CategoryForm
             category={selectedProduct as CategoryProduct | null}
+            onSave={handleSaveProduct}
+            onCancel={() => setIsFormOpen(false)}
+          />
+        ) : isFormOpen && activeTab === "component-types" ? (
+          <ComponentTypeForm
+            componentType={selectedComponentType}
             onSave={handleSaveProduct}
             onCancel={() => setIsFormOpen(false)}
           />

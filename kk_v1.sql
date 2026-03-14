@@ -219,6 +219,45 @@ INSERT INTO `combos` VALUES (1,'Breakfast Combo',120.00,1),(2,'Lunch Combo 1',18
 UNLOCK TABLES;
 
 --
+-- Table structure for table `plated_items`
+--
+
+DROP TABLE IF EXISTS `plated_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `plated_items` (
+  `plated_item_id` int NOT NULL AUTO_INCREMENT,
+  `item_id` int NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`plated_item_id`),
+  UNIQUE KEY `uk_plated_items_item_id` (`item_id`),
+  CONSTRAINT `fk_plated_items_item` FOREIGN KEY (`item_id`) REFERENCES `items` (`item_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `plated_item_components`
+--
+
+DROP TABLE IF EXISTS `plated_item_components`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `plated_item_components` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `plated_item_id` int NOT NULL,
+  `component_item_id` int NOT NULL,
+  `quantity` decimal(10,3) NOT NULL DEFAULT '1.000',
+  `sort_order` int DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_plated_item_components_plated_item_id` (`plated_item_id`),
+  KEY `idx_plated_item_components_component_item_id` (`component_item_id`),
+  CONSTRAINT `fk_plated_item_components_component` FOREIGN KEY (`component_item_id`) REFERENCES `items` (`item_id`),
+  CONSTRAINT `fk_plated_item_components_parent` FOREIGN KEY (`plated_item_id`) REFERENCES `plated_items` (`plated_item_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Temporary view structure for view `customer_orders_view`
 --
 
@@ -346,13 +385,13 @@ CREATE TABLE `items` (
   `description` text,
   `alias` varchar(100) DEFAULT NULL,
   `category_id` int DEFAULT NULL,
-  `uom` varchar(50) NOT NULL,
-  `weight_factor` decimal(5,3) DEFAULT NULL,
-  `weight_uom` varchar(50) DEFAULT NULL,
+  `uom_customer` varchar(50) NOT NULL,
+  `unit_packing` decimal(10,3) DEFAULT NULL,
+  `uom_packing` varchar(50) DEFAULT NULL,
   `item_type` varchar(50) DEFAULT NULL,
   `hsn_code` varchar(50) DEFAULT NULL,
-  `factor` decimal(5,3) DEFAULT '1.000',
-  `quantity_portion` int DEFAULT NULL,
+  `uom_production` varchar(50) DEFAULT NULL,
+  `packing_to_production_rate` decimal(10,6) DEFAULT '1.000000',
   `buffer_percentage` decimal(5,2) DEFAULT NULL,
   `picture_url` varchar(255) DEFAULT NULL,
   `breakfast_price` decimal(10,2) DEFAULT NULL,

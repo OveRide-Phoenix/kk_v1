@@ -33,7 +33,8 @@ type MealType = "breakfast" | "lunch" | "dinner" | "condiments";
 
 type CartLine = {
   menu_item_id: number;
-  item_id: number;
+  item_id?: number | null;
+  combo_id?: number | null;
   meal: MealType;
   item_name: string;
   price: number;
@@ -242,6 +243,7 @@ export default function MobileCartPage() {
         body: JSON.stringify({
           items: cartItems.map((item) => ({
             item_id: item.item_id,
+            combo_id: item.combo_id,
             quantity: item.quantity,
             price: item.price,
           })),
@@ -336,6 +338,7 @@ export default function MobileCartPage() {
       coupon_codes: appliedCoupons.length ? appliedCoupons : undefined,
       items: cartItems.map((item) => ({
         item_id: item.item_id,
+        combo_id: item.combo_id,
         quantity: item.quantity,
         price: item.price,
         menu_item_id: item.menu_item_id,

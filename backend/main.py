@@ -41,6 +41,12 @@ from .utils.combos import (
     fetch_combos_with_items,
     normalize_combo_items,
 )
+from .utils.plated_items import (
+    expand_plated_quantities,
+    fetch_plated_item_detail,
+    fetch_plated_items_with_components,
+    normalize_plated_components,
+)
 from .city_config import (
     DEFAULT_CITY,
     CityCode,
@@ -277,6 +283,79 @@ def attach_bld_ids(cursor, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return items
 
 
+def get_combo_blds(cursor, combo_id: int) -> List[int]:
+    cursor.execute(
+        "SELECT bld_id FROM combo_bld_map WHERE combo_id = %s ORDER BY bld_id",
+        (combo_id,),
+    )
+    rows = cursor.fetchall() or []
+    return [
+        value
+        for value in (_row_value(row, "bld_id", 0) for row in rows)
+        if value is not None
+    ]
+
+
+def set_combo_blds(cursor, combo_id: int, bld_ids: List[int]) -> None:
+    cursor.execute("DELETE FROM combo_bld_map WHERE combo_id = %s", (combo_id,))
+    if not bld_ids:
+        return
+    values = [(combo_id, bld_id) for bld_id in bld_ids]
+    cursor.executemany(
+        "INSERT INTO combo_bld_map (combo_id, bld_id) VALUES (%s, %s)",
+        values,
+    )
+
+
+def attach_combo_bld_ids(
+    cursor, combos: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    if not combos:
+        return combos
+
+    combo_ids = sorted(
+        {
+            int(combo_id)
+            for combo_id in (combo.get("combo_id") for combo in combos)
+            if combo_id is not None
+        }
+    )
+    if not combo_ids:
+        for combo in combos:
+            combo["bld_ids"] = []
+        return combos
+
+    placeholders = ", ".join(["%s"] * len(combo_ids))
+    cursor.execute(
+        f"""
+        SELECT combo_id, bld_id
+          FROM combo_bld_map
+         WHERE combo_id IN ({placeholders})
+         ORDER BY combo_id, bld_id
+        """,
+        tuple(combo_ids),
+    )
+    rows = cursor.fetchall() or []
+    mapping: Dict[int, List[int]] = {}
+    for row in rows:
+        combo_id = _row_value(row, "combo_id", 0)
+        bld_id = _row_value(row, "bld_id", 1)
+        if combo_id is None or bld_id is None:
+            continue
+        mapping.setdefault(combo_id, []).append(bld_id)
+
+    for combo in combos:
+        raw_key = combo.get("combo_id")
+        try:
+            normalized_key = int(raw_key)
+        except (TypeError, ValueError):
+            normalized_key = None
+        combo["bld_ids"] = (
+            mapping.get(normalized_key, []) if normalized_key is not None else []
+        )
+    return combos
+
+
 def _is_condiment_from_blds(
     bld_ids: Iterable[Any], condiments_bld_id: Optional[int]
 ) -> bool:
@@ -320,6 +399,47 @@ def _resolve_category_id_by_name(cursor, category_name: str) -> Optional[int]:
     return _row_value(row, "category_id", 0) if row else None
 
 
+def ensure_component_type_ids_exist(cursor, component_type_ids: Iterable[Any]) -> None:
+    normalized = sorted(set(_normalize_int_list(component_type_ids)))
+    if not normalized:
+        return
+    placeholders = ", ".join(["%s"] * len(normalized))
+    cursor.execute(
+        f"""
+        SELECT component_type_id
+          FROM component_types
+         WHERE component_type_id IN ({placeholders})
+        """,
+        tuple(normalized),
+    )
+    rows = cursor.fetchall() or []
+    existing = {
+        value
+        for value in (_row_value(row, "component_type_id", 0) for row in rows)
+        if value is not None
+    }
+    missing = [component_type_id for component_type_id in normalized if component_type_id not in existing]
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown component_type_id values: {missing}",
+        )
+
+
+def _ensure_component_type_required_for_item(
+    *,
+    is_condiment_item: bool,
+    component_type_id: Optional[int],
+) -> None:
+    if is_condiment_item:
+        return
+    if component_type_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail="component_type_id is required for non-condiment items",
+        )
+
+
 def _build_item_detail_columns(available_columns: Set[str]) -> List[str]:
     def col(field: str, alias: Optional[str] = None, default: str = "NULL") -> str:
         target = alias or field
@@ -332,12 +452,15 @@ def _build_item_detail_columns(available_columns: Set[str]) -> List[str]:
         col("alias"),
         col("category_id"),
         "c.category_name",
-        col("uom"),
-        col("weight_factor"),
-        col("weight_uom"),
+        col("component_type_id"),
+        "ct.name AS component_type_name",
+        col("uom_customer"),
+        col("uom_customer", alias="uom"),
+        col("unit_packing"),
+        col("uom_packing"),
         col("hsn_code"),
-        col("factor"),
-        col("quantity_portion"),
+        col("uom_production"),
+        col("packing_to_production_rate"),
         col("buffer_percentage"),
     ]
 
@@ -412,6 +535,7 @@ def _fetch_item_detail(
             {select_sql}
         FROM items i
         LEFT JOIN categories c ON i.category_id = c.category_id
+        LEFT JOIN component_types ct ON i.component_type_id = ct.component_type_id
         WHERE i.item_id = %s
         """,
         (item_id,),
@@ -433,6 +557,29 @@ def filter_items_by_bld(
         if target in normalized_ids:
             filtered.append(item)
     return filtered
+
+
+def attach_plated_flags(cursor, items: List[Dict[str, Any]]) -> None:
+    item_ids = [
+        int(item.get("item_id"))
+        for item in items
+        if item.get("item_id") is not None
+    ]
+    if not item_ids:
+        return
+    placeholders = ", ".join(["%s"] * len(item_ids))
+    cursor.execute(
+        f"SELECT item_id FROM plated_items WHERE item_id IN ({placeholders})",
+        tuple(item_ids),
+    )
+    plated_ids = {
+        int(row["item_id"])
+        for row in (cursor.fetchall() or [])
+        if row.get("item_id") is not None
+    }
+    for item in items:
+        item_id = item.get("item_id")
+        item["is_plated"] = bool(item_id in plated_ids if item_id is not None else False)
 
 
 from .config import (
@@ -1829,12 +1976,13 @@ class ItemUpdatePayload(BaseModel):
     description: Optional[str] = None
     alias: Optional[str] = None
     category_id: Optional[int] = None
-    uom: Optional[str] = None
-    weight_factor: Optional[float] = None
-    weight_uom: Optional[str] = None
+    component_type_id: Optional[int] = None
+    uom_customer: Optional[str] = None
+    unit_packing: Optional[float] = None
+    uom_packing: Optional[str] = None
     hsn_code: Optional[str] = None
-    factor: Optional[float] = None
-    quantity_portion: Optional[int] = None
+    uom_production: Optional[str] = None
+    packing_to_production_rate: Optional[float] = None
     buffer_percentage: Optional[float] = None
     max_qty_breakfast: Optional[int] = None
     max_qty_lunch: Optional[int] = None
@@ -1856,16 +2004,17 @@ class ItemUpdatePayload(BaseModel):
 
 class ItemCreatePayload(BaseModel):
     name: str
-    uom: str
+    uom_customer: str
     bld_ids: List[int]
     description: Optional[str] = None
     alias: Optional[str] = None
     category_id: Optional[int] = None
-    weight_factor: Optional[float] = None
-    weight_uom: Optional[str] = None
+    component_type_id: Optional[int] = None
+    unit_packing: Optional[float] = None
+    uom_packing: Optional[str] = None
     hsn_code: Optional[str] = None
-    factor: Optional[float] = None
-    quantity_portion: Optional[int] = None
+    uom_production: Optional[str] = None
+    packing_to_production_rate: Optional[float] = None
     buffer_percentage: Optional[float] = None
     max_qty_breakfast: Optional[int] = None
     max_qty_lunch: Optional[int] = None
@@ -1885,7 +2034,8 @@ class ItemCreatePayload(BaseModel):
 
 
 class ComboItemPayload(BaseModel):
-    item_id: int
+    item_id: Optional[int] = None
+    component_type_id: Optional[int] = None
     quantity: int = Field(1, ge=1)
 
 
@@ -1893,6 +2043,7 @@ class ComboCreatePayload(BaseModel):
     combo_name: str
     price: float = Field(ge=0)
     category_id: int
+    bld_ids: List[int] = Field(default_factory=list)
     items: List[ComboItemPayload] = Field(default_factory=list)
 
 
@@ -1900,7 +2051,83 @@ class ComboUpdatePayload(BaseModel):
     combo_name: Optional[str] = None
     price: Optional[float] = Field(default=None, ge=0)
     category_id: Optional[int] = None
+    bld_ids: Optional[List[int]] = None
     items: Optional[List[ComboItemPayload]] = None
+
+
+class PlatedItemComponentPayload(BaseModel):
+    item_id: Optional[int] = None
+    component_type_id: Optional[int] = None
+    quantity: float = Field(1, gt=0)
+
+
+class PlatedItemCreatePayload(BaseModel):
+    name: str
+    uom_customer: str
+    bld_ids: List[int]
+    components: List[PlatedItemComponentPayload] = Field(default_factory=list)
+    description: Optional[str] = None
+    alias: Optional[str] = None
+    category_id: Optional[int] = None
+    unit_packing: Optional[float] = None
+    uom_packing: Optional[str] = None
+    hsn_code: Optional[str] = None
+    uom_production: Optional[str] = None
+    packing_to_production_rate: Optional[float] = None
+    buffer_percentage: Optional[float] = None
+    max_qty_breakfast: Optional[int] = None
+    max_qty_lunch: Optional[int] = None
+    max_qty_dinner: Optional[int] = None
+    max_qty_condiments: Optional[int] = None
+    picture_url: Optional[str] = None
+    breakfast_price: Optional[float] = None
+    lunch_price: Optional[float] = None
+    dinner_price: Optional[float] = None
+    condiments_price: Optional[float] = None
+    festival_price: Optional[float] = None
+    cgst: Optional[float] = None
+    sgst: Optional[float] = None
+    igst: Optional[float] = None
+    net_price: Optional[float] = None
+
+
+class PlatedItemUpdatePayload(BaseModel):
+    name: Optional[str] = None
+    uom_customer: Optional[str] = None
+    bld_ids: Optional[List[int]] = None
+    components: Optional[List[PlatedItemComponentPayload]] = None
+    description: Optional[str] = None
+    alias: Optional[str] = None
+    category_id: Optional[int] = None
+    unit_packing: Optional[float] = None
+    uom_packing: Optional[str] = None
+    hsn_code: Optional[str] = None
+    uom_production: Optional[str] = None
+    packing_to_production_rate: Optional[float] = None
+    buffer_percentage: Optional[float] = None
+    max_qty_breakfast: Optional[int] = None
+    max_qty_lunch: Optional[int] = None
+    max_qty_dinner: Optional[int] = None
+    max_qty_condiments: Optional[int] = None
+    picture_url: Optional[str] = None
+    breakfast_price: Optional[float] = None
+    lunch_price: Optional[float] = None
+    dinner_price: Optional[float] = None
+    condiments_price: Optional[float] = None
+    festival_price: Optional[float] = None
+    cgst: Optional[float] = None
+    sgst: Optional[float] = None
+    igst: Optional[float] = None
+    net_price: Optional[float] = None
+
+
+class PlatedExpansionLineItemPayload(BaseModel):
+    item_id: int
+    quantity: float = Field(1, gt=0)
+
+
+class PlatedExpansionPreviewPayload(BaseModel):
+    items: List[PlatedExpansionLineItemPayload] = Field(default_factory=list)
 
 
 class CategoryCreatePayload(BaseModel):
@@ -1911,12 +2138,132 @@ class CategoryUpdatePayload(BaseModel):
     category_name: str = Field(..., min_length=1, max_length=100)
 
 
+class ComponentTypeCreatePayload(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    description: Optional[str] = None
+
+
+class ComponentTypeUpdatePayload(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+def _normalize_item_payload_data(
+    data: Dict[str, Any],
+) -> Dict[str, Any]:
+    string_fields = {
+        "name",
+        "description",
+        "alias",
+        "uom_customer",
+        "uom_packing",
+        "hsn_code",
+        "uom_production",
+        "picture_url",
+    }
+    nullable_string_fields = {
+        "description",
+        "alias",
+        "uom_packing",
+        "hsn_code",
+        "uom_production",
+        "picture_url",
+    }
+    int_fields = {
+        "category_id",
+        "component_type_id",
+        "max_qty_breakfast",
+        "max_qty_lunch",
+        "max_qty_dinner",
+        "max_qty_condiments",
+    }
+    float_fields = {
+        "unit_packing",
+        "packing_to_production_rate",
+        "buffer_percentage",
+        "breakfast_price",
+        "lunch_price",
+        "dinner_price",
+        "condiments_price",
+        "festival_price",
+        "cgst",
+        "sgst",
+        "igst",
+        "net_price",
+    }
+    bool_fields = {"is_combo"}
+
+    cleaned: Dict[str, Any] = {}
+    for field, value in data.items():
+        if field in string_fields and isinstance(value, str):
+            value = value.strip()
+            if not value and field in nullable_string_fields:
+                value = None
+        if field in int_fields and value is not None:
+            try:
+                value = int(value)
+            except (TypeError, ValueError):
+                value = None
+        if field in float_fields and value is not None:
+            try:
+                value = float(value)
+            except (TypeError, ValueError):
+                value = None
+        if field in bool_fields and value is not None:
+            value = 1 if value else 0
+        cleaned[field] = value
+    return cleaned
+
+
+def _item_column_field_map(available_columns: Set[str]) -> Dict[str, str]:
+    field_map = {
+        "name": "name",
+        "description": "description",
+        "alias": "alias",
+        "category_id": "category_id",
+        "component_type_id": "component_type_id",
+        "uom_customer": "uom_customer",
+        "unit_packing": "unit_packing",
+        "uom_packing": "uom_packing",
+        "hsn_code": "hsn_code",
+        "uom_production": "uom_production",
+        "packing_to_production_rate": "packing_to_production_rate",
+        "buffer_percentage": "buffer_percentage",
+        "max_qty_breakfast": "max_qty_breakfast",
+        "max_qty_lunch": "max_qty_lunch",
+        "max_qty_dinner": "max_qty_dinner",
+        "max_qty_condiments": "max_qty_condiments",
+        "picture_url": "picture_url",
+        "breakfast_price": "breakfast_price",
+        "lunch_price": "lunch_price",
+        "dinner_price": "dinner_price",
+        "condiments_price": "condiments_price",
+        "festival_price": "festival_price",
+        "cgst": "cgst",
+        "sgst": "sgst",
+        "igst": "igst",
+        "net_price": "net_price",
+        "is_combo": "is_combo",
+    }
+    return {
+        field: column
+        for field, column in field_map.items()
+        if column in available_columns
+    }
+
+
 @app.get("/api/products/items", tags=["Products"])
 def get_all_items(
     only_condiments: Optional[bool] = Query(
         None,
         description="When true, returns only condiment items",
         alias="only_condiments",
+    ),
+    include_plated: Optional[bool] = Query(
+        False,
+        description="When true, includes plated items in the items response",
+        alias="include_plated",
     ),
 ):
     db = get_db()
@@ -1983,12 +2330,15 @@ def get_all_items(
             "i.alias",
             "i.category_id",
             "c.category_name",
-            "i.uom",
-            "i.weight_factor",
-            "i.weight_uom",
+            "i.component_type_id",
+            "ct.name AS component_type_name",
+            "i.uom_customer",
+            "i.uom_customer AS uom",
+            "i.unit_packing",
+            "i.uom_packing",
             "i.hsn_code",
-            "i.factor",
-            "i.quantity_portion",
+            "i.uom_production",
+            "i.packing_to_production_rate",
             "i.buffer_percentage",
             *max_columns_sql,
             "i.picture_url",
@@ -2010,11 +2360,13 @@ def get_all_items(
                     {select_sql}
                 FROM items i
                 LEFT JOIN categories c ON i.category_id = c.category_id
+                LEFT JOIN component_types ct ON i.component_type_id = ct.component_type_id
             """
         )
         records = cursor.fetchall()
 
         attach_bld_ids(cursor, records)
+        attach_plated_flags(cursor, records)
         normalized_records = []
         try:
             condiments_bld_id = resolve_bld_id(cursor, CONDIMENTS_BLD_TYPE)
@@ -2024,6 +2376,8 @@ def get_all_items(
             row["is_condiment"] = _is_condiment_from_blds(
                 row.get("bld_ids"), condiments_bld_id
             )
+            if row.get("is_plated") and not include_plated:
+                continue
             if only_condiments and not row["is_condiment"]:
                 continue
             normalized_records.append(row)
@@ -2053,29 +2407,31 @@ def create_item(
             "name",
             "description",
             "alias",
-            "uom",
-            "weight_uom",
+            "uom_customer",
+            "uom_packing",
             "hsn_code",
+            "uom_production",
             "picture_url",
         }
         nullable_string_fields = {
             "description",
             "alias",
-            "weight_uom",
+            "uom_packing",
             "hsn_code",
+            "uom_production",
             "picture_url",
         }
         int_fields = {
             "category_id",
-            "quantity_portion",
+            "component_type_id",
             "max_qty_breakfast",
             "max_qty_lunch",
             "max_qty_dinner",
             "max_qty_condiments",
         }
         float_fields = {
-            "weight_factor",
-            "factor",
+            "unit_packing",
+            "packing_to_production_rate",
             "buffer_percentage",
             "breakfast_price",
             "lunch_price",
@@ -2111,8 +2467,8 @@ def create_item(
 
         if not cleaned.get("name"):
             raise HTTPException(status_code=400, detail="name is required")
-        if not cleaned.get("uom"):
-            raise HTTPException(status_code=400, detail="uom is required")
+        if not cleaned.get("uom_customer"):
+            raise HTTPException(status_code=400, detail="uom_customer is required")
 
         try:
             condiments_bld_id = resolve_bld_id(cursor, CONDIMENTS_BLD_TYPE)
@@ -2130,6 +2486,14 @@ def create_item(
             if snacks_category_id is not None:
                 cleaned["category_id"] = snacks_category_id
 
+        _ensure_component_type_required_for_item(
+            is_condiment_item=is_condiment_item,
+            component_type_id=cleaned.get("component_type_id"),
+        )
+
+        if cleaned.get("component_type_id") is not None:
+            ensure_component_type_ids_exist(cursor, [cleaned.get("component_type_id")])
+
         if not normalized_bld_ids:
             raise HTTPException(
                 status_code=400, detail="At least one meal assignment is required"
@@ -2140,12 +2504,13 @@ def create_item(
             "description": "description",
             "alias": "alias",
             "category_id": "category_id",
-            "uom": "uom",
-            "weight_factor": "weight_factor",
-            "weight_uom": "weight_uom",
+            "component_type_id": "component_type_id",
+            "uom_customer": "uom_customer",
+            "unit_packing": "unit_packing",
+            "uom_packing": "uom_packing",
             "hsn_code": "hsn_code",
-            "factor": "factor",
-            "quantity_portion": "quantity_portion",
+            "uom_production": "uom_production",
+            "packing_to_production_rate": "packing_to_production_rate",
             "buffer_percentage": "buffer_percentage",
             "max_qty_breakfast": "max_qty_breakfast",
             "max_qty_lunch": "max_qty_lunch",
@@ -2230,6 +2595,11 @@ def update_item(
         cursor.execute("SHOW COLUMNS FROM items")
         available_columns = {row["Field"] for row in cursor.fetchall()}
 
+        cursor.execute("SELECT item_id, component_type_id FROM items WHERE item_id = %s", (item_id,))
+        existing_item = cursor.fetchone()
+        if not existing_item:
+            raise HTTPException(status_code=404, detail="Item not found")
+
         data = payload.model_dump(exclude_unset=True)
         raw_bld_ids = data.pop("bld_ids", [])
         normalized_bld_ids = _validate_bld_ids(cursor, raw_bld_ids)
@@ -2238,29 +2608,31 @@ def update_item(
             "name",
             "description",
             "alias",
-            "uom",
-            "weight_uom",
+            "uom_customer",
+            "uom_packing",
             "hsn_code",
+            "uom_production",
             "picture_url",
         }
         nullable_string_fields = {
             "description",
             "alias",
-            "weight_uom",
+            "uom_packing",
             "hsn_code",
+            "uom_production",
             "picture_url",
         }
         int_fields = {
             "category_id",
-            "quantity_portion",
+            "component_type_id",
             "max_qty_breakfast",
             "max_qty_lunch",
             "max_qty_dinner",
             "max_qty_condiments",
         }
         float_fields = {
-            "weight_factor",
-            "factor",
+            "unit_packing",
+            "packing_to_production_rate",
             "buffer_percentage",
             "breakfast_price",
             "lunch_price",
@@ -2295,24 +2667,39 @@ def update_item(
             cleaned[field] = value
 
         is_condiment_item = _is_condiment_from_blds(
-            normalized_bld_ids, condiments_bld_id
+            normalized_bld_ids if "bld_ids" in payload.model_fields_set else get_item_blds(cursor, item_id),
+            condiments_bld_id
         )
         if is_condiment_item and not cleaned.get("category_id"):
             snacks_category_id = _resolve_category_id_by_name(cursor, "Snacks")
             if snacks_category_id is not None:
                 cleaned["category_id"] = snacks_category_id
 
+        effective_component_type_id = (
+            cleaned.get("component_type_id")
+            if "component_type_id" in cleaned
+            else existing_item.get("component_type_id")
+        )
+        _ensure_component_type_required_for_item(
+            is_condiment_item=is_condiment_item,
+            component_type_id=effective_component_type_id,
+        )
+
+        if cleaned.get("component_type_id") is not None:
+            ensure_component_type_ids_exist(cursor, [cleaned.get("component_type_id")])
+
         field_map = {
             "name": "name",
             "description": "description",
             "alias": "alias",
             "category_id": "category_id",
-            "uom": "uom",
-            "weight_factor": "weight_factor",
-            "weight_uom": "weight_uom",
+            "component_type_id": "component_type_id",
+            "uom_customer": "uom_customer",
+            "unit_packing": "unit_packing",
+            "uom_packing": "uom_packing",
             "hsn_code": "hsn_code",
-            "factor": "factor",
-            "quantity_portion": "quantity_portion",
+            "uom_production": "uom_production",
+            "packing_to_production_rate": "packing_to_production_rate",
             "buffer_percentage": "buffer_percentage",
             "max_qty_breakfast": "max_qty_breakfast",
             "max_qty_lunch": "max_qty_lunch",
@@ -2416,7 +2803,9 @@ def get_all_combos():
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
-        return fetch_combos_with_items(cursor)
+        combos = fetch_combos_with_items(cursor)
+        attach_combo_bld_ids(cursor, combos)
+        return combos
     except mysql.connector.Error as err:
         raise HTTPException(status_code=500, detail=str(err))
     finally:
@@ -2434,9 +2823,28 @@ def create_combo(
         normalized_name = payload.combo_name.strip()
         if not normalized_name:
             raise HTTPException(status_code=400, detail="combo_name is required")
+        normalized_bld_ids = _validate_bld_ids(cursor, payload.bld_ids)
+        if not normalized_bld_ids:
+            raise HTTPException(status_code=400, detail="At least one meal assignment is required")
+        try:
+            condiments_bld_id = resolve_bld_id(cursor, CONDIMENTS_BLD_TYPE)
+        except HTTPException:
+            condiments_bld_id = None
+        _ensure_valid_meal_combination(normalized_bld_ids, condiments_bld_id)
         ensure_category_exists(cursor, payload.category_id)
         normalized_items = normalize_combo_items(payload.items)
-        ensure_item_ids_exist(cursor, (item["item_id"] for item in normalized_items))
+        ensure_item_ids_exist(
+            cursor,
+            (item["item_id"] for item in normalized_items if item.get("item_id") is not None),
+        )
+        ensure_component_type_ids_exist(
+            cursor,
+            (
+                item["component_type_id"]
+                for item in normalized_items
+                if item.get("component_type_id") is not None
+            ),
+        )
 
         cursor.execute(
             "INSERT INTO combos (combo_name, price, category_id) VALUES (%s, %s, %s)",
@@ -2446,13 +2854,15 @@ def create_combo(
 
         if normalized_items:
             values = [
-                (combo_id, entry["item_id"], entry["quantity"])
+                (combo_id, entry.get("item_id"), entry.get("component_type_id"), entry["quantity"])
                 for entry in normalized_items
             ]
             cursor.executemany(
-                "INSERT INTO combo_items (combo_id, item_id, quantity) VALUES (%s, %s, %s)",
+                "INSERT INTO combo_items (combo_id, item_id, component_type_id, quantity) VALUES (%s, %s, %s, %s)",
                 values,
             )
+
+        set_combo_blds(cursor, combo_id, normalized_bld_ids)
 
         db.commit()
 
@@ -2466,6 +2876,8 @@ def create_combo(
         )
 
         combo = fetch_combo_detail(cursor, combo_id)
+        if combo:
+            combo["bld_ids"] = get_combo_blds(cursor, combo_id)
         return combo or {"combo_id": combo_id}
     except mysql.connector.Error as err:
         db.rollback()
@@ -2507,6 +2919,19 @@ def update_combo(
             fields.append("category_id = %s")
             values.append(payload.category_id)
 
+        normalized_bld_ids = None
+        if payload.bld_ids is not None:
+            normalized_bld_ids = _validate_bld_ids(cursor, payload.bld_ids)
+            if not normalized_bld_ids:
+                raise HTTPException(
+                    status_code=400, detail="At least one meal assignment is required"
+                )
+            try:
+                condiments_bld_id = resolve_bld_id(cursor, CONDIMENTS_BLD_TYPE)
+            except HTTPException:
+                condiments_bld_id = None
+            _ensure_valid_meal_combination(normalized_bld_ids, condiments_bld_id)
+
         if fields:
             values.append(combo_id)
             cursor.execute(
@@ -2517,17 +2942,29 @@ def update_combo(
         if payload.items is not None:
             normalized_items = normalize_combo_items(payload.items)
             ensure_item_ids_exist(
-                cursor, (item["item_id"] for item in normalized_items)
+                cursor,
+                (item["item_id"] for item in normalized_items if item.get("item_id") is not None)
+            )
+            ensure_component_type_ids_exist(
+                cursor,
+                (
+                    item["component_type_id"]
+                    for item in normalized_items
+                    if item.get("component_type_id") is not None
+                )
             )
             cursor.execute("DELETE FROM combo_items WHERE combo_id = %s", (combo_id,))
             values = [
-                (combo_id, entry["item_id"], entry["quantity"])
+                (combo_id, entry.get("item_id"), entry.get("component_type_id"), entry["quantity"])
                 for entry in normalized_items
             ]
             cursor.executemany(
-                "INSERT INTO combo_items (combo_id, item_id, quantity) VALUES (%s, %s, %s)",
+                "INSERT INTO combo_items (combo_id, item_id, component_type_id, quantity) VALUES (%s, %s, %s, %s)",
                 values,
             )
+
+        if normalized_bld_ids is not None:
+            set_combo_blds(cursor, combo_id, normalized_bld_ids)
 
         db.commit()
 
@@ -2541,6 +2978,8 @@ def update_combo(
         )
 
         combo = fetch_combo_detail(cursor, combo_id)
+        if combo:
+            combo["bld_ids"] = get_combo_blds(cursor, combo_id)
         return combo or {"combo_id": combo_id}
     except mysql.connector.Error as err:
         db.rollback()
@@ -2572,6 +3011,318 @@ def delete_combo(combo_id: int, user: Dict[str, Any] = Depends(admin_required)):
         )
 
         return {"status": "deleted", "combo_id": combo_id}
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.get("/api/products/plated-items", tags=["Products"])
+def get_all_plated_items():
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        records = fetch_plated_items_with_components(cursor)
+        attach_bld_ids(cursor, records)
+        try:
+            condiments_bld_id = resolve_bld_id(cursor, CONDIMENTS_BLD_TYPE)
+        except HTTPException:
+            condiments_bld_id = None
+        for row in records:
+            row["is_condiment"] = _is_condiment_from_blds(
+                row.get("bld_ids"), condiments_bld_id
+            )
+        return records
+    except mysql.connector.Error as err:
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.post("/api/products/plated-items", tags=["Products"])
+def create_plated_item(
+    payload: PlatedItemCreatePayload,
+    user: Dict[str, Any] = Depends(admin_required),
+):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute("SHOW COLUMNS FROM items")
+        available_columns = {row["Field"] for row in cursor.fetchall()}
+
+        data = payload.model_dump()
+        raw_bld_ids = data.pop("bld_ids", [])
+        raw_components = data.pop("components", [])
+        normalized_bld_ids = _validate_bld_ids(cursor, raw_bld_ids)
+        normalized_components = normalize_plated_components(raw_components)
+        ensure_item_ids_exist(
+            cursor,
+            (
+                item["item_id"]
+                for item in normalized_components
+                if item.get("item_id") is not None
+            ),
+        )
+        ensure_component_type_ids_exist(
+            cursor,
+            (
+                item["component_type_id"]
+                for item in normalized_components
+                if item.get("component_type_id") is not None
+            ),
+        )
+
+        cleaned = _normalize_item_payload_data(data)
+        cleaned["is_combo"] = 0
+
+        if not cleaned.get("name"):
+            raise HTTPException(status_code=400, detail="name is required")
+        if not cleaned.get("uom_customer"):
+            raise HTTPException(status_code=400, detail="uom_customer is required")
+        if not normalized_bld_ids:
+            raise HTTPException(status_code=400, detail="At least one meal assignment is required")
+
+        try:
+            condiments_bld_id = resolve_bld_id(cursor, CONDIMENTS_BLD_TYPE)
+        except HTTPException:
+            condiments_bld_id = None
+        _ensure_valid_meal_combination(normalized_bld_ids, condiments_bld_id)
+
+        field_map = _item_column_field_map(available_columns)
+        columns: List[str] = []
+        placeholders: List[str] = []
+        values: List[Any] = []
+        for field, column in field_map.items():
+            if field not in cleaned:
+                continue
+            columns.append(column)
+            placeholders.append("%s")
+            values.append(cleaned[field])
+
+        cursor.execute(
+            f"INSERT INTO items ({', '.join(columns)}) VALUES ({', '.join(placeholders)})",
+            values,
+        )
+        item_id = cursor.lastrowid
+        set_item_blds(cursor, item_id, normalized_bld_ids)
+
+        cursor.execute(
+            "INSERT INTO plated_items (item_id) VALUES (%s)",
+            (item_id,),
+        )
+        plated_item_id = cursor.lastrowid
+
+        cursor.executemany(
+            """
+            INSERT INTO plated_item_components (plated_item_id, component_item_id, component_type_id, quantity)
+            VALUES (%s, %s, %s, %s)
+            """,
+            [
+                (
+                    plated_item_id,
+                    component.get("item_id"),
+                    component.get("component_type_id"),
+                    component["quantity"],
+                )
+                for component in normalized_components
+            ],
+        )
+
+        db.commit()
+
+        log_admin_action(
+            db,
+            admin_id=user.get("admin_id") if isinstance(user, dict) else None,
+            action_type="ADD",
+            entity_type="ITEM",
+            entity_id=item_id,
+            description=f"Created plated item {item_id}",
+        )
+
+        plated_item = fetch_plated_item_detail(cursor, item_id)
+        if plated_item:
+            plated_item["bld_ids"] = get_item_blds(cursor, item_id)
+            plated_item["is_condiment"] = _is_condiment_from_blds(
+                plated_item.get("bld_ids"), condiments_bld_id
+            )
+
+        return {
+            "success": True,
+            "item_id": item_id,
+            "item": plated_item,
+        }
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.put("/api/products/plated-items/{item_id}", tags=["Products"])
+def update_plated_item(
+    item_id: int,
+    payload: PlatedItemUpdatePayload,
+    user: Dict[str, Any] = Depends(admin_required),
+):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute("SHOW COLUMNS FROM items")
+        available_columns = {row["Field"] for row in cursor.fetchall()}
+        cursor.execute(
+            "SELECT plated_item_id FROM plated_items WHERE item_id = %s LIMIT 1",
+            (item_id,),
+        )
+        plated_row = cursor.fetchone()
+        if not plated_row:
+            raise HTTPException(status_code=404, detail="Plated item not found")
+
+        data = payload.model_dump(exclude_unset=True)
+        raw_bld_ids = data.pop("bld_ids", None)
+        raw_components = data.pop("components", None)
+        normalized_bld_ids = (
+            _validate_bld_ids(cursor, raw_bld_ids) if raw_bld_ids is not None else None
+        )
+        normalized_components = (
+            normalize_plated_components(raw_components) if raw_components is not None else None
+        )
+        if normalized_components is not None:
+            ensure_item_ids_exist(
+                cursor,
+                (
+                    item["item_id"]
+                    for item in normalized_components
+                    if item.get("item_id") is not None
+                ),
+            )
+            ensure_component_type_ids_exist(
+                cursor,
+                (
+                    item["component_type_id"]
+                    for item in normalized_components
+                    if item.get("component_type_id") is not None
+                ),
+            )
+
+        cleaned = _normalize_item_payload_data(data)
+        field_map = _item_column_field_map(available_columns)
+
+        assignments: List[str] = []
+        values: List[Any] = []
+        updated_fields: List[str] = []
+        for field, column in field_map.items():
+            if field not in cleaned:
+                continue
+            assignments.append(f"{column} = %s")
+            values.append(cleaned[field])
+            updated_fields.append(column)
+
+        if assignments:
+            values.append(item_id)
+            cursor.execute(
+                f"UPDATE items SET {', '.join(assignments)} WHERE item_id = %s",
+                values,
+            )
+
+        try:
+            condiments_bld_id = resolve_bld_id(cursor, CONDIMENTS_BLD_TYPE)
+        except HTTPException:
+            condiments_bld_id = None
+        if normalized_bld_ids is not None:
+            _ensure_valid_meal_combination(normalized_bld_ids, condiments_bld_id)
+            set_item_blds(cursor, item_id, normalized_bld_ids)
+            updated_fields.append("bld_ids")
+
+        if normalized_components is not None:
+            cursor.execute(
+                "DELETE FROM plated_item_components WHERE plated_item_id = %s",
+                (plated_row["plated_item_id"],),
+            )
+            cursor.executemany(
+                """
+                INSERT INTO plated_item_components (plated_item_id, component_item_id, component_type_id, quantity)
+                VALUES (%s, %s, %s, %s)
+                """,
+                [
+                    (
+                        plated_row["plated_item_id"],
+                        component.get("item_id"),
+                        component.get("component_type_id"),
+                        component["quantity"],
+                    )
+                    for component in normalized_components
+                ],
+            )
+            updated_fields.append("components")
+
+        db.commit()
+
+        log_admin_action(
+            db,
+            admin_id=user.get("admin_id") if isinstance(user, dict) else None,
+            action_type="UPDATE",
+            entity_type="ITEM",
+            entity_id=item_id,
+            description=f"Updated plated item {item_id}: {', '.join(updated_fields) if updated_fields else 'no fields'}",
+        )
+
+        plated_item = fetch_plated_item_detail(cursor, item_id)
+        if plated_item:
+            plated_item["bld_ids"] = get_item_blds(cursor, item_id)
+            plated_item["is_condiment"] = _is_condiment_from_blds(
+                plated_item.get("bld_ids"), condiments_bld_id
+            )
+
+        return {
+            "success": True,
+            "item": plated_item,
+            "updated_fields": updated_fields,
+        }
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.delete("/api/products/plated-items/{item_id}", tags=["Products"])
+def delete_plated_item(
+    item_id: int, user: Dict[str, Any] = Depends(admin_required)
+):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT plated_item_id FROM plated_items WHERE item_id = %s LIMIT 1",
+            (item_id,),
+        )
+        plated_row = cursor.fetchone()
+        if not plated_row:
+            raise HTTPException(status_code=404, detail="Plated item not found")
+
+        cursor.execute(
+            "DELETE FROM plated_items WHERE plated_item_id = %s",
+            (plated_row["plated_item_id"],),
+        )
+        cursor.execute("DELETE FROM items WHERE item_id = %s", (item_id,))
+
+        db.commit()
+
+        log_admin_action(
+            db,
+            admin_id=user.get("admin_id") if isinstance(user, dict) else None,
+            action_type="DELETE",
+            entity_type="ITEM",
+            entity_id=item_id,
+            description=f"Deleted plated item {item_id}",
+        )
+
+        return {"status": "deleted", "item_id": item_id}
     except mysql.connector.Error as err:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(err))
@@ -2747,7 +3498,11 @@ def delete_category(category_id: int, user: Dict[str, Any] = Depends(admin_requi
 def get_available_items(
     bld_type: str = Query(
         ..., description="BLD type: Breakfast, Lunch, Dinner, Condiments"
-    )
+    ),
+    include_combos: bool = Query(
+        False,
+        description="When true, includes combo products mapped to the selected meal",
+    ),
 ):
     db = get_db()
     cursor = db.cursor(dictionary=True)
@@ -2762,12 +3517,15 @@ def get_available_items(
                 i.description,
                 i.alias,
                 i.category_id,
-                i.uom,
-                i.weight_factor,
-                i.weight_uom,
+                i.component_type_id,
+                ct.name AS component_type_name,
+                i.uom_customer,
+                i.uom_customer AS uom,
+                i.unit_packing,
+                i.uom_packing,
                 i.hsn_code,
-                i.factor,
-                i.quantity_portion,
+                i.uom_production,
+                i.packing_to_production_rate,
                 i.buffer_percentage,
                 i.max_qty_breakfast,
                 i.max_qty_lunch,
@@ -2784,6 +3542,7 @@ def get_available_items(
                 i.igst,
                 i.net_price
             FROM items i
+            LEFT JOIN component_types ct ON i.component_type_id = ct.component_type_id
             WHERE EXISTS (
                 SELECT 1 
                   FROM item_bld_map map
@@ -2805,12 +3564,15 @@ def get_available_items(
                         i.description,
                         i.alias,
                         i.category_id,
-                        i.uom,
-                        i.weight_factor,
-                        i.weight_uom,
+                        i.component_type_id,
+                        ct.name AS component_type_name,
+                        i.uom_customer,
+                        i.uom_customer AS uom,
+                        i.unit_packing,
+                        i.uom_packing,
                         i.hsn_code,
-                        i.factor,
-                        i.quantity_portion,
+                        i.uom_production,
+                        i.packing_to_production_rate,
                         i.buffer_percentage,
                         i.max_qty,
                         i.max_qty AS max_qty_condiments,
@@ -2825,6 +3587,7 @@ def get_available_items(
                         i.igst,
                         i.net_price
                     FROM items i
+                    LEFT JOIN component_types ct ON i.component_type_id = ct.component_type_id
                     WHERE EXISTS (
                         SELECT 1 
                           FROM item_bld_map map
@@ -2848,7 +3611,64 @@ def get_available_items(
                 )
 
         attach_bld_ids(cursor, items)
-        return filter_items_by_bld(items, bld_id)
+        attach_plated_flags(cursor, items)
+        filtered_items = filter_items_by_bld(items, bld_id)
+
+        if not include_combos:
+            return filtered_items
+
+        cursor.execute(
+            """
+            SELECT
+                c.combo_id,
+                c.combo_name AS name,
+                NULL AS description,
+                NULL AS alias,
+                c.category_id,
+                NULL AS component_type_id,
+                NULL AS component_type_name,
+                'combo' AS uom_customer,
+                'combo' AS uom,
+                1 AS unit_packing,
+                'combo' AS uom_packing,
+                NULL AS hsn_code,
+                'combo' AS uom_production,
+                1 AS packing_to_production_rate,
+                NULL AS buffer_percentage,
+                NULL AS max_qty_breakfast,
+                NULL AS max_qty_lunch,
+                NULL AS max_qty_dinner,
+                NULL AS max_qty_condiments,
+                NULL AS picture_url,
+                c.price AS breakfast_price,
+                c.price AS lunch_price,
+                c.price AS dinner_price,
+                NULL AS condiments_price,
+                c.price AS festival_price,
+                NULL AS cgst,
+                NULL AS sgst,
+                NULL AS igst,
+                c.price AS net_price,
+                1 AS is_combo
+            FROM combos c
+            WHERE EXISTS (
+                SELECT 1
+                  FROM combo_bld_map cbm
+                 WHERE cbm.combo_id = c.combo_id
+                   AND cbm.bld_id = %s
+            )
+            ORDER BY c.combo_name ASC
+            """,
+            (bld_id,),
+        )
+        combos = cursor.fetchall() or []
+        attach_combo_bld_ids(cursor, combos)
+        for combo in combos:
+            combo["item_id"] = None
+            combo["is_plated"] = False
+            combo["is_condiment"] = False
+
+        return [*filtered_items, *combos]
 
     except mysql.connector.Error as err:
         raise HTTPException(status_code=500, detail=str(err))
@@ -2864,6 +3684,7 @@ def _get_daily_menu_internal(
     period_type: Optional[str],
     city_code: CityCode,
     menu_type: str,
+    include_combos: bool = False,
 ):
     db = get_db()
     cursor = db.cursor(dictionary=True)
@@ -2922,8 +3743,23 @@ def _get_daily_menu_internal(
             SELECT
                 mi.menu_item_id,
                 mi.item_id,
-                i.name AS item_name,
-                i.uom,
+                mi.combo_id,
+                COALESCE(i.name, c.combo_name) AS item_name,
+                i.component_type_id,
+                ct.name AS component_type_name,
+                COALESCE(i.uom_customer, 'combo') AS uom,
+                CASE
+                    WHEN mi.combo_id IS NOT NULL THEN 1
+                    ELSE 0
+                END AS is_combo,
+                CASE
+                    WHEN mi.item_id IS NOT NULL AND EXISTS (
+                        SELECT 1
+                        FROM plated_items p
+                        WHERE p.item_id = mi.item_id
+                    ) THEN 1
+                    ELSE 0
+                END AS is_plated,
                 i.buffer_percentage,
                 mi.category_id,
                 mi.max_qty,
@@ -2938,13 +3774,16 @@ def _get_daily_menu_internal(
                 i.max_qty_dinner,
                 i.max_qty_condiments
             FROM menu_items mi
-            JOIN items i ON mi.item_id = i.item_id
+            LEFT JOIN items i ON mi.item_id = i.item_id
+            LEFT JOIN combos c ON mi.combo_id = c.combo_id
+            LEFT JOIN component_types ct ON i.component_type_id = ct.component_type_id
             WHERE mi.menu_id = %s
+              AND (%s = 1 OR mi.combo_id IS NULL)
             ORDER BY mi.sort_order ASC
         """
         legacy_items_mode = False
         try:
-            cursor.execute(items_query, (menu_id,))
+            cursor.execute(items_query, (menu_id, 1 if include_combos else 0))
             menu_items = cursor.fetchall()
         except mysql.connector.Error as err:
             if err.errno == errorcode.ER_BAD_FIELD_ERROR:
@@ -2953,8 +3792,13 @@ def _get_daily_menu_internal(
                     SELECT
                         mi.menu_item_id,
                         mi.item_id,
+                        NULL AS combo_id,
                         i.name AS item_name,
-                        i.uom,
+                        i.component_type_id,
+                        ct.name AS component_type_name,
+                        i.uom_customer AS uom,
+                        0 AS is_combo,
+                        0 AS is_plated,
                         i.buffer_percentage,
                         mi.category_id,
                         mi.max_qty,
@@ -2964,9 +3808,13 @@ def _get_daily_menu_internal(
                         mi.rate,
                         mi.is_default,
                         mi.sort_order,
-                        i.max_qty AS legacy_item_max_qty
+                        i.max_qty_breakfast,
+                        i.max_qty_lunch,
+                        i.max_qty_dinner,
+                        i.max_qty_condiments
                     FROM menu_items mi
                     JOIN items i ON mi.item_id = i.item_id
+                    LEFT JOIN component_types ct ON i.component_type_id = ct.component_type_id
                     WHERE mi.menu_id = %s
                     ORDER BY mi.sort_order ASC
                 """
@@ -3000,7 +3848,12 @@ def _get_daily_menu_internal(
                 {
                     "menu_item_id": it["menu_item_id"],
                     "item_id": it["item_id"],
+                    "combo_id": it.get("combo_id"),
                     "item_name": it["item_name"],
+                    "component_type_id": it.get("component_type_id"),
+                    "component_type_name": it.get("component_type_name"),
+                    "is_combo": bool(it.get("is_combo")),
+                    "is_plated": bool(it.get("is_plated")),
                     "uom": it.get("uom"),
                     "buffer_percentage": float(it["buffer_percentage"] or 0),
                     "category_id": it["category_id"],
@@ -3011,11 +3864,7 @@ def _get_daily_menu_internal(
                     "rate": float(it["rate"]),
                     "is_default": bool(it["is_default"]),
                     "sort_order": it["sort_order"],
-                    "item_max_qty": (
-                        it.get("legacy_item_max_qty")
-                        if legacy_items_mode
-                        else it.get(meal_column)
-                    ),
+                    "item_max_qty": it.get(meal_column),
                 }
                 for it in menu_items
             ],
@@ -3029,7 +3878,8 @@ def _get_daily_menu_internal(
 
 # 3. Create or update (upsert) a daily menu using BLD
 class MenuItemPayload(BaseModel):
-    item_id: int
+    item_id: Optional[int] = None
+    combo_id: Optional[int] = None
     category_id: Optional[int] = None
     max_qty: Optional[int] = None
     available_qty: Optional[int] = None
@@ -3132,33 +3982,165 @@ def upsert_daily_menu(payload: DailyMenuPayload):
             )
             menu_id = cursor.lastrowid
 
-        # Delete existing menu_items for this menu
-        delete_items_query = "DELETE FROM menu_items WHERE menu_id = %s"
-        cursor.execute(delete_items_query, (menu_id,))
-
-        # Insert each item from payload
+        normalized_menu_items: List[
+            Dict[str, Any]
+        ] = []
+        seen_payload_keys: set[Tuple[str, int]] = set()
         for idx, mi in enumerate(payload.items, start=1):
-            max_qty_value = mi.max_qty if mi.max_qty is not None else None
-            available_qty_value = (
-                mi.available_qty if mi.available_qty is not None else max_qty_value
+            has_item = mi.item_id is not None
+            has_combo = mi.combo_id is not None
+            if has_item == has_combo:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"items[{idx - 1}] must include exactly one of item_id or combo_id",
+                )
+            payload_key = (
+                ("item", int(mi.item_id))
+                if has_item
+                else ("combo", int(mi.combo_id))
             )
-            insert_item_query = """
-                INSERT INTO menu_items
-                    (menu_id, item_id, category_id, max_qty, available_qty, rate, is_default, sort_order)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            if payload_key in seen_payload_keys:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Duplicate menu entry in payload: {payload_key[0]} {payload_key[1]}",
+                )
+            seen_payload_keys.add(payload_key)
+            if has_item:
+                cursor.execute(
+                    "SELECT category_id FROM items WHERE item_id = %s LIMIT 1",
+                    (mi.item_id,),
+                )
+                row = cursor.fetchone()
+                if row is None:
+                    raise HTTPException(status_code=400, detail=f"Unknown item_id: {mi.item_id}")
+                resolved_category_id = mi.category_id if mi.category_id is not None else row[0]
+            else:
+                cursor.execute(
+                    "SELECT category_id FROM combos WHERE combo_id = %s LIMIT 1",
+                    (mi.combo_id,),
+                )
+                row = cursor.fetchone()
+                if row is None:
+                    raise HTTPException(status_code=400, detail=f"Unknown combo_id: {mi.combo_id}")
+                resolved_category_id = mi.category_id if mi.category_id is not None else row[0]
+
+            normalized_menu_items.append(
+                {
+                    "item_id": mi.item_id,
+                    "combo_id": mi.combo_id,
+                    "category_id": resolved_category_id,
+                    "max_qty": mi.max_qty if mi.max_qty is not None else None,
+                    "available_qty": mi.available_qty if mi.available_qty is not None else None,
+                    "rate": float(mi.rate),
+                    "is_default": bool(mi.is_default),
+                    "sort_order": mi.sort_order or idx,
+                    "key": payload_key,
+                }
+            )
+
+        cursor.execute(
             """
+            SELECT menu_item_id, item_id, combo_id
+            FROM menu_items
+            WHERE menu_id = %s
+            ORDER BY menu_item_id ASC
+            """,
+            (menu_id,),
+        )
+        existing_menu_items = cursor.fetchall() or []
+        existing_by_key: Dict[Tuple[str, int], Dict[str, Any]] = {}
+        stale_menu_item_ids: List[int] = []
+        for row in existing_menu_items:
+            existing_item_id = row[1]
+            existing_combo_id = row[2]
+            if existing_item_id is not None:
+                row_key = ("item", int(existing_item_id))
+            elif existing_combo_id is not None:
+                row_key = ("combo", int(existing_combo_id))
+            else:
+                stale_menu_item_ids.append(int(row[0]))
+                continue
+            if row_key in existing_by_key:
+                stale_menu_item_ids.append(int(row[0]))
+                continue
+            existing_by_key[row_key] = {
+                "menu_item_id": int(row[0]),
+                "item_id": existing_item_id,
+                "combo_id": existing_combo_id,
+            }
+
+        retained_menu_item_ids: set[int] = set()
+        for entry in normalized_menu_items:
+            item_id = entry["item_id"]
+            combo_id = entry["combo_id"]
+            category_id = entry["category_id"]
+            max_qty_value = entry["max_qty"]
+            available_qty_value = entry["available_qty"]
+            rate_value = entry["rate"]
+            is_default = entry["is_default"]
+            sort_order = entry["sort_order"]
+            payload_key = entry["key"]
+            effective_available_qty = (
+                available_qty_value if available_qty_value is not None else max_qty_value
+            )
+
+            existing_row = existing_by_key.get(payload_key)
+            if existing_row:
+                retained_menu_item_ids.add(existing_row["menu_item_id"])
+                cursor.execute(
+                    """
+                    UPDATE menu_items
+                    SET category_id = %s,
+                        max_qty = %s,
+                        available_qty = %s,
+                        rate = %s,
+                        is_default = %s,
+                        sort_order = %s
+                    WHERE menu_item_id = %s
+                    """,
+                    (
+                        category_id,
+                        max_qty_value,
+                        effective_available_qty,
+                        rate_value,
+                        int(is_default),
+                        sort_order,
+                        existing_row["menu_item_id"],
+                    ),
+                )
+                continue
+
             cursor.execute(
-                insert_item_query,
+                """
+                INSERT INTO menu_items
+                    (menu_id, item_id, combo_id, category_id, max_qty, available_qty, rate, is_default, sort_order)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
                 (
                     menu_id,
-                    mi.item_id,
-                    mi.category_id,
+                    item_id,
+                    combo_id,
+                    category_id,
                     max_qty_value,
-                    available_qty_value,
-                    mi.rate,
-                    int(mi.is_default),
-                    mi.sort_order or idx,
+                    effective_available_qty,
+                    rate_value,
+                    int(is_default),
+                    sort_order,
                 ),
+            )
+            retained_menu_item_ids.add(int(cursor.lastrowid))
+
+        for existing_row in existing_menu_items:
+            existing_menu_item_id = int(existing_row[0])
+            if existing_menu_item_id not in retained_menu_item_ids:
+                stale_menu_item_ids.append(existing_menu_item_id)
+
+        if stale_menu_item_ids:
+            unique_stale_ids = sorted(set(stale_menu_item_ids))
+            placeholders = ", ".join(["%s"] * len(unique_stale_ids))
+            cursor.execute(
+                f"DELETE FROM menu_items WHERE menu_item_id IN ({placeholders})",
+                tuple(unique_stale_ids),
             )
 
         db.commit()
@@ -3177,7 +4159,210 @@ def upsert_daily_menu(payload: DailyMenuPayload):
             period_type=payload.period_type,
             city_code=city_code,
             menu_type=resolved_menu_type,
+            include_combos=True,
         )
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.get("/api/products/component-types", tags=["Products"])
+def get_all_component_types():
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            SELECT component_type_id, name, description, is_active
+              FROM component_types
+             WHERE is_active = 1
+             ORDER BY name ASC
+            """
+        )
+        rows = cursor.fetchall() or []
+        for row in rows:
+            row["is_active"] = bool(row.get("is_active", True))
+        return rows
+    except mysql.connector.Error as err:
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.post("/api/products/component-types", tags=["Products"])
+def create_component_type(
+    payload: ComponentTypeCreatePayload,
+    user: Dict[str, Any] = Depends(admin_required),
+):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        name = (payload.name or "").strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="name is required")
+        description = (payload.description or "").strip() or None
+        cursor.execute(
+            """
+            INSERT INTO component_types (name, description, is_active)
+            VALUES (%s, %s, 1)
+            """,
+            (name, description),
+        )
+        component_type_id = cursor.lastrowid
+        db.commit()
+        log_admin_action(
+            db,
+            admin_id=user.get("admin_id") if isinstance(user, dict) else None,
+            action_type="ADD",
+            entity_type="COMPONENT_TYPE",
+            entity_id=component_type_id,
+            description=f"Created component type {component_type_id}",
+        )
+        return {
+            "component_type_id": component_type_id,
+            "name": name,
+            "description": description,
+            "is_active": True,
+        }
+    except mysql.connector.Error as err:
+        db.rollback()
+        if err.errno == errorcode.ER_DUP_ENTRY:
+            raise HTTPException(status_code=400, detail="Component type already exists")
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.put("/api/products/component-types/{component_type_id}", tags=["Products"])
+def update_component_type(
+    component_type_id: int,
+    payload: ComponentTypeUpdatePayload,
+    user: Dict[str, Any] = Depends(admin_required),
+):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT 1 FROM component_types WHERE component_type_id = %s",
+            (component_type_id,),
+        )
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Component type not found")
+
+        updates: List[str] = []
+        values: List[Any] = []
+        if payload.name is not None:
+            name = payload.name.strip()
+            if not name:
+                raise HTTPException(status_code=400, detail="name is required")
+            updates.append("name = %s")
+            values.append(name)
+        if payload.description is not None:
+            updates.append("description = %s")
+            values.append((payload.description or "").strip() or None)
+        if payload.is_active is not None:
+            updates.append("is_active = %s")
+            values.append(1 if payload.is_active else 0)
+        if not updates:
+            raise HTTPException(status_code=400, detail="No fields to update")
+
+        values.append(component_type_id)
+        cursor.execute(
+            f"UPDATE component_types SET {', '.join(updates)} WHERE component_type_id = %s",
+            values,
+        )
+        db.commit()
+        log_admin_action(
+            db,
+            admin_id=user.get("admin_id") if isinstance(user, dict) else None,
+            action_type="UPDATE",
+            entity_type="COMPONENT_TYPE",
+            entity_id=component_type_id,
+            description=f"Updated component type {component_type_id}",
+        )
+        cursor.execute(
+            """
+            SELECT component_type_id, name, description, is_active
+              FROM component_types
+             WHERE component_type_id = %s
+            """,
+            (component_type_id,),
+        )
+        row = cursor.fetchone()
+        if row:
+            row["is_active"] = bool(row.get("is_active", True))
+        return row or {"component_type_id": component_type_id}
+    except mysql.connector.Error as err:
+        db.rollback()
+        if err.errno == errorcode.ER_DUP_ENTRY:
+            raise HTTPException(status_code=400, detail="Component type already exists")
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.delete("/api/products/component-types/{component_type_id}", tags=["Products"])
+def delete_component_type(
+    component_type_id: int,
+    user: Dict[str, Any] = Depends(admin_required),
+):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT 1 FROM component_types WHERE component_type_id = %s",
+            (component_type_id,),
+        )
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Component type not found")
+        cursor.execute(
+            "SELECT 1 FROM items WHERE component_type_id = %s LIMIT 1",
+            (component_type_id,),
+        )
+        if cursor.fetchone() is not None:
+            raise HTTPException(
+                status_code=400,
+                detail="Component type is still assigned to one or more items",
+            )
+        cursor.execute(
+            "SELECT 1 FROM plated_item_components WHERE component_type_id = %s LIMIT 1",
+            (component_type_id,),
+        )
+        if cursor.fetchone() is not None:
+            raise HTTPException(
+                status_code=400,
+                detail="Component type is still used in one or more plated items",
+            )
+        cursor.execute(
+            "SELECT 1 FROM combo_items WHERE component_type_id = %s LIMIT 1",
+            (component_type_id,),
+        )
+        if cursor.fetchone() is not None:
+            raise HTTPException(
+                status_code=400,
+                detail="Component type is still used in one or more combos",
+            )
+
+        cursor.execute(
+            "DELETE FROM component_types WHERE component_type_id = %s",
+            (component_type_id,),
+        )
+        db.commit()
+        log_admin_action(
+            db,
+            admin_id=user.get("admin_id") if isinstance(user, dict) else None,
+            action_type="DELETE",
+            entity_type="COMPONENT_TYPE",
+            entity_id=component_type_id,
+            description=f"Deleted component type {component_type_id}",
+        )
+        return {"status": "deleted", "component_type_id": component_type_id}
     except mysql.connector.Error as err:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(err))
@@ -3835,6 +5020,7 @@ def admin_order_history(
               LEFT JOIN addresses a ON o.address_id = a.address_id
               LEFT JOIN order_items oi ON o.order_id = oi.order_id
               LEFT JOIN items i ON oi.item_id = i.item_id
+              LEFT JOIN combos co ON oi.combo_id = co.combo_id
              {where_fragment}
         """
         cursor.execute(count_query, tuple(params))
@@ -3863,6 +5049,7 @@ def admin_order_history(
             LEFT JOIN addresses a ON o.address_id = a.address_id
             LEFT JOIN order_items oi ON o.order_id = oi.order_id
             LEFT JOIN items i ON oi.item_id = i.item_id
+            LEFT JOIN combos co ON oi.combo_id = co.combo_id
             {where_fragment}
             GROUP BY
                 o.order_id,
@@ -3900,11 +5087,12 @@ def admin_order_history(
                     oi.order_id,
                     oi.quantity,
                     oi.price,
-                    i.name AS item_name
+                    COALESCE(i.name, co.combo_name) AS item_name
                 FROM order_items oi
-                JOIN items i ON oi.item_id = i.item_id
+                LEFT JOIN items i ON oi.item_id = i.item_id
+                LEFT JOIN combos co ON oi.combo_id = co.combo_id
                 WHERE oi.order_id IN ({placeholders})
-                ORDER BY oi.order_id ASC, i.name ASC
+                ORDER BY oi.order_id ASC, COALESCE(i.name, co.combo_name) ASC
                 """,
                 tuple(order_ids),
             )
@@ -4112,11 +5300,12 @@ def admin_order_invoice(
             SELECT 
                 oi.quantity,
                 oi.price,
-                i.name AS item_name
+                COALESCE(i.name, co.combo_name) AS item_name
             FROM order_items oi
-            JOIN items i ON oi.item_id = i.item_id
+            LEFT JOIN items i ON oi.item_id = i.item_id
+            LEFT JOIN combos co ON oi.combo_id = co.combo_id
             WHERE oi.order_id = %s
-            ORDER BY i.name ASC
+            ORDER BY COALESCE(i.name, co.combo_name) ASC
             """,
             (order_id,),
         )
@@ -4214,6 +5403,20 @@ class TripSheetRequest(BaseModel):
     city_code: Optional[str] = None
 
 
+class DeliveryRoutePayload(BaseModel):
+    route_id: Optional[int] = None
+    route_code: str = Field(..., min_length=1, max_length=50)
+    route_name: str = Field(..., min_length=1, max_length=150)
+    notes: Optional[str] = None
+    is_active: bool = True
+    sort_order: Optional[int] = Field(default=0, ge=0)
+
+
+class DeliveryRouteBulkSaveRequest(BaseModel):
+    city_code: Optional[str] = None
+    routes: List[DeliveryRoutePayload] = Field(default_factory=list)
+
+
 class DevOrderSeedRequest(BaseModel):
     date: Optional[str] = None
     city_code: Optional[str] = None
@@ -4241,6 +5444,181 @@ def _purge_all_orders_impl():
         db.close()
 
 
+def _ensure_delivery_routes_table(db) -> None:
+    cursor = db.cursor()
+    try:
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS delivery_routes (
+                route_id INT NOT NULL AUTO_INCREMENT,
+                city_code VARCHAR(10) NOT NULL,
+                route_code VARCHAR(50) NOT NULL,
+                route_name VARCHAR(150) NOT NULL,
+                notes TEXT NULL,
+                is_active TINYINT(1) NOT NULL DEFAULT 1,
+                sort_order INT NOT NULL DEFAULT 0,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (route_id),
+                UNIQUE KEY uq_delivery_routes_city_route_code (city_code, route_code)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+            """
+        )
+        db.commit()
+    finally:
+        cursor.close()
+
+
+@app.get("/api/logistics/routes", tags=["Logistics"])
+def list_delivery_routes(
+    city_code: Optional[str] = Query(None, alias="city_code"),
+    user: Dict[str, Any] = Depends(admin_required),
+):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        _ensure_delivery_routes_table(db)
+        resolved_city = _resolve_city_context(city_code, user)
+        cursor.execute(
+            """
+            SELECT route_id, city_code, route_code, route_name, notes, is_active, sort_order
+              FROM delivery_routes
+             WHERE city_code = %s
+             ORDER BY sort_order ASC, route_code ASC
+            """,
+            (resolved_city,),
+        )
+        return cursor.fetchall() or []
+    except mysql.connector.Error as err:
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.post("/api/logistics/routes/bulk-save", tags=["Logistics"])
+def bulk_save_delivery_routes(
+    payload: DeliveryRouteBulkSaveRequest,
+    user: Dict[str, Any] = Depends(admin_required),
+):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        _ensure_delivery_routes_table(db)
+        resolved_city = _resolve_city_context(payload.city_code, user)
+        normalized_routes: List[Dict[str, Any]] = []
+        seen_codes: Set[str] = set()
+        for index, route in enumerate(payload.routes):
+            route_code = (route.route_code or "").strip()
+            route_name = (route.route_name or "").strip()
+            notes = (route.notes or "").strip() or None
+            if not route_code or not route_name:
+                raise HTTPException(
+                    status_code=400,
+                    detail="route_code and route_name are required for each route",
+                )
+            route_code_key = route_code.lower()
+            if route_code_key in seen_codes:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Duplicate route_code in payload: {route_code}",
+                )
+            seen_codes.add(route_code_key)
+            normalized_routes.append(
+                {
+                    "route_id": int(route.route_id) if route.route_id else None,
+                    "route_code": route_code,
+                    "route_name": route_name,
+                    "notes": notes,
+                    "is_active": 1 if route.is_active else 0,
+                    "sort_order": int(route.sort_order or index),
+                }
+            )
+
+        cursor.execute(
+            "SELECT route_id FROM delivery_routes WHERE city_code = %s",
+            (resolved_city,),
+        )
+        existing_route_ids = {
+            int(row["route_id"]) for row in (cursor.fetchall() or []) if row.get("route_id") is not None
+        }
+
+        kept_route_ids: List[int] = []
+        for route in normalized_routes:
+            route_id = route["route_id"]
+            if route_id and route_id in existing_route_ids:
+                cursor.execute(
+                    """
+                    UPDATE delivery_routes
+                       SET route_code = %s,
+                           route_name = %s,
+                           notes = %s,
+                           is_active = %s,
+                           sort_order = %s
+                     WHERE route_id = %s
+                       AND city_code = %s
+                    """,
+                    (
+                        route["route_code"],
+                        route["route_name"],
+                        route["notes"],
+                        route["is_active"],
+                        route["sort_order"],
+                        route_id,
+                        resolved_city,
+                    ),
+                )
+                kept_route_ids.append(route_id)
+                continue
+
+            cursor.execute(
+                """
+                INSERT INTO delivery_routes (city_code, route_code, route_name, notes, is_active, sort_order)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    resolved_city,
+                    route["route_code"],
+                    route["route_name"],
+                    route["notes"],
+                    route["is_active"],
+                    route["sort_order"],
+                ),
+            )
+            kept_route_ids.append(int(cursor.lastrowid))
+
+        if kept_route_ids:
+            placeholders = ", ".join(["%s"] * len(kept_route_ids))
+            cursor.execute(
+                f"DELETE FROM delivery_routes WHERE city_code = %s AND route_id NOT IN ({placeholders})",
+                (resolved_city, *kept_route_ids),
+            )
+        else:
+            cursor.execute("DELETE FROM delivery_routes WHERE city_code = %s", (resolved_city,))
+
+        db.commit()
+
+        cursor.execute(
+            """
+            SELECT route_id, city_code, route_code, route_name, notes, is_active, sort_order
+              FROM delivery_routes
+             WHERE city_code = %s
+             ORDER BY sort_order ASC, route_code ASC
+            """,
+            (resolved_city,),
+        )
+        return {
+            "city_code": resolved_city,
+            "routes": cursor.fetchall() or [],
+        }
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
 @app.delete("/api/dev/orders", tags=["Developer"])
 def purge_all_orders(user: Dict[str, Any] = Depends(developer_required)):
     return _purge_all_orders_impl()
@@ -4252,7 +5630,8 @@ def purge_all_orders_post(user: Dict[str, Any] = Depends(developer_required)):
 
 
 class OrderItemPayload(BaseModel):
-    item_id: int
+    item_id: Optional[int] = None
+    combo_id: Optional[int] = None
     quantity: int
     price: float
     menu_item_id: Optional[int] = None
@@ -4342,6 +5721,14 @@ def _load_tax_amounts(cursor, discounted_subtotal: float) -> Tuple[float, float]
 def _compute_order_totals(
     cursor, items: List[OrderItemPayload], coupon_codes: Optional[List[str]]
 ) -> Dict[str, Any]:
+    for index, item in enumerate(items):
+        has_item = item.item_id is not None
+        has_combo = item.combo_id is not None
+        if has_item == has_combo:
+            raise HTTPException(
+                status_code=400,
+                detail=f"items[{index}] must include exactly one of item_id or combo_id",
+            )
     subtotal = sum(item.price * item.quantity for item in items)
     discount_amount, applied_coupons = _load_coupon_discount(cursor, coupon_codes, subtotal)
     discounted_subtotal = max(subtotal - discount_amount, 0.0)
@@ -5127,6 +6514,7 @@ def generate_trip_sheet_report(
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
+        _ensure_delivery_routes_table(db)
         meals_requiring_production = get_food_meals_for_city(target_city)
         if meals_requiring_production:
             meal_placeholders = ", ".join(["%s"] * len(meals_requiring_production))
@@ -5179,19 +6567,26 @@ def generate_trip_sheet_report(
                 a.written_address,
                 a.city,
                 a.pin_code,
-                a.route_assignment
+                a.route_assignment,
+                dr.route_code,
+                dr.route_name,
+                dr.sort_order
             FROM orders o
             JOIN customers c ON o.customer_id = c.customer_id
             JOIN addresses a ON o.address_id = a.address_id
+            LEFT JOIN delivery_routes dr
+              ON dr.city_code COLLATE utf8mb4_0900_ai_ci = a.city_code
+             AND dr.route_code COLLATE utf8mb4_0900_ai_ci = a.route_assignment
            WHERE DATE(o.created_at) = %s
              AND a.city_code = %s
-           ORDER BY COALESCE(a.route_assignment, ''), c.name
+           ORDER BY COALESCE(dr.sort_order, 9999), COALESCE(dr.route_name, a.route_assignment, ''), c.name
             """,
             (parsed_date, target_city),
         )
         rows = cursor.fetchall() or []
 
         route_groups: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        route_sort_order: Dict[str, int] = {}
         updatable_statuses = {
             ORDER_STATUS_PENDING.lower(),
             ORDER_STATUS_CONFIRMED.lower(),
@@ -5199,7 +6594,8 @@ def generate_trip_sheet_report(
         }
 
         for row in rows:
-            route_label = row.get("route_assignment") or "Unassigned"
+            route_label = row.get("route_name") or row.get("route_assignment") or "Unassigned"
+            route_sort_order.setdefault(route_label, int(row.get("sort_order") or 9999))
             normalized_display = normalize_status_for_response(row.get("status"))
             if normalized_display.lower() in updatable_statuses:
                 display_status = ORDER_STATUS_ON_THE_WAY
@@ -5238,7 +6634,10 @@ def generate_trip_sheet_report(
         db.commit()
 
         routes_payload = []
-        for route, orders in route_groups.items():
+        for route, orders in sorted(
+            route_groups.items(),
+            key=lambda entry: (route_sort_order.get(entry[0], 9999), entry[0].lower()),
+        ):
             total_amount = sum(order["total_price"] for order in orders)
             routes_payload.append(
                 {
@@ -5256,6 +6655,626 @@ def generate_trip_sheet_report(
             "status_updates": updated_rows,
             "generated_at": datetime.utcnow().isoformat() + "Z",
         }
+    finally:
+        cursor.close()
+        db.close()
+
+
+def _fetch_production_menu_rows(
+    cursor,
+    target_date: str,
+    city_code: CityCode,
+    period_type: Optional[str],
+    meals: List[str],
+) -> List[Dict[str, Any]]:
+    if not meals:
+        return []
+    placeholders = ", ".join(["%s"] * len(meals))
+    normalized_period = None if period_type == "festivals" else period_type
+    cursor.execute(
+        f"""
+        SELECT
+            m.menu_id,
+            m.is_released,
+            m.is_production_generated,
+            b.bld_type AS meal,
+            mi.menu_item_id,
+            mi.item_id,
+            mi.combo_id,
+            COALESCE(i.name, c.combo_name) AS menu_entry_name
+        FROM menu m
+        JOIN bld b ON m.bld_id = b.bld_id
+        JOIN menu_items mi ON m.menu_id = mi.menu_id
+        LEFT JOIN items i ON mi.item_id = i.item_id
+        LEFT JOIN combos c ON mi.combo_id = c.combo_id
+        WHERE m.menu_type = %s
+          AND m.date = %s
+          AND m.city_code = %s
+          AND ((m.period_type IS NULL AND %s IS NULL) OR m.period_type = %s)
+          AND b.bld_type IN ({placeholders})
+        ORDER BY b.bld_type ASC, mi.sort_order ASC, mi.menu_item_id ASC
+        """,
+        (
+            MENU_TYPE_ONE_DAY,
+            target_date,
+            city_code,
+            normalized_period,
+            normalized_period,
+            *meals,
+        ),
+    )
+    return cursor.fetchall() or []
+
+
+def _build_default_item_resolution_map(
+    cursor,
+    target_date: str,
+    city_code: CityCode,
+    period_type: Optional[str],
+    meals: List[str],
+) -> Tuple[
+    Dict[Tuple[str, int], int],
+    Dict[Tuple[str, int], str],
+    Dict[Tuple[str, int], int],
+]:
+    if not meals:
+        return {}, {}, {}
+    placeholders = ", ".join(["%s"] * len(meals))
+    normalized_period = None if period_type == "festivals" else period_type
+    cursor.execute(
+        f"""
+        SELECT
+            b.bld_type AS meal,
+            i.component_type_id,
+            i.item_id,
+            i.name
+        FROM menu m
+        JOIN bld b ON m.bld_id = b.bld_id
+        JOIN menu_items mi ON mi.menu_id = m.menu_id
+        JOIN items i ON mi.item_id = i.item_id
+        WHERE m.menu_type = %s
+          AND m.date = %s
+          AND m.city_code = %s
+          AND ((m.period_type IS NULL AND %s IS NULL) OR m.period_type = %s)
+          AND mi.is_default = 1
+          AND i.component_type_id IS NOT NULL
+          AND b.bld_type IN ({placeholders})
+        ORDER BY b.bld_type ASC, i.component_type_id ASC, mi.menu_item_id ASC
+        """,
+        (
+            MENU_TYPE_ONE_DAY,
+            target_date,
+            city_code,
+            normalized_period,
+            normalized_period,
+            *meals,
+        ),
+    )
+    rows = cursor.fetchall() or []
+    counts: Dict[Tuple[str, int], int] = {}
+    resolved_ids: Dict[Tuple[str, int], int] = {}
+    resolved_names: Dict[Tuple[str, int], str] = {}
+    for row in rows:
+        meal = row.get("meal")
+        component_type_id = row.get("component_type_id")
+        item_id = row.get("item_id")
+        if meal is None or component_type_id is None or item_id is None:
+            continue
+        key = (str(meal), int(component_type_id))
+        counts[key] = counts.get(key, 0) + 1
+        if counts[key] == 1:
+            resolved_ids[key] = int(item_id)
+            resolved_names[key] = str(row.get("name") or f"Item #{item_id}")
+    return resolved_ids, resolved_names, counts
+
+
+def _fetch_order_quantities_by_menu_item(
+    cursor, target_date: str, city_code: CityCode
+) -> Dict[int, float]:
+    cursor.execute(
+        """
+        SELECT
+            oi.menu_item_id,
+            SUM(oi.quantity) AS quantity
+        FROM orders o
+        JOIN order_items oi ON oi.order_id = o.order_id
+        JOIN addresses a ON o.address_id = a.address_id
+        WHERE COALESCE(o.order_date, DATE(o.created_at)) = %s
+          AND a.city_code = %s
+          AND oi.menu_item_id IS NOT NULL
+          AND LOWER(REPLACE(COALESCE(o.status, ''), ' (Payment Due)', '')) NOT IN (
+            'cancelled',
+            'cancelled by customer',
+            'cancelled by admin'
+          )
+        GROUP BY oi.menu_item_id
+        """,
+        (target_date, city_code),
+    )
+    rows = cursor.fetchall() or []
+    return {
+        int(row["menu_item_id"]): float(row.get("quantity") or 0)
+        for row in rows
+        if row.get("menu_item_id") is not None
+    }
+
+
+def _fetch_item_unit_details(
+    cursor, item_ids: Iterable[int]
+) -> Dict[int, Dict[str, Any]]:
+    normalized_ids = sorted({int(item_id) for item_id in item_ids if item_id is not None})
+    if not normalized_ids:
+        return {}
+    placeholders = ", ".join(["%s"] * len(normalized_ids))
+    cursor.execute(
+        f"""
+        SELECT
+            item_id,
+            name,
+            uom_customer,
+            unit_packing,
+            uom_packing,
+            uom_production,
+            packing_to_production_rate
+        FROM items
+        WHERE item_id IN ({placeholders})
+        """,
+        tuple(normalized_ids),
+    )
+    rows = cursor.fetchall() or []
+    details: Dict[int, Dict[str, Any]] = {}
+    for row in rows:
+        item_id = row.get("item_id")
+        if item_id is None:
+            continue
+        details[int(item_id)] = {
+            "item_id": int(item_id),
+            "name": row.get("name"),
+            "uom_customer": row.get("uom_customer"),
+            "unit_packing": float(row["unit_packing"]) if row.get("unit_packing") is not None else None,
+            "uom_packing": row.get("uom_packing"),
+            "uom_production": row.get("uom_production"),
+            "packing_to_production_rate": float(row["packing_to_production_rate"])
+            if row.get("packing_to_production_rate") is not None
+            else None,
+        }
+    return details
+
+
+def _fetch_plated_parent_item_ids(cursor, item_ids: Iterable[int]) -> set[int]:
+    normalized_ids = sorted({int(item_id) for item_id in item_ids if item_id is not None})
+    if not normalized_ids:
+        return set()
+    placeholders = ", ".join(["%s"] * len(normalized_ids))
+    cursor.execute(
+        f"SELECT item_id FROM plated_items WHERE item_id IN ({placeholders})",
+        tuple(normalized_ids),
+    )
+    rows = cursor.fetchall() or []
+    return {
+        int(row["item_id"])
+        for row in rows
+        if row.get("item_id") is not None
+    }
+
+
+def _fetch_plated_components_by_parent_item(
+    cursor, parent_item_ids: Iterable[int]
+) -> Dict[int, List[Dict[str, Any]]]:
+    normalized_ids = sorted({int(item_id) for item_id in parent_item_ids if item_id is not None})
+    if not normalized_ids:
+        return {}
+    placeholders = ", ".join(["%s"] * len(normalized_ids))
+    cursor.execute(
+        f"""
+        SELECT
+            p.item_id AS parent_item_id,
+            pic.component_item_id,
+            pic.component_type_id,
+            pic.quantity,
+            i.name AS component_item_name,
+            ct.name AS component_type_name
+        FROM plated_items p
+        JOIN plated_item_components pic ON p.plated_item_id = pic.plated_item_id
+        LEFT JOIN items i ON pic.component_item_id = i.item_id
+        LEFT JOIN component_types ct ON pic.component_type_id = ct.component_type_id
+        WHERE p.item_id IN ({placeholders})
+        ORDER BY p.item_id ASC, pic.id ASC
+        """,
+        tuple(normalized_ids),
+    )
+    rows = cursor.fetchall() or []
+    components: Dict[int, List[Dict[str, Any]]] = {}
+    for row in rows:
+        parent_item_id = row.get("parent_item_id")
+        if parent_item_id is None:
+            continue
+        components.setdefault(int(parent_item_id), []).append(
+            {
+                "component_item_id": int(row["component_item_id"])
+                if row.get("component_item_id") is not None
+                else None,
+                "component_type_id": int(row["component_type_id"])
+                if row.get("component_type_id") is not None
+                else None,
+                "quantity": float(row.get("quantity") or 0),
+                "component_item_name": row.get("component_item_name"),
+                "component_type_name": row.get("component_type_name"),
+            }
+        )
+    return components
+
+
+def _fetch_combo_components_by_combo_id(
+    cursor, combo_ids: Iterable[int]
+) -> Dict[int, List[Dict[str, Any]]]:
+    normalized_ids = sorted({int(combo_id) for combo_id in combo_ids if combo_id is not None})
+    if not normalized_ids:
+        return {}
+    placeholders = ", ".join(["%s"] * len(normalized_ids))
+    cursor.execute(
+        f"""
+        SELECT
+            ci.combo_id,
+            ci.item_id AS component_item_id,
+            ci.component_type_id,
+            ci.quantity,
+            i.name AS component_item_name,
+            ct.name AS component_type_name
+        FROM combo_items ci
+        LEFT JOIN items i ON ci.item_id = i.item_id
+        LEFT JOIN component_types ct ON ci.component_type_id = ct.component_type_id
+        WHERE ci.combo_id IN ({placeholders})
+        ORDER BY ci.combo_id ASC, ci.id ASC
+        """,
+        tuple(normalized_ids),
+    )
+    rows = cursor.fetchall() or []
+    components: Dict[int, List[Dict[str, Any]]] = {}
+    for row in rows:
+        combo_id = row.get("combo_id")
+        if combo_id is None:
+            continue
+        components.setdefault(int(combo_id), []).append(
+            {
+                "component_item_id": int(row["component_item_id"])
+                if row.get("component_item_id") is not None
+                else None,
+                "component_type_id": int(row["component_type_id"])
+                if row.get("component_type_id") is not None
+                else None,
+                "quantity": float(row.get("quantity") or 0),
+                "component_item_name": row.get("component_item_name"),
+                "component_type_name": row.get("component_type_name"),
+            }
+        )
+    return components
+
+
+def _append_production_issue(
+    issues: List[Dict[str, Any]],
+    *,
+    issue_type: str,
+    parent_name: str,
+    required_units: float,
+    component_type_name: Optional[str] = None,
+    item_name: Optional[str] = None,
+    detail: Optional[str] = None,
+) -> None:
+    issues.append(
+        {
+            "type": issue_type,
+            "parent_name": parent_name,
+            "item_name": item_name,
+            "component_type_name": component_type_name,
+            "required_units": round(required_units, 3),
+            "detail": detail,
+        }
+    )
+
+
+def _resolve_component_type_for_meal(
+    resolved_default_ids: Dict[Tuple[str, int], int],
+    resolved_default_names: Dict[Tuple[str, int], str],
+    resolution_counts: Dict[Tuple[str, int], int],
+    *,
+    meal: str,
+    component_type_id: Optional[int],
+) -> Tuple[Optional[int], Optional[str], Optional[str]]:
+    if component_type_id is None:
+        return None, None, "Missing component type"
+    key = (meal, int(component_type_id))
+    count = resolution_counts.get(key, 0)
+    if count == 1:
+        return (
+            resolved_default_ids.get(key),
+            resolved_default_names.get(key),
+            None,
+        )
+    if count == 0:
+        return None, None, "No default item of the day found"
+    return None, None, "Multiple default items found"
+
+
+def _accumulate_production_item(
+    aggregate: Dict[int, Dict[str, Any]],
+    issues: List[Dict[str, Any]],
+    *,
+    parent_name: str,
+    item_details: Dict[int, Dict[str, Any]],
+    item_id: Optional[int],
+    demand_units: float,
+) -> None:
+    if item_id is None:
+        _append_production_issue(
+            issues,
+            issue_type="missing_item",
+            parent_name=parent_name,
+            required_units=demand_units,
+            detail="Missing concrete item reference",
+        )
+        return
+
+    detail = item_details.get(int(item_id))
+    if not detail:
+        _append_production_issue(
+            issues,
+            issue_type="missing_item_config",
+            parent_name=parent_name,
+            required_units=demand_units,
+            item_name=f"Item #{item_id}",
+            detail="Item not found in catalog",
+        )
+        return
+
+    unit_packing = detail.get("unit_packing")
+    conversion_rate = detail.get("packing_to_production_rate")
+    uom_production = detail.get("uom_production")
+    if unit_packing is None or conversion_rate is None or not uom_production:
+        _append_production_issue(
+            issues,
+            issue_type="missing_unit_conversion",
+            parent_name=parent_name,
+            required_units=demand_units,
+            item_name=detail.get("name"),
+            detail="unit_packing, packing_to_production_rate, or uom_production is missing",
+        )
+        return
+
+    production_quantity = demand_units * float(unit_packing) * float(conversion_rate)
+    bucket = aggregate.setdefault(
+        int(item_id),
+        {
+            "item_id": int(item_id),
+            "item_name": detail.get("name"),
+            "order_units": 0.0,
+            "uom_customer": detail.get("uom_customer"),
+            "unit_packing": float(unit_packing),
+            "uom_packing": detail.get("uom_packing"),
+            "uom_production": uom_production,
+            "packing_to_production_rate": float(conversion_rate),
+            "production_quantity": 0.0,
+        },
+    )
+    bucket["order_units"] = float(bucket["order_units"]) + float(demand_units)
+    bucket["production_quantity"] = float(bucket["production_quantity"]) + float(
+        production_quantity
+    )
+
+
+@app.get("/api/production/day-plan", tags=["Production"])
+def get_daily_production_plan(
+    date: str,
+    period_type: Optional[str] = Query(
+        "one_day", description="Menu period to filter, e.g., one_day or subscription"
+    ),
+    city_code: Optional[str] = Query(None, alias="city_code"),
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user),
+):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        resolved_city = _resolve_city_context(city_code, user)
+        meals = get_food_meals_for_city(resolved_city)
+        menu_rows = _fetch_production_menu_rows(
+            cursor, date, resolved_city, period_type, meals
+        )
+        order_quantities = _fetch_order_quantities_by_menu_item(cursor, date, resolved_city)
+        (
+            resolved_default_ids,
+            resolved_default_names,
+            resolution_counts,
+        ) = _build_default_item_resolution_map(
+            cursor, date, resolved_city, period_type, meals
+        )
+
+        all_item_ids = {
+            int(row["item_id"])
+            for row in menu_rows
+            if row.get("item_id") is not None
+        }
+        plated_parent_ids = _fetch_plated_parent_item_ids(cursor, all_item_ids)
+        combo_ids = {
+            int(row["combo_id"])
+            for row in menu_rows
+            if row.get("combo_id") is not None
+        }
+
+        plated_components = _fetch_plated_components_by_parent_item(
+            cursor, plated_parent_ids
+        )
+        combo_components = _fetch_combo_components_by_combo_id(cursor, combo_ids)
+
+        concrete_item_ids = set(all_item_ids)
+        for component_rows in plated_components.values():
+            for component in component_rows:
+                if component.get("component_item_id") is not None:
+                    concrete_item_ids.add(int(component["component_item_id"]))
+        for component_rows in combo_components.values():
+            for component in component_rows:
+                if component.get("component_item_id") is not None:
+                    concrete_item_ids.add(int(component["component_item_id"]))
+
+        item_details = _fetch_item_unit_details(cursor, concrete_item_ids)
+
+        rows_by_meal: Dict[str, List[Dict[str, Any]]] = {meal: [] for meal in meals}
+        meal_status: Dict[str, Dict[str, bool]] = {
+            meal: {"is_released": False, "is_production_generated": False}
+            for meal in meals
+        }
+        for row in menu_rows:
+            meal = row.get("meal")
+            if meal not in rows_by_meal:
+                continue
+            rows_by_meal[meal].append(row)
+            meal_status[meal] = {
+                "is_released": bool(row.get("is_released")),
+                "is_production_generated": bool(row.get("is_production_generated")),
+            }
+
+        response_meals: List[Dict[str, Any]] = []
+        for meal in meals:
+            aggregate: Dict[int, Dict[str, Any]] = {}
+            issues: List[Dict[str, Any]] = []
+            for row in rows_by_meal.get(meal, []):
+                menu_item_id = row.get("menu_item_id")
+                if menu_item_id is None:
+                    continue
+                ordered_units = float(order_quantities.get(int(menu_item_id), 0) or 0)
+                if ordered_units <= 0:
+                    continue
+                parent_name = row.get("menu_entry_name") or f"Menu Item #{menu_item_id}"
+
+                combo_id = row.get("combo_id")
+                item_id = row.get("item_id")
+                if combo_id is not None:
+                    for component in combo_components.get(int(combo_id), []):
+                        required_units = ordered_units * float(component.get("quantity") or 0)
+                        if required_units <= 0:
+                            continue
+                        if component.get("component_item_id") is not None:
+                            _accumulate_production_item(
+                                aggregate,
+                                issues,
+                                parent_name=parent_name,
+                                item_details=item_details,
+                                item_id=int(component["component_item_id"]),
+                                demand_units=required_units,
+                            )
+                        else:
+                            resolved_item_id, _, resolution_error = _resolve_component_type_for_meal(
+                                resolved_default_ids,
+                                resolved_default_names,
+                                resolution_counts,
+                                meal=meal,
+                                component_type_id=component.get("component_type_id"),
+                            )
+                            if resolved_item_id is not None:
+                                _accumulate_production_item(
+                                    aggregate,
+                                    issues,
+                                    parent_name=parent_name,
+                                    item_details=item_details,
+                                    item_id=resolved_item_id,
+                                    demand_units=required_units,
+                                )
+                                continue
+                            _append_production_issue(
+                                issues,
+                                issue_type="unresolved_generic_component",
+                                parent_name=parent_name,
+                                required_units=required_units,
+                                component_type_name=component.get("component_type_name"),
+                                detail=resolution_error
+                                or "Generic component still needs item-of-the-day resolution",
+                            )
+                    continue
+
+                if item_id is None:
+                    continue
+
+                normalized_item_id = int(item_id)
+                if normalized_item_id in plated_parent_ids:
+                    for component in plated_components.get(normalized_item_id, []):
+                        required_units = ordered_units * float(component.get("quantity") or 0)
+                        if required_units <= 0:
+                            continue
+                        if component.get("component_item_id") is not None:
+                            _accumulate_production_item(
+                                aggregate,
+                                issues,
+                                parent_name=parent_name,
+                                item_details=item_details,
+                                item_id=int(component["component_item_id"]),
+                                demand_units=required_units,
+                            )
+                        else:
+                            resolved_item_id, _, resolution_error = _resolve_component_type_for_meal(
+                                resolved_default_ids,
+                                resolved_default_names,
+                                resolution_counts,
+                                meal=meal,
+                                component_type_id=component.get("component_type_id"),
+                            )
+                            if resolved_item_id is not None:
+                                _accumulate_production_item(
+                                    aggregate,
+                                    issues,
+                                    parent_name=parent_name,
+                                    item_details=item_details,
+                                    item_id=resolved_item_id,
+                                    demand_units=required_units,
+                                )
+                                continue
+                            _append_production_issue(
+                                issues,
+                                issue_type="unresolved_generic_component",
+                                parent_name=parent_name,
+                                required_units=required_units,
+                                component_type_name=component.get("component_type_name"),
+                                detail=resolution_error
+                                or "Generic component still needs item-of-the-day resolution",
+                            )
+                    continue
+
+                _accumulate_production_item(
+                    aggregate,
+                    issues,
+                    parent_name=parent_name,
+                    item_details=item_details,
+                    item_id=normalized_item_id,
+                    demand_units=ordered_units,
+                )
+
+            meal_items = sorted(
+                (
+                    {
+                        **value,
+                        "order_units": round(float(value["order_units"]), 3),
+                        "production_quantity": round(float(value["production_quantity"]), 3),
+                    }
+                    for value in aggregate.values()
+                ),
+                key=lambda item: (item.get("item_name") or "").lower(),
+            )
+            response_meals.append(
+                {
+                    "meal": meal,
+                    "is_released": meal_status[meal]["is_released"],
+                    "is_production_generated": meal_status[meal]["is_production_generated"],
+                    "items": meal_items,
+                    "issues": issues,
+                }
+            )
+
+        return {
+            "date": date,
+            "city_code": resolved_city,
+            "period_type": period_type,
+            "meals": response_meals,
+        }
+    except mysql.connector.Error as err:
+        raise HTTPException(status_code=500, detail=str(err))
     finally:
         cursor.close()
         db.close()
@@ -5351,6 +7370,88 @@ def get_production_orders_summary(
         db.close()
 
 
+@app.post("/api/production/plated-expand-preview", tags=["Production"])
+def preview_plated_item_expansion(
+    payload: PlatedExpansionPreviewPayload,
+    user: Dict[str, Any] = Depends(admin_required),
+):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        normalized_input: Dict[int, float] = {}
+        for entry in payload.items:
+            normalized_input[entry.item_id] = (
+                normalized_input.get(entry.item_id, 0.0) + float(entry.quantity)
+            )
+
+        expanded_result = expand_plated_quantities(cursor, normalized_input)
+        expanded_quantities = expanded_result.get("item_quantities", {})
+        unresolved_component_types = expanded_result.get("unresolved_component_types", [])
+        if not expanded_quantities and not unresolved_component_types:
+            return {"items": [], "expanded_items": [], "unresolved_component_types": []}
+
+        item_ids = sorted(expanded_quantities.keys())
+        placeholders = ", ".join(["%s"] * len(item_ids))
+        cursor.execute(
+            f"""
+            SELECT item_id,
+                   name,
+                   uom_customer,
+                   unit_packing,
+                   uom_packing,
+                   uom_production,
+                   packing_to_production_rate
+              FROM items
+             WHERE item_id IN ({placeholders})
+             ORDER BY name ASC
+            """,
+            tuple(item_ids),
+        )
+        item_rows = {
+            int(row["item_id"]): row for row in (cursor.fetchall() or []) if row.get("item_id") is not None
+        }
+
+        expanded_items = []
+        for item_id in item_ids:
+            row = item_rows.get(item_id, {})
+            expanded_qty = float(expanded_quantities[item_id])
+            unit_packing = row.get("unit_packing")
+            conversion_rate = row.get("packing_to_production_rate")
+            production_quantity = None
+            if unit_packing is not None and conversion_rate is not None:
+                production_quantity = (
+                    expanded_qty * float(unit_packing) * float(conversion_rate)
+                )
+
+            expanded_items.append(
+                {
+                    "item_id": item_id,
+                    "name": row.get("name"),
+                    "expanded_quantity": expanded_qty,
+                    "uom_customer": row.get("uom_customer"),
+                    "unit_packing": float(unit_packing) if unit_packing is not None else None,
+                    "uom_packing": row.get("uom_packing"),
+                    "uom_production": row.get("uom_production"),
+                    "packing_to_production_rate": float(conversion_rate) if conversion_rate is not None else None,
+                    "production_quantity": production_quantity,
+                }
+            )
+
+        return {
+            "items": [
+                {"item_id": entry.item_id, "quantity": float(entry.quantity)}
+                for entry in payload.items
+            ],
+            "expanded_items": expanded_items,
+            "unresolved_component_types": unresolved_component_types,
+        }
+    except mysql.connector.Error as err:
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
 @app.get("/api/menu", tags=["Daily Menu"])
 def get_daily_menu(
     date: Optional[str] = Query(None, description="Date in YYYY-MM-DD"),
@@ -5363,6 +7464,10 @@ def get_daily_menu(
     ),
     city_code: Optional[str] = Query(None, alias="city_code"),
     menu_type: Optional[str] = Query(MENU_TYPE_ONE_DAY, alias="menu_type"),
+    include_combos: bool = Query(
+        False,
+        description="When true, includes combo menu rows in the response",
+    ),
     user: Optional[Dict[str, Any]] = Depends(get_optional_user),
 ):
     resolved_city = _resolve_city_context(city_code, user)
@@ -5376,7 +7481,12 @@ def get_daily_menu(
         target_bld_type = CONDIMENTS_BLD_TYPE
     ensure_menu_allowed(resolved_city, resolved_menu_type)
     return _get_daily_menu_internal(
-        date, target_bld_type, period_type, resolved_city, resolved_menu_type
+        date,
+        target_bld_type,
+        period_type,
+        resolved_city,
+        resolved_menu_type,
+        include_combos=include_combos,
     )
 
 
@@ -5436,14 +7546,15 @@ def create_order(payload: CreateOrderPayload):
 
         cursor.execute(
             """
-            INSERT INTO orders (customer_id, address_id, total_price, payment_method, status, order_type, paid, discount, cgst, sgst)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO orders (customer_id, address_id, total_price, payment_method, order_date, status, order_type, paid, discount, cgst, sgst)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 payload.customer_id,
                 address_id,
                 float(totals["total_price"]),
                 payload.payment_method,
+                payload.order_date,
                 stored_status,
                 payload.order_type or "one_time",
                 paid_flag,
@@ -5456,11 +7567,19 @@ def create_order(payload: CreateOrderPayload):
 
         cursor.executemany(
             """
-            INSERT INTO order_items (order_id, item_id, quantity, price)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO order_items (order_id, item_id, combo_id, menu_item_id, meal_type, quantity, price)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             """,
             [
-                (order_id, item.item_id, item.quantity, float(item.price))
+                (
+                    order_id,
+                    item.item_id,
+                    item.combo_id,
+                    item.menu_item_id,
+                    item.meal_type,
+                    item.quantity,
+                    float(item.price),
+                )
                 for item in payload.items
             ],
         )
@@ -5557,9 +7676,10 @@ def list_customer_orders(customer_id: int, limit: int = Query(50, ge=1, le=200))
             SELECT oi.order_id,
                    oi.quantity,
                    oi.price,
-                   i.name AS item_name
+                   COALESCE(i.name, co.combo_name) AS item_name
               FROM order_items oi
-              JOIN items i ON oi.item_id = i.item_id
+              LEFT JOIN items i ON oi.item_id = i.item_id
+              LEFT JOIN combos co ON oi.combo_id = co.combo_id
              WHERE oi.order_id IN ({placeholders})
              ORDER BY oi.order_id ASC, oi.order_item_id ASC
             """,
