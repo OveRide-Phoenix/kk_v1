@@ -46,7 +46,7 @@ sqlparse==0.5.3
 starlette==0.47.2
 tqdm==4.67.1
 typing-inspection==0.4.1
-typing_extensions==4.14.1
+typing_extensions>=4.15.0
 uritemplate==4.2.0
 urllib3==2.5.0
 uvicorn==0.35.0
