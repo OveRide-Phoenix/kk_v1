@@ -35,15 +35,36 @@ async function request(path: string, init?: RequestInit) {
     headers,
     ...init,
   });
-  // Optional: handle 401 with auto-refresh
+  // On 401: attempt a silent token refresh, then retry the original request once.
   if (res.status === 401) {
-    // try refresh once
     const r = await fetch(`${API_BASE}/auth/refresh`, {
       method: "POST",
-      credentials: "include",
+      credentials: "include", // sends the refresh_token HTTP-only cookie
     });
     if (r.ok) {
-      return fetch(`${API_BASE}${path}`, { credentials: "include", ...init });
+      // Persist the new tokens in localStorage so components that read
+      // localStorage directly (and the Authorization header injected above)
+      // stay in sync with the freshly-rotated cookies.
+      try {
+        const tokens = await r.clone().json();
+        if (tokens?.access_token) {
+          localStorage.setItem("access_token", tokens.access_token);
+        }
+        if (tokens?.refresh_token) {
+          localStorage.setItem("refresh_token", tokens.refresh_token);
+        }
+      } catch {
+        // ignore parse errors — cookie-based auth still works
+      }
+      // Retry original request; updated Authorization header picks up new token.
+      const retryHeaders = new Headers(headers);
+      const newToken = localStorage.getItem("access_token");
+      if (newToken) retryHeaders.set("Authorization", `Bearer ${newToken}`);
+      return fetch(`${API_BASE}${path}`, {
+        credentials: "include",
+        ...init,
+        headers: retryHeaders,
+      });
     }
   }
   return res;

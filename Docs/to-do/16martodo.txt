@@ -1,7 +1,3 @@
-City based app
-
-
-
 address immutable - so old addresses dont get deleted and stuff, so we need to add an active/deprecated field to addresses table
 
 keep effective-date and status fields for item price history and stuff

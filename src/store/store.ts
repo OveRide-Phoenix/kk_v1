@@ -96,14 +96,13 @@ const initialRoleCodes = normaliseRoleCodes(persistedRoleCodes);
 const normalizeCityPreference = (value?: string | null) => normalizeCityCode(value ?? DEFAULT_CITY);
 
 const resolveEligibleCities = (user: AuthUser): string[] => {
-  const raw = Array.isArray(user?.eligible_city_codes) && user?.eligible_city_codes.length
-    ? user?.eligible_city_codes
-    : user?.city_code
-      ? [user.city_code]
-      : [];
-  const normalized = raw
-    .map((code) => normalizeCityCode(code || DEFAULT_CITY))
-    .filter(Boolean);
+  const raw =
+    Array.isArray(user?.eligible_city_codes) && user?.eligible_city_codes.length
+      ? user?.eligible_city_codes
+      : user?.city_code
+        ? [user.city_code]
+        : [];
+  const normalized = raw.map((code) => normalizeCityCode(code || DEFAULT_CITY)).filter(Boolean);
   if (normalized.length === 0 && user?.city_code) {
     normalized.push(normalizeCityCode(user.city_code));
   }
@@ -166,7 +165,9 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     set({ user });
 
     const roles = user?.roles ?? [];
-    const codes = (user?.role_codes ?? (user as Record<string, unknown> | null)?.roleCodes ?? []) as string[];
+    const codes = (user?.role_codes ??
+      (user as Record<string, unknown> | null)?.roleCodes ??
+      []) as string[];
     get().setRoleState(roles, codes);
 
     if (user) {
@@ -174,7 +175,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       const current = normalizeCityPreference(get().adminCity);
       const nextCity = eligibleCities.includes(current)
         ? current
-        : eligibleCities[0] ?? normalizeCityPreference(user.city_code);
+        : (eligibleCities[0] ?? normalizeCityPreference(user.city_code));
       get().setAdminCity(nextCity);
     }
   },
@@ -182,6 +183,18 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     return get().roleCodes.includes(roleCode);
   },
   logout: async () => {
+    // Clear HTTP-only cookies that JS cannot touch directly.
+    if (isBrowser) {
+      try {
+        await fetch("/api/backend/auth/logout", {
+          method: "POST",
+          credentials: "include",
+        });
+      } catch {
+        // Best-effort — proceed with local cleanup even if the request fails.
+      }
+    }
+
     if (isBrowser) {
       localStorage.removeItem("access_token");
       localStorage.removeItem("refresh_token");

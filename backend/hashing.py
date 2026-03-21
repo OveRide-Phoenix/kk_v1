@@ -1,8 +1,36 @@
+"""Password hashing utilities for Kuteera Kitchen backend.
+
+Uses bcrypt via the ``bcrypt`` package. Call :func:`hash_password` when
+storing a new password and :func:`verify_password` when checking one.
+"""
+
 import bcrypt
 
-pwd = b"#Jun03123"
-h = b"$2b$12$togjzHD04OtMRDgvKa2DR.k49xb8r5gy0gFHlQpprpVWabyeCYYDe"
 
-print("pwd bytes:", repr(pwd), "len:", len(pwd))
-print("hash len:", len(h))  # should be 60
-print("matches?", bcrypt.checkpw(pwd, h))
+def hash_password(plain: str) -> str:
+    """Hash a plain-text password with bcrypt.
+
+    Args:
+        plain: The plain-text password to hash.
+
+    Returns:
+        The bcrypt hash string, suitable for storage in the database.
+    """
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(plain.encode(), salt).decode()
+
+
+def verify_password(plain: str, hashed: str) -> bool:
+    """Verify a plain-text password against a stored bcrypt hash.
+
+    Args:
+        plain: The plain-text password supplied by the user.
+        hashed: The bcrypt hash retrieved from the database.
+
+    Returns:
+        True if the password matches, False otherwise.
+    """
+    try:
+        return bcrypt.checkpw(plain.encode(), hashed.encode())
+    except Exception:
+        return False

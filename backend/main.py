@@ -120,9 +120,7 @@ def _parse_optional_date(value: Optional[str]) -> Optional[date]:
     try:
         return datetime.strptime(stripped, "%Y-%m-%d").date()
     except ValueError as exc:
-        raise HTTPException(
-            status_code=400, detail="Invalid date format. Use YYYY-MM-DD."
-        ) from exc
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.") from exc
 
 
 MEAL_NORMALIZATION_MAP = {
@@ -199,11 +197,7 @@ def _validate_bld_ids(cursor, bld_ids: Iterable[Any]) -> List[int]:
         tuple(normalized),
     )
     rows = cursor.fetchall() or []
-    valid = {
-        value
-        for value in (_row_value(row, "bld_id", 0) for row in rows)
-        if value is not None
-    }
+    valid = {value for value in (_row_value(row, "bld_id", 0) for row in rows) if value is not None}
 
     invalid = [bid for bid in normalized if bid not in valid]
     if invalid:
@@ -218,11 +212,7 @@ def get_item_blds(cursor, item_id: int) -> List[int]:
         (item_id,),
     )
     rows = cursor.fetchall() or []
-    return [
-        value
-        for value in (_row_value(row, "bld_id", 0) for row in rows)
-        if value is not None
-    ]
+    return [value for value in (_row_value(row, "bld_id", 0) for row in rows) if value is not None]
 
 
 def set_item_blds(cursor, item_id: int, bld_ids: List[int]) -> None:
@@ -241,11 +231,7 @@ def attach_bld_ids(cursor, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         return items
 
     item_ids = sorted(
-        {
-            int(item_id)
-            for item_id in (item.get("item_id") for item in items)
-            if item_id is not None
-        }
+        {int(item_id) for item_id in (item.get("item_id") for item in items) if item_id is not None}
     )
     if not item_ids:
         for item in items:
@@ -277,9 +263,7 @@ def attach_bld_ids(cursor, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             normalized_key = int(raw_key)
         except (TypeError, ValueError):
             normalized_key = None
-        item["bld_ids"] = (
-            mapping.get(normalized_key, []) if normalized_key is not None else []
-        )
+        item["bld_ids"] = mapping.get(normalized_key, []) if normalized_key is not None else []
     return items
 
 
@@ -289,11 +273,7 @@ def get_combo_blds(cursor, combo_id: int) -> List[int]:
         (combo_id,),
     )
     rows = cursor.fetchall() or []
-    return [
-        value
-        for value in (_row_value(row, "bld_id", 0) for row in rows)
-        if value is not None
-    ]
+    return [value for value in (_row_value(row, "bld_id", 0) for row in rows) if value is not None]
 
 
 def set_combo_blds(cursor, combo_id: int, bld_ids: List[int]) -> None:
@@ -307,9 +287,7 @@ def set_combo_blds(cursor, combo_id: int, bld_ids: List[int]) -> None:
     )
 
 
-def attach_combo_bld_ids(
-    cursor, combos: List[Dict[str, Any]]
-) -> List[Dict[str, Any]]:
+def attach_combo_bld_ids(cursor, combos: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     if not combos:
         return combos
 
@@ -350,15 +328,11 @@ def attach_combo_bld_ids(
             normalized_key = int(raw_key)
         except (TypeError, ValueError):
             normalized_key = None
-        combo["bld_ids"] = (
-            mapping.get(normalized_key, []) if normalized_key is not None else []
-        )
+        combo["bld_ids"] = mapping.get(normalized_key, []) if normalized_key is not None else []
     return combos
 
 
-def _is_condiment_from_blds(
-    bld_ids: Iterable[Any], condiments_bld_id: Optional[int]
-) -> bool:
+def _is_condiment_from_blds(bld_ids: Iterable[Any], condiments_bld_id: Optional[int]) -> bool:
     if condiments_bld_id is None:
         return False
     try:
@@ -418,7 +392,9 @@ def ensure_component_type_ids_exist(cursor, component_type_ids: Iterable[Any]) -
         for value in (_row_value(row, "component_type_id", 0) for row in rows)
         if value is not None
     }
-    missing = [component_type_id for component_type_id in normalized if component_type_id not in existing]
+    missing = [
+        component_type_id for component_type_id in normalized if component_type_id not in existing
+    ]
     if missing:
         raise HTTPException(
             status_code=400,
@@ -543,9 +519,7 @@ def _fetch_item_detail(
     return cursor.fetchone()
 
 
-def filter_items_by_bld(
-    items: List[Dict[str, Any]], bld_id: int
-) -> List[Dict[str, Any]]:
+def filter_items_by_bld(items: List[Dict[str, Any]], bld_id: int) -> List[Dict[str, Any]]:
     target = int(bld_id)
     filtered: List[Dict[str, Any]] = []
     for item in items:
@@ -560,11 +534,7 @@ def filter_items_by_bld(
 
 
 def attach_plated_flags(cursor, items: List[Dict[str, Any]]) -> None:
-    item_ids = [
-        int(item.get("item_id"))
-        for item in items
-        if item.get("item_id") is not None
-    ]
+    item_ids = [int(item.get("item_id")) for item in items if item.get("item_id") is not None]
     if not item_ids:
         return
     placeholders = ", ".join(["%s"] * len(item_ids))
@@ -573,9 +543,7 @@ def attach_plated_flags(cursor, items: List[Dict[str, Any]]) -> None:
         tuple(item_ids),
     )
     plated_ids = {
-        int(row["item_id"])
-        for row in (cursor.fetchall() or [])
-        if row.get("item_id") is not None
+        int(row["item_id"]) for row in (cursor.fetchall() or []) if row.get("item_id") is not None
     }
     for item in items:
         item_id = item.get("item_id")
@@ -606,9 +574,7 @@ def create_access_token(sub: dict) -> str:
 
 
 def create_refresh_token(sub: dict, jti: str) -> str:
-    return _create_jwt(
-        {"sub": sub, "type": "refresh", "jti": jti}, REFRESH_TOKEN_TTL_SEC
-    )
+    return _create_jwt({"sub": sub, "type": "refresh", "jti": jti}, REFRESH_TOKEN_TTL_SEC)
 
 
 def decode_token(token: str) -> dict:
@@ -792,9 +758,7 @@ def _bulk_update_order_status_for_date(
     new_status: str,
     allowed_previous_statuses: Iterable[str],
 ) -> int:
-    normalized_previous = sorted(
-        {status.lower() for status in allowed_previous_statuses if status}
-    )
+    normalized_previous = sorted({status.lower() for status in allowed_previous_statuses if status})
     if not normalized_previous:
         return 0
     placeholders = ", ".join(["%s"] * len(normalized_previous))
@@ -847,9 +811,7 @@ def _customer_has_city(cursor, customer_id: int, city_code: CityCode) -> bool:
     return cursor.fetchone() is not None
 
 
-def _resolve_city_context(
-    city_override: Optional[str], user: Optional[Dict[str, Any]]
-) -> CityCode:
+def _resolve_city_context(city_override: Optional[str], user: Optional[Dict[str, Any]]) -> CityCode:
     if city_override:
         return normalize_city_code(city_override)
     if user:
@@ -870,9 +832,7 @@ def normalize_menu_type(value: Optional[str]) -> str:
 
 def ensure_menu_allowed(city_code: CityCode, menu_type: str):
     if menu_type == MENU_TYPE_ONE_DAY and not city_supports_food(city_code):
-        raise HTTPException(
-            status_code=400, detail="This city does not support food menus yet."
-        )
+        raise HTTPException(status_code=400, detail="This city does not support food menus yet.")
     if menu_type == MENU_TYPE_CONDIMENTS and not city_supports_condiments(city_code):
         raise HTTPException(
             status_code=400, detail="This city does not support condiments menus yet."
@@ -946,9 +906,7 @@ def hydrate_team_members(db, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]
         if not roles:
             continue
         role_details = make_role_summary(roles, role_map)
-        role_codes = [
-            detail.get("code") for detail in role_details if detail.get("code")
-        ]
+        role_codes = [detail.get("code") for detail in role_details if detail.get("code")]
         members.append(
             {
                 "customer_id": row["customer_id"],
@@ -996,9 +954,7 @@ def apply_team_member_update(
         if role_ids is not None:
             normalised_roles = sorted({int(rid) for rid in role_ids})
             if require_role_ids and not normalised_roles:
-                raise HTTPException(
-                    status_code=400, detail="At least one role is required"
-                )
+                raise HTTPException(status_code=400, detail="At least one role is required")
             validate_role_ids(db, normalised_roles)
             if normalised_roles:
                 updates.append("roles=%s")
@@ -1015,10 +971,17 @@ def apply_team_member_update(
         if admin_password is not None:
             password = admin_password.strip()
             if password:
-                if len(password) < 6:
+                if len(password) < 8:
                     raise HTTPException(
                         status_code=400,
-                        detail="Admin password must be at least 6 characters",
+                        detail="Admin password must be at least 8 characters",
+                    )
+                has_letter = any(c.isalpha() for c in password)
+                has_digit = any(c.isdigit() for c in password)
+                if not has_letter or not has_digit:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Admin password must contain at least one letter and one number",
                     )
                 updates.append("admin_password_hash=%s")
                 params.append(hash_password(password))
@@ -1163,9 +1126,7 @@ def get_city(phone: str):
         cursor.execute(query, (phone,))
         result = cursor.fetchone()
         if not result:
-            raise HTTPException(
-                status_code=404, detail="User does not exist. Please register."
-            )
+            raise HTTPException(status_code=404, detail="User does not exist. Please register.")
 
         roles = parse_role_ids(result.get("roles"))
         _, role_codes, role_details = build_role_context(db, roles)
@@ -1178,9 +1139,7 @@ def get_city(phone: str):
         return {
             "city": result["city"],
             "city_code": result.get("city_code") or DEFAULT_CITY,
-            "eligible_city_codes": [
-                row.get("city_code") or DEFAULT_CITY for row in eligible_rows
-            ],
+            "eligible_city_codes": [row.get("city_code") or DEFAULT_CITY for row in eligible_rows],
             "is_admin": bool(is_admin),
             "roles": roles,
             "role_codes": role_codes,
@@ -1313,9 +1272,7 @@ def register_customer(data: CustomerCreate):
         normalized_city_code = _resolve_city_code(data.city, data.city_code)
         city_label = _normalize_city_label(data.city, normalized_city_code)
         # Check if the mobile number already exists
-        cursor.execute(
-            "SELECT id FROM customers WHERE primary_mobile = %s", (data.primary_mobile,)
-        )
+        cursor.execute("SELECT id FROM customers WHERE primary_mobile = %s", (data.primary_mobile,))
         existing_customer = cursor.fetchone()
 
         if existing_customer:
@@ -1415,9 +1372,22 @@ class TeamMemberUpdateRequest(BaseModel):
     admin_is_active: Optional[bool] = None
 
 
-# --- LOGIN: return tokens in JSON for localStorage ---
+# --- LOGIN: set HTTP-only cookies + return tokens in JSON body ---
 @app.post("/api/login")
 def login(data: LoginRequest, response: Response):
+    """Authenticate a customer or admin user and issue JWT tokens.
+
+    Sets access and refresh tokens as HTTP-only cookies (used by Next.js
+    middleware and SSR requests) and also returns them in the JSON body
+    so the frontend can persist them in localStorage for client-side API calls.
+
+    Args:
+        data: Login credentials (phone, optional admin_password, optional city_code).
+        response: FastAPI response object used to set cookies.
+
+    Returns:
+        JSON with message, user profile, role info, and token pair.
+    """
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
@@ -1440,9 +1410,7 @@ def login(data: LoginRequest, response: Response):
         result = cursor.fetchone()
 
         if not result:
-            raise HTTPException(
-                status_code=404, detail="User not found. Please register."
-            )
+            raise HTTPException(status_code=404, detail="User not found. Please register.")
 
         roles = parse_role_ids(result.get("roles"))
         role_map, role_codes, role_details = build_role_context(db, roles)
@@ -1467,9 +1435,7 @@ def login(data: LoginRequest, response: Response):
             admin_login = True
 
         if not admin_password_provided and not data.city_code:
-            raise HTTPException(
-                status_code=400, detail="Please select a city to continue."
-            )
+            raise HTTPException(status_code=400, detail="Please select a city to continue.")
 
         requested_city_code = _resolve_city_code(None, data.city_code)
         if not admin_password_provided and not _customer_has_city(
@@ -1512,7 +1478,12 @@ def login(data: LoginRequest, response: Response):
             base_payload["role"] = "customer"
 
         access = create_access_token(base_payload)
-        refresh = create_refresh_token(base_payload, str(uuid.uuid4()))
+        refresh_tok = create_refresh_token(base_payload, str(uuid.uuid4()))
+
+        # Set HTTP-only cookies so Next.js middleware and SSR requests can
+        # authenticate without accessing JavaScript-visible storage.
+        set_cookie(response, "access_token", access, ACCESS_TOKEN_TTL_SEC)
+        set_cookie(response, "refresh_token", refresh_tok, REFRESH_TOKEN_TTL_SEC)
 
         user_payload = dict(base_payload)
         user_payload["role_details"] = role_details
@@ -1523,7 +1494,7 @@ def login(data: LoginRequest, response: Response):
             "is_admin_account": is_admin_account,
             "user": user_payload,
             "access_token": access,
-            "refresh_token": refresh,
+            "refresh_token": refresh_tok,
             "role_codes": role_codes,
             "role_details": role_details,
         }
@@ -1543,13 +1514,11 @@ def list_roles(user=Depends(admin_required)):
     cursor = db.cursor(dictionary=True)
     try:
         ensure_default_roles(cursor)
-        cursor.execute(
-            """
+        cursor.execute("""
             SELECT role_id, code, name, description, is_system, created_at
             FROM roles
             ORDER BY name ASC
-            """
-        )
+            """)
         roles = cursor.fetchall()
         usage = role_usage_counts(db)
         for role in roles:
@@ -1626,9 +1595,7 @@ def update_role(role_id: int, payload: RoleUpdateRequest, user=Depends(admin_req
             if not new_name:
                 raise HTTPException(status_code=400, detail="Role name is required")
             if role["is_system"] and new_name != role["name"]:
-                raise HTTPException(
-                    status_code=400, detail="System roles cannot be renamed"
-                )
+                raise HTTPException(status_code=400, detail="System roles cannot be renamed")
             updates.append("name=%s")
             params.append(new_name)
 
@@ -1666,22 +1633,16 @@ def delete_role(role_id: int, user=Depends(admin_required)):
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
-        cursor.execute(
-            "SELECT role_id, code, is_system FROM roles WHERE role_id=%s", (role_id,)
-        )
+        cursor.execute("SELECT role_id, code, is_system FROM roles WHERE role_id=%s", (role_id,))
         role = cursor.fetchone()
         if not role:
             raise HTTPException(status_code=404, detail="Role not found")
         if role["is_system"] or role["code"] in {ADMIN_ROLE_CODE, DEVELOPER_ROLE_CODE}:
-            raise HTTPException(
-                status_code=400, detail="Protected roles cannot be deleted"
-            )
+            raise HTTPException(status_code=400, detail="Protected roles cannot be deleted")
 
         usage = role_usage_counts(db)
         if usage.get(role_id, 0) > 0:
-            raise HTTPException(
-                status_code=400, detail="Role is assigned to team members"
-            )
+            raise HTTPException(status_code=400, detail="Role is assigned to team members")
 
         cursor.execute("DELETE FROM roles WHERE role_id=%s", (role_id,))
         db.commit()
@@ -1696,14 +1657,12 @@ def list_team_members(user=Depends(admin_required)):
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
-        cursor.execute(
-            """
+        cursor.execute("""
             SELECT customer_id, name, primary_mobile, email, roles, admin_is_active, admin_password_hash, created_at
             FROM customers
             WHERE roles IS NOT NULL
             ORDER BY name ASC
-            """
-        )
+            """)
         rows = cursor.fetchall()
         members = hydrate_team_members(db, rows)
         return {"team_members": members}
@@ -1752,43 +1711,67 @@ def update_team_member(
 
 
 @app.post("/auth/refresh")
-def refresh(
+async def refresh(
     request: Request,
     response: Response,
     creds: HTTPAuthorizationCredentials | None = Depends(bearer),
 ):
-    # Try Authorization: Bearer <refresh_token> first
-    token = None
-    if creds and creds.scheme.lower() == "bearer":
+    """Issue a new access token (and rotate the refresh token) given a valid refresh token.
+
+    Token lookup order:
+    1. HTTP-only ``refresh_token`` cookie (preferred — set by login endpoint).
+    2. ``Authorization: Bearer <token>`` header (client-side fallback).
+    3. JSON body ``{"refresh_token": "..."}`` (legacy fallback).
+
+    On success, sets a fresh access-token cookie and rotates the refresh-token
+    cookie so each refresh window is single-use from the browser's perspective.
+    The new tokens are also returned in the JSON body for localStorage consumers.
+
+    Args:
+        request: FastAPI request object.
+        response: FastAPI response object used to set cookies.
+        creds: Optional Bearer credentials from the Authorization header.
+
+    Returns:
+        JSON with new ``access_token`` and ``refresh_token``.
+    """
+    # Prefer the HTTP-only cookie set by the login endpoint.
+    token = request.cookies.get("refresh_token")
+
+    # Fallback: Authorization: Bearer <refresh_token>
+    if not token and creds and creds.scheme.lower() == "bearer":
         token = creds.credentials
 
-    # Fallback: JSON body with {"refresh_token": "..."}
+    # Fallback: JSON body {"refresh_token": "..."}
     if not token:
         try:
-            body = request.json() if hasattr(request, "json") else None
+            body = await request.json()
+            if isinstance(body, dict):
+                token = body.get("refresh_token")
         except Exception:
-            body = None
-        if body and isinstance(body, dict):
-            token = body.get("refresh_token")
-
-    # Fallback: legacy cookie (if you still keep it set somewhere)
-    if not token:
-        token = request.cookies.get("refresh_token")
+            pass
 
     if not token:
         raise HTTPException(status_code=401, detail="No refresh token")
 
     try:
-        payload = decode_token(token)  # your helper already configured
+        payload = decode_token(token)
         if payload.get("type") != "refresh":
             raise ValueError("wrong token type")
-        sub = payload["sub"] if "sub" in payload else payload.get("usr")
+        sub = payload.get("sub") or payload.get("usr")
+        if not sub:
+            raise ValueError("missing sub claim")
     except Exception:
-        raise HTTPException(status_code=401, detail="Invalid refresh token")
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
 
     new_access = create_access_token(sub)
+    # Rotate the refresh token so each refresh window issues a fresh token.
+    new_refresh = create_refresh_token(sub, str(uuid.uuid4()))
 
-    return {"access_token": new_access}
+    set_cookie(response, "access_token", new_access, ACCESS_TOKEN_TTL_SEC)
+    set_cookie(response, "refresh_token", new_refresh, REFRESH_TOKEN_TTL_SEC)
+
+    return {"access_token": new_access, "refresh_token": new_refresh}
 
 
 @app.post("/auth/logout")
@@ -2246,11 +2229,7 @@ def _item_column_field_map(available_columns: Set[str]) -> Dict[str, str]:
         "net_price": "net_price",
         "is_combo": "is_combo",
     }
-    return {
-        field: column
-        for field, column in field_map.items()
-        if column in available_columns
-    }
+    return {field: column for field, column in field_map.items() if column in available_columns}
 
 
 @app.get("/api/products/items", tags=["Products"])
@@ -2354,15 +2333,13 @@ def get_all_items(
         ]
 
         select_sql = ",\n                    ".join(select_columns)
-        cursor.execute(
-            f"""
+        cursor.execute(f"""
                 SELECT 
                     {select_sql}
                 FROM items i
                 LEFT JOIN categories c ON i.category_id = c.category_id
                 LEFT JOIN component_types ct ON i.component_type_id = ct.component_type_id
-            """
-        )
+            """)
         records = cursor.fetchall()
 
         attach_bld_ids(cursor, records)
@@ -2373,9 +2350,7 @@ def get_all_items(
         except HTTPException:
             condiments_bld_id = None
         for row in records:
-            row["is_condiment"] = _is_condiment_from_blds(
-                row.get("bld_ids"), condiments_bld_id
-            )
+            row["is_condiment"] = _is_condiment_from_blds(row.get("bld_ids"), condiments_bld_id)
             if row.get("is_plated") and not include_plated:
                 continue
             if only_condiments and not row["is_condiment"]:
@@ -2390,9 +2365,7 @@ def get_all_items(
 
 
 @app.post("/api/products/items", tags=["Products"])
-def create_item(
-    payload: ItemCreatePayload, user: Dict[str, Any] = Depends(admin_required)
-):
+def create_item(payload: ItemCreatePayload, user: Dict[str, Any] = Depends(admin_required)):
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
@@ -2474,9 +2447,7 @@ def create_item(
             condiments_bld_id = resolve_bld_id(cursor, CONDIMENTS_BLD_TYPE)
         except HTTPException:
             condiments_bld_id = None
-        is_condiment_item = _is_condiment_from_blds(
-            normalized_bld_ids, condiments_bld_id
-        )
+        is_condiment_item = _is_condiment_from_blds(normalized_bld_ids, condiments_bld_id)
         _ensure_valid_meal_combination(normalized_bld_ids, condiments_bld_id)
 
         _ensure_valid_meal_combination(normalized_bld_ids, condiments_bld_id)
@@ -2495,9 +2466,7 @@ def create_item(
             ensure_component_type_ids_exist(cursor, [cleaned.get("component_type_id")])
 
         if not normalized_bld_ids:
-            raise HTTPException(
-                status_code=400, detail="At least one meal assignment is required"
-            )
+            raise HTTPException(status_code=400, detail="At least one meal assignment is required")
 
         field_map = {
             "name": "name",
@@ -2530,9 +2499,7 @@ def create_item(
         }
 
         field_map = {
-            field: column
-            for field, column in field_map.items()
-            if column in available_columns
+            field: column for field, column in field_map.items() if column in available_columns
         }
 
         columns: List[str] = []
@@ -2546,7 +2513,9 @@ def create_item(
             placeholders.append("%s")
             values.append(cleaned[field])
 
-        insert_query = f"INSERT INTO items ({', '.join(columns)}) VALUES ({', '.join(placeholders)})"
+        insert_query = (
+            f"INSERT INTO items ({', '.join(columns)}) VALUES ({', '.join(placeholders)})"
+        )
         cursor.execute(insert_query, values)
         item_id = cursor.lastrowid
 
@@ -2595,7 +2564,9 @@ def update_item(
         cursor.execute("SHOW COLUMNS FROM items")
         available_columns = {row["Field"] for row in cursor.fetchall()}
 
-        cursor.execute("SELECT item_id, component_type_id FROM items WHERE item_id = %s", (item_id,))
+        cursor.execute(
+            "SELECT item_id, component_type_id FROM items WHERE item_id = %s", (item_id,)
+        )
         existing_item = cursor.fetchone()
         if not existing_item:
             raise HTTPException(status_code=404, detail="Item not found")
@@ -2667,8 +2638,12 @@ def update_item(
             cleaned[field] = value
 
         is_condiment_item = _is_condiment_from_blds(
-            normalized_bld_ids if "bld_ids" in payload.model_fields_set else get_item_blds(cursor, item_id),
-            condiments_bld_id
+            (
+                normalized_bld_ids
+                if "bld_ids" in payload.model_fields_set
+                else get_item_blds(cursor, item_id)
+            ),
+            condiments_bld_id,
         )
         if is_condiment_item and not cleaned.get("category_id"):
             snacks_category_id = _resolve_category_id_by_name(cursor, "Snacks")
@@ -2719,9 +2694,7 @@ def update_item(
         }
 
         field_map = {
-            field: column
-            for field, column in field_map.items()
-            if column in available_columns
+            field: column for field, column in field_map.items() if column in available_columns
         }
 
         set_clauses: List[str] = []
@@ -2737,9 +2710,7 @@ def update_item(
 
         if set_clauses:
             values.append(item_id)
-            update_query = (
-                f"UPDATE items SET {', '.join(set_clauses)} WHERE item_id = %s"
-            )
+            update_query = f"UPDATE items SET {', '.join(set_clauses)} WHERE item_id = %s"
             cursor.execute(update_query, values)
             if cursor.rowcount == 0:
                 cursor.execute("SELECT 1 FROM items WHERE item_id = %s", (item_id,))
@@ -2814,9 +2785,7 @@ def get_all_combos():
 
 
 @app.post("/api/products/combos", tags=["Products"])
-def create_combo(
-    payload: ComboCreatePayload, user: Dict[str, Any] = Depends(admin_required)
-):
+def create_combo(payload: ComboCreatePayload, user: Dict[str, Any] = Depends(admin_required)):
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
@@ -2906,9 +2875,7 @@ def update_combo(
         if payload.combo_name is not None:
             normalized_name = payload.combo_name.strip()
             if not normalized_name:
-                raise HTTPException(
-                    status_code=400, detail="combo_name cannot be empty"
-                )
+                raise HTTPException(status_code=400, detail="combo_name cannot be empty")
             fields.append("combo_name = %s")
             values.append(normalized_name)
         if payload.price is not None:
@@ -2943,7 +2910,7 @@ def update_combo(
             normalized_items = normalize_combo_items(payload.items)
             ensure_item_ids_exist(
                 cursor,
-                (item["item_id"] for item in normalized_items if item.get("item_id") is not None)
+                (item["item_id"] for item in normalized_items if item.get("item_id") is not None),
             )
             ensure_component_type_ids_exist(
                 cursor,
@@ -2951,7 +2918,7 @@ def update_combo(
                     item["component_type_id"]
                     for item in normalized_items
                     if item.get("component_type_id") is not None
-                )
+                ),
             )
             cursor.execute("DELETE FROM combo_items WHERE combo_id = %s", (combo_id,))
             values = [
@@ -3031,9 +2998,7 @@ def get_all_plated_items():
         except HTTPException:
             condiments_bld_id = None
         for row in records:
-            row["is_condiment"] = _is_condiment_from_blds(
-                row.get("bld_ids"), condiments_bld_id
-            )
+            row["is_condiment"] = _is_condiment_from_blds(row.get("bld_ids"), condiments_bld_id)
         return records
     except mysql.connector.Error as err:
         raise HTTPException(status_code=500, detail=str(err))
@@ -3060,11 +3025,7 @@ def create_plated_item(
         normalized_components = normalize_plated_components(raw_components)
         ensure_item_ids_exist(
             cursor,
-            (
-                item["item_id"]
-                for item in normalized_components
-                if item.get("item_id") is not None
-            ),
+            (item["item_id"] for item in normalized_components if item.get("item_id") is not None),
         )
         ensure_component_type_ids_exist(
             cursor,
@@ -3291,9 +3252,7 @@ def update_plated_item(
 
 
 @app.delete("/api/products/plated-items/{item_id}", tags=["Products"])
-def delete_plated_item(
-    item_id: int, user: Dict[str, Any] = Depends(admin_required)
-):
+def delete_plated_item(item_id: int, user: Dict[str, Any] = Depends(admin_required)):
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
@@ -3336,8 +3295,7 @@ def get_all_addons():
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
-        cursor.execute(
-            """
+        cursor.execute("""
             SELECT 
                 ia.add_on_id,
                 main_item.name AS main_item_name,
@@ -3347,8 +3305,7 @@ def get_all_addons():
             FROM item_add_ons ia
             LEFT JOIN items main_item ON ia.main_item_id = main_item.item_id
             LEFT JOIN items add_on_item ON ia.add_on_item_id = add_on_item.item_id
-        """
-        )
+        """)
         return cursor.fetchall()
     except mysql.connector.Error as err:
         raise HTTPException(status_code=500, detail=str(err))
@@ -3372,9 +3329,7 @@ def get_all_categories():
 
 
 @app.post("/api/products/categories", tags=["Products"])
-def create_category(
-    payload: CategoryCreatePayload, user: Dict[str, Any] = Depends(admin_required)
-):
+def create_category(payload: CategoryCreatePayload, user: Dict[str, Any] = Depends(admin_required)):
     db = get_db()
     cursor = db.cursor()
     try:
@@ -3418,9 +3373,7 @@ def update_category(
     db = get_db()
     cursor = db.cursor()
     try:
-        cursor.execute(
-            "SELECT 1 FROM categories WHERE category_id = %s", (category_id,)
-        )
+        cursor.execute("SELECT 1 FROM categories WHERE category_id = %s", (category_id,))
         if cursor.fetchone() is None:
             raise HTTPException(status_code=404, detail="Category not found")
 
@@ -3459,9 +3412,7 @@ def delete_category(category_id: int, user: Dict[str, Any] = Depends(admin_requi
     db = get_db()
     cursor = db.cursor()
     try:
-        cursor.execute(
-            "SELECT 1 FROM categories WHERE category_id = %s", (category_id,)
-        )
+        cursor.execute("SELECT 1 FROM categories WHERE category_id = %s", (category_id,))
         if cursor.fetchone() is None:
             raise HTTPException(status_code=404, detail="Category not found")
 
@@ -3484,9 +3435,7 @@ def delete_category(category_id: int, user: Dict[str, Any] = Depends(admin_requi
             err.errno == errorcode.ER_ROW_IS_REFERENCED
             or err.errno == errorcode.ER_ROW_IS_REFERENCED_2
         ):
-            raise HTTPException(
-                status_code=400, detail="Category is in use and cannot be deleted"
-            )
+            raise HTTPException(status_code=400, detail="Category is in use and cannot be deleted")
         raise HTTPException(status_code=500, detail=str(err))
     finally:
         cursor.close()
@@ -3496,9 +3445,7 @@ def delete_category(category_id: int, user: Dict[str, Any] = Depends(admin_requi
 # 1. Fetch available items for a given meal (BLD)
 @app.get("/api/menu/available-items", tags=["Daily Menu"])
 def get_available_items(
-    bld_type: str = Query(
-        ..., description="BLD type: Breakfast, Lunch, Dinner, Condiments"
-    ),
+    bld_type: str = Query(..., description="BLD type: Breakfast, Lunch, Dinner, Condiments"),
     include_combos: bool = Query(
         False,
         description="When true, includes combo products mapped to the selected meal",
@@ -3606,9 +3553,7 @@ def get_available_items(
                 item["max_qty_breakfast"] = legacy_value
                 item["max_qty_lunch"] = legacy_value
                 item["max_qty_dinner"] = legacy_value
-                item["max_qty_condiments"] = item.get(
-                    "max_qty_condiments", legacy_value
-                )
+                item["max_qty_condiments"] = item.get("max_qty_condiments", legacy_value)
 
         attach_bld_ids(cursor, items)
         attach_plated_flags(cursor, items)
@@ -3703,15 +3648,11 @@ def _get_daily_menu_internal(
         params: List[Any] = [resolved_menu_type, city_code, bld_id]
         if resolved_menu_type == MENU_TYPE_ONE_DAY:
             if not date:
-                raise HTTPException(
-                    status_code=400, detail="date is required for ONE_DAY menus"
-                )
+                raise HTTPException(status_code=400, detail="date is required for ONE_DAY menus")
             where_clauses.append("date = %s")
             params.append(date)
             param_period = None if period_type == "festivals" else period_type
-            where_clauses.append(
-                "((period_type IS NULL AND %s IS NULL) OR (period_type = %s))"
-            )
+            where_clauses.append("((period_type IS NULL AND %s IS NULL) OR (period_type = %s))")
             params.extend([param_period, param_period])
         else:
             where_clauses.append("date IS NULL")
@@ -3921,17 +3862,13 @@ def upsert_daily_menu(payload: DailyMenuPayload):
         resolved_menu_type = normalize_menu_type(payload.menu_type)
         ensure_menu_allowed(city_code, resolved_menu_type)
         menu_date = payload.date if resolved_menu_type == MENU_TYPE_ONE_DAY else None
-        resolved_delivers_by = resolve_delivers_by_value(
-            canonical_bld_type, payload.delivers_by
-        )
+        resolved_delivers_by = resolve_delivers_by_value(canonical_bld_type, payload.delivers_by)
 
         find_conditions = ["menu_type = %s", "bld_id = %s", "city_code = %s"]
         params: List[Any] = [resolved_menu_type, bld_id, city_code]
         if resolved_menu_type == MENU_TYPE_ONE_DAY:
             if not menu_date:
-                raise HTTPException(
-                    status_code=400, detail="date is required for ONE_DAY menus"
-                )
+                raise HTTPException(status_code=400, detail="date is required for ONE_DAY menus")
             find_conditions.append("date = %s")
             params.append(menu_date)
         else:
@@ -3982,9 +3919,7 @@ def upsert_daily_menu(payload: DailyMenuPayload):
             )
             menu_id = cursor.lastrowid
 
-        normalized_menu_items: List[
-            Dict[str, Any]
-        ] = []
+        normalized_menu_items: List[Dict[str, Any]] = []
         seen_payload_keys: set[Tuple[str, int]] = set()
         for idx, mi in enumerate(payload.items, start=1):
             has_item = mi.item_id is not None
@@ -3994,11 +3929,7 @@ def upsert_daily_menu(payload: DailyMenuPayload):
                     status_code=400,
                     detail=f"items[{idx - 1}] must include exactly one of item_id or combo_id",
                 )
-            payload_key = (
-                ("item", int(mi.item_id))
-                if has_item
-                else ("combo", int(mi.combo_id))
-            )
+            payload_key = ("item", int(mi.item_id)) if has_item else ("combo", int(mi.combo_id))
             if payload_key in seen_payload_keys:
                 raise HTTPException(
                     status_code=400,
@@ -4174,14 +4105,12 @@ def get_all_component_types():
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
-        cursor.execute(
-            """
+        cursor.execute("""
             SELECT component_type_id, name, description, is_active
               FROM component_types
              WHERE is_active = 1
              ORDER BY name ASC
-            """
-        )
+            """)
         rows = cursor.fetchall() or []
         for row in rows:
             row["is_active"] = bool(row.get("is_active", True))
@@ -4482,9 +4411,7 @@ def auto_generate_daily_menu(
 
 
 @app.post("/api/dev/daily-menu/clear", tags=["Developer Tools"])
-def clear_daily_menu(
-    payload: AutoMenuRequest, _: Dict[str, Any] = Depends(developer_required)
-):
+def clear_daily_menu(payload: AutoMenuRequest, _: Dict[str, Any] = Depends(developer_required)):
     target_date = _normalize_menu_date(payload.date)
     target_city = normalize_city_code(payload.city_code or DEFAULT_CITY)
     summary: Dict[str, Any] = {}
@@ -4673,12 +4600,8 @@ def get_dashboard_metrics(
         pending_status_values = tuple(
             sorted({status.lower() for status in PENDING_ORDER_STATUS_NAMES if status})
         )
-        pending_placeholders = (
-            ", ".join(["%s"] * len(pending_status_values)) or "'pending'"
-        )
-        status_compare_expr = (
-            "LOWER(REPLACE(COALESCE(o.status, ''), ' (Payment Due)', ''))"
-        )
+        pending_placeholders = ", ".join(["%s"] * len(pending_status_values)) or "'pending'"
+        status_compare_expr = "LOWER(REPLACE(COALESCE(o.status, ''), ' (Payment Due)', ''))"
 
         total_customers = get_customer_count(db, target_city)
 
@@ -4777,9 +4700,7 @@ def get_dashboard_metrics(
         daily_orders_pending = int(daily_orders_record.get("pending_today") or 0)
         daily_orders_delivered = int(daily_orders_record.get("delivered_today") or 0)
 
-        daily_menu_completed = (
-            total_blds > 0 and menu_count >= total_blds and menu_items_count > 0
-        )
+        daily_menu_completed = total_blds > 0 and menu_count >= total_blds and menu_items_count > 0
         release_completed = total_blds > 0 and released_count >= total_blds
         production_completed = total_blds > 0 and production_count >= total_blds
         deliveries_completed = daily_orders_total > 0 and daily_orders_pending == 0
@@ -4803,9 +4724,7 @@ def get_dashboard_metrics(
         production_status = (
             "Done"
             if production_completed
-            else (
-                "In Progress" if total_blds > 0 and production_count > 0 else "Pending"
-            )
+            else ("In Progress" if total_blds > 0 and production_count > 0 else "Pending")
         )
 
         checklist = [
@@ -4814,27 +4733,21 @@ def get_dashboard_metrics(
                 "label": "Daily Menu Creation",
                 "completed": daily_menu_completed,
                 "status": daily_menu_status,
-                "detail": (
-                    f"{menu_count}/{total_blds} menus ready" if total_blds else None
-                ),
+                "detail": (f"{menu_count}/{total_blds} menus ready" if total_blds else None),
             },
             {
                 "key": "menu_release",
                 "label": "Menu Release",
                 "completed": release_completed,
                 "status": menu_release_status,
-                "detail": (
-                    f"{released_count}/{total_blds} released" if total_blds else None
-                ),
+                "detail": (f"{released_count}/{total_blds} released" if total_blds else None),
             },
             {
                 "key": "production_plan",
                 "label": "Kitchen Production Planning",
                 "completed": production_completed,
                 "status": production_status,
-                "detail": (
-                    f"{production_count}/{total_blds} planned" if total_blds else None
-                ),
+                "detail": (f"{production_count}/{total_blds} planned" if total_blds else None),
             },
             {
                 "key": "trip_sheet",
@@ -4886,11 +4799,7 @@ def get_dashboard_metrics(
             status_formatted = format_status_with_payment(row.get("status"), paid_flag)
             recent_orders.append(
                 {
-                    "id": (
-                        f"ORD-{order_id:05d}"
-                        if order_id
-                        else str(row.get("order_id") or "")
-                    ),
+                    "id": (f"ORD-{order_id:05d}" if order_id else str(row.get("order_id") or "")),
                     "orderId": order_id,
                     "customer": row.get("customer_name") or "Unknown Customer",
                     "items": int(row.get("item_count") or 0),
@@ -4961,9 +4870,7 @@ def _apply_order_filters(
     if status:
         normalized = status.strip().lower()
         if normalized and normalized != "all":
-            base_where.append(
-                "LOWER(REPLACE(COALESCE(o.status, ''), ' (Payment Due)', '')) = %s"
-            )
+            base_where.append("LOWER(REPLACE(COALESCE(o.status, ''), ' (Payment Due)', '')) = %s")
             params.append(normalized)
     if customer:
         term = f"%{customer.strip()}%"
@@ -5130,9 +5037,7 @@ def admin_order_history(
 
             for record in orders:
                 paid_flag = bool(record.get("paid"))
-                normalized_status = format_status_with_payment(
-                    record.get("status"), paid_flag
-                )
+                normalized_status = format_status_with_payment(record.get("status"), paid_flag)
                 payment_label = "Paid" if paid_flag else "Payment Due"
                 order_items = items_by_order.get(record["order_id"], []) or [
                     {"name": "", "quantity": 0, "price": 0.0, "line_total": 0.0}
@@ -5172,9 +5077,7 @@ def admin_order_history(
         result = []
         for record in orders:
             paid_flag = bool(record.get("paid"))
-            normalized_status = format_status_with_payment(
-                record.get("status"), paid_flag
-            )
+            normalized_status = format_status_with_payment(record.get("status"), paid_flag)
             order_id = record["order_id"]
             result.append(
                 {
@@ -5248,9 +5151,7 @@ def admin_update_order_status(
         return {"order_id": order_id, "status": new_status}
     except mysql.connector.Error as err:
         db.rollback()
-        raise HTTPException(
-            status_code=500, detail=f"Failed to update order status: {err.msg}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to update order status: {err.msg}")
     finally:
         cursor.close()
         db.close()
@@ -5436,9 +5337,7 @@ def _purge_all_orders_impl():
         return {"deleted_orders": total_orders}
     except mysql.connector.Error as err:
         db.rollback()
-        raise HTTPException(
-            status_code=500, detail=f"Failed to purge orders: {err.msg}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to purge orders: {err.msg}")
     finally:
         cursor.close()
         db.close()
@@ -5447,8 +5346,7 @@ def _purge_all_orders_impl():
 def _ensure_delivery_routes_table(db) -> None:
     cursor = db.cursor()
     try:
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS delivery_routes (
                 route_id INT NOT NULL AUTO_INCREMENT,
                 city_code VARCHAR(10) NOT NULL,
@@ -5462,8 +5360,7 @@ def _ensure_delivery_routes_table(db) -> None:
                 PRIMARY KEY (route_id),
                 UNIQUE KEY uq_delivery_routes_city_route_code (city_code, route_code)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-            """
-        )
+            """)
         db.commit()
     finally:
         cursor.close()
@@ -5540,7 +5437,9 @@ def bulk_save_delivery_routes(
             (resolved_city,),
         )
         existing_route_ids = {
-            int(row["route_id"]) for row in (cursor.fetchall() or []) if row.get("route_id") is not None
+            int(row["route_id"])
+            for row in (cursor.fetchall() or [])
+            if row.get("route_id") is not None
         }
 
         kept_route_ids: List[int] = []
@@ -5696,14 +5595,12 @@ def _load_coupon_discount(
 
 
 def _load_tax_amounts(cursor, discounted_subtotal: float) -> Tuple[float, float]:
-    cursor.execute(
-        """
+    cursor.execute("""
         SELECT constant_code, constant_value
           FROM constants
          WHERE constant_type = 'tax'
            AND is_active = 1
-        """
-    )
+        """)
     cgst_percent = 0.0
     sgst_percent = 0.0
     for code, value in cursor.fetchall() or []:
@@ -5793,13 +5690,9 @@ def get_customer_addresses(customer_id: int):
                 "city_code": row.get("city_code") or DEFAULT_CITY,
                 "pin_code": row.get("pin_code") or "",
                 "is_default": bool(row.get("is_default")),
-                "latitude": (
-                    float(row["latitude"]) if row.get("latitude") is not None else None
-                ),
+                "latitude": (float(row["latitude"]) if row.get("latitude") is not None else None),
                 "longitude": (
-                    float(row["longitude"])
-                    if row.get("longitude") is not None
-                    else None
+                    float(row["longitude"]) if row.get("longitude") is not None else None
                 ),
                 "route_assignment": row.get("route_assignment"),
             }
@@ -5852,14 +5745,10 @@ def create_customer_address(customer_id: int, payload: AddressPayload):
 
         normalized_city_code = _resolve_city_code(payload.city, payload.city_code)
         city_label = _normalize_city_label(payload.city, normalized_city_code)
-        lat, lng = _resolve_coordinates(
-            cursor, customer_id, payload.latitude, payload.longitude
-        )
+        lat, lng = _resolve_coordinates(cursor, customer_id, payload.latitude, payload.longitude)
 
         if payload.is_default:
-            cursor.execute(
-                "UPDATE addresses SET is_default=0 WHERE customer_id=%s", (customer_id,)
-            )
+            cursor.execute("UPDATE addresses SET is_default=0 WHERE customer_id=%s", (customer_id,))
 
         cursor.execute(
             """
@@ -5918,15 +5807,9 @@ def update_customer_address(customer_id: int, address_id: int, payload: AddressP
 
         normalized_city_code = _resolve_city_code(payload.city, payload.city_code)
         city_label = _normalize_city_label(payload.city, normalized_city_code)
-        lat_input = (
-            payload.latitude
-            if payload.latitude is not None
-            else existing.get("latitude")
-        )
+        lat_input = payload.latitude if payload.latitude is not None else existing.get("latitude")
         lng_input = (
-            payload.longitude
-            if payload.longitude is not None
-            else existing.get("longitude")
+            payload.longitude if payload.longitude is not None else existing.get("longitude")
         )
         lat, lng = _resolve_coordinates(cursor, customer_id, lat_input, lng_input)
 
@@ -5979,9 +5862,7 @@ def update_customer_address(customer_id: int, address_id: int, payload: AddressP
         db.close()
 
 
-@app.post(
-    "/api/customers/{customer_id}/addresses/{address_id}/default", tags=["Customers"]
-)
+@app.post("/api/customers/{customer_id}/addresses/{address_id}/default", tags=["Customers"])
 def set_default_customer_address(customer_id: int, address_id: int):
     db = get_db()
     cursor = db.cursor()
@@ -5993,9 +5874,7 @@ def set_default_customer_address(customer_id: int, address_id: int):
         if cursor.fetchone() is None:
             raise HTTPException(status_code=404, detail="Address not found")
 
-        cursor.execute(
-            "UPDATE addresses SET is_default=0 WHERE customer_id=%s", (customer_id,)
-        )
+        cursor.execute("UPDATE addresses SET is_default=0 WHERE customer_id=%s", (customer_id,))
         cursor.execute(
             "UPDATE addresses SET is_default=1 WHERE address_id=%s AND customer_id=%s",
             (address_id, customer_id),
@@ -6027,9 +5906,7 @@ def generate_production_plan(payload: ProductionPlanRequest):
         )
         menu = cursor.fetchone()
         if not menu:
-            raise HTTPException(
-                status_code=404, detail="Menu not found for that date/type"
-            )
+            raise HTTPException(status_code=404, detail="Menu not found for that date/type")
         menu_id = menu["menu_id"]
 
         updated = _persist_plan_items(cursor, menu_id, payload.plans)
@@ -6079,9 +5956,7 @@ def reopen_production_plan(payload: ProductionPlanResetRequest):
         )
         menu_row = cursor.fetchone()
         if not menu_row:
-            raise HTTPException(
-                status_code=404, detail="Menu not found for that date/type"
-            )
+            raise HTTPException(status_code=404, detail="Menu not found for that date/type")
 
         menu_id = int(menu_row["menu_id"])
 
@@ -6137,9 +6012,7 @@ def finalize_production_plan(payload: ProductionPlanFinalizeRequest):
         )
         menu_row = cursor.fetchone()
         if not menu_row:
-            raise HTTPException(
-                status_code=404, detail="Menu not found for that date/type"
-            )
+            raise HTTPException(status_code=404, detail="Menu not found for that date/type")
 
         menu_id = int(menu_row["menu_id"])
 
@@ -6211,9 +6084,7 @@ def update_max_quantities(payload: UpdateMaxQtyRequest):
         )
         menu_row = cursor.fetchone()
         if not menu_row:
-            raise HTTPException(
-                status_code=404, detail="Menu not found for that date/type"
-            )
+            raise HTTPException(status_code=404, detail="Menu not found for that date/type")
         menu_id = menu_row["menu_id"]
 
         for adjustment in payload.updates:
@@ -6300,9 +6171,7 @@ def update_max_quantities(payload: UpdateMaxQtyRequest):
             )
 
         if not updated_items:
-            raise HTTPException(
-                status_code=404, detail="No matching menu items were updated"
-            )
+            raise HTTPException(status_code=404, detail="No matching menu items were updated")
 
         db.commit()
 
@@ -6389,9 +6258,7 @@ def seed_orders_for_testing(
         )
         candidates = cursor.fetchall() or []
         if not candidates:
-            raise HTTPException(
-                status_code=400, detail="No customers found for target city"
-            )
+            raise HTTPException(status_code=400, detail="No customers found for target city")
 
         cursor.execute(
             """
@@ -6446,10 +6313,7 @@ def seed_orders_for_testing(
             for item in selected_items:
                 available_qty = item.get("available_qty")
                 max_allowed = 3
-                if (
-                    isinstance(available_qty, (int, float))
-                    and available_qty is not None
-                ):
+                if isinstance(available_qty, (int, float)) and available_qty is not None:
                     if available_qty <= 0:
                         continue
                     max_allowed = max(1, min(3, int(available_qty)))
@@ -6799,9 +6663,7 @@ def _fetch_order_quantities_by_menu_item(
     }
 
 
-def _fetch_item_unit_details(
-    cursor, item_ids: Iterable[int]
-) -> Dict[int, Dict[str, Any]]:
+def _fetch_item_unit_details(cursor, item_ids: Iterable[int]) -> Dict[int, Dict[str, Any]]:
     normalized_ids = sorted({int(item_id) for item_id in item_ids if item_id is not None})
     if not normalized_ids:
         return {}
@@ -6831,12 +6693,16 @@ def _fetch_item_unit_details(
             "item_id": int(item_id),
             "name": row.get("name"),
             "uom_customer": row.get("uom_customer"),
-            "unit_packing": float(row["unit_packing"]) if row.get("unit_packing") is not None else None,
+            "unit_packing": (
+                float(row["unit_packing"]) if row.get("unit_packing") is not None else None
+            ),
             "uom_packing": row.get("uom_packing"),
             "uom_production": row.get("uom_production"),
-            "packing_to_production_rate": float(row["packing_to_production_rate"])
-            if row.get("packing_to_production_rate") is not None
-            else None,
+            "packing_to_production_rate": (
+                float(row["packing_to_production_rate"])
+                if row.get("packing_to_production_rate") is not None
+                else None
+            ),
         }
     return details
 
@@ -6851,11 +6717,7 @@ def _fetch_plated_parent_item_ids(cursor, item_ids: Iterable[int]) -> set[int]:
         tuple(normalized_ids),
     )
     rows = cursor.fetchall() or []
-    return {
-        int(row["item_id"])
-        for row in rows
-        if row.get("item_id") is not None
-    }
+    return {int(row["item_id"]) for row in rows if row.get("item_id") is not None}
 
 
 def _fetch_plated_components_by_parent_item(
@@ -6891,12 +6753,16 @@ def _fetch_plated_components_by_parent_item(
             continue
         components.setdefault(int(parent_item_id), []).append(
             {
-                "component_item_id": int(row["component_item_id"])
-                if row.get("component_item_id") is not None
-                else None,
-                "component_type_id": int(row["component_type_id"])
-                if row.get("component_type_id") is not None
-                else None,
+                "component_item_id": (
+                    int(row["component_item_id"])
+                    if row.get("component_item_id") is not None
+                    else None
+                ),
+                "component_type_id": (
+                    int(row["component_type_id"])
+                    if row.get("component_type_id") is not None
+                    else None
+                ),
                 "quantity": float(row.get("quantity") or 0),
                 "component_item_name": row.get("component_item_name"),
                 "component_type_name": row.get("component_type_name"),
@@ -6937,12 +6803,16 @@ def _fetch_combo_components_by_combo_id(
             continue
         components.setdefault(int(combo_id), []).append(
             {
-                "component_item_id": int(row["component_item_id"])
-                if row.get("component_item_id") is not None
-                else None,
-                "component_type_id": int(row["component_type_id"])
-                if row.get("component_type_id") is not None
-                else None,
+                "component_item_id": (
+                    int(row["component_item_id"])
+                    if row.get("component_item_id") is not None
+                    else None
+                ),
+                "component_type_id": (
+                    int(row["component_type_id"])
+                    if row.get("component_type_id") is not None
+                    else None
+                ),
                 "quantity": float(row.get("quantity") or 0),
                 "component_item_name": row.get("component_item_name"),
                 "component_type_name": row.get("component_type_name"),
@@ -7076,33 +6946,19 @@ def get_daily_production_plan(
     try:
         resolved_city = _resolve_city_context(city_code, user)
         meals = get_food_meals_for_city(resolved_city)
-        menu_rows = _fetch_production_menu_rows(
-            cursor, date, resolved_city, period_type, meals
-        )
+        menu_rows = _fetch_production_menu_rows(cursor, date, resolved_city, period_type, meals)
         order_quantities = _fetch_order_quantities_by_menu_item(cursor, date, resolved_city)
         (
             resolved_default_ids,
             resolved_default_names,
             resolution_counts,
-        ) = _build_default_item_resolution_map(
-            cursor, date, resolved_city, period_type, meals
-        )
+        ) = _build_default_item_resolution_map(cursor, date, resolved_city, period_type, meals)
 
-        all_item_ids = {
-            int(row["item_id"])
-            for row in menu_rows
-            if row.get("item_id") is not None
-        }
+        all_item_ids = {int(row["item_id"]) for row in menu_rows if row.get("item_id") is not None}
         plated_parent_ids = _fetch_plated_parent_item_ids(cursor, all_item_ids)
-        combo_ids = {
-            int(row["combo_id"])
-            for row in menu_rows
-            if row.get("combo_id") is not None
-        }
+        combo_ids = {int(row["combo_id"]) for row in menu_rows if row.get("combo_id") is not None}
 
-        plated_components = _fetch_plated_components_by_parent_item(
-            cursor, plated_parent_ids
-        )
+        plated_components = _fetch_plated_components_by_parent_item(cursor, plated_parent_ids)
         combo_components = _fetch_combo_components_by_combo_id(cursor, combo_ids)
 
         concrete_item_ids = set(all_item_ids)
@@ -7119,8 +6975,7 @@ def get_daily_production_plan(
 
         rows_by_meal: Dict[str, List[Dict[str, Any]]] = {meal: [] for meal in meals}
         meal_status: Dict[str, Dict[str, bool]] = {
-            meal: {"is_released": False, "is_production_generated": False}
-            for meal in meals
+            meal: {"is_released": False, "is_production_generated": False} for meal in meals
         }
         for row in menu_rows:
             meal = row.get("meal")
@@ -7162,12 +7017,14 @@ def get_daily_production_plan(
                                 demand_units=required_units,
                             )
                         else:
-                            resolved_item_id, _, resolution_error = _resolve_component_type_for_meal(
-                                resolved_default_ids,
-                                resolved_default_names,
-                                resolution_counts,
-                                meal=meal,
-                                component_type_id=component.get("component_type_id"),
+                            resolved_item_id, _, resolution_error = (
+                                _resolve_component_type_for_meal(
+                                    resolved_default_ids,
+                                    resolved_default_names,
+                                    resolution_counts,
+                                    meal=meal,
+                                    component_type_id=component.get("component_type_id"),
+                                )
                             )
                             if resolved_item_id is not None:
                                 _accumulate_production_item(
@@ -7209,12 +7066,14 @@ def get_daily_production_plan(
                                 demand_units=required_units,
                             )
                         else:
-                            resolved_item_id, _, resolution_error = _resolve_component_type_for_meal(
-                                resolved_default_ids,
-                                resolved_default_names,
-                                resolution_counts,
-                                meal=meal,
-                                component_type_id=component.get("component_type_id"),
+                            resolved_item_id, _, resolution_error = (
+                                _resolve_component_type_for_meal(
+                                    resolved_default_ids,
+                                    resolved_default_names,
+                                    resolution_counts,
+                                    meal=meal,
+                                    component_type_id=component.get("component_type_id"),
+                                )
                             )
                             if resolved_item_id is not None:
                                 _accumulate_production_item(
@@ -7380,8 +7239,8 @@ def preview_plated_item_expansion(
     try:
         normalized_input: Dict[int, float] = {}
         for entry in payload.items:
-            normalized_input[entry.item_id] = (
-                normalized_input.get(entry.item_id, 0.0) + float(entry.quantity)
+            normalized_input[entry.item_id] = normalized_input.get(entry.item_id, 0.0) + float(
+                entry.quantity
             )
 
         expanded_result = expand_plated_quantities(cursor, normalized_input)
@@ -7408,7 +7267,9 @@ def preview_plated_item_expansion(
             tuple(item_ids),
         )
         item_rows = {
-            int(row["item_id"]): row for row in (cursor.fetchall() or []) if row.get("item_id") is not None
+            int(row["item_id"]): row
+            for row in (cursor.fetchall() or [])
+            if row.get("item_id") is not None
         }
 
         expanded_items = []
@@ -7419,9 +7280,7 @@ def preview_plated_item_expansion(
             conversion_rate = row.get("packing_to_production_rate")
             production_quantity = None
             if unit_packing is not None and conversion_rate is not None:
-                production_quantity = (
-                    expanded_qty * float(unit_packing) * float(conversion_rate)
-                )
+                production_quantity = expanded_qty * float(unit_packing) * float(conversion_rate)
 
             expanded_items.append(
                 {
@@ -7432,7 +7291,9 @@ def preview_plated_item_expansion(
                     "unit_packing": float(unit_packing) if unit_packing is not None else None,
                     "uom_packing": row.get("uom_packing"),
                     "uom_production": row.get("uom_production"),
-                    "packing_to_production_rate": float(conversion_rate) if conversion_rate is not None else None,
+                    "packing_to_production_rate": (
+                        float(conversion_rate) if conversion_rate is not None else None
+                    ),
                     "production_quantity": production_quantity,
                 }
             )
@@ -7474,9 +7335,7 @@ def get_daily_menu(
     resolved_menu_type = normalize_menu_type(menu_type)
     target_bld_type = bld_type or CONDIMENTS_BLD_TYPE
     if resolved_menu_type == MENU_TYPE_ONE_DAY and not date:
-        raise HTTPException(
-            status_code=400, detail="date is required for ONE_DAY menus"
-        )
+        raise HTTPException(status_code=400, detail="date is required for ONE_DAY menus")
     if resolved_menu_type == MENU_TYPE_CONDIMENTS and not bld_type:
         target_bld_type = CONDIMENTS_BLD_TYPE
     ensure_menu_allowed(resolved_city, resolved_menu_type)
@@ -7493,9 +7352,7 @@ def get_daily_menu(
 @app.post("/api/orders/quote", tags=["Orders"])
 def quote_order(payload: OrderQuotePayload):
     if not payload.items:
-        raise HTTPException(
-            status_code=400, detail="Order must include at least one item"
-        )
+        raise HTTPException(status_code=400, detail="Order must include at least one item")
     db = get_db()
     cursor = db.cursor()
     try:
@@ -7511,9 +7368,7 @@ def quote_order(payload: OrderQuotePayload):
 @app.post("/api/orders/create", tags=["Orders"])
 def create_order(payload: CreateOrderPayload):
     if not payload.items:
-        raise HTTPException(
-            status_code=400, detail="Order must include at least one item"
-        )
+        raise HTTPException(status_code=400, detail="Order must include at least one item")
 
     db = get_db()
     cursor = db.cursor()
@@ -7530,9 +7385,7 @@ def create_order(payload: CreateOrderPayload):
             )
             fallback = cursor.fetchone()
             if fallback is None:
-                raise HTTPException(
-                    status_code=400, detail="No valid address found for customer"
-                )
+                raise HTTPException(status_code=400, detail="No valid address found for customer")
             address_id = fallback[0]
 
         totals = _compute_order_totals(cursor, payload.items, payload.coupon_codes)
@@ -7540,9 +7393,7 @@ def create_order(payload: CreateOrderPayload):
         normalized_method = (payload.payment_method or "").strip()
         paid_flag = 1 if normalized_method.lower() in {"upi", "card", "online"} else 0
         initial_status = ORDER_STATUS_CONFIRMED if paid_flag else ORDER_STATUS_PENDING
-        stored_status = (
-            initial_status if paid_flag else f"{initial_status} (Payment Due)"
-        )
+        stored_status = initial_status if paid_flag else f"{initial_status} (Payment Due)"
 
         cursor.execute(
             """
@@ -7707,9 +7558,7 @@ def list_customer_orders(customer_id: int, limit: int = Query(50, ge=1, le=200))
                     "order_id": order_id,
                     "created_at": created.isoformat() if created else None,
                     "total_price": float(order.get("total_price") or 0),
-                    "status": format_status_with_payment(
-                        order.get("status"), paid_flag
-                    ),
+                    "status": format_status_with_payment(order.get("status"), paid_flag),
                     "payment_method": order.get("payment_method") or "Cash",
                     "paid": paid_flag,
                     "address": {
