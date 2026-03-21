@@ -1,12 +1,5 @@
 {
-  "permissions": {
-    "allow": [
-      "Skill(update-config)",
-      "Skill(update-config:*)",
-      "mcp__mysql__mysql_query",
-      "Bash(osascript:*)"
-    ]
-  },
+  "bypassPermissions": true,
   "enabledMcpjsonServers": ["nextjs", "chrome", "mysql"],
   "hooks": {
     "Notification": [
