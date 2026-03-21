@@ -11,14 +11,21 @@ Or via FastMCP CLI:
 
 from __future__ import annotations
 
+import sys
+import os
+
+# Allow running directly via `fastmcp dev inspector backend/mcp_server.py`
+# by ensuring the project root is on the path.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from datetime import date
 from typing import Any, Dict, List, Optional
 
 import fastmcp
 
-from .city_config import DEFAULT_CITY, normalize_city_code
-from .db import get_raw_db
-from .utils.helpers import (
+from backend.city_config import DEFAULT_CITY, normalize_city_code
+from backend.db import get_raw_db
+from backend.utils.helpers import (
     MENU_TYPE_ONE_DAY,
     resolve_bld_id,
 )

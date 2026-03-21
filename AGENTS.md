@@ -135,6 +135,10 @@ COOKIE_SECURE=false
 COOKIE_SAMESITE=Lax
 ```
 
+## MCP Server
+
+`backend/mcp_server.py` exposes key backend operations as MCP tools for AI agents. When modifying or adding API endpoints, check if the change affects any of the 6 existing tools (`get_daily_menu`, `get_orders_for_date`, `get_order_detail`, `get_production_status`, `search_customers`, `get_delivery_routes`) and update them if needed. If a new domain is added (e.g. packing, subscriptions), consider adding a corresponding MCP tool.
+
 ## Path Alias
 
 TypeScript: `@/*` maps to `./src/*` (configured in `tsconfig.json`).
