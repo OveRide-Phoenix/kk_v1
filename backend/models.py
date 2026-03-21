@@ -54,7 +54,7 @@ class Address(Base):
     latitude = Column(DECIMAL(10, 8), nullable=False)
     longitude = Column(DECIMAL(11, 8), nullable=False)
     address_type = Column(String(50), nullable=True)
-    route_assignment = Column(String(50), nullable=True)
+    route_id = Column(Integer, ForeignKey("delivery_routes.route_id"), nullable=True)
     is_default = Column(Boolean, nullable=False, default=False)
 
     customer = relationship("Customer", back_populates="addresses")
@@ -241,7 +241,9 @@ class ItemAddOn(Base):
     max_quantity = Column(Integer, nullable=False, default=1)
 
     main_item = relationship("Item", back_populates="add_on_links", foreign_keys=[main_item_id])
-    add_on_item = relationship("Item", back_populates="add_on_for_links", foreign_keys=[add_on_item_id])
+    add_on_item = relationship(
+        "Item", back_populates="add_on_for_links", foreign_keys=[add_on_item_id]
+    )
 
 
 class ItemPriceHistory(Base):

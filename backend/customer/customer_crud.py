@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from ..utils.rbac import get_role_id, parse_role_ids
 
+
 # Add CustomerUpdate model that's used in main.py
 class CustomerUpdate(BaseModel):
     referred_by: Optional[str] = None
@@ -23,17 +24,19 @@ class CustomerUpdate(BaseModel):
     latitude: float
     longitude: float
     address_type: Optional[str] = None
-    route_assignment: Optional[str] = None
+    route_id: Optional[int] = None
     is_default: bool = True
 
 
 def create_customer(db, customer_data):
     try:
         cursor = db.cursor()
-        
+
         # Check if mobile number already exists
-        cursor.execute("SELECT customer_id FROM customers WHERE primary_mobile = %s", 
-                      (customer_data.primary_mobile,))
+        cursor.execute(
+            "SELECT customer_id FROM customers WHERE primary_mobile = %s",
+            (customer_data.primary_mobile,),
+        )
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="Mobile number already registered")
 
@@ -59,8 +62,8 @@ def create_customer(db, customer_data):
 
         # Insert address
         address_query = """
-        INSERT INTO addresses (customer_id, house_apartment_no, written_address, city, pin_code, 
-                             latitude, longitude, address_type, route_assignment, is_default)
+        INSERT INTO addresses (customer_id, house_apartment_no, written_address, city, pin_code,
+                             latitude, longitude, address_type, route_id, is_default)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         address_values = (
@@ -72,13 +75,13 @@ def create_customer(db, customer_data):
             customer_data.latitude,
             customer_data.longitude,
             customer_data.address_type,
-            customer_data.route_assignment,
-            customer_data.is_default
+            customer_data.route_id,
+            customer_data.is_default,
         )
 
         cursor.execute(address_query, address_values)
         db.commit()
-        
+
         return {"customer_id": customer_id, "message": "Customer and address created successfully"}
 
     except mysql.connector.Error as err:
@@ -86,6 +89,7 @@ def create_customer(db, customer_data):
         raise HTTPException(status_code=500, detail=f"Database error: {str(err)}")
     finally:
         cursor.close()
+
 
 def get_customer_by_id(db, customer_id):
     try:
@@ -96,14 +100,16 @@ def get_customer_by_id(db, customer_id):
             c.name, c.recipient_name, c.payment_frequency, c.email, c.created_at,
             c.roles, c.admin_is_active,
             a.address_id, a.house_apartment_no, a.written_address, a.city, 
-            a.pin_code, a.latitude, a.longitude, a.address_type, a.route_assignment
+            a.pin_code, a.latitude, a.longitude, a.address_type, a.route_id,
+            dr.route_name, dr.route_code
         FROM customers c
         INNER JOIN addresses a ON c.customer_id = a.customer_id
+        LEFT JOIN delivery_routes dr ON dr.route_id = a.route_id
         WHERE c.customer_id = %s AND a.is_default = 1
         """
         cursor.execute(query, (customer_id,))
         result = cursor.fetchone()
-        
+
         if not result:
             raise HTTPException(status_code=404, detail="Customer not found")
         roles = parse_role_ids(result.get("roles"))
@@ -117,6 +123,7 @@ def get_customer_by_id(db, customer_id):
     finally:
         cursor.close()
 
+
 def get_all_customers(db, city_code: Optional[str] = None):
     try:
         cursor = db.cursor(dictionary=True)
@@ -128,7 +135,8 @@ def get_all_customers(db, city_code: Optional[str] = None):
                 c.name, c.recipient_name, c.payment_frequency, c.email, c.created_at,
                 c.roles, c.admin_is_active,
                 a.address_id, a.house_apartment_no, a.written_address, a.city, 
-                a.pin_code, a.latitude, a.longitude, a.address_type, a.route_assignment,
+                a.pin_code, a.latitude, a.longitude, a.address_type, a.route_id,
+                dr.route_name, dr.route_code,
                 COALESCE(o.completed_orders, 0) AS completed_orders,
                 COALESCE(p.pending_orders, 0) AS pending_orders
             FROM customers c
@@ -145,6 +153,7 @@ def get_all_customers(db, city_code: Optional[str] = None):
                 ) ranked_addr
                WHERE ranked_addr.rn = 1
             ) a ON c.customer_id = a.customer_id
+            LEFT JOIN delivery_routes dr ON dr.route_id = a.route_id
             LEFT JOIN (
                 SELECT o.customer_id, COUNT(*) AS completed_orders
                   FROM orders o
@@ -171,11 +180,13 @@ def get_all_customers(db, city_code: Optional[str] = None):
                 c.name, c.recipient_name, c.payment_frequency, c.email, c.created_at,
                 c.roles, c.admin_is_active,
                 a.address_id, a.house_apartment_no, a.written_address, a.city, 
-                a.pin_code, a.latitude, a.longitude, a.address_type, a.route_assignment,
+                a.pin_code, a.latitude, a.longitude, a.address_type, a.route_id,
+                dr.route_name, dr.route_code,
                 COALESCE(o.completed_orders, 0) AS completed_orders,
                 COALESCE(p.pending_orders, 0) AS pending_orders
             FROM customers c
             INNER JOIN addresses a ON c.customer_id = a.customer_id
+            LEFT JOIN delivery_routes dr ON dr.route_id = a.route_id
             LEFT JOIN (
                 SELECT customer_id, COUNT(*) AS completed_orders
                 FROM orders
@@ -204,8 +215,9 @@ def get_all_customers(db, city_code: Optional[str] = None):
     finally:
         cursor.close()
 
+
 def update_customer(db, customer_id, customer_data):
-    #THIS IS NOT WORKING, PLEASE FIX ME
+    # THIS IS NOT WORKING, PLEASE FIX ME
     try:
         cursor = db.cursor()
 
@@ -215,7 +227,7 @@ def update_customer(db, customer_id, customer_data):
         )
         if cursor.fetchone() is None:
             raise HTTPException(status_code=404, detail="Customer or default address not found")
-        
+
         # Update customer information
         customer_query = """
         UPDATE customers 
@@ -233,14 +245,14 @@ def update_customer(db, customer_id, customer_data):
             customer_data.email,
             customer_id,
         )
-        
+
         cursor.execute(customer_query, customer_values)
-        
+
         # Update address information
         address_query = """
         UPDATE addresses 
         SET house_apartment_no=%s, written_address=%s, city=%s, pin_code=%s,
-            latitude=%s, longitude=%s, address_type=%s, route_assignment=%s
+            latitude=%s, longitude=%s, address_type=%s, route_id=%s
         WHERE customer_id=%s AND is_default=TRUE
         """
         address_values = (
@@ -251,42 +263,44 @@ def update_customer(db, customer_id, customer_data):
             customer_data.latitude,
             customer_data.longitude,
             customer_data.address_type,
-            customer_data.route_assignment,
+            customer_data.route_id,
             customer_id,
         )
-        
+
         cursor.execute(address_query, address_values)
         db.commit()
-            
+
         return {"message": "Customer and address updated successfully"}
-        
+
     except mysql.connector.Error as err:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(err)}")
     finally:
         cursor.close()
 
+
 def delete_customer(db, customer_id):
     try:
         cursor = db.cursor()
-        
+
         # First delete all addresses for this customer
         cursor.execute("DELETE FROM addresses WHERE customer_id = %s", (customer_id,))
-        
+
         # Then delete the customer
         cursor.execute("DELETE FROM customers WHERE customer_id = %s", (customer_id,))
-        
+
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Customer not found")
-            
+
         db.commit()
         return {"message": "Customer and associated addresses deleted successfully"}
-        
+
     except mysql.connector.Error as err:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(err)}")
     finally:
         cursor.close()
+
 
 def get_customer_count(db, city_code: Optional[str] = None):
     try:

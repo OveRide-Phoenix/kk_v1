@@ -1179,7 +1179,7 @@ class CustomerCreate(BaseModel):
     latitude: float
     longitude: float
     address_type: Optional[str] = None
-    route_assignment: Optional[str] = None
+    route_id: Optional[int] = None
     is_default: bool = False
 
 
@@ -1214,7 +1214,7 @@ def register_user(user: CustomerCreate):
         # Insert into addresses
         cursor.execute(
             """
-            INSERT INTO addresses (customer_id, house_apartment_no, written_address, city, city_code, pin_code, latitude, longitude, address_type, route_assignment, is_default)
+            INSERT INTO addresses (customer_id, house_apartment_no, written_address, city, city_code, pin_code, latitude, longitude, address_type, route_id, is_default)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """,
             (
@@ -1227,7 +1227,7 @@ def register_user(user: CustomerCreate):
                 user.latitude,
                 user.longitude,
                 user.address_type,
-                user.route_assignment,
+                user.route_id,
                 user.is_default,
             ),
         )
@@ -1258,7 +1258,7 @@ class CustomerCreate(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     address_type: Optional[str] = None
-    route_assignment: Optional[str] = None
+    route_id: Optional[int] = None
     is_default: bool = False
 
 
@@ -1303,7 +1303,7 @@ def register_customer(data: CustomerCreate):
         # Insert address details with address_type from dropdown and is_default set to True
         cursor.execute(
             """
-            INSERT INTO addresses (customer_id, house_apartment_no, written_address, city, city_code, pin_code, latitude, longitude, address_type, route_assignment, is_default)
+            INSERT INTO addresses (customer_id, house_apartment_no, written_address, city, city_code, pin_code, latitude, longitude, address_type, route_id, is_default)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """,
             (
@@ -1316,7 +1316,7 @@ def register_customer(data: CustomerCreate):
                 data.latitude,
                 data.longitude,
                 data.address_type,
-                data.route_assignment,
+                data.route_id,
                 True,
             ),
         )
@@ -5302,6 +5302,7 @@ class UpdateMaxQtyRequest(BaseModel):
 class TripSheetRequest(BaseModel):
     date: str
     city_code: Optional[str] = None
+    meal_type: Optional[str] = None
 
 
 class DeliveryRoutePayload(BaseModel):
@@ -5650,7 +5651,7 @@ class AddressPayload(BaseModel):
     pin_code: str
     latitude: Optional[float] = None
     longitude: Optional[float] = None
-    route_assignment: Optional[str] = None
+    route_id: Optional[int] = None
     is_default: bool = False
 
 
@@ -5662,20 +5663,23 @@ def get_customer_addresses(customer_id: int):
         cursor.execute(
             """
             SELECT
-                address_id,
-                address_type,
-                house_apartment_no,
-                written_address,
-                city,
-                city_code,
-                pin_code,
-                is_default,
-                latitude,
-                longitude,
-                route_assignment
-            FROM addresses
-            WHERE customer_id = %s
-            ORDER BY is_default DESC, address_id ASC
+                a.address_id,
+                a.address_type,
+                a.house_apartment_no,
+                a.written_address,
+                a.city,
+                a.city_code,
+                a.pin_code,
+                a.is_default,
+                a.latitude,
+                a.longitude,
+                a.route_id,
+                dr.route_code,
+                dr.route_name
+            FROM addresses a
+            LEFT JOIN delivery_routes dr ON dr.route_id = a.route_id
+            WHERE a.customer_id = %s
+            ORDER BY a.is_default DESC, a.address_id ASC
             """,
             (customer_id,),
         )
@@ -5694,7 +5698,9 @@ def get_customer_addresses(customer_id: int):
                 "longitude": (
                     float(row["longitude"]) if row.get("longitude") is not None else None
                 ),
-                "route_assignment": row.get("route_assignment"),
+                "route_id": row.get("route_id"),
+                "route_code": row.get("route_code"),
+                "route_name": row.get("route_name"),
             }
             for row in rows
         ]
@@ -5762,7 +5768,7 @@ def create_customer_address(customer_id: int, payload: AddressPayload):
                 latitude,
                 longitude,
                 address_type,
-                route_assignment,
+                route_id,
                 is_default
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
@@ -5776,7 +5782,7 @@ def create_customer_address(customer_id: int, payload: AddressPayload):
                 lat,
                 lng,
                 payload.address_type.strip() if payload.address_type else "Address",
-                payload.route_assignment,
+                payload.route_id,
                 1 if payload.is_default else 0,
             ),
         )
@@ -5830,7 +5836,7 @@ def update_customer_address(customer_id: int, address_id: int, payload: AddressP
                    latitude=%s,
                    longitude=%s,
                    address_type=%s,
-                   route_assignment=%s,
+                   route_id=%s,
                    is_default=%s
              WHERE address_id=%s AND customer_id=%s
             """,
@@ -5843,7 +5849,7 @@ def update_customer_address(customer_id: int, address_id: int, payload: AddressP
                 lat,
                 lng,
                 payload.address_type.strip() if payload.address_type else "Address",
-                payload.route_assignment,
+                payload.route_id,
                 1 if payload.is_default else 0,
                 address_id,
                 customer_id,
@@ -5854,6 +5860,50 @@ def update_customer_address(customer_id: int, address_id: int, payload: AddressP
 
         db.commit()
         return {"message": "Address updated successfully"}
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(err)}")
+    finally:
+        cursor.close()
+        db.close()
+
+
+class AddressRouteAssignPayload(BaseModel):
+    route_id: Optional[int] = None
+
+
+@app.patch("/api/customers/{customer_id}/addresses/{address_id}/route", tags=["Customers"])
+def assign_address_route(
+    customer_id: int,
+    address_id: int,
+    payload: AddressRouteAssignPayload,
+    user: Dict[str, Any] = Depends(admin_required),
+):
+    """Assign or clear the delivery route for a specific customer address.
+
+    Args:
+        customer_id: ID of the customer who owns the address.
+        address_id: ID of the address to update.
+        payload: Contains route_id (or null to clear).
+
+    Returns:
+        Success message.
+    """
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute(
+            "SELECT address_id FROM addresses WHERE address_id=%s AND customer_id=%s LIMIT 1",
+            (address_id, customer_id),
+        )
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Address not found")
+        cursor.execute(
+            "UPDATE addresses SET route_id=%s WHERE address_id=%s AND customer_id=%s",
+            (payload.route_id, address_id, customer_id),
+        )
+        db.commit()
+        return {"message": "Route assigned successfully"}
     except mysql.connector.Error as err:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(err)}")
@@ -6366,6 +6416,98 @@ def seed_orders_for_testing(
         db.close()
 
 
+@app.get("/api/logistics/trip-sheet/unassigned-routes", tags=["Logistics"])
+def get_unassigned_route_customers(
+    date: str = Query(..., description="Date in YYYY-MM-DD format"),
+    city_code: Optional[str] = Query(None),
+    meal_type: Optional[str] = Query(
+        None, description="Filter to orders containing this meal type"
+    ),
+    user: Dict[str, Any] = Depends(admin_required),
+):
+    """Return customers who have active orders on the given date but whose delivery address has no route assignment.
+
+    This must return an empty list before a trip sheet can be generated.
+
+    Args:
+        date: Service date in YYYY-MM-DD format.
+        city_code: City to filter by; defaults to admin's active city.
+        meal_type: Optional meal type to scope the check (e.g. "Breakfast").
+
+    Returns:
+        Object with unassigned_count and list of customers with order and address details.
+    """
+    parsed_date = _parse_optional_date(date)
+    if not parsed_date:
+        raise HTTPException(status_code=400, detail="Valid date required (YYYY-MM-DD)")
+    target_city = _resolve_city_context(city_code, user)
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        meal_filter_sql = ""
+        params: tuple = (parsed_date, target_city)
+        if meal_type:
+            meal_filter_sql = """
+              AND EXISTS (
+                SELECT 1 FROM order_items oi_m
+                WHERE oi_m.order_id = o.order_id
+                  AND LOWER(oi_m.meal_type) = LOWER(%s)
+              )"""
+            params = (parsed_date, target_city, meal_type)
+        cursor.execute(
+            f"""
+            SELECT
+                o.order_id,
+                o.total_price,
+                o.status,
+                c.customer_id,
+                c.name AS customer_name,
+                c.primary_mobile,
+                a.address_id,
+                a.house_apartment_no,
+                a.written_address,
+                a.city,
+                a.route_id
+            FROM orders o
+            JOIN customers c ON o.customer_id = c.customer_id
+            JOIN addresses a ON o.address_id = a.address_id
+            WHERE DATE(o.created_at) = %s
+              AND a.city_code = %s
+              AND o.status NOT IN ('Cancelled', 'Delivered')
+              AND a.route_id IS NULL
+              {meal_filter_sql}
+            ORDER BY c.name
+            """,
+            params,
+        )
+        rows = cursor.fetchall() or []
+        return {
+            "date": parsed_date.isoformat(),
+            "city_code": target_city,
+            "unassigned_count": len(rows),
+            "customers": [
+                {
+                    "order_id": row["order_id"],
+                    "customer_id": row["customer_id"],
+                    "customer_name": row["customer_name"],
+                    "phone": row["primary_mobile"],
+                    "total_price": float(row["total_price"] or 0),
+                    "status": row["status"],
+                    "address": {
+                        "address_id": row["address_id"],
+                        "house_apartment_no": row["house_apartment_no"],
+                        "written_address": row["written_address"],
+                        "city": row["city"],
+                    },
+                }
+                for row in rows
+            ],
+        }
+    finally:
+        cursor.close()
+        db.close()
+
+
 @app.post("/api/logistics/trip-sheet", tags=["Logistics"])
 def generate_trip_sheet_report(
     payload: TripSheetRequest,
@@ -6412,9 +6554,20 @@ def generate_trip_sheet_report(
                     status_code=400,
                     detail=f"Generate kitchen production for {missing_label} before creating the trip sheet.",
                 )
+        meal_type = payload.meal_type
+        meal_filter_sql = ""
+        orders_params: tuple = (parsed_date, target_city)
+        if meal_type:
+            meal_filter_sql = """
+              AND EXISTS (
+                SELECT 1 FROM order_items oi_m
+                WHERE oi_m.order_id = o.order_id
+                  AND LOWER(oi_m.meal_type) = LOWER(%s)
+              )"""
+            orders_params = (parsed_date, target_city, meal_type)
         cursor.execute(
-            """
-            SELECT 
+            f"""
+            SELECT
                 o.order_id,
                 o.created_at,
                 o.total_price,
@@ -6431,23 +6584,63 @@ def generate_trip_sheet_report(
                 a.written_address,
                 a.city,
                 a.pin_code,
-                a.route_assignment,
+                a.route_id,
                 dr.route_code,
                 dr.route_name,
                 dr.sort_order
             FROM orders o
             JOIN customers c ON o.customer_id = c.customer_id
             JOIN addresses a ON o.address_id = a.address_id
-            LEFT JOIN delivery_routes dr
-              ON dr.city_code COLLATE utf8mb4_0900_ai_ci = a.city_code
-             AND dr.route_code COLLATE utf8mb4_0900_ai_ci = a.route_assignment
+            LEFT JOIN delivery_routes dr ON dr.route_id = a.route_id
            WHERE DATE(o.created_at) = %s
              AND a.city_code = %s
-           ORDER BY COALESCE(dr.sort_order, 9999), COALESCE(dr.route_name, a.route_assignment, ''), c.name
+             {meal_filter_sql}
+           ORDER BY COALESCE(dr.sort_order, 9999), COALESCE(dr.route_name, ''), c.name
             """,
-            (parsed_date, target_city),
+            orders_params,
         )
         rows = cursor.fetchall() or []
+
+        # Batch fetch order items (filtered to meal_type when specified)
+        order_items_map: Dict[int, List[Dict[str, Any]]] = {}
+        if rows:
+            order_ids = [row["order_id"] for row in rows]
+            id_placeholders = ", ".join(["%s"] * len(order_ids))
+            items_meal_filter = ""
+            items_params: tuple = tuple(order_ids)
+            if meal_type:
+                items_meal_filter = "AND LOWER(oi.meal_type) = LOWER(%s)"
+                items_params = (*order_ids, meal_type)
+            cursor.execute(
+                f"""
+                SELECT
+                    oi.order_id,
+                    oi.quantity,
+                    oi.price,
+                    oi.meal_type,
+                    COALESCE(i.name, co.combo_name) AS item_name
+                FROM order_items oi
+                LEFT JOIN items i ON oi.item_id = i.item_id
+                LEFT JOIN combos co ON oi.combo_id = co.combo_id
+                WHERE oi.order_id IN ({id_placeholders})
+                  {items_meal_filter}
+                ORDER BY oi.order_id, COALESCE(i.name, co.combo_name)
+                """,
+                items_params,
+            )
+            for item_row in cursor.fetchall() or []:
+                oid = item_row["order_id"]
+                qty = int(item_row.get("quantity") or 0)
+                price = float(item_row.get("price") or 0)
+                order_items_map.setdefault(oid, []).append(
+                    {
+                        "item_name": item_row.get("item_name") or "Item",
+                        "meal_type": item_row.get("meal_type"),
+                        "quantity": qty,
+                        "price": price,
+                        "line_total": round(qty * price, 2),
+                    }
+                )
 
         route_groups: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
         route_sort_order: Dict[str, int] = {}
@@ -6458,7 +6651,7 @@ def generate_trip_sheet_report(
         }
 
         for row in rows:
-            route_label = row.get("route_name") or row.get("route_assignment") or "Unassigned"
+            route_label = row.get("route_name") or "Unassigned"
             route_sort_order.setdefault(route_label, int(row.get("sort_order") or 9999))
             normalized_display = normalize_status_for_response(row.get("status"))
             if normalized_display.lower() in updatable_statuses:
@@ -6485,16 +6678,36 @@ def generate_trip_sheet_report(
                         "city": row.get("city"),
                         "pin_code": row.get("pin_code"),
                     },
+                    "items": order_items_map.get(row["order_id"], []),
                 }
             )
 
-        updated_rows = _bulk_update_order_status_for_date(
-            cursor,
-            parsed_date.isoformat(),
-            target_city,
-            ORDER_STATUS_ON_THE_WAY,
-            updatable_statuses,
-        )
+        # Update status only for the orders visible in this trip sheet
+        updatable_order_ids = [
+            row["order_id"]
+            for row in rows
+            if normalize_status_for_response(row.get("status")).lower() in updatable_statuses
+        ]
+        updated_rows = 0
+        if updatable_order_ids:
+            id_ph = ", ".join(["%s"] * len(updatable_order_ids))
+            status_compare_expr = "LOWER(REPLACE(COALESCE(status, ''), ' (Payment Due)', ''))"
+            prev_ph = ", ".join(["%s"] * len(updatable_statuses))
+            cursor.execute(
+                f"""
+                UPDATE orders
+                   SET status = CASE WHEN paid = 1 THEN %s ELSE CONCAT(%s, ' (Payment Due)') END
+                 WHERE order_id IN ({id_ph})
+                   AND {status_compare_expr} IN ({prev_ph})
+                """,
+                (
+                    ORDER_STATUS_ON_THE_WAY,
+                    ORDER_STATUS_ON_THE_WAY,
+                    *updatable_order_ids,
+                    *sorted(updatable_statuses),
+                ),
+            )
+            updated_rows = cursor.rowcount
         db.commit()
 
         routes_payload = []
@@ -6515,6 +6728,7 @@ def generate_trip_sheet_report(
         return {
             "date": parsed_date.isoformat(),
             "city_code": target_city,
+            "meal_type": meal_type,
             "routes": routes_payload,
             "status_updates": updated_rows,
             "generated_at": datetime.utcnow().isoformat() + "Z",

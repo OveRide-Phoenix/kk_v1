@@ -2,20 +2,21 @@ address immutable - so old addresses dont get deleted and stuff, so we need to a
 
 keep effective-date and status fields for item price history and stuff
 
-unassigned route should be handled compulsoryly
+------------ unassigned route should be handled compulsoryly
+
 
 price change even for a single day (if) happens from master oNLY so that it is tracked in item_price_history
 
 discounts per product concept - overhead
 
-delivery price coloumn in orders table
+add a delivery price coloumn in orders table
 
 In lunch, curry will only be a single- rather, There will only be a single curry in the menu. So the default curry should automatically default to that curry. I said curry too many times.
 usually the default, second one wont be default if second one of the same type is added to the daily menu
 
-trip sheet is also seperate for BLD and CONDIMENTS and split amounts also as bld
+------------- trip sheet is also seperate for BLD and CONDIMENTS and split amounts also as bld
 
-order status typpes
+order status types
 
 ---
 mobile:

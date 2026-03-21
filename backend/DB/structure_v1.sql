@@ -145,11 +145,13 @@ CREATE TABLE `addresses` (
   `latitude` decimal(10,8) NOT NULL,
   `longitude` decimal(11,8) NOT NULL,
   `address_type` varchar(50) DEFAULT NULL,
-  `route_assignment` varchar(50) DEFAULT NULL,
+  `route_id` int DEFAULT NULL,
   `is_default` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`address_id`),
   KEY `customer_id` (`customer_id`),
-  CONSTRAINT `addresses_ibfk_1` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`customer_id`)
+  KEY `fk_addresses_route_id` (`route_id`),
+  CONSTRAINT `addresses_ibfk_1` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`customer_id`),
+  CONSTRAINT `fk_addresses_route_id` FOREIGN KEY (`route_id`) REFERENCES `delivery_routes` (`route_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- TABLE: menu

@@ -1,150 +1,321 @@
-"use client"
+"use client";
 
-import { useMemo, useState } from "react"
-import { format } from "date-fns"
-import { AdminLayout } from "@/components/admin-layout"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { DatePickerWithPresets } from "@/components/ui/date-picker"
-import { Badge } from "@/components/ui/badge"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { useToast } from "@/hooks/use-toast"
-import { http } from "@/lib/http"
-import { useAuthStore } from "@/store/store"
-import { Info, Loader2, MapPin, Plus, Route, Truck, Wallet, X } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { format } from "date-fns";
+import { AdminLayout } from "@/components/admin-layout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { DatePickerWithPresets } from "@/components/ui/date-picker";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import { http } from "@/lib/http";
+import { useAuthStore } from "@/store/store";
+import { getSupportedMeals } from "@/config/cities";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { AlertTriangle, Info, Loader2, MapPin, Plus, Route, Truck, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+type MealName = "Breakfast" | "Lunch" | "Dinner" | "Condiments";
+
+type OrderItem = {
+  item_name: string;
+  meal_type: string | null;
+  quantity: number;
+  price: number;
+  line_total: number;
+};
 
 type TripSheetOrder = {
-  order_id: number
-  customer_id: number
-  customer_name: string | null
-  phone: string | null
-  email?: string | null
-  total_price: number
-  payment_method: string
-  paid: boolean
-  status: string
+  order_id: number;
+  customer_id: number;
+  customer_name: string | null;
+  phone: string | null;
+  email?: string | null;
+  total_price: number;
+  payment_method: string;
+  paid: boolean;
+  status: string;
   address: {
-    address_id: number | null
-    label?: string | null
-    house_apartment_no?: string | null
-    written_address?: string | null
-    city?: string | null
-    pin_code?: string | null
-  }
-}
+    address_id: number | null;
+    label?: string | null;
+    house_apartment_no?: string | null;
+    written_address?: string | null;
+    city?: string | null;
+    pin_code?: string | null;
+  };
+  items: OrderItem[];
+};
 
 type TripSheetRoute = {
-  route: string
-  total_orders: number
-  total_amount: number
-  orders: TripSheetOrder[]
-}
+  route: string;
+  total_orders: number;
+  total_amount: number;
+  orders: TripSheetOrder[];
+};
 
 type TripSheetResponse = {
-  date: string
-  city_code: string
-  routes: TripSheetRoute[]
-  status_updates: number
-  generated_at: string
-}
+  date: string;
+  city_code: string;
+  meal_type: string | null;
+  routes: TripSheetRoute[];
+  status_updates: number;
+  generated_at: string;
+};
+
+type UnassignedCustomer = {
+  order_id: number;
+  customer_id: number;
+  customer_name: string;
+  phone: string | null;
+  total_price: number;
+  status: string;
+  address: {
+    address_id: number;
+    house_apartment_no: string | null;
+    written_address: string | null;
+    city: string | null;
+  };
+};
+
+type UnassignedResponse = {
+  date: string;
+  city_code: string;
+  unassigned_count: number;
+  customers: UnassignedCustomer[];
+};
 
 type DeliveryRouteConfig = {
-  route_id?: number | null
-  route_code: string
-  route_name: string
-  notes?: string | null
-  is_active?: boolean
-  sort_order: number
-}
+  route_id?: number | null;
+  route_code: string;
+  route_name: string;
+  notes?: string | null;
+  is_active?: boolean;
+  sort_order: number;
+};
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
     maximumFractionDigits: 0,
-  }).format(value)
+  }).format(value);
 
 const statusBadgeClass = (status: string) => {
-  const raw = status.toLowerCase()
+  const raw = status.toLowerCase();
   const normalized = raw
     .replace(/\(payment due\)/g, "")
     .replace(/\s+-\s+payment due/g, "")
-    .trim()
-  if (raw.includes("payment due")) {
-    return "bg-amber-50 text-amber-900 border border-amber-100"
-  }
-  if (normalized === "confirmed") {
-    return "bg-sky-50 text-sky-700 border border-sky-100"
-  }
-  if (normalized === "preparing") {
-    return "bg-amber-50 text-amber-800 border border-amber-100"
-  }
-  if (normalized === "on the way") {
-    return "bg-indigo-50 text-indigo-700 border border-indigo-100"
-  }
-  if (normalized === "delivered") {
-    return "bg-emerald-50 text-emerald-700 border border-emerald-100"
-  }
-  if (normalized === "cancelled" || normalized === "canceled") {
-    return "bg-rose-50 text-rose-700 border border-rose-100"
-  }
-  return "bg-slate-50 text-slate-700 border border-slate-100"
-}
+    .trim();
+  if (raw.includes("payment due")) return "bg-amber-50 text-amber-900 border border-amber-100";
+  if (normalized === "confirmed") return "bg-sky-50 text-sky-700 border border-sky-100";
+  if (normalized === "preparing") return "bg-amber-50 text-amber-800 border border-amber-100";
+  if (normalized === "on the way") return "bg-indigo-50 text-indigo-700 border border-indigo-100";
+  if (normalized === "delivered") return "bg-emerald-50 text-emerald-700 border border-emerald-100";
+  if (normalized === "cancelled" || normalized === "canceled")
+    return "bg-rose-50 text-rose-700 border border-rose-100";
+  return "bg-slate-50 text-slate-700 border border-slate-100";
+};
 
 export default function TripSheetPage() {
-  const adminCity = useAuthStore((state) => state.adminCity || state.user?.city_code || "MYS")
-  const [selectedDate, setSelectedDate] = useState(() => new Date())
-  const [routes, setRoutes] = useState<TripSheetRoute[]>([])
-  const [statusUpdates, setStatusUpdates] = useState(0)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [routePlannerOpen, setRoutePlannerOpen] = useState(false)
-  const [routePlannerLoading, setRoutePlannerLoading] = useState(false)
-  const [routePlannerSaving, setRoutePlannerSaving] = useState(false)
-  const [routePlannerError, setRoutePlannerError] = useState<string | null>(null)
-  const [routeConfigs, setRouteConfigs] = useState<DeliveryRouteConfig[]>([])
-  const { toast } = useToast()
+  const adminCity = useAuthStore((state) => state.adminCity || state.user?.city_code || "MYS");
+  const [selectedDate, setSelectedDate] = useState(() => new Date());
+  const [selectedMeal, setSelectedMeal] = useState<MealName>("Breakfast");
+  // Per-meal generated sheet data
+  const [mealSheets, setMealSheets] = useState<Partial<Record<MealName, TripSheetResponse>>>({});
+  // Per-meal unassigned customers
+  const [unassigned, setUnassigned] = useState<Partial<Record<MealName, UnassignedResponse>>>({});
+  const [unassignedLoading, setUnassignedLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [routePlannerOpen, setRoutePlannerOpen] = useState(false);
+  const [routePlannerLoading, setRoutePlannerLoading] = useState(false);
+  const [routePlannerSaving, setRoutePlannerSaving] = useState(false);
+  const [routePlannerError, setRoutePlannerError] = useState<string | null>(null);
+  const [routeConfigs, setRouteConfigs] = useState<DeliveryRouteConfig[]>([]);
+  // Route assignment dialog (from unassigned warning)
+  const [assignTarget, setAssignTarget] = useState<UnassignedCustomer | null>(null);
+  const [assignRouteId, setAssignRouteId] = useState<string>("");
+  const [assignSaving, setAssignSaving] = useState(false);
+  const { toast } = useToast();
 
-  const isoDate = useMemo(() => format(selectedDate, "yyyy-MM-dd"), [selectedDate])
-  const dateLabel = useMemo(() => format(selectedDate, "PPP"), [selectedDate])
+  const isoDate = useMemo(() => format(selectedDate, "yyyy-MM-dd"), [selectedDate]);
+  const dateLabel = useMemo(() => format(selectedDate, "PPP"), [selectedDate]);
+
+  const visibleMeals = useMemo<MealName[]>(
+    () =>
+      getSupportedMeals(adminCity).map((m) => (m.charAt(0).toUpperCase() + m.slice(1)) as MealName),
+    [adminCity],
+  );
+
+  // Reset selection to first valid meal if city changes
+  useEffect(() => {
+    if (visibleMeals.length && !visibleMeals.includes(selectedMeal)) {
+      setSelectedMeal(visibleMeals[0]);
+    }
+  }, [selectedMeal, visibleMeals]);
+
+  // Clear sheet + reload unassigned whenever date or city changes
+  useEffect(() => {
+    setMealSheets({});
+    setError(null);
+  }, [isoDate, adminCity]);
+
+  const loadUnassigned = useCallback(
+    async (meal: MealName) => {
+      setUnassignedLoading(true);
+      try {
+        const params = new URLSearchParams({
+          date: isoDate,
+          city_code: adminCity,
+          meal_type: meal,
+        });
+        const res = await http.get(`/api/logistics/trip-sheet/unassigned-routes?${params}`);
+        const data = (await res.json()) as UnassignedResponse | { detail?: string };
+        if (!res.ok) throw new Error("detail" in data && data.detail ? data.detail : "Failed");
+        setUnassigned((prev) => ({ ...prev, [meal]: data as UnassignedResponse }));
+      } catch {
+        // non-fatal — just clear
+        setUnassigned((prev) => ({ ...prev, [meal]: undefined }));
+      } finally {
+        setUnassignedLoading(false);
+      }
+    },
+    [isoDate, adminCity],
+  );
+
+  // Load unassigned whenever meal or date changes
+  useEffect(() => {
+    void loadUnassigned(selectedMeal);
+  }, [selectedMeal, loadUnassigned]);
+
+  const handleGenerate = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await http.post("/api/logistics/trip-sheet", {
+        date: isoDate,
+        city_code: adminCity,
+        meal_type: selectedMeal,
+      });
+      const data = (await res.json()) as TripSheetResponse | { detail?: string };
+      if (!res.ok) {
+        throw new Error(
+          "detail" in data && data.detail ? data.detail : "Failed to generate trip sheet",
+        );
+      }
+      const payload = data as TripSheetResponse;
+      setMealSheets((prev) => ({ ...prev, [selectedMeal]: payload }));
+      // Refresh unassigned after generation (statuses may have changed)
+      void loadUnassigned(selectedMeal);
+      toast({
+        title: `${selectedMeal} trip sheet generated`,
+        description:
+          payload.status_updates > 0
+            ? `${payload.status_updates} orders marked as On the Way.`
+            : payload.routes.length > 0
+              ? "No status changes required."
+              : "No orders found for this meal.",
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to generate trip sheet");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openAssignDialog = async (customer: UnassignedCustomer) => {
+    setAssignTarget(customer);
+    setAssignRouteId("");
+    // Ensure routes are loaded
+    if (routeConfigs.length === 0) {
+      try {
+        const res = await http.get(`/api/logistics/routes?city_code=${adminCity}`);
+        const data = (await res.json()) as DeliveryRouteConfig[] | { detail?: string };
+        if (res.ok && Array.isArray(data)) setRouteConfigs(data as DeliveryRouteConfig[]);
+      } catch {
+        // non-fatal
+      }
+    }
+  };
+
+  const handleAssignRoute = async () => {
+    if (!assignTarget) return;
+    setAssignSaving(true);
+    try {
+      const res = await http.patch(
+        `/api/customers/${assignTarget.customer_id}/addresses/${assignTarget.address.address_id}/route`,
+        { route_id: assignRouteId ? Number(assignRouteId) : null },
+      );
+      const data = (await res.json()) as { detail?: string };
+      if (!res.ok) throw new Error(data?.detail || "Failed to assign route");
+      toast({ title: "Route assigned", description: `${assignTarget.customer_name} updated.` });
+      setAssignTarget(null);
+      void loadUnassigned(selectedMeal);
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Failed to assign route",
+        variant: "destructive",
+      });
+    } finally {
+      setAssignSaving(false);
+    }
+  };
 
   const loadRouteConfigs = async () => {
-    setRoutePlannerLoading(true)
-    setRoutePlannerError(null)
+    setRoutePlannerLoading(true);
+    setRoutePlannerError(null);
     try {
-      const response = await http.get(`/api/logistics/routes?city_code=${adminCity}`)
-      const data = (await response.json()) as DeliveryRouteConfig[] | { detail?: string }
-      if (!response.ok) {
-        throw new Error("detail" in data && data.detail ? data.detail : "Failed to load routes")
-      }
-      const rows = Array.isArray(data) ? data : []
+      const res = await http.get(`/api/logistics/routes?city_code=${adminCity}`);
+      const data = (await res.json()) as DeliveryRouteConfig[] | { detail?: string };
+      if (!res.ok)
+        throw new Error("detail" in data && data.detail ? data.detail : "Failed to load routes");
+      const rows = Array.isArray(data) ? data : [];
       setRouteConfigs(
-        rows.map((route, index) => ({
-          route_id: route.route_id ?? null,
-          route_code: route.route_code ?? "",
-          route_name: route.route_name ?? "",
-          notes: route.notes ?? "",
-          is_active: route.is_active ?? true,
-          sort_order: Number.isFinite(route.sort_order) ? route.sort_order : index,
+        rows.map((r, i) => ({
+          route_id: r.route_id ?? null,
+          route_code: r.route_code ?? "",
+          route_name: r.route_name ?? "",
+          notes: r.notes ?? "",
+          is_active: r.is_active ?? true,
+          sort_order: Number.isFinite(r.sort_order) ? r.sort_order : i,
         })),
-      )
+      );
     } catch (err) {
-      setRoutePlannerError(err instanceof Error ? err.message : "Unable to load routes")
-      setRouteConfigs([])
+      setRoutePlannerError(err instanceof Error ? err.message : "Unable to load routes");
+      setRouteConfigs([]);
     } finally {
-      setRoutePlannerLoading(false)
+      setRoutePlannerLoading(false);
     }
-  }
+  };
 
   const openRoutePlanner = async () => {
-    setRoutePlannerOpen(true)
-    await loadRouteConfigs()
-  }
+    setRoutePlannerOpen(true);
+    await loadRouteConfigs();
+  };
 
   const addRouteRow = () => {
     setRouteConfigs((prev) => [
@@ -157,115 +328,78 @@ export default function TripSheetPage() {
         is_active: true,
         sort_order: prev.length,
       },
-    ])
-  }
+    ]);
+  };
 
-  const updateRouteRow = (index: number, field: keyof DeliveryRouteConfig, value: string | number | boolean | null) => {
-    setRouteConfigs((prev) =>
-      prev.map((route, routeIndex) =>
-        routeIndex === index
-          ? {
-              ...route,
-              [field]: value,
-            }
-          : route,
-      ),
-    )
-  }
+  const updateRouteRow = (
+    index: number,
+    field: keyof DeliveryRouteConfig,
+    value: string | number | boolean | null,
+  ) => {
+    setRouteConfigs((prev) => prev.map((r, i) => (i === index ? { ...r, [field]: value } : r)));
+  };
 
   const removeRouteRow = (index: number) => {
     setRouteConfigs((prev) =>
-      prev
-        .filter((_, routeIndex) => routeIndex !== index)
-        .map((route, routeIndex) => ({
-          ...route,
-          sort_order: routeIndex,
-        })),
-    )
-  }
+      prev.filter((_, i) => i !== index).map((r, i) => ({ ...r, sort_order: i })),
+    );
+  };
 
   const saveRouteConfigs = async () => {
-    setRoutePlannerSaving(true)
-    setRoutePlannerError(null)
+    setRoutePlannerSaving(true);
+    setRoutePlannerError(null);
     try {
       const payload = {
         city_code: adminCity,
-        routes: routeConfigs.map((route, index) => ({
-          route_id: route.route_id ?? undefined,
-          route_code: route.route_code.trim(),
-          route_name: route.route_name.trim(),
-          notes: route.notes?.trim() || null,
-          is_active: route.is_active ?? true,
-          sort_order: index,
+        routes: routeConfigs.map((r, i) => ({
+          route_id: r.route_id ?? undefined,
+          route_code: r.route_code.trim(),
+          route_name: r.route_name.trim(),
+          notes: r.notes?.trim() || null,
+          is_active: r.is_active ?? true,
+          sort_order: i,
         })),
-      }
-      const response = await http.post("/api/logistics/routes/bulk-save", payload)
-      const data = (await response.json()) as { routes?: DeliveryRouteConfig[]; detail?: string }
-      if (!response.ok) {
-        throw new Error(data?.detail || "Failed to save route plan")
-      }
+      };
+      const res = await http.post("/api/logistics/routes/bulk-save", payload);
+      const data = (await res.json()) as { routes?: DeliveryRouteConfig[]; detail?: string };
+      if (!res.ok) throw new Error(data?.detail || "Failed to save route plan");
       setRouteConfigs(
-        (data.routes ?? []).map((route, index) => ({
-          route_id: route.route_id ?? null,
-          route_code: route.route_code ?? "",
-          route_name: route.route_name ?? "",
-          notes: route.notes ?? "",
-          is_active: route.is_active ?? true,
-          sort_order: Number.isFinite(route.sort_order) ? route.sort_order : index,
+        (data.routes ?? []).map((r, i) => ({
+          route_id: r.route_id ?? null,
+          route_code: r.route_code ?? "",
+          route_name: r.route_name ?? "",
+          notes: r.notes ?? "",
+          is_active: r.is_active ?? true,
+          sort_order: Number.isFinite(r.sort_order) ? r.sort_order : i,
         })),
-      )
+      );
       toast({
         title: "Route plan saved",
         description: `Saved ${data.routes?.length ?? 0} routes for ${adminCity}.`,
-      })
-      setRoutePlannerOpen(false)
+      });
+      setRoutePlannerOpen(false);
     } catch (err) {
-      setRoutePlannerError(err instanceof Error ? err.message : "Unable to save routes")
+      setRoutePlannerError(err instanceof Error ? err.message : "Unable to save routes");
     } finally {
-      setRoutePlannerSaving(false)
+      setRoutePlannerSaving(false);
     }
-  }
+  };
 
-  const handleGenerate = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const response = await http.post("/api/logistics/trip-sheet", {
-        date: isoDate,
-        city_code: adminCity,
-      })
-      const data = (await response.json()) as TripSheetResponse | { detail?: string }
-      if (!response.ok) {
-        throw new Error("detail" in data && data.detail ? data.detail : "Failed to generate trip sheet")
-      }
-      const payload = data as TripSheetResponse
-      setRoutes(payload.routes ?? [])
-      setStatusUpdates(payload.status_updates ?? 0)
-      toast({
-        title: "Trip sheet generated",
-        description:
-          payload.routes?.length && payload.status_updates
-            ? `${payload.status_updates} orders marked as On the Way.`
-            : payload.routes?.length
-              ? "No status changes were required."
-              : "No orders found for the selected date.",
-      })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to generate trip sheet")
-    } finally {
-      setLoading(false)
-    }
-  }
+  const currentSheet = mealSheets[selectedMeal];
+  const currentUnassigned = unassigned[selectedMeal];
+  const hasUnassigned = (currentUnassigned?.unassigned_count ?? 0) > 0;
 
   return (
     <AdminLayout activePage="trip-sheet">
       <div className="mb-6 space-y-1">
         <h1 className="text-2xl font-serif font-semibold text-foreground">Trip Sheet Generation</h1>
         <p className="text-sm text-muted-foreground">
-          Generate city-wise delivery manifests grouped by route and automatically advance orders to “On the Way”.
+          Generate delivery manifests per meal, grouped by route. Orders advance to "On the Way" on
+          generation.
         </p>
       </div>
 
+      {/* Date + actions */}
       <Card className="mb-6">
         <CardHeader>
           <CardTitle className="text-base font-semibold">Select run date</CardTitle>
@@ -280,26 +414,115 @@ export default function TripSheetPage() {
               <strong>City:</strong> {adminCity}
             </p>
             <p className="flex items-center gap-2 text-xs">
-              <Info className="h-4 w-4 text-muted-foreground" /> Orders in “Confirmed (Payment Due)”, “Confirmed”, or
-              “Preparing” will move to “On the Way”.
+              <Info className="h-4 w-4 text-muted-foreground" /> Confirmed / Preparing orders move
+              to "On the Way".
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={() => void openRoutePlanner()}>
               Route Planning
             </Button>
-            <Button onClick={handleGenerate} disabled={loading}>
-              {loading ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Generating…
-                </span>
-              ) : (
-                "Generate Trip Sheet"
-              )}
-            </Button>
           </div>
         </CardContent>
       </Card>
+
+      {/* Meal tabs */}
+      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {visibleMeals.map((meal) => {
+          const sheet = mealSheets[meal];
+          const isSelected = meal === selectedMeal;
+          const isGenerated = !!sheet;
+          return (
+            <Card
+              key={meal}
+              role="button"
+              tabIndex={0}
+              onClick={() => setSelectedMeal(meal)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setSelectedMeal(meal);
+                }
+              }}
+              className={cn(
+                "cursor-pointer border shadow-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+                isSelected
+                  ? "border-primary bg-primary/5"
+                  : "border-border hover:border-primary/50",
+              )}
+            >
+              <CardHeader className="pb-1 pt-4">
+                <CardTitle className="text-sm font-semibold">{meal}</CardTitle>
+              </CardHeader>
+              <CardContent className="pb-4 text-xs text-muted-foreground">
+                {isGenerated ? (
+                  <span className="text-emerald-600 font-medium">
+                    {sheet.routes.reduce((s, r) => s + r.total_orders, 0)} orders across{" "}
+                    {sheet.routes.length} routes
+                  </span>
+                ) : (
+                  <span>Not generated</span>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Unassigned warning */}
+      {!unassignedLoading && hasUnassigned && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-amber-900">
+                {currentUnassigned!.unassigned_count} delivery address
+                {currentUnassigned!.unassigned_count > 1 ? "es" : ""} not assigned to a route
+              </p>
+              <p className="mt-0.5 text-xs text-amber-700">
+                Open Customer Management, find each customer below, and assign their delivery
+                address to a route before generating the {selectedMeal} trip sheet.
+              </p>
+              <div className="mt-3 space-y-1.5">
+                {currentUnassigned!.customers.map((c) => (
+                  <button
+                    key={c.order_id}
+                    onClick={() => void openAssignDialog(c)}
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-amber-800 transition-colors hover:bg-amber-100"
+                  >
+                    <MapPin className="h-3 w-3 shrink-0 text-amber-500" />
+                    <span className="font-medium">{c.customer_name}</span>
+                    <span className="truncate text-amber-600">
+                      {[c.address.house_apartment_no, c.address.written_address]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </span>
+                    <span className="ml-auto shrink-0 text-amber-500 underline">Assign route</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Generate button for selected meal */}
+      <div className="mb-6 flex items-center gap-3">
+        <Button onClick={handleGenerate} disabled={loading || hasUnassigned}>
+          {loading ? (
+            <span className="flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" /> Generating…
+            </span>
+          ) : (
+            `Generate ${selectedMeal} Trip Sheet`
+          )}
+        </Button>
+        {hasUnassigned && (
+          <p className="text-xs text-muted-foreground">
+            Fix route assignments above to enable generation.
+          </p>
+        )}
+      </div>
 
       {error && (
         <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
@@ -307,21 +530,34 @@ export default function TripSheetPage() {
         </div>
       )}
 
-      {routes.length === 0 && !error ? (
+      {/* Trip sheet results */}
+      {!currentSheet ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center gap-2 py-12 text-center text-sm text-muted-foreground">
             <Route className="h-6 w-6 text-muted-foreground" />
-            <p>Generate a trip sheet to see the grouped delivery routes for {dateLabel}.</p>
+            <p>
+              Generate the <strong>{selectedMeal}</strong> trip sheet to see delivery routes for{" "}
+              {dateLabel}.
+            </p>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-6">
-          {statusUpdates > 0 && (
+          {currentSheet.status_updates > 0 && (
             <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-              {statusUpdates} orders updated to <strong>On the Way</strong>.
+              {currentSheet.status_updates} orders updated to <strong>On the Way</strong>.
             </div>
           )}
-          {routes.map((route) => (
+
+          {currentSheet.routes.length === 0 && (
+            <Card className="border-dashed">
+              <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                No orders found for {selectedMeal} on {dateLabel}.
+              </CardContent>
+            </Card>
+          )}
+
+          {currentSheet.routes.map((route) => (
             <Card key={route.route}>
               <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <div>
@@ -330,7 +566,7 @@ export default function TripSheetPage() {
                     {route.route}
                   </CardTitle>
                   <p className="text-sm text-muted-foreground">
-                    {route.total_orders} orders • {formatCurrency(route.total_amount)}
+                    {route.total_orders} orders · {formatCurrency(route.total_amount)}
                   </p>
                 </div>
               </CardHeader>
@@ -338,10 +574,11 @@ export default function TripSheetPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Order</TableHead>
+                      <TableHead className="w-24">Order</TableHead>
                       <TableHead>Customer</TableHead>
-                      <TableHead>Address</TableHead>
-                      <TableHead>Payment</TableHead>
+                      <TableHead className="w-48 min-w-[12rem]">Address</TableHead>
+                      <TableHead>Items</TableHead>
+                      <TableHead className="text-right">Payment</TableHead>
                       <TableHead>Status</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -349,35 +586,56 @@ export default function TripSheetPage() {
                     {route.orders.map((order) => (
                       <TableRow key={order.order_id}>
                         <TableCell>
-                          <div className="font-semibold">ORD-{String(order.order_id).padStart(5, "0")}</div>
-                          <div className="text-xs text-muted-foreground">{order.email ?? order.phone ?? "—"}</div>
+                          <span className="px-2 py-1 rounded-full text-[10px] font-mono font-medium bg-amber-800/15 text-amber-900">
+                            ORD-{String(order.order_id).padStart(5, "0")}
+                          </span>
                         </TableCell>
                         <TableCell>
-                          <div>{order.customer_name ?? "Customer"}</div>
+                          <div className="font-medium">{order.customer_name ?? "Customer"}</div>
                           <div className="text-xs text-muted-foreground">
                             {order.phone ? `+91 ${order.phone}` : "No phone"}
                           </div>
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          <div className="flex items-center gap-1 text-foreground">
-                            <MapPin className="h-3.5 w-3.5 text-primary" />{" "}
-                            {order.address.label || order.address.house_apartment_no || "Address"}
-                          </div>
-                          <p className="text-xs">
-                            {[order.address.written_address, order.address.city, order.address.pin_code]
-                              .filter(Boolean)
-                              .join(", ")}
-                          </p>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm font-medium">{formatCurrency(order.total_price)}</div>
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Wallet className="h-3 w-3" />
-                            {order.payment_method} {order.paid ? "· Paid" : "· Collect"}
+                        <TableCell className="w-48 min-w-[12rem] text-sm text-muted-foreground">
+                          <div className="flex items-start gap-1">
+                            <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                            <span className="whitespace-normal break-words">
+                              {[
+                                order.address.house_apartment_no,
+                                order.address.written_address,
+                                order.address.city,
+                                order.address.pin_code,
+                              ]
+                                .filter(Boolean)
+                                .join(", ")}
+                            </span>
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge className={cn("text-xs", statusBadgeClass(order.status))}>{order.status}</Badge>
+                          {order.items.length === 0 ? (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          ) : (
+                            <ul className="space-y-0.5 text-xs text-muted-foreground">
+                              {order.items.map((item, idx) => (
+                                <li key={idx}>
+                                  {item.quantity} × {item.item_name}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="text-sm font-semibold">
+                            {formatCurrency(order.total_price)}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {order.payment_method} · {order.paid ? "Paid" : "Collect"}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={cn("text-xs", statusBadgeClass(order.status))}>
+                            {order.status}
+                          </Badge>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -389,73 +647,130 @@ export default function TripSheetPage() {
         </div>
       )}
 
+      {/* Route assignment dialog */}
+      <Dialog
+        open={!!assignTarget}
+        onOpenChange={(open) => {
+          if (!open) setAssignTarget(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Assign delivery route</DialogTitle>
+          </DialogHeader>
+          {assignTarget && (
+            <div className="space-y-4">
+              <div className="rounded-lg border bg-muted/40 p-3 text-sm">
+                <p className="font-medium">{assignTarget.customer_name}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {[assignTarget.address.house_apartment_no, assignTarget.address.written_address]
+                    .filter(Boolean)
+                    .join(", ")}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label>Route</Label>
+                {routeConfigs.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    No routes configured for {adminCity}. Add routes via Route Planning first.
+                  </p>
+                ) : (
+                  <Select value={assignRouteId} onValueChange={setAssignRouteId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a route…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {routeConfigs.map((r) => (
+                        <SelectItem
+                          key={r.route_id ?? r.route_code}
+                          value={String(r.route_id ?? "")}
+                        >
+                          {r.route_name}
+                          {r.notes ? ` — ${r.notes}` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignTarget(null)} disabled={assignSaving}>
+              Cancel
+            </Button>
+            <Button onClick={handleAssignRoute} disabled={!assignRouteId || assignSaving}>
+              {assignSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Route planner dialog */}
       <Dialog open={routePlannerOpen} onOpenChange={setRoutePlannerOpen}>
         <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>Route Planning</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="flex flex-col gap-4 overflow-hidden">
             <p className="text-sm text-muted-foreground">
-              Define reusable delivery routes for {adminCity}. Later, customers can be assigned to these routes from Customer Management.
+              Define reusable delivery routes for {adminCity}. Customers are assigned to routes from
+              Customer Management.
             </p>
-
-            {routePlannerError ? (
+            {routePlannerError && (
               <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
                 {routePlannerError}
               </div>
-            ) : null}
-
+            )}
             {routePlannerLoading ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Loading routes…
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading routes…
               </div>
             ) : (
-              <div className="space-y-3">
-                {routeConfigs.length === 0 ? (
-                  <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-                    No routes configured yet. Add your first route below.
-                  </div>
-                ) : null}
-
-                {routeConfigs.map((route, index) => (
-                  <div key={`${route.route_id ?? "new"}-${index}`} className="rounded-lg border p-4">
-                    <div className="grid gap-4 md:grid-cols-[140px_minmax(0,1fr)_auto]">
-                      <div className="space-y-2">
-                        <Label>Route Code</Label>
-                        <Input
-                          value={route.route_code}
-                          onChange={(event) => updateRouteRow(index, "route_code", event.target.value)}
-                          placeholder="Route A"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Route Name</Label>
-                        <Input
-                          value={route.route_name}
-                          onChange={(event) => updateRouteRow(index, "route_name", event.target.value)}
-                          placeholder="Vijayanagar and Gokulam"
-                        />
-                      </div>
-                      <div className="flex items-end">
-                        <Button type="button" variant="ghost" size="icon" onClick={() => removeRouteRow(index)}>
-                          <X className="h-4 w-4" />
-                        </Button>
+              <div className="flex flex-col gap-3 overflow-hidden">
+                <div className="max-h-[55vh] overflow-y-auto space-y-2 pr-1">
+                  {routeConfigs.length === 0 && (
+                    <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                      No routes configured yet. Add your first route below.
+                    </div>
+                  )}
+                  {routeConfigs.map((route, index) => (
+                    <div
+                      key={`${route.route_id ?? "new"}-${index}`}
+                      className="rounded-lg border p-3"
+                    >
+                      <div className="grid gap-3 md:grid-cols-[140px_minmax(0,1fr)_auto]">
+                        <div className="space-y-1.5">
+                          <Label>Route Code</Label>
+                          <Input
+                            value={route.route_code}
+                            onChange={(e) => updateRouteRow(index, "route_code", e.target.value)}
+                            placeholder="route 1"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label>Route Name</Label>
+                          <Input
+                            value={route.route_name}
+                            onChange={(e) => updateRouteRow(index, "route_name", e.target.value)}
+                            placeholder="Vijayanagar and Gokulam"
+                          />
+                        </div>
+                        <div className="flex items-end">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeRouteRow(index)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                    <div className="mt-4 space-y-2">
-                      <Label>Notes</Label>
-                      <Textarea
-                        value={route.notes ?? ""}
-                        onChange={(event) => updateRouteRow(index, "notes", event.target.value)}
-                        placeholder="Optional notes for this route"
-                        rows={2}
-                      />
-                    </div>
-                  </div>
-                ))}
-
-                <Button type="button" variant="outline" onClick={addRouteRow}>
+                  ))}
+                </div>
+                <Button type="button" variant="outline" onClick={addRouteRow} className="w-fit">
                   <Plus className="mr-2 h-4 w-4" />
                   Add Route
                 </Button>
@@ -463,7 +778,11 @@ export default function TripSheetPage() {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRoutePlannerOpen(false)} disabled={routePlannerSaving}>
+            <Button
+              variant="outline"
+              onClick={() => setRoutePlannerOpen(false)}
+              disabled={routePlannerSaving}
+            >
               Cancel
             </Button>
             <Button onClick={saveRouteConfigs} disabled={routePlannerLoading || routePlannerSaving}>
@@ -473,5 +792,5 @@ export default function TripSheetPage() {
         </DialogContent>
       </Dialog>
     </AdminLayout>
-  )
+  );
 }
