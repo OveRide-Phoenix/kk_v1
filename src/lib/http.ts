@@ -1,11 +1,11 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? '/api/backend'; // Option A default
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "/api/backend"; // Option A default
 
-const isBrowser = typeof window !== 'undefined';
+const isBrowser = typeof window !== "undefined";
 
 function readAccessToken(): string | null {
   if (!isBrowser) return null;
   try {
-    return localStorage.getItem('access_token');
+    return localStorage.getItem("access_token");
   } catch {
     return null;
   }
@@ -13,7 +13,7 @@ function readAccessToken(): string | null {
 
 async function request(path: string, init?: RequestInit) {
   const headers = new Headers({
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   });
 
   if (init?.headers) {
@@ -23,33 +23,48 @@ async function request(path: string, init?: RequestInit) {
     });
   }
 
-  if (!headers.has('Authorization')) {
+  if (!headers.has("Authorization")) {
     const token = readAccessToken();
     if (token) {
-      headers.set('Authorization', `Bearer ${token}`);
+      headers.set("Authorization", `Bearer ${token}`);
     }
   }
 
   const res = await fetch(`${API_BASE}${path}`, {
-    credentials: 'include',       // ⬅️ important for cookies
+    credentials: "include", // ⬅️ important for cookies
     headers,
     ...init,
   });
   // Optional: handle 401 with auto-refresh
   if (res.status === 401) {
     // try refresh once
-    const r = await fetch(`${API_BASE}/auth/refresh`, { method: 'POST', credentials: 'include' });
+    const r = await fetch(`${API_BASE}/auth/refresh`, {
+      method: "POST",
+      credentials: "include",
+    });
     if (r.ok) {
-      return fetch(`${API_BASE}${path}`, { credentials: 'include', ...init });
+      return fetch(`${API_BASE}${path}`, { credentials: "include", ...init });
     }
   }
   return res;
 }
 
 export const http = {
-  get: (p: string) => request(p, { method: 'GET' }),
-  post: <T extends Record<string, unknown>>(p: string, body?: T) => request(p, { method: 'POST', body: body ? JSON.stringify(body) : undefined }),
-  put: <T extends Record<string, unknown>>(p: string, body?: T) => request(p, { method: 'PUT', body: body ? JSON.stringify(body) : undefined }),
-  patch: <T extends Record<string, unknown>>(p: string, body?: T) => request(p, { method: 'PATCH', body: body ? JSON.stringify(body) : undefined }),
-  delete: (p: string) => request(p, { method: 'DELETE' }),
+  get: (p: string) => request(p, { method: "GET" }),
+  post: <T extends Record<string, unknown>>(p: string, body?: T) =>
+    request(p, {
+      method: "POST",
+      body: body ? JSON.stringify(body) : undefined,
+    }),
+  put: <T extends Record<string, unknown>>(p: string, body?: T) =>
+    request(p, {
+      method: "PUT",
+      body: body ? JSON.stringify(body) : undefined,
+    }),
+  patch: <T extends Record<string, unknown>>(p: string, body?: T) =>
+    request(p, {
+      method: "PATCH",
+      body: body ? JSON.stringify(body) : undefined,
+    }),
+  delete: (p: string) => request(p, { method: "DELETE" }),
 };

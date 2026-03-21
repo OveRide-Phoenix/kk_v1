@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(update-config)",
+      "Skill(update-config:*)",
+      "mcp__mysql__mysql_query",
+      "Bash(osascript:*)"
+    ]
+  },
+  "enabledMcpjsonServers": ["nextjs", "chrome", "mysql"],
+  "hooks": {
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.message // \"Claude needs your attention\"' | xargs -I{} osascript -e 'display notification \"{}\" with title \"Claude Code\" sound name \"Glass\"'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node hooks/prettier.mjs",
+            "statusMessage": "Formatting with prettier..."
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,10 +1,6 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Python Style
 
-- **Formatter**: Black (line length 100). Runs automatically via hook after every edit.
+- **Formatter**: Black (line length 100). Run `black <file>` after editing any `.py` file.
 - **Type annotations**: Required on all function parameters and return types.
 - **Docstrings**: Required on all functions, classes, and FastAPI route handlers. Use Google style:
 
@@ -20,7 +16,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
       """
   ```
 
-- FastAPI endpoints must include a docstring that describes the endpoint's purpose, expected inputs, and what it returns — this doubles as API documentation.
+- FastAPI endpoints must include a docstring describing the endpoint's purpose, expected inputs, and return value.
+
+## Code Formatting
+
+After modifying any `.js`, `.jsx`, `.ts`, `.tsx`, `.json`, `.css`, `.scss`, `.html`, or `.md` file, run:
+
+```bash
+npx prettier --write <file>
+```
+
+Always format files you create or edit before finishing a task.
 
 ## Project Overview
 
