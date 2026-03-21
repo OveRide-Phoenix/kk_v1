@@ -1,8 +1,0 @@
-#!/bin/sh
-'''exec' "/Users/shanky/1. Projects/kk_v1/backend/venv/bin/python3" "$0" "$@"
-' '''
-import sys
-from rsa.cli import sign
-if __name__ == '__main__':
-    sys.argv[0] = sys.argv[0].removesuffix('.exe')
-    sys.exit(sign())

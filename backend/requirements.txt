@@ -9,6 +9,7 @@ charset-normalizer==3.4.4
 click==8.2.1
 cryptography==45.0.6
 fastapi==0.116.1
+fastmcp==3.1.1
 google-ai-generativelanguage==0.6.15
 google-api-core==2.27.0
 google-api-python-client==2.185.0
