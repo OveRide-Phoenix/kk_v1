@@ -7,6 +7,9 @@ backend/routers/ and backend/customer/.
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+from typing import AsyncGenerator
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -25,11 +28,36 @@ from .routers.rbac import router as rbac_router
 
 # Import db to ensure the shared connection pool is initialised at startup.
 from . import db as _db  # noqa: F401
+from .db import get_raw_db
+from .utils.helpers import _ensure_menu_type_column, get_items_columns
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    """Run schema initialisation once at startup before serving any requests.
+
+    Caches the items table column set and applies any outstanding schema
+    migrations (menu_type column guard) so that request handlers never need
+    to do schema inspection at runtime.
+    """
+    db = get_raw_db()
+    try:
+        cursor = db.cursor(dictionary=True)
+        try:
+            _ensure_menu_type_column(db)
+            get_items_columns(cursor)
+        finally:
+            cursor.close()
+    finally:
+        db.close()
+    yield
+
 
 app = FastAPI(
     title="Kuteera Kitchen API",
     description="Backend API for the Kuteera Kitchen meal prep and delivery platform.",
     version="1.0.0",
+    lifespan=_lifespan,
 )
 
 app.add_middleware(

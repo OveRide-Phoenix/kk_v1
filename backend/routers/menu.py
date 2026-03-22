@@ -27,7 +27,6 @@ from ..utils.helpers import (
     resolve_delivers_by_value,
     filter_items_by_bld,
     _resolve_city_context,
-    _ensure_menu_type_column,
 )
 from ..utils.logger import log_admin_action
 
@@ -94,7 +93,6 @@ def _get_daily_menu_internal(
     db = get_raw_db()
     cursor = db.cursor(dictionary=True)
     try:
-        _ensure_menu_type_column(db)
         resolved_menu_type = normalize_menu_type(menu_type)
         ensure_menu_allowed(city_code, resolved_menu_type)
         canonical_bld_type = normalize_meal_type(bld_type)
@@ -535,7 +533,6 @@ def upsert_daily_menu(payload: DailyMenuPayload) -> Dict[str, Any]:
     db = get_raw_db()
     cursor = db.cursor()
     try:
-        _ensure_menu_type_column(db)
         canonical_bld_type = normalize_meal_type(payload.bld_type)
         bld_id = resolve_bld_id(cursor, canonical_bld_type)
         city_code = normalize_city_code(payload.city_code or DEFAULT_CITY)

@@ -30,6 +30,7 @@ from ..utils.helpers import (
     _fetch_item_detail,
     _normalize_item_payload_data,
     _item_column_field_map,
+    get_items_columns,
 )
 from ..utils.combos import (
     ensure_category_exists,
@@ -276,8 +277,7 @@ def get_all_items(
     db = get_raw_db()
     cursor = db.cursor(dictionary=True)
     try:
-        cursor.execute("SHOW COLUMNS FROM items")
-        available_columns = {row["Field"] for row in cursor.fetchall()}
+        available_columns = get_items_columns(cursor)
         try:
             condiments_bld_id = resolve_bld_id(cursor, CONDIMENTS_BLD_TYPE)
         except HTTPException:
@@ -357,15 +357,13 @@ def get_all_items(
         ]
 
         select_sql = ",\n                    ".join(select_columns)
-        cursor.execute(
-            f"""
+        cursor.execute(f"""
                 SELECT
                     {select_sql}
                 FROM items i
                 LEFT JOIN categories c ON i.category_id = c.category_id
                 LEFT JOIN component_types ct ON i.component_type_id = ct.component_type_id
-            """
-        )
+            """)
         records = cursor.fetchall()
 
         attach_bld_ids(cursor, records)
@@ -403,8 +401,7 @@ def create_item(
     db = get_raw_db()
     cursor = db.cursor(dictionary=True)
     try:
-        cursor.execute("SHOW COLUMNS FROM items")
-        available_columns = {row["Field"] for row in cursor.fetchall()}
+        available_columns = get_items_columns(cursor)
 
         data = payload.model_dump()
         raw_bld_ids = data.pop("bld_ids", [])
@@ -512,8 +509,7 @@ def update_item(
     db = get_raw_db()
     cursor = db.cursor(dictionary=True)
     try:
-        cursor.execute("SHOW COLUMNS FROM items")
-        available_columns = {row["Field"] for row in cursor.fetchall()}
+        available_columns = get_items_columns(cursor)
 
         cursor.execute(
             "SELECT item_id, component_type_id FROM items WHERE item_id = %s", (item_id,)
@@ -942,8 +938,7 @@ def create_plated_item(
     db = get_raw_db()
     cursor = db.cursor(dictionary=True)
     try:
-        cursor.execute("SHOW COLUMNS FROM items")
-        available_columns = {row["Field"] for row in cursor.fetchall()}
+        available_columns = get_items_columns(cursor)
 
         data = payload.model_dump()
         raw_bld_ids = data.pop("bld_ids", [])
@@ -1069,8 +1064,7 @@ def update_plated_item(
     db = get_raw_db()
     cursor = db.cursor(dictionary=True)
     try:
-        cursor.execute("SHOW COLUMNS FROM items")
-        available_columns = {row["Field"] for row in cursor.fetchall()}
+        available_columns = get_items_columns(cursor)
         cursor.execute(
             "SELECT plated_item_id FROM plated_items WHERE item_id = %s LIMIT 1",
             (item_id,),
