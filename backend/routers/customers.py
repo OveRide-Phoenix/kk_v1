@@ -62,12 +62,19 @@ class AddressRouteAssignPayload(BaseModel):
 
 
 def _get_db():
-    """Return a raw mysql.connector connection (used as FastAPI Depends target).
+    """Yield a pooled mysql.connector connection and return it on teardown.
 
-    Returns:
-        mysql.connector connection object.
+    Used as a FastAPI ``Depends`` target so FastAPI automatically closes
+    (i.e. returns to the pool) the connection after each request.
+
+    Yields:
+        A ``mysql.connector.pooling.PooledMySQLConnection`` instance.
     """
-    return get_raw_db()
+    db = get_raw_db()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 def _resolve_coordinates(
@@ -425,9 +432,7 @@ def update_customer_address(customer_id: int, address_id: int, payload: AddressP
         db.close()
 
 
-@router.patch(
-    "/api/customers/{customer_id}/addresses/{address_id}/route", tags=["Customers"]
-)
+@router.patch("/api/customers/{customer_id}/addresses/{address_id}/route", tags=["Customers"])
 def assign_address_route(
     customer_id: int,
     address_id: int,
@@ -468,9 +473,7 @@ def assign_address_route(
         db.close()
 
 
-@router.post(
-    "/api/customers/{customer_id}/addresses/{address_id}/default", tags=["Customers"]
-)
+@router.post("/api/customers/{customer_id}/addresses/{address_id}/default", tags=["Customers"])
 def set_default_customer_address(customer_id: int, address_id: int):
     """Mark an address as the default for a customer.
 
