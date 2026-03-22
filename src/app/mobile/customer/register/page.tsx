@@ -6,6 +6,7 @@ import { mobilePalette, playfairMobile, workSans } from "@/components/mobile/cus
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { http } from "@/lib/http";
 import { ChangeEvent, FormEvent, ReactNode, useMemo, useState } from "react";
 
 const CITY_OPTIONS = [
@@ -16,7 +17,9 @@ const CITY_OPTIONS = [
 const PAYMENT_FREQUENCIES = ["Daily", "Weekly", "Monthly"] as const;
 
 const resolveCityCode = (value: string) => {
-  const match = CITY_OPTIONS.find((option) => option.label.toLowerCase() === value.trim().toLowerCase());
+  const match = CITY_OPTIONS.find(
+    (option) => option.label.toLowerCase() === value.trim().toLowerCase(),
+  );
   return match ? match.code : "MYS";
 };
 
@@ -24,7 +27,10 @@ export default function MobileCustomerRegisterPage() {
   const router = useRouter();
   const { toast } = useToast();
   const handleBack = () => {
-    const idx = typeof window !== "undefined" ? (window.history.state as { idx?: number } | null)?.idx : undefined;
+    const idx =
+      typeof window !== "undefined"
+        ? (window.history.state as { idx?: number } | null)?.idx
+        : undefined;
     if (typeof idx === "number" && idx > 0) {
       router.back();
       return;
@@ -59,7 +65,9 @@ export default function MobileCustomerRegisterPage() {
 
   const mapView = useMemo(() => <GoogleMapPicker onLocationSelect={onLocationSelect} />, []);
 
-  const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleChange = (
+    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
+  ) => {
     const { name, value } = e.target;
 
     if (name === "primaryMobile" || name === "alternativeMobile") {
@@ -142,19 +150,16 @@ export default function MobileCustomerRegisterPage() {
     };
 
     try {
-      const response = await fetch("http://localhost:8000/api/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const response = await http.post("/api/register", payload as Record<string, unknown>);
 
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
         const detail = (data as { detail?: string }).detail;
-        const message = detail && detail.includes("Duplicate entry")
-          ? "This phone number is already registered."
-          : detail || "Registration failed. Please try again.";
+        const message =
+          detail && detail.includes("Duplicate entry")
+            ? "This phone number is already registered."
+            : detail || "Registration failed. Please try again.";
 
         toast({
           variant: "destructive",
@@ -186,7 +191,10 @@ export default function MobileCustomerRegisterPage() {
   return (
     <main
       className={`${workSans.variable} ${playfairMobile.variable} min-h-dvh w-full overflow-x-hidden`}
-      style={{ backgroundColor: mobilePalette.background, fontFamily: "var(--font-mobile-work-sans), sans-serif" }}
+      style={{
+        backgroundColor: mobilePalette.background,
+        fontFamily: "var(--font-mobile-work-sans), sans-serif",
+      }}
     >
       <div className="mx-auto w-full max-w-[448px] pb-8">
         <header className="relative flex items-center justify-center p-4">
@@ -198,16 +206,36 @@ export default function MobileCustomerRegisterPage() {
           >
             <ArrowLeft color="#0F172A" size={20} />
           </button>
-          <h1 className="text-center text-lg font-bold text-[#0F172A]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>Create Your Account</h1>
+          <h1
+            className="text-center text-lg font-bold text-[#0F172A]"
+            style={{ fontFamily: "var(--font-mobile-playfair), serif" }}
+          >
+            Create Your Account
+          </h1>
         </header>
 
         <section className="px-6 pb-4 pt-6">
-          <h2 className="text-[32px] font-bold tracking-[-0.8px] text-[#8D4A25]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>Join Kuteera Kitchen</h2>
-          <p className="mt-2 text-base leading-6 text-[#475569]">Sign up to start your healthy food subscription journey.</p>
+          <h2
+            className="text-[32px] font-bold tracking-[-0.8px] text-[#8D4A25]"
+            style={{ fontFamily: "var(--font-mobile-playfair), serif" }}
+          >
+            Join Kuteera Kitchen
+          </h2>
+          <p className="mt-2 text-base leading-6 text-[#475569]">
+            Sign up to start your healthy food subscription journey.
+          </p>
         </section>
 
         <form className="flex flex-col gap-5 px-6 pb-8 pt-2" onSubmit={onSubmit}>
-          <InputField icon={<CircleUserRound size={18} color="#8D4A25" />} label="Customer Name *" name="name" value={form.name} placeholder="John Doe" onChange={handleChange} required />
+          <InputField
+            icon={<CircleUserRound size={18} color="#8D4A25" />}
+            label="Customer Name *"
+            name="name"
+            value={form.name}
+            placeholder="John Doe"
+            onChange={handleChange}
+            required
+          />
           <InputField
             icon={<Phone size={18} color="#8D4A25" />}
             label="Referred By"
@@ -237,9 +265,23 @@ export default function MobileCustomerRegisterPage() {
             onChange={handleChange}
           />
 
-          <InputField icon={<CircleUserRound size={18} color="#8D4A25" />} label="Receiver Name *" name="recipientName" value={form.recipientName} placeholder="Food receiver" onChange={handleChange} required />
+          <InputField
+            icon={<CircleUserRound size={18} color="#8D4A25" />}
+            label="Receiver Name *"
+            name="recipientName"
+            value={form.recipientName}
+            placeholder="Food receiver"
+            onChange={handleChange}
+            required
+          />
 
-          <SelectField label="Payment Frequency" name="paymentFrequency" value={form.paymentFrequency} onChange={handleChange} options={PAYMENT_FREQUENCIES.map((f) => ({ value: f, label: f }))} />
+          <SelectField
+            label="Payment Frequency"
+            name="paymentFrequency"
+            value={form.paymentFrequency}
+            onChange={handleChange}
+            options={PAYMENT_FREQUENCIES.map((f) => ({ value: f, label: f }))}
+          />
 
           <SelectField
             label="Address Type"
@@ -254,12 +296,33 @@ export default function MobileCustomerRegisterPage() {
           />
 
           {form.addressType === "Other" ? (
-            <InputField label="Other Address Name" name="otherAddressName" value={otherAddressName} placeholder="Gym / Parents Home / etc" onChange={(e) => setOtherAddressName(e.target.value)} />
+            <InputField
+              label="Other Address Name"
+              name="otherAddressName"
+              value={otherAddressName}
+              placeholder="Gym / Parents Home / etc"
+              onChange={(e) => setOtherAddressName(e.target.value)}
+            />
           ) : null}
 
-          <InputField icon={<MapPin size={18} color="#8D4A25" />} label="House/Apartment *" name="houseApartmentNo" value={form.houseApartmentNo} placeholder="Flat/House number" onChange={handleChange} required />
+          <InputField
+            icon={<MapPin size={18} color="#8D4A25" />}
+            label="House/Apartment *"
+            name="houseApartmentNo"
+            value={form.houseApartmentNo}
+            placeholder="Flat/House number"
+            onChange={handleChange}
+            required
+          />
 
-          <TextAreaField label="Written Address *" name="writtenAddress" value={form.writtenAddress} placeholder="Street, locality, landmark" onChange={handleChange} required />
+          <TextAreaField
+            label="Written Address *"
+            name="writtenAddress"
+            value={form.writtenAddress}
+            placeholder="Street, locality, landmark"
+            onChange={handleChange}
+            required
+          />
 
           <SelectField
             label="City *"
@@ -270,15 +333,35 @@ export default function MobileCustomerRegisterPage() {
             required
           />
 
-          <InputField label="Pin Code *" name="pinCode" type="tel" value={form.pinCode} placeholder="6 digits" onChange={handleChange} required />
+          <InputField
+            label="Pin Code *"
+            name="pinCode"
+            type="tel"
+            value={form.pinCode}
+            placeholder="6 digits"
+            onChange={handleChange}
+            required
+          />
 
-          <InputField icon={<Mail size={18} color="#8D4A25" />} label="Email" name="email" type="email" value={form.email} placeholder="example@mail.com" onChange={handleChange} />
+          <InputField
+            icon={<Mail size={18} color="#8D4A25" />}
+            label="Email"
+            name="email"
+            type="email"
+            value={form.email}
+            placeholder="example@mail.com"
+            onChange={handleChange}
+          />
 
           <div className="space-y-2">
-            <span className="block pl-1 text-sm font-semibold text-[#1E293B]">Google Maps Location</span>
+            <span className="block pl-1 text-sm font-semibold text-[#1E293B]">
+              Google Maps Location
+            </span>
             {mapView}
             {form.latitude !== null && form.longitude !== null ? (
-              <p className="text-xs text-[#64748B]">Selected: {form.latitude.toFixed(6)}, {form.longitude.toFixed(6)}</p>
+              <p className="text-xs text-[#64748B]">
+                Selected: {form.latitude.toFixed(6)}, {form.longitude.toFixed(6)}
+              </p>
             ) : null}
           </div>
 
@@ -293,15 +376,24 @@ export default function MobileCustomerRegisterPage() {
           </label>
 
           <p className="px-4 text-center text-[13px] leading-[21px] text-[#64748B]">
-            By creating an account, you agree to our <span className="font-medium text-[#8D4A25] underline">Terms of Service</span> and <span className="font-medium text-[#8D4A25] underline">Privacy Policy</span>.
+            By creating an account, you agree to our{" "}
+            <span className="font-medium text-[#8D4A25] underline">Terms of Service</span> and{" "}
+            <span className="font-medium text-[#8D4A25] underline">Privacy Policy</span>.
           </p>
 
-          <button type="submit" className="h-14 w-full rounded-2xl bg-[#8D4A25] text-lg font-bold text-white shadow-[0px_10px_15px_-3px_rgba(141,74,37,0.2),0px_4px_6px_-4px_rgba(141,74,37,0.2)] disabled:opacity-60" disabled={isSubmitting}>
+          <button
+            type="submit"
+            className="h-14 w-full rounded-2xl bg-[#8D4A25] text-lg font-bold text-white shadow-[0px_10px_15px_-3px_rgba(141,74,37,0.2),0px_4px_6px_-4px_rgba(141,74,37,0.2)] disabled:opacity-60"
+            disabled={isSubmitting}
+          >
             {isSubmitting ? "Creating..." : "Create Account"}
           </button>
 
           <p className="pb-4 pt-1 text-center text-sm text-[#475569]">
-            Already have an account? <Link href="/mobile/customer/login/phone" className="font-bold text-[#8D4A25]">Login</Link>
+            Already have an account?{" "}
+            <Link href="/mobile/customer/login/phone" className="font-bold text-[#8D4A25]">
+              Login
+            </Link>
           </p>
         </form>
       </div>
@@ -320,7 +412,16 @@ type InputFieldProps = {
   onChange: (e: ChangeEvent<HTMLInputElement>) => void;
 };
 
-function InputField({ icon, label, name, placeholder, value, onChange, type = "text", required = false }: InputFieldProps) {
+function InputField({
+  icon,
+  label,
+  name,
+  placeholder,
+  value,
+  onChange,
+  type = "text",
+  required = false,
+}: InputFieldProps) {
   return (
     <label className="block">
       <span className="mb-2 block pl-1 text-sm font-semibold text-[#1E293B]">{label}</span>
@@ -334,13 +435,31 @@ function InputField({ icon, label, name, placeholder, value, onChange, type = "t
           required={required}
           className="h-14 w-full rounded-2xl border border-[#8D4A25] bg-transparent px-4 pr-11 text-base text-[#0F172A] placeholder:text-[#94A3B8] outline-none"
         />
-        {icon ? <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2">{icon}</span> : null}
+        {icon ? (
+          <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2">
+            {icon}
+          </span>
+        ) : null}
       </div>
     </label>
   );
 }
 
-function SelectField({ label, name, value, onChange, options, required = false }: { label: string; name: string; value: string; onChange: (e: ChangeEvent<HTMLSelectElement>) => void; options: { value: string; label: string }[]; required?: boolean }) {
+function SelectField({
+  label,
+  name,
+  value,
+  onChange,
+  options,
+  required = false,
+}: {
+  label: string;
+  name: string;
+  value: string;
+  onChange: (e: ChangeEvent<HTMLSelectElement>) => void;
+  options: { value: string; label: string }[];
+  required?: boolean;
+}) {
   return (
     <label className="block">
       <span className="mb-2 block pl-1 text-sm font-semibold text-[#1E293B]">{label}</span>
@@ -362,7 +481,21 @@ function SelectField({ label, name, value, onChange, options, required = false }
   );
 }
 
-function TextAreaField({ label, name, value, placeholder, onChange, required = false }: { label: string; name: string; value: string; placeholder: string; onChange: (e: ChangeEvent<HTMLTextAreaElement>) => void; required?: boolean }) {
+function TextAreaField({
+  label,
+  name,
+  value,
+  placeholder,
+  onChange,
+  required = false,
+}: {
+  label: string;
+  name: string;
+  value: string;
+  placeholder: string;
+  onChange: (e: ChangeEvent<HTMLTextAreaElement>) => void;
+  required?: boolean;
+}) {
   return (
     <label className="block">
       <span className="mb-2 block pl-1 text-sm font-semibold text-[#1E293B]">{label}</span>

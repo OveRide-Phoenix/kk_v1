@@ -2,7 +2,19 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Bell, CalendarDays, ChevronDown, ChevronUp, LayoutGrid, List, Loader2, Minus, Plus, ShoppingCart } from "lucide-react";
+import {
+  ArrowRight,
+  Bell,
+  CalendarDays,
+  ChevronDown,
+  ChevronUp,
+  LayoutGrid,
+  List,
+  Loader2,
+  Minus,
+  Plus,
+  ShoppingCart,
+} from "lucide-react";
 import { format as formatDate, isSameDay, isSameMonth } from "date-fns";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -11,6 +23,7 @@ import { LeaveCartDialog } from "@/components/mobile/customer/leave-cart-dialog"
 import { mobilePalette, outfit, playfairMobile } from "@/components/mobile/customer/theme";
 import { getSupportedMeals } from "@/config/cities";
 import { useAuthStore } from "@/store/store";
+import { http } from "@/lib/http";
 
 type MealType = "breakfast" | "lunch" | "dinner" | "condiments";
 
@@ -105,12 +118,6 @@ const normalizeType = (value: string | null | undefined): "subscription" | "one_
   return normalized === "subscription" ? "subscription" : "one_time";
 };
 
-const buildAuthHeaders = (): Record<string, string> => {
-  if (typeof window === "undefined") return {};
-  const token = localStorage.getItem("access_token");
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
-
 export default function MobileCustomerHomePage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
@@ -184,7 +191,6 @@ export default function MobileCustomerHomePage() {
     setMenuError(null);
 
     (async () => {
-      const headers = buildAuthHeaders();
       try {
         const nextMenu: Partial<Record<MealType, MenuItem[]>> = {};
 
@@ -195,21 +201,21 @@ export default function MobileCustomerHomePage() {
               return;
             }
 
-            const url = new URL("http://localhost:8000/api/menu");
-            url.searchParams.set("bld_type", meal);
-            url.searchParams.set("include_combos", "1");
+            const params = new URLSearchParams();
+            params.set("bld_type", meal);
+            params.set("include_combos", "1");
             if (userHasCityOverride) {
-              url.searchParams.set("city_code", cityCode);
+              params.set("city_code", cityCode);
             }
             if (meal === "condiments") {
-              url.searchParams.set("menu_type", "CONDIMENTS");
+              params.set("menu_type", "CONDIMENTS");
             } else {
-              url.searchParams.set("date", todayISO);
-              url.searchParams.set("period_type", "one_day");
-              url.searchParams.set("menu_type", "ONE_DAY");
+              params.set("date", todayISO);
+              params.set("period_type", "one_day");
+              params.set("menu_type", "ONE_DAY");
             }
 
-            const response = await fetch(url.toString(), { headers });
+            const response = await http.get(`/api/menu?${params}`);
             if (response.status === 404 || !response.ok) {
               nextMenu[meal] = [];
               return;
@@ -264,8 +270,7 @@ export default function MobileCustomerHomePage() {
       setOrdersLoading(true);
       setOrdersError(null);
       try {
-        const headers = buildAuthHeaders();
-        const response = await fetch(`http://localhost:8000/api/customers/${customerId}/orders`, { headers });
+        const response = await http.get(`/api/customers/${customerId}/orders`);
         if (!response.ok) throw new Error("Unable to load your orders");
         const data = (await response.json()) as OrderSummary[];
         if (cancelled) return;
@@ -273,7 +278,9 @@ export default function MobileCustomerHomePage() {
           data.map((order) => ({
             ...order,
             order_type: order.order_type ?? "one_time",
-            items: Array.isArray((order as { items?: OrderItem[] }).items) ? (order as { items?: OrderItem[] }).items ?? [] : [],
+            items: Array.isArray((order as { items?: OrderItem[] }).items)
+              ? ((order as { items?: OrderItem[] }).items ?? [])
+              : [],
           })),
         );
       } catch {
@@ -506,23 +513,40 @@ export default function MobileCustomerHomePage() {
   }, [orders]);
 
   const showTodaysBookingCard = ordersLoading || Boolean(ordersError) || todaysBookings.length > 0;
-  const showSubscriptionCardAboveMenu = ordersLoading || Boolean(ordersError) || Boolean(currentSubscription);
-  const bookingActionHref = hasMultipleTodayOrders ? "/mobile/customer/orders" : "/mobile/customer/order";
+  const showSubscriptionCardAboveMenu =
+    ordersLoading || Boolean(ordersError) || Boolean(currentSubscription);
+  const bookingActionHref = hasMultipleTodayOrders
+    ? "/mobile/customer/orders"
+    : "/mobile/customer/order";
 
   return (
     <main
       className={`${outfit.variable} ${playfairMobile.variable} min-h-screen w-full overflow-y-auto pb-28 [-webkit-overflow-scrolling:touch] touch-pan-y`}
-      style={{ backgroundColor: mobilePalette.background, fontFamily: "var(--font-mobile-outfit), sans-serif" }}
+      style={{
+        backgroundColor: mobilePalette.background,
+        fontFamily: "var(--font-mobile-outfit), sans-serif",
+      }}
     >
       <div className="mx-auto w-full max-w-[448px]">
         <header className="flex items-center justify-between px-6 pb-4 pt-10">
           <div className="flex items-center gap-3">
             <div className="h-14 w-14 overflow-hidden rounded-full border-2 border-[rgba(141,73,37,0.2)] bg-white p-1">
-              <Image src={DEFAULT_PROFILE_ICON} alt="profile icon" width={48} height={48} className="h-full w-full rounded-full object-cover" />
+              <Image
+                src={DEFAULT_PROFILE_ICON}
+                alt="profile icon"
+                width={48}
+                height={48}
+                className="h-full w-full rounded-full object-cover"
+              />
             </div>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[1px] text-[rgba(141,73,37,0.6)]">Namaste 🙏</p>
-              <h1 className="text-[20px] font-bold leading-[25px] text-[#8D4925]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>
+              <p className="text-[10px] font-bold uppercase tracking-[1px] text-[rgba(141,73,37,0.6)]">
+                Namaste 🙏
+              </p>
+              <h1
+                className="text-[20px] font-bold leading-[25px] text-[#8D4925]"
+                style={{ fontFamily: "var(--font-mobile-playfair), serif" }}
+              >
                 {hydrated && customerName ? `Welcome, ${customerName}` : "Welcome"}
               </h1>
             </div>
@@ -539,18 +563,26 @@ export default function MobileCustomerHomePage() {
                 <div>
                   <p className="text-[11px] text-[rgba(141,73,37,0.6)]">Today&apos;s Booking</p>
                   {ordersLoading ? (
-                    <p className="mt-1 flex items-center gap-2 text-sm text-[#475569]"><Loader2 className="h-4 w-4 animate-spin" /> Checking bookings...</p>
+                    <p className="mt-1 flex items-center gap-2 text-sm text-[#475569]">
+                      <Loader2 className="h-4 w-4 animate-spin" /> Checking bookings...
+                    </p>
                   ) : ordersError ? (
                     <p className="mt-1 text-sm text-red-600">{ordersError}</p>
                   ) : hasMultipleTodayOrders ? (
                     <>
-                      <p className="text-lg font-bold text-[#8D4925]">{todaysBookings.length} Orders Today</p>
-                      <p className="text-xs text-[#475569]">Track all today&apos;s orders from one place.</p>
+                      <p className="text-lg font-bold text-[#8D4925]">
+                        {todaysBookings.length} Orders Today
+                      </p>
+                      <p className="text-xs text-[#475569]">
+                        Track all today&apos;s orders from one place.
+                      </p>
                     </>
                   ) : todaysBooking ? (
                     <>
                       <p className="text-lg font-bold text-[#8D4925]">{todaysBooking.status}</p>
-                      <p className="text-xs text-[#475569]">{todaysItemsCount} items • ₹{Math.round(todaysBooking.total_price)}</p>
+                      <p className="text-xs text-[#475569]">
+                        {todaysItemsCount} items • ₹{Math.round(todaysBooking.total_price)}
+                      </p>
                     </>
                   ) : null}
                 </div>
@@ -593,25 +625,37 @@ export default function MobileCustomerHomePage() {
         {showSubscriptionCardAboveMenu ? (
           <section className="px-6 py-4">
             <div className="relative overflow-hidden rounded-2xl bg-[#8D4925] p-6 text-white shadow-[0px_10px_15px_-3px_rgba(141,73,37,0.2),0px_4px_6px_-4px_rgba(141,73,37,0.2)]">
-              <p className="text-[11px] uppercase tracking-[1px] text-white/70">Monthly Subscription</p>
+              <p className="text-[11px] uppercase tracking-[1px] text-white/70">
+                Monthly Subscription
+              </p>
               {ordersLoading ? (
-                <p className="mt-2 flex items-center gap-2 text-sm text-white/90"><Loader2 className="h-4 w-4 animate-spin" /> Checking subscription...</p>
+                <p className="mt-2 flex items-center gap-2 text-sm text-white/90">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Checking subscription...
+                </p>
               ) : ordersError ? (
                 <p className="mt-2 text-sm text-white/90">{ordersError}</p>
               ) : currentSubscription ? (
                 <>
-                  <h2 className="mt-1 text-2xl font-bold" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>
+                  <h2
+                    className="mt-1 text-2xl font-bold"
+                    style={{ fontFamily: "var(--font-mobile-playfair), serif" }}
+                  >
                     Active Subscription
                   </h2>
                   <div className="mt-6 flex items-end justify-between gap-3">
                     <div>
-                      <p className="text-[10px] uppercase tracking-[0.5px] text-white/70">This month</p>
+                      <p className="text-[10px] uppercase tracking-[0.5px] text-white/70">
+                        This month
+                      </p>
                       <p className="mt-1 flex items-center gap-2 text-xl font-bold">
                         <CalendarDays size={15} />
                         {subscriptionDeliveries} deliveries
                       </p>
                     </div>
-                    <Link href="/mobile/customer/subscription/manage" className="rounded-xl bg-white px-5 py-2 text-xs font-bold text-[#8D4925]">
+                    <Link
+                      href="/mobile/customer/subscription/manage"
+                      className="rounded-xl bg-white px-5 py-2 text-xs font-bold text-[#8D4925]"
+                    >
                       Manage Plan
                     </Link>
                   </div>
@@ -623,7 +667,10 @@ export default function MobileCustomerHomePage() {
 
         <section className="px-6 pb-4">
           <div className="flex items-center justify-between gap-3">
-            <h3 className="text-xl font-bold text-[#8D4925]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>
+            <h3
+              className="text-xl font-bold text-[#8D4925]"
+              style={{ fontFamily: "var(--font-mobile-playfair), serif" }}
+            >
               Today&apos;s Menu
             </h3>
             <div className="inline-flex items-center gap-1 rounded-xl border border-[#8D4925]/15 bg-white p-1">
@@ -645,7 +692,9 @@ export default function MobileCustomerHomePage() {
               </button>
             </div>
           </div>
-          <p className="text-[11px] text-[rgba(141,73,37,0.6)]">Breakfast, Lunch, Dinner, and Condiments</p>
+          <p className="text-[11px] text-[rgba(141,73,37,0.6)]">
+            Breakfast, Lunch, Dinner, and Condiments
+          </p>
         </section>
 
         {MEAL_ORDER.map((meal) => (
@@ -656,7 +705,11 @@ export default function MobileCustomerHomePage() {
               onClick={() => toggleMeal(meal)}
             >
               <h4 className="text-base font-bold text-[#8D4925]">{MEAL_LABELS[meal]}</h4>
-              {collapsedMeals[meal] ? <ChevronDown size={18} color="#8D4925" /> : <ChevronUp size={18} color="#8D4925" />}
+              {collapsedMeals[meal] ? (
+                <ChevronDown size={18} color="#8D4925" />
+              ) : (
+                <ChevronUp size={18} color="#8D4925" />
+              )}
             </button>
 
             {menuLoading ? (
@@ -667,50 +720,59 @@ export default function MobileCustomerHomePage() {
             ) : menuError ? (
               <p className="text-sm text-red-600">{menuError}</p>
             ) : collapsedMeals[meal] ? null : menuByMeal[meal].length === 0 ? (
-              <p className="rounded-xl border border-[rgba(141,73,37,0.08)] bg-white px-4 py-3 text-sm text-[#475569]">No items available right now.</p>
+              <p className="rounded-xl border border-[rgba(141,73,37,0.08)] bg-white px-4 py-3 text-sm text-[#475569]">
+                No items available right now.
+              </p>
             ) : menuView === "list" ? (
               <div className="space-y-3">
                 {menuByMeal[meal].map((item) => (
-                  <article key={`${meal}-${item.menu_item_id}`} className="rounded-xl border border-[rgba(141,73,37,0.08)] bg-white px-3 py-3 shadow-[0px_4px_12px_-1px_rgba(141,73,37,0.08)]">
+                  <article
+                    key={`${meal}-${item.menu_item_id}`}
+                    className="rounded-xl border border-[rgba(141,73,37,0.08)] bg-white px-3 py-3 shadow-[0px_4px_12px_-1px_rgba(141,73,37,0.08)]"
+                  >
                     {(() => {
                       const qty = Math.max(0, Number(quantities[item.menu_item_id] ?? 0));
                       return (
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0 pr-2">
-                        <h5 className="truncate text-[13px] font-bold text-[#8D4925]">{item.item_name}</h5>
-                        <p className="text-sm font-bold text-[#1B4332]">₹{Math.round(item.rate || 0)}</p>
-                      </div>
-                      {qty > 0 ? (
-                        <div className="flex items-center gap-1 rounded-lg bg-[#8D4925] px-1 py-1 text-[#FDFAF1]">
-                          <button
-                            type="button"
-                            className="flex h-6 w-6 items-center justify-center rounded-md bg-white/15 disabled:opacity-40"
-                            onClick={() => decrementItem(item)}
-                            disabled={qty <= 0}
-                          >
-                            <Minus size={13} />
-                          </button>
-                          <span className="min-w-6 text-center text-xs font-bold">{qty}</span>
-                          <button
-                            type="button"
-                            className="flex h-6 w-6 items-center justify-center rounded-md bg-white/15 disabled:opacity-40"
-                            onClick={() => incrementItem(item)}
-                            disabled={qty >= item.available_qty}
-                          >
-                            <Plus size={13} />
-                          </button>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0 pr-2">
+                            <h5 className="truncate text-[13px] font-bold text-[#8D4925]">
+                              {item.item_name}
+                            </h5>
+                            <p className="text-sm font-bold text-[#1B4332]">
+                              ₹{Math.round(item.rate || 0)}
+                            </p>
+                          </div>
+                          {qty > 0 ? (
+                            <div className="flex items-center gap-1 rounded-lg bg-[#8D4925] px-1 py-1 text-[#FDFAF1]">
+                              <button
+                                type="button"
+                                className="flex h-6 w-6 items-center justify-center rounded-md bg-white/15 disabled:opacity-40"
+                                onClick={() => decrementItem(item)}
+                                disabled={qty <= 0}
+                              >
+                                <Minus size={13} />
+                              </button>
+                              <span className="min-w-6 text-center text-xs font-bold">{qty}</span>
+                              <button
+                                type="button"
+                                className="flex h-6 w-6 items-center justify-center rounded-md bg-white/15 disabled:opacity-40"
+                                onClick={() => incrementItem(item)}
+                                disabled={qty >= item.available_qty}
+                              >
+                                <Plus size={13} />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#8D4925] text-[#FDFAF1]"
+                              onClick={() => incrementItem(item)}
+                              disabled={item.available_qty <= 0}
+                            >
+                              <Plus size={16} />
+                            </button>
+                          )}
                         </div>
-                      ) : (
-                        <button
-                          type="button"
-                          className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#8D4925] text-[#FDFAF1]"
-                          onClick={() => incrementItem(item)}
-                          disabled={item.available_qty <= 0}
-                        >
-                          <Plus size={16} />
-                        </button>
-                      )}
-                    </div>
                       );
                     })()}
                   </article>
@@ -719,7 +781,10 @@ export default function MobileCustomerHomePage() {
             ) : (
               <div className="grid grid-cols-2 gap-4">
                 {menuByMeal[meal].map((item) => (
-                  <article key={`${meal}-${item.menu_item_id}`} className="overflow-hidden rounded-2xl border border-[rgba(141,73,37,0.05)] bg-white shadow-[0px_4px_12px_-1px_rgba(141,73,37,0.08)]">
+                  <article
+                    key={`${meal}-${item.menu_item_id}`}
+                    className="overflow-hidden rounded-2xl border border-[rgba(141,73,37,0.05)] bg-white shadow-[0px_4px_12px_-1px_rgba(141,73,37,0.08)]"
+                  >
                     <div className="relative">
                       <Image
                         src={item.picture_url || PLACEHOLDER_IMAGE}
@@ -754,8 +819,12 @@ export default function MobileCustomerHomePage() {
                     </div>
                     <div className="p-3">
                       <div className="flex items-start justify-between gap-2">
-                        <h5 className="text-[13px] font-bold text-[#8D4925] leading-tight">{item.item_name}</h5>
-                        <p className="shrink-0 text-sm font-bold text-[#1B4332]">₹{Math.round(item.rate || 0)}</p>
+                        <h5 className="text-[13px] font-bold text-[#8D4925] leading-tight">
+                          {item.item_name}
+                        </h5>
+                        <p className="shrink-0 text-sm font-bold text-[#1B4332]">
+                          ₹{Math.round(item.rate || 0)}
+                        </p>
                       </div>
                     </div>
                   </article>
@@ -768,9 +837,13 @@ export default function MobileCustomerHomePage() {
         {!ordersLoading && !ordersError && !currentSubscription ? (
           <section className="px-6 pb-4">
             <div className="relative overflow-hidden rounded-2xl bg-[#8D4925] p-6 text-white shadow-[0px_10px_15px_-3px_rgba(141,73,37,0.2),0px_4px_6px_-4px_rgba(141,73,37,0.2)]">
-              <p className="text-[11px] uppercase tracking-[1px] text-white/70">Monthly Subscription</p>
+              <p className="text-[11px] uppercase tracking-[1px] text-white/70">
+                Monthly Subscription
+              </p>
               <div className="mt-3 flex items-center justify-between gap-3">
-                <p className="text-sm font-medium text-white/90">No active subscription for this month.</p>
+                <p className="text-sm font-medium text-white/90">
+                  No active subscription for this month.
+                </p>
                 <Link
                   href="/mobile/customer/subscription/manage"
                   onClick={(event) => {
@@ -789,15 +862,23 @@ export default function MobileCustomerHomePage() {
 
       {cartTotals.totalQuantity > 0 ? (
         <div className="fixed bottom-24 left-1/2 z-40 w-[calc(100%-2rem)] max-w-[398px] -translate-x-1/2">
-          <button type="button" className="flex w-full items-center justify-between" onClick={handleReviewCart}>
+          <button
+            type="button"
+            className="flex w-full items-center justify-between"
+            onClick={handleReviewCart}
+          >
             <div className="flex w-full items-center justify-between rounded-2xl border border-white/10 bg-[#8D4925] p-4 text-white shadow-[0px_10px_15px_-3px_rgba(141,73,37,0.35),0px_4px_6px_-4px_rgba(141,73,37,0.35)]">
               <div className="flex items-center gap-2">
                 <ShoppingCart size={18} className="text-white/90" />
                 <div className="text-left">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-white/70">Selected Items</p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-white/70">
+                    Selected Items
+                  </p>
                   <p className="text-base font-bold">
                     ₹{Math.round(cartTotals.totalPrice)}
-                    <span className="ml-1 text-xs font-normal text-white/70">({cartTotals.totalQuantity} item{cartTotals.totalQuantity === 1 ? "" : "s"})</span>
+                    <span className="ml-1 text-xs font-normal text-white/70">
+                      ({cartTotals.totalQuantity} item{cartTotals.totalQuantity === 1 ? "" : "s"})
+                    </span>
                   </p>
                 </div>
               </div>
@@ -822,49 +903,77 @@ export default function MobileCustomerHomePage() {
             <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-slate-300" />
             <div className="mb-4 flex items-start justify-between gap-2">
               <div>
-                <p className="text-xs font-bold uppercase tracking-widest text-[#8D4925]/60">Order ID</p>
-                <h3 className="text-xl font-bold text-[#8D4925]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>
+                <p className="text-xs font-bold uppercase tracking-widest text-[#8D4925]/60">
+                  Order ID
+                </p>
+                <h3
+                  className="text-xl font-bold text-[#8D4925]"
+                  style={{ fontFamily: "var(--font-mobile-playfair), serif" }}
+                >
                   #{selectedOrderDetails.order_id}
                 </h3>
               </div>
-              <span className="rounded-full bg-[#8D4925]/10 px-2.5 py-1 text-xs font-bold text-[#8D4925]">{selectedOrderDetails.status}</span>
+              <span className="rounded-full bg-[#8D4925]/10 px-2.5 py-1 text-xs font-bold text-[#8D4925]">
+                {selectedOrderDetails.status}
+              </span>
             </div>
 
             <div className="space-y-3 rounded-xl border border-[#8D4925]/10 bg-white p-4">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-[#64748b]">Date</span>
                 <span className="font-semibold text-[#1e293b]">
-                  {selectedOrderDetails.created_at ? formatDate(new Date(selectedOrderDetails.created_at), "dd MMM yyyy • hh:mm a") : "Scheduled"}
+                  {selectedOrderDetails.created_at
+                    ? formatDate(new Date(selectedOrderDetails.created_at), "dd MMM yyyy • hh:mm a")
+                    : "Scheduled"}
                 </span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-[#64748b]">Order type</span>
                 <span className="font-semibold text-[#1e293b]">
-                  {normalizeType(selectedOrderDetails.order_type) === "subscription" ? "Subscription" : "One-time"}
+                  {normalizeType(selectedOrderDetails.order_type) === "subscription"
+                    ? "Subscription"
+                    : "One-time"}
                 </span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-[#64748b]">Payment</span>
-                <span className="font-semibold text-[#1e293b]">{selectedOrderDetails.payment_method}</span>
+                <span className="font-semibold text-[#1e293b]">
+                  {selectedOrderDetails.payment_method}
+                </span>
               </div>
               <div className="text-sm">
                 <p className="text-[#64748b]">Delivery address</p>
                 <p className="mt-1 font-semibold text-[#1e293b]">
                   {selectedOrderDetails.address
-                    ? [selectedOrderDetails.address.line, selectedOrderDetails.address.city, selectedOrderDetails.address.pin_code].filter(Boolean).join(", ")
+                    ? [
+                        selectedOrderDetails.address.line,
+                        selectedOrderDetails.address.city,
+                        selectedOrderDetails.address.pin_code,
+                      ]
+                        .filter(Boolean)
+                        .join(", ")
                     : "Address details unavailable"}
                 </p>
               </div>
             </div>
 
             <div className="mt-4 rounded-xl border border-[#8D4925]/10 bg-white p-4">
-              <p className="mb-3 text-xs font-bold uppercase tracking-wider text-[#8D4925]/70">Items</p>
+              <p className="mb-3 text-xs font-bold uppercase tracking-wider text-[#8D4925]/70">
+                Items
+              </p>
               <div className="space-y-2">
                 {selectedOrderDetails.items.length ? (
                   selectedOrderDetails.items.map((item, index) => (
-                    <div key={`${selectedOrderDetails.order_id}-${item.item_name}-${index}`} className="flex items-center justify-between text-sm">
-                      <span className="text-[#1e293b]">{item.item_name} × {item.quantity}</span>
-                      <span className="font-semibold text-[#1e293b]">{currency(item.price * item.quantity)}</span>
+                    <div
+                      key={`${selectedOrderDetails.order_id}-${item.item_name}-${index}`}
+                      className="flex items-center justify-between text-sm"
+                    >
+                      <span className="text-[#1e293b]">
+                        {item.item_name} × {item.quantity}
+                      </span>
+                      <span className="font-semibold text-[#1e293b]">
+                        {currency(item.price * item.quantity)}
+                      </span>
                     </div>
                   ))
                 ) : (
@@ -874,7 +983,9 @@ export default function MobileCustomerHomePage() {
               <div className="mt-3 border-t border-slate-100 pt-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-[#64748b]">Total</span>
-                  <span className="text-lg font-bold text-[#0f172a]">{currency(selectedOrderDetails.total_price)}</span>
+                  <span className="text-lg font-bold text-[#0f172a]">
+                    {currency(selectedOrderDetails.total_price)}
+                  </span>
                 </div>
               </div>
             </div>

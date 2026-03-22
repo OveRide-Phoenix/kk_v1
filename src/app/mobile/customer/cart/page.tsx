@@ -17,6 +17,7 @@ import {
 import { mobilePalette, playfairMobile, workSans } from "@/components/mobile/customer/theme";
 import { normalizeCityCode } from "@/config/cities";
 import { useAuthStore } from "@/store/store";
+import { http } from "@/lib/http";
 
 const CART_STORAGE_KEY = "customer_cart_items";
 const CART_CONTEXT_KEY = "customer_cart_context";
@@ -90,12 +91,6 @@ const currency = (value: number) =>
     maximumFractionDigits: 2,
   }).format(value);
 
-const buildAuthHeaders = (): Record<string, string> => {
-  if (typeof window === "undefined") return {};
-  const token = localStorage.getItem("access_token");
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
-
 export default function MobileCartPage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
@@ -163,9 +158,7 @@ export default function MobileCartPage() {
       setAddressesLoading(true);
       setAddressesError(null);
       try {
-        const response = await fetch(`http://localhost:8000/api/customers/${customerId}/addresses`, {
-          headers: buildAuthHeaders(),
-        });
+        const response = await http.get(`/api/customers/${customerId}/addresses`);
         if (!response.ok) throw new Error("Unable to fetch addresses");
         const data = (await response.json()) as AddressEntry[];
         setAddresses(data);
@@ -199,7 +192,9 @@ export default function MobileCartPage() {
   useEffect(() => {
     if (!addresses.length) return;
     if (cartContext?.address_id) {
-      const match = filteredAddresses.find((address) => address.address_id === cartContext.address_id);
+      const match = filteredAddresses.find(
+        (address) => address.address_id === cartContext.address_id,
+      );
       if (match) {
         setSelectedAddressId(match.address_id);
         return;
@@ -234,21 +229,14 @@ export default function MobileCartPage() {
     setQuoteLoading(true);
     setQuoteError(null);
     try {
-      const response = await fetch("http://localhost:8000/api/orders/quote", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...buildAuthHeaders(),
-        },
-        body: JSON.stringify({
-          items: cartItems.map((item) => ({
-            item_id: item.item_id,
-            combo_id: item.combo_id,
-            quantity: item.quantity,
-            price: item.price,
-          })),
-          coupon_codes: couponOverride ?? appliedCoupons,
-        }),
+      const response = await http.post("/api/orders/quote", {
+        items: cartItems.map((item) => ({
+          item_id: item.item_id,
+          combo_id: item.combo_id,
+          quantity: item.quantity,
+          price: item.price,
+        })),
+        coupon_codes: couponOverride ?? appliedCoupons,
       });
       const data = await response.json();
       if (!response.ok) {
@@ -306,7 +294,10 @@ export default function MobileCartPage() {
   };
 
   const handleBack = () => {
-    const idx = typeof window !== "undefined" ? (window.history.state as { idx?: number } | null)?.idx : undefined;
+    const idx =
+      typeof window !== "undefined"
+        ? (window.history.state as { idx?: number } | null)?.idx
+        : undefined;
     if (typeof idx === "number" && idx > 0) {
       router.back();
       return;
@@ -347,14 +338,7 @@ export default function MobileCartPage() {
     };
 
     try {
-      const response = await fetch("http://localhost:8000/api/orders/create", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...buildAuthHeaders(),
-        },
-        body: JSON.stringify(payload),
-      });
+      const response = await http.post("/api/orders/create", payload);
 
       const data = await response.json();
       if (!response.ok) {
@@ -394,14 +378,27 @@ export default function MobileCartPage() {
 
   if (cartItems.length === 0 && !orderResult) {
     return (
-      <main className={`${workSans.variable} ${playfairMobile.variable} min-h-screen`} style={{ backgroundColor: mobilePalette.background }}>
+      <main
+        className={`${workSans.variable} ${playfairMobile.variable} min-h-screen`}
+        style={{ backgroundColor: mobilePalette.background }}
+      >
         <div className="mx-auto flex min-h-screen w-full max-w-[448px] flex-col items-center justify-center gap-6 px-6 text-center">
           <ShoppingCart className="h-12 w-12 text-[#8D4925]" />
           <div>
-            <h1 className="text-2xl font-bold text-[#463028]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>Your cart is empty</h1>
-            <p className="text-sm text-[#8d6e63]">Browse the menu and add your favourites to get started.</p>
+            <h1
+              className="text-2xl font-bold text-[#463028]"
+              style={{ fontFamily: "var(--font-mobile-playfair), serif" }}
+            >
+              Your cart is empty
+            </h1>
+            <p className="text-sm text-[#8d6e63]">
+              Browse the menu and add your favourites to get started.
+            </p>
           </div>
-          <button className="rounded-xl bg-[#8D4925] px-4 py-2 text-sm font-semibold text-white" onClick={handleContinueShopping}>
+          <button
+            className="rounded-xl bg-[#8D4925] px-4 py-2 text-sm font-semibold text-white"
+            onClick={handleContinueShopping}
+          >
             Back to menu
           </button>
         </div>
@@ -410,15 +407,26 @@ export default function MobileCartPage() {
   }
 
   return (
-    <main className={`${workSans.variable} ${playfairMobile.variable} min-h-screen pb-44`} style={{ backgroundColor: mobilePalette.background }}>
+    <main
+      className={`${workSans.variable} ${playfairMobile.variable} min-h-screen pb-44`}
+      style={{ backgroundColor: mobilePalette.background }}
+    >
       <header className="sticky top-0 z-30 border-b border-[#3D2B1F]/5 bg-[rgba(253,250,241,0.95)] backdrop-blur-md">
         <div className="mx-auto w-full max-w-[448px] p-4">
           <div className="relative flex items-center justify-between">
-          <button onClick={handleBack} className="flex h-9 w-9 items-center justify-center rounded-full">
-            <ArrowLeft size={20} color="#3D2B1F" />
-          </button>
-          <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-lg font-bold text-[#3D2B1F]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>Final Secure Checkout</h1>
-          <span className="h-9 w-9" />
+            <button
+              onClick={handleBack}
+              className="flex h-9 w-9 items-center justify-center rounded-full"
+            >
+              <ArrowLeft size={20} color="#3D2B1F" />
+            </button>
+            <h1
+              className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-lg font-bold text-[#3D2B1F]"
+              style={{ fontFamily: "var(--font-mobile-playfair), serif" }}
+            >
+              Final Secure Checkout
+            </h1>
+            <span className="h-9 w-9" />
           </div>
         </div>
       </header>
@@ -426,7 +434,9 @@ export default function MobileCartPage() {
       <div className="mx-auto w-full max-w-[448px] px-4 py-4">
         <section>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-xs font-bold uppercase tracking-widest text-[#8D4925]">Delivery Address</h2>
+            <h2 className="text-xs font-bold uppercase tracking-widest text-[#8D4925]">
+              Delivery Address
+            </h2>
           </div>
           <div className="rounded-2xl border border-[#3D2B1F]/5 bg-white p-4 shadow-sm">
             {addressesLoading ? (
@@ -434,7 +444,9 @@ export default function MobileCartPage() {
             ) : addressesError ? (
               <p className="text-sm text-[#c75b39]">{addressesError}</p>
             ) : filteredAddresses.length === 0 ? (
-              <p className="text-sm text-[#c75b39]">No delivery addresses available for this city.</p>
+              <p className="text-sm text-[#c75b39]">
+                No delivery addresses available for this city.
+              </p>
             ) : (
               <div className="space-y-3">
                 <div className="flex items-start gap-3">
@@ -449,13 +461,19 @@ export default function MobileCartPage() {
                     >
                       {filteredAddresses.map((address) => (
                         <option key={address.address_id} value={address.address_id.toString()}>
-                          {address.address_type}{address.is_default ? " (Default)" : ""}
+                          {address.address_type}
+                          {address.is_default ? " (Default)" : ""}
                         </option>
                       ))}
                     </select>
                     {selectedAddress ? (
                       <p className="mt-1 text-xs text-[#3D2B1F]/70">
-                        {[selectedAddress.house_apartment_no, selectedAddress.written_address, selectedAddress.city, selectedAddress.pin_code]
+                        {[
+                          selectedAddress.house_apartment_no,
+                          selectedAddress.written_address,
+                          selectedAddress.city,
+                          selectedAddress.pin_code,
+                        ]
                           .filter(Boolean)
                           .join(", ")}
                       </p>
@@ -474,7 +492,9 @@ export default function MobileCartPage() {
                     />
                   </div>
                 ) : (
-                  <p className="text-xs text-[#c75b39]">Location pin not available for this address.</p>
+                  <p className="text-xs text-[#c75b39]">
+                    Location pin not available for this address.
+                  </p>
                 )}
               </div>
             )}
@@ -482,16 +502,25 @@ export default function MobileCartPage() {
         </section>
 
         <section className="mt-5">
-          <h2 className="mb-3 text-xs font-bold uppercase tracking-widest text-[#8D4925]">Items in your cart</h2>
+          <h2 className="mb-3 text-xs font-bold uppercase tracking-widest text-[#8D4925]">
+            Items in your cart
+          </h2>
           <div className="space-y-2">
             {cartItems.map((item) => (
-              <div key={`${item.meal}-${item.menu_item_id}`} className="rounded-xl border border-[#3D2B1F]/5 bg-white p-3">
+              <div
+                key={`${item.meal}-${item.menu_item_id}`}
+                className="rounded-xl border border-[#3D2B1F]/5 bg-white p-3"
+              >
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="text-sm font-bold text-[#3D2B1F]">{item.item_name}</p>
-                    <p className="text-xs capitalize text-[#3D2B1F]/60">{item.meal} • Qty {item.quantity}</p>
+                    <p className="text-xs capitalize text-[#3D2B1F]/60">
+                      {item.meal} • Qty {item.quantity}
+                    </p>
                   </div>
-                  <p className="text-sm font-semibold text-[#3D2B1F]">{currency(item.price * item.quantity)}</p>
+                  <p className="text-sm font-semibold text-[#3D2B1F]">
+                    {currency(item.price * item.quantity)}
+                  </p>
                 </div>
               </div>
             ))}
@@ -499,12 +528,17 @@ export default function MobileCartPage() {
         </section>
 
         <section className="mt-5">
-          <h2 className="mb-3 text-xs font-bold uppercase tracking-widest text-[#8D4925]">Payment Method</h2>
+          <h2 className="mb-3 text-xs font-bold uppercase tracking-widest text-[#8D4925]">
+            Payment Method
+          </h2>
           <div className="overflow-hidden rounded-2xl border border-[#3D2B1F]/5 bg-white shadow-sm">
             {PAYMENT_METHODS.map((method) => {
               const Icon = method.icon;
               return (
-                <label key={method.id} className="flex cursor-pointer items-center justify-between border-b border-[#3D2B1F]/5 p-4 last:border-b-0">
+                <label
+                  key={method.id}
+                  className="flex cursor-pointer items-center justify-between border-b border-[#3D2B1F]/5 p-4 last:border-b-0"
+                >
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FDFAF1] text-[#1B4332]">
                       <Icon size={18} />
@@ -537,7 +571,9 @@ export default function MobileCartPage() {
         </section>
 
         <section className="mt-5 rounded-2xl border border-[#3D2B1F]/5 bg-white p-4 shadow-sm">
-          <h2 className="mb-4 text-xs font-bold uppercase tracking-widest text-[#8D4925]">Order Summary</h2>
+          <h2 className="mb-4 text-xs font-bold uppercase tracking-widest text-[#8D4925]">
+            Order Summary
+          </h2>
           <div className="space-y-3">
             <div className="flex justify-between text-sm text-[#3D2B1F]/80">
               <span>Delivery date</span>
@@ -568,13 +604,22 @@ export default function MobileCartPage() {
           </div>
 
           <div className="mt-4 rounded-lg border border-dashed border-[#8D4925]/20 bg-[#8D4925]/5 p-3">
-            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-[#8d6e63]">Apply coupon</label>
+            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-[#8d6e63]">
+              Apply coupon
+            </label>
             <div className="flex items-center gap-2">
               <div className="flex flex-1 flex-wrap items-center gap-2 rounded-md border border-[#8D4925]/20 bg-white px-2 py-1">
                 {appliedCoupons.map((code) => (
-                  <span key={code} className="inline-flex items-center gap-1 rounded-full bg-[#8D4925]/10 px-2 py-1 text-[0.7rem] font-semibold text-[#463028]">
+                  <span
+                    key={code}
+                    className="inline-flex items-center gap-1 rounded-full bg-[#8D4925]/10 px-2 py-1 text-[0.7rem] font-semibold text-[#463028]"
+                  >
                     {code}
-                    <button type="button" className="rounded-full px-1 text-[#8d6e63] hover:text-[#463028]" onClick={() => handleRemoveCoupon(code)}>
+                    <button
+                      type="button"
+                      className="rounded-full px-1 text-[#8d6e63] hover:text-[#463028]"
+                      onClick={() => handleRemoveCoupon(code)}
+                    >
                       ×
                     </button>
                   </span>
@@ -592,12 +637,19 @@ export default function MobileCartPage() {
                   className="min-w-[120px] flex-1 border-0 bg-transparent text-sm text-[#463028] outline-none placeholder:text-[#8d6e63]"
                 />
               </div>
-              <button type="button" className="rounded-xl border border-[#8D4925]/20 px-3 py-2 text-sm" onClick={handleApplyCoupon} disabled={quoteLoading}>
+              <button
+                type="button"
+                className="rounded-xl border border-[#8D4925]/20 px-3 py-2 text-sm"
+                onClick={handleApplyCoupon}
+                disabled={quoteLoading}
+              >
                 Apply
               </button>
             </div>
             {quoteError ? <p className="mt-2 text-[0.7rem] text-[#c75b39]">{quoteError}</p> : null}
-            {couponError ? <p className="mt-2 text-[0.7rem] text-[#c75b39]">{couponError}</p> : null}
+            {couponError ? (
+              <p className="mt-2 text-[0.7rem] text-[#c75b39]">{couponError}</p>
+            ) : null}
           </div>
 
           <div className="mt-4 flex justify-between border-t border-dashed border-[#8D4925]/20 pt-3 text-base font-semibold text-[#3D2B1F]">
@@ -610,7 +662,9 @@ export default function MobileCartPage() {
       <footer className="fixed bottom-0 left-1/2 z-40 w-full max-w-[448px] -translate-x-1/2 border-t border-[#3D2B1F]/5 bg-[rgba(253,250,241,0.95)] px-4 pb-8 pt-4 backdrop-blur-xl">
         <div className="mx-auto w-full">
           {errorMessage ? (
-            <div className="mb-3 rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-600">{errorMessage}</div>
+            <div className="mb-3 rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-600">
+              {errorMessage}
+            </div>
           ) : null}
 
           <button
@@ -619,7 +673,9 @@ export default function MobileCartPage() {
             disabled={placingOrder || cartItems.length === 0 || !!orderResult}
           >
             {placingOrder ? (
-              <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Placing order…</span>
+              <span className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" /> Placing order…
+              </span>
             ) : (
               "Confirm Order"
             )}

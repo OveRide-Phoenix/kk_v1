@@ -4,10 +4,20 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { format as formatDate, isSameDay, isSameMonth, subDays } from "date-fns";
-import { ArrowLeft, CheckCircle2, ChevronRight, FileText, Filter, Loader2, Package, SlidersHorizontal } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  ChevronRight,
+  FileText,
+  Filter,
+  Loader2,
+  Package,
+  SlidersHorizontal,
+} from "lucide-react";
 import { MobileCustomerBottomNav } from "@/components/mobile/customer/bottom-nav";
 import { mobilePalette, outfit, playfairMobile } from "@/components/mobile/customer/theme";
 import { useAuthStore } from "@/store/store";
+import { http } from "@/lib/http";
 
 type OrderItem = {
   item_name: string;
@@ -49,12 +59,6 @@ const defaultFilters: FilterState = {
   status: "all",
   orderType: "all",
   sort: "newest",
-};
-
-const buildAuthHeaders = (): Record<string, string> => {
-  if (typeof window === "undefined") return {};
-  const token = localStorage.getItem("access_token");
-  return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
 const currency = (value: number) =>
@@ -110,7 +114,8 @@ export default function MobileCustomerOrdersPage() {
   const handleBack = () => {
     const canGoBack =
       typeof window !== "undefined" &&
-      (((window.history.state as { idx?: number } | null)?.idx ?? 0) > 0 || window.history.length > 1);
+      (((window.history.state as { idx?: number } | null)?.idx ?? 0) > 0 ||
+        window.history.length > 1);
     if (canGoBack) {
       router.back();
       return;
@@ -147,9 +152,7 @@ export default function MobileCustomerOrdersPage() {
       setError(null);
       try {
         // Same source endpoint used by desktop /customer/account order history
-        const response = await fetch(`http://localhost:8000/api/customers/${customerId}/orders`, {
-          headers: buildAuthHeaders(),
-        });
+        const response = await http.get(`/api/customers/${customerId}/orders`);
         if (!response.ok) throw new Error("Unable to load order history");
         const data = (await response.json()) as OrderSummary[];
         if (cancelled) return;
@@ -236,7 +239,10 @@ export default function MobileCustomerOrdersPage() {
     if (filters.dateRange === "today") return "Today's Orders";
     if (filters.dateRange === "last7") return "Last 7 Days";
     if (filters.dateRange === "thisMonth") return "This Month";
-    if (filters.dateRange === "custom") return filters.customDate ? formatDate(new Date(filters.customDate), "dd MMM yyyy") : "Custom Date";
+    if (filters.dateRange === "custom")
+      return filters.customDate
+        ? formatDate(new Date(filters.customDate), "dd MMM yyyy")
+        : "Custom Date";
     return "All Orders";
   }, [filters.dateRange, filters.customDate]);
 
@@ -287,7 +293,9 @@ export default function MobileCustomerOrdersPage() {
       .join("");
 
     const addressLine = selectedOrder.address
-      ? [selectedOrder.address.line, selectedOrder.address.city, selectedOrder.address.pin_code].filter(Boolean).join(", ")
+      ? [selectedOrder.address.line, selectedOrder.address.city, selectedOrder.address.pin_code]
+          .filter(Boolean)
+          .join(", ")
       : "Address details unavailable";
 
     printWindow.document.write(`
@@ -333,35 +341,53 @@ export default function MobileCustomerOrdersPage() {
   };
 
   return (
-    <main className={`${outfit.variable} ${playfairMobile.variable} min-h-screen w-full pb-28`} style={{ backgroundColor: mobilePalette.background }}>
+    <main
+      className={`${outfit.variable} ${playfairMobile.variable} min-h-screen w-full pb-28`}
+      style={{ backgroundColor: mobilePalette.background }}
+    >
       <div className="mx-auto w-full max-w-[448px]">
         <header className="sticky top-0 z-20 border-b border-[#8D4925]/10 bg-[rgba(253,250,241,0.95)] px-4 py-4 backdrop-blur-md">
           <div className="relative flex items-center justify-between">
-            <button type="button" onClick={handleBack} className="flex h-9 w-9 items-center justify-center rounded-full">
+            <button
+              type="button"
+              onClick={handleBack}
+              className="flex h-9 w-9 items-center justify-center rounded-full"
+            >
               <ArrowLeft size={20} color="#8D4925" />
             </button>
-            <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-lg font-bold text-[#8D4925]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>Order History</h1>
+            <h1
+              className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-lg font-bold text-[#8D4925]"
+              style={{ fontFamily: "var(--font-mobile-playfair), serif" }}
+            >
+              Order History
+            </h1>
             <div className="h-9 w-9" />
           </div>
 
           <div className="mt-4 flex items-center gap-2 overflow-x-auto pb-2">
             <button
               type="button"
-              onClick={() => setFilters((prev) => ({ ...prev, dateRange: "today", customDate: "" }))}
+              onClick={() =>
+                setFilters((prev) => ({ ...prev, dateRange: "today", customDate: "" }))
+              }
               className={`h-10 shrink-0 rounded-lg px-4 text-sm font-semibold ${filters.dateRange === "today" ? "bg-[#8D4925] text-white" : "bg-[#8D4925]/10 text-[#8D4925]"}`}
             >
               Today
             </button>
             <button
               type="button"
-              onClick={() => setFilters((prev) => ({ ...prev, dateRange: "last7", customDate: "" }))}
+              onClick={() =>
+                setFilters((prev) => ({ ...prev, dateRange: "last7", customDate: "" }))
+              }
               className={`h-10 shrink-0 rounded-lg px-4 text-sm font-semibold ${filters.dateRange === "last7" ? "bg-[#8D4925] text-white" : "bg-[#8D4925]/10 text-[#8D4925]"}`}
             >
               Last 7 Days
             </button>
             <button
               type="button"
-              onClick={() => setFilters((prev) => ({ ...prev, dateRange: "thisMonth", customDate: "" }))}
+              onClick={() =>
+                setFilters((prev) => ({ ...prev, dateRange: "thisMonth", customDate: "" }))
+              }
               className={`h-10 shrink-0 rounded-lg px-4 text-sm font-semibold ${filters.dateRange === "thisMonth" ? "bg-[#8D4925] text-white" : "bg-[#8D4925]/10 text-[#8D4925]"}`}
             >
               This Month
@@ -376,7 +402,9 @@ export default function MobileCustomerOrdersPage() {
           </div>
 
           <div className="mt-2 flex items-center justify-between py-2">
-            <span className="text-xs font-semibold uppercase tracking-[1px] text-[#8D4925]/60">{dateFilterLabel}</span>
+            <span className="text-xs font-semibold uppercase tracking-[1px] text-[#8D4925]/60">
+              {dateFilterLabel}
+            </span>
             <button
               type="button"
               onClick={openFilterSheet}
@@ -400,8 +428,15 @@ export default function MobileCustomerOrdersPage() {
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#8D4925]/8">
                 <Package size={30} color="#8D4925" />
               </div>
-              <h2 className="text-2xl font-bold text-[#1B4332]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>No orders for this filter</h2>
-              <p className="mx-auto mt-2 max-w-[280px] text-sm text-[#64748b]">Try changing date range, status, or order type to see your meals.</p>
+              <h2
+                className="text-2xl font-bold text-[#1B4332]"
+                style={{ fontFamily: "var(--font-mobile-playfair), serif" }}
+              >
+                No orders for this filter
+              </h2>
+              <p className="mx-auto mt-2 max-w-[280px] text-sm text-[#64748b]">
+                Try changing date range, status, or order type to see your meals.
+              </p>
               <button
                 type="button"
                 onClick={() => setFilters((prev) => ({ ...prev, dateRange: "all" }))}
@@ -412,11 +447,17 @@ export default function MobileCustomerOrdersPage() {
             </div>
           ) : (
             <>
-              <p className="text-xs text-[#8D4925]/60">{filteredOrders.length} orders • {totalItems} items</p>
+              <p className="text-xs text-[#8D4925]/60">
+                {filteredOrders.length} orders • {totalItems} items
+              </p>
               {filteredOrders.map((order) => {
                 const createdAt = order.created_at ? new Date(order.created_at) : null;
-                const dateText = createdAt && !Number.isNaN(createdAt.getTime()) ? formatDate(createdAt, "dd MMM yyyy • hh:mm a") : "Scheduled";
-                const typeText = normalizeType(order.order_type) === "subscription" ? "Subscription" : "One-time";
+                const dateText =
+                  createdAt && !Number.isNaN(createdAt.getTime())
+                    ? formatDate(createdAt, "dd MMM yyyy • hh:mm a")
+                    : "Scheduled";
+                const typeText =
+                  normalizeType(order.order_type) === "subscription" ? "Subscription" : "One-time";
                 const itemsLabel = order.items
                   .slice(0, 2)
                   .map((item) => `${item.item_name} ×${item.quantity}`)
@@ -426,10 +467,15 @@ export default function MobileCustomerOrdersPage() {
                 const inProgress = statusKey.includes("progress");
 
                 return (
-                  <article key={order.order_id} className="rounded-lg border border-[#8D4925]/5 bg-white p-4 shadow-sm">
+                  <article
+                    key={order.order_id}
+                    className="rounded-lg border border-[#8D4925]/5 bg-white p-4 shadow-sm"
+                  >
                     <div className="mb-3 flex items-start justify-between">
                       <div>
-                        <span className="text-xs font-bold uppercase tracking-widest text-[#8D4925]/60">Order ID</span>
+                        <span className="text-xs font-bold uppercase tracking-widest text-[#8D4925]/60">
+                          Order ID
+                        </span>
                         <h3 className="text-lg font-bold text-[#8D4925]">#{order.order_id}</h3>
                       </div>
                       <span
@@ -446,19 +492,31 @@ export default function MobileCustomerOrdersPage() {
                       </span>
                     </div>
                     <div className="mb-4 space-y-2">
-                      <p className="text-sm font-medium text-[#64748b]">{typeText} • {dateText}</p>
-                      <p className="text-sm font-semibold text-[#1e293b]">{itemsLabel || "Meal order"}</p>
+                      <p className="text-sm font-medium text-[#64748b]">
+                        {typeText} • {dateText}
+                      </p>
+                      <p className="text-sm font-semibold text-[#1e293b]">
+                        {itemsLabel || "Meal order"}
+                      </p>
                       <p className="text-xs italic text-[#94a3b8]">
-                        {order.address ? `Deliver to ${[order.address.line, order.address.city, order.address.pin_code].filter(Boolean).join(", ")}` : "Address details unavailable"}
+                        {order.address
+                          ? `Deliver to ${[order.address.line, order.address.city, order.address.pin_code].filter(Boolean).join(", ")}`
+                          : "Address details unavailable"}
                       </p>
                     </div>
                     <div className="flex items-center justify-between border-t border-slate-100 pt-3">
                       <div>
                         <span className="text-xs text-[#64748b]">Total Amount</span>
-                        <p className="text-lg font-bold text-[#0f172a]">{currency(order.total_price)}</p>
+                        <p className="text-lg font-bold text-[#0f172a]">
+                          {currency(order.total_price)}
+                        </p>
                         <p className="text-xs text-[#64748b]">{order.payment_method}</p>
                       </div>
-                      <button type="button" onClick={() => openOrderDetails(order)} className="inline-flex items-center gap-1 text-sm font-bold text-[#8D4925]">
+                      <button
+                        type="button"
+                        onClick={() => openOrderDetails(order)}
+                        className="inline-flex items-center gap-1 text-sm font-bold text-[#8D4925]"
+                      >
                         View Details
                         <ChevronRight size={14} />
                       </button>
@@ -473,16 +531,34 @@ export default function MobileCustomerOrdersPage() {
 
       {filterOpen ? (
         <>
-          <button className="fixed inset-0 z-40 bg-black/35" type="button" aria-label="Close filters" onClick={() => setFilterOpen(false)} />
+          <button
+            className="fixed inset-0 z-40 bg-black/35"
+            type="button"
+            aria-label="Close filters"
+            onClick={() => setFilterOpen(false)}
+          />
           <section className="fixed bottom-0 left-1/2 z-50 w-full max-w-[448px] -translate-x-1/2 rounded-t-3xl bg-[#FDFAF1] px-5 pb-8 pt-4 shadow-2xl">
             <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-slate-300" />
             <div className="mb-6 flex items-center justify-between">
-              <h3 className="text-xl font-bold text-[#1B4332]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>Filter & Sort</h3>
-              <button type="button" onClick={resetDraftFilters} className="text-sm font-semibold text-[#8D4925]">Reset</button>
+              <h3
+                className="text-xl font-bold text-[#1B4332]"
+                style={{ fontFamily: "var(--font-mobile-playfair), serif" }}
+              >
+                Filter & Sort
+              </h3>
+              <button
+                type="button"
+                onClick={resetDraftFilters}
+                className="text-sm font-semibold text-[#8D4925]"
+              >
+                Reset
+              </button>
             </div>
 
             <div className="mb-6">
-              <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">Date Range</p>
+              <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">
+                Date Range
+              </p>
               <div className="grid grid-cols-2 gap-2">
                 {[
                   { key: "today", label: "Today" },
@@ -493,7 +569,13 @@ export default function MobileCustomerOrdersPage() {
                   <button
                     key={item.key}
                     type="button"
-                    onClick={() => setDraftFilters((prev) => ({ ...prev, dateRange: item.key as DateRange, customDate: "" }))}
+                    onClick={() =>
+                      setDraftFilters((prev) => ({
+                        ...prev,
+                        dateRange: item.key as DateRange,
+                        customDate: "",
+                      }))
+                    }
                     className={`rounded-lg border px-3 py-2 text-sm font-medium ${draftFilters.dateRange === item.key ? "border-[#8D4925] bg-[#8D4925]/10 text-[#8D4925]" : "border-slate-200 text-slate-600"}`}
                   >
                     {item.label}
@@ -505,14 +587,22 @@ export default function MobileCustomerOrdersPage() {
                 <input
                   type="date"
                   value={draftFilters.customDate}
-                  onChange={(event) => setDraftFilters((prev) => ({ ...prev, customDate: event.target.value, dateRange: "custom" }))}
+                  onChange={(event) =>
+                    setDraftFilters((prev) => ({
+                      ...prev,
+                      customDate: event.target.value,
+                      dateRange: "custom",
+                    }))
+                  }
                   className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
                 />
               </div>
             </div>
 
             <div className="mb-6">
-              <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">Order Status</p>
+              <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">
+                Order Status
+              </p>
               <div className="flex flex-wrap gap-2">
                 {statusOptions.map((status) => (
                   <button
@@ -528,7 +618,9 @@ export default function MobileCustomerOrdersPage() {
             </div>
 
             <div className="mb-6">
-              <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">Order Type</p>
+              <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">
+                Order Type
+              </p>
               <div className="grid grid-cols-3 gap-2">
                 {[
                   { key: "all", label: "All" },
@@ -538,7 +630,12 @@ export default function MobileCustomerOrdersPage() {
                   <button
                     key={item.key}
                     type="button"
-                    onClick={() => setDraftFilters((prev) => ({ ...prev, orderType: item.key as OrderTypeFilter }))}
+                    onClick={() =>
+                      setDraftFilters((prev) => ({
+                        ...prev,
+                        orderType: item.key as OrderTypeFilter,
+                      }))
+                    }
                     className={`rounded-lg border px-2 py-2 text-xs font-medium ${draftFilters.orderType === item.key ? "border-[#8D4925] bg-[#8D4925]/10 text-[#8D4925]" : "border-slate-200 text-slate-600"}`}
                   >
                     {item.label}
@@ -559,7 +656,9 @@ export default function MobileCustomerOrdersPage() {
                   <button
                     key={item.key}
                     type="button"
-                    onClick={() => setDraftFilters((prev) => ({ ...prev, sort: item.key as SortKey }))}
+                    onClick={() =>
+                      setDraftFilters((prev) => ({ ...prev, sort: item.key as SortKey }))
+                    }
                     className={`rounded-lg border px-2 py-2 text-xs font-medium ${draftFilters.sort === item.key ? "border-[#1B4332] bg-[#1B4332]/10 text-[#1B4332]" : "border-slate-200 text-slate-600"}`}
                   >
                     {item.label}
@@ -582,27 +681,47 @@ export default function MobileCustomerOrdersPage() {
 
       {selectedOrder ? (
         <>
-          <button className="fixed inset-0 z-40 bg-black/35" type="button" aria-label="Close details" onClick={closeOrderDetails} />
+          <button
+            className="fixed inset-0 z-40 bg-black/35"
+            type="button"
+            aria-label="Close details"
+            onClick={closeOrderDetails}
+          />
           <section className="fixed bottom-0 left-1/2 z-50 w-full max-w-[448px] -translate-x-1/2 rounded-t-3xl bg-[#FDFAF1] px-5 pb-8 pt-4 shadow-2xl">
             <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-slate-300" />
             <div className="mb-4 flex items-start justify-between gap-2">
               <div>
-                <p className="text-xs font-bold uppercase tracking-widest text-[#8D4925]/60">Order ID</p>
-                <h3 className="text-xl font-bold text-[#8D4925]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>#{selectedOrder.order_id}</h3>
+                <p className="text-xs font-bold uppercase tracking-widest text-[#8D4925]/60">
+                  Order ID
+                </p>
+                <h3
+                  className="text-xl font-bold text-[#8D4925]"
+                  style={{ fontFamily: "var(--font-mobile-playfair), serif" }}
+                >
+                  #{selectedOrder.order_id}
+                </h3>
               </div>
-              <span className="rounded-full bg-[#8D4925]/10 px-2.5 py-1 text-xs font-bold text-[#8D4925]">{selectedOrder.status}</span>
+              <span className="rounded-full bg-[#8D4925]/10 px-2.5 py-1 text-xs font-bold text-[#8D4925]">
+                {selectedOrder.status}
+              </span>
             </div>
 
             <div className="space-y-3 rounded-xl border border-[#8D4925]/10 bg-white p-4">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-[#64748b]">Date</span>
                 <span className="font-semibold text-[#1e293b]">
-                  {selectedOrder.created_at ? formatDate(new Date(selectedOrder.created_at), "dd MMM yyyy • hh:mm a") : "Scheduled"}
+                  {selectedOrder.created_at
+                    ? formatDate(new Date(selectedOrder.created_at), "dd MMM yyyy • hh:mm a")
+                    : "Scheduled"}
                 </span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-[#64748b]">Order type</span>
-                <span className="font-semibold text-[#1e293b]">{normalizeType(selectedOrder.order_type) === "subscription" ? "Subscription" : "One-time"}</span>
+                <span className="font-semibold text-[#1e293b]">
+                  {normalizeType(selectedOrder.order_type) === "subscription"
+                    ? "Subscription"
+                    : "One-time"}
+                </span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-[#64748b]">Payment</span>
@@ -612,20 +731,35 @@ export default function MobileCustomerOrdersPage() {
                 <p className="text-[#64748b]">Delivery address</p>
                 <p className="mt-1 font-semibold text-[#1e293b]">
                   {selectedOrder.address
-                    ? [selectedOrder.address.line, selectedOrder.address.city, selectedOrder.address.pin_code].filter(Boolean).join(", ")
+                    ? [
+                        selectedOrder.address.line,
+                        selectedOrder.address.city,
+                        selectedOrder.address.pin_code,
+                      ]
+                        .filter(Boolean)
+                        .join(", ")
                     : "Address details unavailable"}
                 </p>
               </div>
             </div>
 
             <div className="mt-4 rounded-xl border border-[#8D4925]/10 bg-white p-4">
-              <p className="mb-3 text-xs font-bold uppercase tracking-wider text-[#8D4925]/70">Items</p>
+              <p className="mb-3 text-xs font-bold uppercase tracking-wider text-[#8D4925]/70">
+                Items
+              </p>
               <div className="space-y-2">
                 {selectedOrder.items.length ? (
                   selectedOrder.items.map((item, index) => (
-                    <div key={`${selectedOrder.order_id}-${item.item_name}-${index}`} className="flex items-center justify-between text-sm">
-                      <span className="text-[#1e293b]">{item.item_name} × {item.quantity}</span>
-                      <span className="font-semibold text-[#1e293b]">{currency(item.price * item.quantity)}</span>
+                    <div
+                      key={`${selectedOrder.order_id}-${item.item_name}-${index}`}
+                      className="flex items-center justify-between text-sm"
+                    >
+                      <span className="text-[#1e293b]">
+                        {item.item_name} × {item.quantity}
+                      </span>
+                      <span className="font-semibold text-[#1e293b]">
+                        {currency(item.price * item.quantity)}
+                      </span>
                     </div>
                   ))
                 ) : (
@@ -635,17 +769,27 @@ export default function MobileCustomerOrdersPage() {
               <div className="mt-3 border-t border-slate-100 pt-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-[#64748b]">Total</span>
-                  <span className="text-lg font-bold text-[#0f172a]">{currency(selectedOrder.total_price)}</span>
+                  <span className="text-lg font-bold text-[#0f172a]">
+                    {currency(selectedOrder.total_price)}
+                  </span>
                 </div>
               </div>
             </div>
 
             <div className="mt-4 grid grid-cols-2 gap-2">
-              <button type="button" onClick={handleGenerateBill} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#8D4925] py-3 text-sm font-bold text-white">
+              <button
+                type="button"
+                onClick={handleGenerateBill}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#8D4925] py-3 text-sm font-bold text-white"
+              >
                 <FileText size={16} />
                 Generate Bill
               </button>
-              <button type="button" onClick={closeOrderDetails} className="rounded-xl bg-[#1B4332] py-3 text-sm font-bold text-white">
+              <button
+                type="button"
+                onClick={closeOrderDetails}
+                className="rounded-xl bg-[#1B4332] py-3 text-sm font-bold text-white"
+              >
                 Close
               </button>
             </div>
