@@ -1091,6 +1091,28 @@ def _normalize_item_payload_data(data: Dict[str, Any]) -> Dict[str, Any]:
     return cleaned
 
 
+_ITEMS_COLUMNS: Optional[Set[str]] = None
+
+
+def get_items_columns(cursor: Any) -> Set[str]:
+    """Return the cached set of column names for the items table.
+
+    Fetches from the database exactly once per process lifetime; all subsequent
+    calls return the cached set without touching the DB.
+
+    Args:
+        cursor: Database cursor (used only on the first call).
+
+    Returns:
+        Set of column name strings present in the items table.
+    """
+    global _ITEMS_COLUMNS
+    if _ITEMS_COLUMNS is None:
+        cursor.execute("SHOW COLUMNS FROM items")
+        _ITEMS_COLUMNS = {row["Field"] for row in cursor.fetchall()}
+    return _ITEMS_COLUMNS
+
+
 def _item_column_field_map(available_columns: Set[str]) -> Dict[str, str]:
     """Build a mapping of payload field names to DB column names (only for available columns).
 
