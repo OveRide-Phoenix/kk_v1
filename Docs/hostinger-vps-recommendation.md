@@ -1,6 +1,6 @@
 # Hostinger VPS Decision Notes for `kk_v1`
 
-## Questions for Stakeholders
+## Questions for Discussion
 
 Before selecting a VPS, these 5 questions should be answered.
 
@@ -37,11 +37,11 @@ These numbers are practical planning estimates for this codebase after optimizat
 
 ## Option Comparison
 
-| Plan | Specs | Intro Price | Renewal Price | Estimated concurrent active users after optimization | Notes |
-| --- | --- | --- | --- | --- | --- |
-| `KVM 1` | `1 vCPU`, `4 GB RAM`, `50 GB NVMe`, `4 TB bandwidth` | `$6.49/mo` | `$11.99/mo` | about `10-25` | suitable for testing, staging, or very small production usage |
-| `KVM 2` | `2 vCPU`, `8 GB RAM`, `100 GB NVMe`, `8 TB bandwidth` | `$8.99/mo` | `$14.99/mo` | about `30-80` | suitable for a more serious production launch with moderate traffic |
-| `KVM 4` | `4 vCPU`, `16 GB RAM`, `200 GB NVMe`, `16 TB bandwidth` | `$12.99/mo` | `$28.99/mo` | about `80-180` | suitable for heavier traffic, more admin activity, or more headroom from day one |
+| Plan    | Specs                                                   | Intro Price | Renewal Price | Estimated concurrent active users after optimization | Notes                                                                            |
+| ------- | ------------------------------------------------------- | ----------- | ------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `KVM 1` | `1 vCPU`, `4 GB RAM`, `50 GB NVMe`, `4 TB bandwidth`    | `$6.49/mo`  | `$11.99/mo`   | about `10-25`                                        | suitable for testing, staging, or very small production usage                    |
+| `KVM 2` | `2 vCPU`, `8 GB RAM`, `100 GB NVMe`, `8 TB bandwidth`   | `$8.99/mo`  | `$14.99/mo`   | about `30-80`                                        | suitable for a more serious production launch with moderate traffic              |
+| `KVM 4` | `4 vCPU`, `16 GB RAM`, `200 GB NVMe`, `16 TB bandwidth` | `$12.99/mo` | `$28.99/mo`   | about `80-180`                                       | suitable for heavier traffic, more admin activity, or more headroom from day one |
 
 ## Pricing Notes
 
@@ -69,14 +69,14 @@ These numbers are practical planning estimates for this codebase after optimizat
 
 - Higher cost
 - More headroom for traffic spikes, reports, and future growth
-- Better if stakeholders expect heavier concurrency or want more buffer from the start
+- Better if we expect heavier concurrency or want more buffer from the start
 
-## Summary Table for Stakeholder Discussion
+## Summary Table for Discussion
 
-| Question | If answer is small/light | If answer is moderate | If answer is high/heavy |
-| --- | --- | --- | --- |
-| Concurrent active users | closer to `KVM 1` | closer to `KVM 2` | closer to `KVM 4` |
+| Question                   | If answer is small/light   | If answer is moderate         | If answer is high/heavy       |
+| -------------------------- | -------------------------- | ----------------------------- | ----------------------------- |
+| Concurrent active users    | closer to `KVM 1`          | closer to `KVM 2`             | closer to `KVM 4`             |
 | Order spikes at meal times | `KVM 1` may still be tight | `KVM 2` becomes more relevant | `KVM 4` becomes more relevant |
-| Admin/report usage | light | moderate | heavy |
-| Need for future headroom | low | medium | high |
-| Long-term monthly budget | smallest budget | balanced budget | bigger budget |
+| Admin/report usage         | light                      | moderate                      | heavy                         |
+| Need for future headroom   | low                        | medium                        | high                          |
+| Long-term monthly budget   | smallest budget            | balanced budget               | bigger budget                 |
