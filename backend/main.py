@@ -7,7 +7,6 @@ backend/routers/ and backend/customer/.
 
 from __future__ import annotations
 
-import mysql.connector
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -24,16 +23,8 @@ from .routers.products import router as products_router
 from .routers.production import router as production_router
 from .routers.rbac import router as rbac_router
 
-# Guard against mysql-connector native C-extension segfaults seen on macOS.
-_mysql_connect_original = mysql.connector.connect
-
-
-def _mysql_connect_force_pure(*args, **kwargs):
-    kwargs.setdefault("use_pure", True)
-    return _mysql_connect_original(*args, **kwargs)
-
-
-mysql.connector.connect = _mysql_connect_force_pure
+# Import db to ensure the shared connection pool is initialised at startup.
+from . import db as _db  # noqa: F401
 
 app = FastAPI(
     title="Kuteera Kitchen API",
