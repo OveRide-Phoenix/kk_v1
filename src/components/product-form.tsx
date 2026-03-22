@@ -1,30 +1,43 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState, useEffect, useRef, useMemo } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { type Product, type CategoryProduct } from "@/types/product"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { useState, useEffect, useRef, useMemo } from "react";
+import { http } from "@/lib/http";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { type Product, type CategoryProduct } from "@/types/product";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 interface ComponentTypeOption {
-  component_type_id: number
-  name: string
-  description?: string | null
+  component_type_id: number;
+  name: string;
+  description?: string | null;
 }
 
-type ProductFormScope = "items" | "condiments"
+type ProductFormScope = "items" | "condiments";
 
 interface ProductFormProps {
-  product: Product | null
-  onSave: (product: Product) => Promise<void> | void
-  onCancel: () => void
-  formScope?: ProductFormScope
+  product: Product | null;
+  onSave: (product: Product) => Promise<void> | void;
+  onCancel: () => void;
+  formScope?: ProductFormScope;
 }
 
 const normalizeMaxField = (value: unknown): number => {
@@ -36,7 +49,6 @@ const normalizeMaxField = (value: unknown): number => {
 
 const CONDIMENTS_BLD_ID = 4;
 const EMPTY_OPTION_VALUE = "__none";
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 const MEAL_OPTIONS = [
   { id: 1, label: "Breakfast", maxField: "max_qty_breakfast" },
@@ -46,14 +58,13 @@ const MEAL_OPTIONS = [
 ];
 
 const createInitialFormData = (item: Product | null, scope: ProductFormScope) => {
-  const existingMeals =
-    item && Array.isArray(item.bld_ids) ? [...item.bld_ids] : []
+  const existingMeals = item && Array.isArray(item.bld_ids) ? [...item.bld_ids] : [];
   const defaultMeals =
     scope === "condiments"
       ? existingMeals.length > 0
         ? existingMeals
         : [CONDIMENTS_BLD_ID]
-      : existingMeals
+      : existingMeals;
 
   if (item) {
     const initial = {
@@ -63,8 +74,8 @@ const createInitialFormData = (item: Product | null, scope: ProductFormScope) =>
       max_qty_lunch: normalizeMaxField(item.max_qty_lunch),
       max_qty_dinner: normalizeMaxField(item.max_qty_dinner),
       max_qty_condiments: normalizeMaxField(item.max_qty_condiments),
-    }
-    return initial
+    };
+    return initial;
   }
 
   return {
@@ -95,78 +106,85 @@ const createInitialFormData = (item: Product | null, scope: ProductFormScope) =>
     sgst: 0,
     igst: 0,
     net_price: 0,
-  }
-}
+  };
+};
 
-export default function ProductForm({ product, onSave, onCancel, formScope = "items" }: ProductFormProps) {
-  const isEditing = !!product
-  const [formData, setFormData] = useState<any>(() => createInitialFormData(product, formScope))
-  const [submitting, setSubmitting] = useState(false)
-  const [formError, setFormError] = useState<string | null>(null)
-  const previousMealsRef = useRef<number[]>([])
-  const isCondimentScope = formScope === "condiments"
-  const selectedMeals = Array.isArray(formData.bld_ids) ? formData.bld_ids : []
-  const isCondiment = isCondimentScope || selectedMeals.includes(CONDIMENTS_BLD_ID)
-  const [categoryOptions, setCategoryOptions] = useState<CategoryProduct[]>([])
-  const [componentTypeOptions, setComponentTypeOptions] = useState<ComponentTypeOption[]>([])
-  const [parentItemOptions, setParentItemOptions] = useState<Array<{ item_id: number; name: string }>>([])
-  const [loadingReferences, setLoadingReferences] = useState(false)
+export default function ProductForm({
+  product,
+  onSave,
+  onCancel,
+  formScope = "items",
+}: ProductFormProps) {
+  const isEditing = !!product;
+  const [formData, setFormData] = useState<any>(() => createInitialFormData(product, formScope));
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const previousMealsRef = useRef<number[]>([]);
+  const isCondimentScope = formScope === "condiments";
+  const selectedMeals = Array.isArray(formData.bld_ids) ? formData.bld_ids : [];
+  const isCondiment = isCondimentScope || selectedMeals.includes(CONDIMENTS_BLD_ID);
+  const [categoryOptions, setCategoryOptions] = useState<CategoryProduct[]>([]);
+  const [componentTypeOptions, setComponentTypeOptions] = useState<ComponentTypeOption[]>([]);
+  const [parentItemOptions, setParentItemOptions] = useState<
+    Array<{ item_id: number; name: string }>
+  >([]);
+  const [loadingReferences, setLoadingReferences] = useState(false);
 
   const handleChange = (field: string, value: any) => {
-    setFormData((prev: any) => ({ ...prev, [field]: value }))
-  }
+    setFormData((prev: any) => ({ ...prev, [field]: value }));
+  };
 
   const handleMealSelection = (mealId: number) => {
     setFormData((prev: any) => {
-      const current: number[] = Array.isArray(prev.bld_ids) ? prev.bld_ids : []
-      const normalized = current.filter((id): id is number => typeof id === "number")
-      const set = new Set(normalized)
+      const current: number[] = Array.isArray(prev.bld_ids) ? prev.bld_ids : [];
+      const normalized = current.filter((id): id is number => typeof id === "number");
+      const set = new Set(normalized);
 
       if (mealId === CONDIMENTS_BLD_ID) {
         if (set.has(CONDIMENTS_BLD_ID)) {
-          const restored = previousMealsRef.current.length ? [...previousMealsRef.current] : []
-          return { ...prev, bld_ids: restored }
+          const restored = previousMealsRef.current.length ? [...previousMealsRef.current] : [];
+          return { ...prev, bld_ids: restored };
         }
-        previousMealsRef.current = Array.from(set).filter((id) => id !== CONDIMENTS_BLD_ID)
-        return { ...prev, bld_ids: [CONDIMENTS_BLD_ID] }
+        previousMealsRef.current = Array.from(set).filter((id) => id !== CONDIMENTS_BLD_ID);
+        return { ...prev, bld_ids: [CONDIMENTS_BLD_ID] };
       }
 
-      const next = new Set(Array.from(set).filter((id) => id !== CONDIMENTS_BLD_ID))
+      const next = new Set(Array.from(set).filter((id) => id !== CONDIMENTS_BLD_ID));
       if (next.has(mealId)) {
-        next.delete(mealId)
+        next.delete(mealId);
       } else {
-        next.add(mealId)
+        next.add(mealId);
       }
-      const sorted = Array.from(next).sort((a, b) => a - b)
-      previousMealsRef.current = [...sorted]
-      return { ...prev, bld_ids: sorted }
-    })
-  }
+      const sorted = Array.from(next).sort((a, b) => a - b);
+      previousMealsRef.current = [...sorted];
+      return { ...prev, bld_ids: sorted };
+    });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSubmitting(true)
-    setFormError(null)
+    e.preventDefault();
+    setSubmitting(true);
+    setFormError(null);
     if (!isCondiment) {
       const componentTypeId =
         typeof formData.component_type_id === "number" && formData.component_type_id > 0
           ? formData.component_type_id
-          : null
+          : null;
       if (componentTypeId == null) {
-        setFormError("Component type is required for non-condiment items.")
-        setSubmitting(false)
-        return
+        setFormError("Component type is required for non-condiment items.");
+        setSubmitting(false);
+        return;
       }
     }
     try {
-      await Promise.resolve(onSave(formData))
+      await Promise.resolve(onSave(formData));
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to save item"
-      setFormError(message)
+      const message = error instanceof Error ? error.message : "Failed to save item";
+      setFormError(message);
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
-  }
+  };
 
   // Generate alias from name
   useEffect(() => {
@@ -175,101 +193,101 @@ export default function ProductForm({ product, onSave, onCancel, formScope = "it
         .toLowerCase()
         .replace(/[^a-z0-9]/g, "-")
         .replace(/-+/g, "-")
-        .replace(/^-|-$/g, "")
-      handleChange("alias", alias)
+        .replace(/^-|-$/g, "");
+      handleChange("alias", alias);
     }
-  }, [formData.name, isEditing])
+  }, [formData.name, isEditing]);
 
   useEffect(() => {
-    setFormData(createInitialFormData(product, formScope))
-    setFormError(null)
-    setSubmitting(false)
-    previousMealsRef.current = []
-  }, [product, formScope])
+    setFormData(createInitialFormData(product, formScope));
+    setFormError(null);
+    setSubmitting(false);
+    previousMealsRef.current = [];
+  }, [product, formScope]);
 
   useEffect(() => {
-    let cancelled = false
+    let cancelled = false;
     const fetchReferences = async () => {
-      setLoadingReferences(true)
+      setLoadingReferences(true);
       try {
         const [categoriesRes, itemsRes, componentTypesRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/api/products/categories`),
-          fetch(`${API_BASE_URL}/api/products/items`),
-          fetch(`${API_BASE_URL}/api/products/component-types`),
-        ])
+          http.get("/api/products/categories"),
+          http.get("/api/products/items"),
+          http.get("/api/products/component-types"),
+        ]);
         if (!categoriesRes.ok) {
-          throw new Error("Failed to load categories")
+          throw new Error("Failed to load categories");
         }
         if (!itemsRes.ok) {
-          throw new Error("Failed to load catalog items")
+          throw new Error("Failed to load catalog items");
         }
         if (!componentTypesRes.ok) {
-          throw new Error("Failed to load component types")
+          throw new Error("Failed to load component types");
         }
         const [categoriesData, itemsData, componentTypesData] = await Promise.all([
           categoriesRes.json(),
           itemsRes.json(),
           componentTypesRes.json(),
-        ])
+        ]);
         if (cancelled) {
-          return
+          return;
         }
-        setCategoryOptions(Array.isArray(categoriesData) ? categoriesData : [])
-        setComponentTypeOptions(Array.isArray(componentTypesData) ? componentTypesData : [])
+        setCategoryOptions(Array.isArray(categoriesData) ? categoriesData : []);
+        setComponentTypeOptions(Array.isArray(componentTypesData) ? componentTypesData : []);
         const mappedItems = Array.isArray(itemsData)
           ? itemsData.map((entry: any) => ({
               item_id: entry.item_id,
               name: entry.name ?? `Item #${entry.item_id}`,
             }))
-          : []
-        setParentItemOptions(mappedItems)
+          : [];
+        setParentItemOptions(mappedItems);
       } catch (error) {
-        console.error("Failed to load reference data", error)
+        console.error("Failed to load reference data", error);
         if (!cancelled) {
-          setCategoryOptions([])
-          setComponentTypeOptions([])
-          setParentItemOptions([])
+          setCategoryOptions([]);
+          setComponentTypeOptions([]);
+          setParentItemOptions([]);
         }
       } finally {
         if (!cancelled) {
-          setLoadingReferences(false)
+          setLoadingReferences(false);
         }
       }
-    }
-    fetchReferences()
+    };
+    fetchReferences();
     return () => {
-      cancelled = true
-    }
-  }, [])
+      cancelled = true;
+    };
+  }, []);
 
   const snacksCategoryId = useMemo(() => {
-    const match = categoryOptions.find((cat) => cat.category_name.toLowerCase() === "snacks")
-    return match?.category_id ?? null
-  }, [categoryOptions])
+    const match = categoryOptions.find((cat) => cat.category_name.toLowerCase() === "snacks");
+    return match?.category_id ?? null;
+  }, [categoryOptions]);
 
   useEffect(() => {
     if (isCondiment && snacksCategoryId && !formData.category_id) {
-      handleChange("category_id", snacksCategoryId)
+      handleChange("category_id", snacksCategoryId);
     }
-  }, [isCondiment, snacksCategoryId, formData.category_id])
+  }, [isCondiment, snacksCategoryId, formData.category_id]);
 
   useEffect(() => {
     if (!isCondimentScope) {
-      return
+      return;
     }
     const hasOnlyCondiment =
       Array.isArray(formData.bld_ids) &&
       formData.bld_ids.length === 1 &&
-      formData.bld_ids[0] === CONDIMENTS_BLD_ID
+      formData.bld_ids[0] === CONDIMENTS_BLD_ID;
     if (!hasOnlyCondiment) {
-      setFormData((prev: any) => ({ ...prev, bld_ids: [CONDIMENTS_BLD_ID] }))
+      setFormData((prev: any) => ({ ...prev, bld_ids: [CONDIMENTS_BLD_ID] }));
     }
-  }, [isCondimentScope, formData.bld_ids])
+  }, [isCondimentScope, formData.bld_ids]);
 
   const selectableParentItems = useMemo(() => {
-    const currentItemId = product?.item_id
-    return parentItemOptions.filter((item) => item.item_id !== currentItemId)
-  }, [parentItemOptions, product?.item_id])
+    const currentItemId = product?.item_id;
+    return parentItemOptions.filter((item) => item.item_id !== currentItemId);
+  }, [parentItemOptions, product?.item_id]);
 
   return (
     <Dialog open={true} onOpenChange={() => onCancel()}>
@@ -295,7 +313,9 @@ export default function ProductForm({ product, onSave, onCancel, formScope = "it
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="sub_item">Parent Item</Label>
-                  <p className="text-xs text-muted-foreground">Maps to column <code>sub_item</code></p>
+                  <p className="text-xs text-muted-foreground">
+                    Maps to column <code>sub_item</code>
+                  </p>
                   <Select
                     value={
                       typeof formData.sub_item === "number" && formData.sub_item > 0
@@ -308,7 +328,9 @@ export default function ProductForm({ product, onSave, onCancel, formScope = "it
                     disabled={loadingReferences}
                   >
                     <SelectTrigger id="sub_item">
-                      <SelectValue placeholder={loadingReferences ? "Loading…" : "Select parent item"} />
+                      <SelectValue
+                        placeholder={loadingReferences ? "Loading…" : "Select parent item"}
+                      />
                     </SelectTrigger>
                     <SelectContent className="max-h-64">
                       <SelectItem value={EMPTY_OPTION_VALUE}>None</SelectItem>
@@ -321,7 +343,9 @@ export default function ProductForm({ product, onSave, onCancel, formScope = "it
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="name">Name <span className="text-red-500">*</span></Label>
+                  <Label htmlFor="name">
+                    Name <span className="text-red-500">*</span>
+                  </Label>
                   <Input
                     id="name"
                     value={formData.name}
@@ -349,7 +373,9 @@ export default function ProductForm({ product, onSave, onCancel, formScope = "it
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="category_id">Category</Label>
-                  <p className="text-xs text-muted-foreground">Stored as <code>category_id</code></p>
+                  <p className="text-xs text-muted-foreground">
+                    Stored as <code>category_id</code>
+                  </p>
                   <Select
                     value={
                       typeof formData.category_id === "number" && formData.category_id > 0
@@ -362,7 +388,9 @@ export default function ProductForm({ product, onSave, onCancel, formScope = "it
                     disabled={loadingReferences}
                   >
                     <SelectTrigger id="category_id">
-                      <SelectValue placeholder={loadingReferences ? "Loading…" : "Select category"} />
+                      <SelectValue
+                        placeholder={loadingReferences ? "Loading…" : "Select category"}
+                      />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value={EMPTY_OPTION_VALUE}>None</SelectItem>
@@ -376,7 +404,9 @@ export default function ProductForm({ product, onSave, onCancel, formScope = "it
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="group">Group</Label>
-                  <p className="text-xs text-muted-foreground">Persists to <code>group</code> column</p>
+                  <p className="text-xs text-muted-foreground">
+                    Persists to <code>group</code> column
+                  </p>
                   <Input
                     id="group"
                     value={formData.group ?? ""}
@@ -388,24 +418,33 @@ export default function ProductForm({ product, onSave, onCancel, formScope = "it
                     Component Type {!isCondiment && <span className="text-red-500">*</span>}
                   </Label>
                   <p className="text-xs text-muted-foreground">
-                    Use this when the item fulfills a generic slot, for example Paneer Curry to Curry.
+                    Use this when the item fulfills a generic slot, for example Paneer Curry to
+                    Curry.
                   </p>
                   <Select
                     value={
-                      typeof formData.component_type_id === "number" && formData.component_type_id > 0
+                      typeof formData.component_type_id === "number" &&
+                      formData.component_type_id > 0
                         ? String(formData.component_type_id)
                         : EMPTY_OPTION_VALUE
                     }
                     onValueChange={(value) =>
-                      handleChange("component_type_id", value === EMPTY_OPTION_VALUE ? "" : Number(value))
+                      handleChange(
+                        "component_type_id",
+                        value === EMPTY_OPTION_VALUE ? "" : Number(value),
+                      )
                     }
                     disabled={loadingReferences}
                   >
                     <SelectTrigger id="component_type_id">
-                      <SelectValue placeholder={loadingReferences ? "Loading…" : "Select component type"} />
+                      <SelectValue
+                        placeholder={loadingReferences ? "Loading…" : "Select component type"}
+                      />
                     </SelectTrigger>
                     <SelectContent>
-                      {isCondiment ? <SelectItem value={EMPTY_OPTION_VALUE}>None</SelectItem> : null}
+                      {isCondiment ? (
+                        <SelectItem value={EMPTY_OPTION_VALUE}>None</SelectItem>
+                      ) : null}
                       {componentTypeOptions.map((componentType) => (
                         <SelectItem
                           key={componentType.component_type_id}
@@ -421,14 +460,13 @@ export default function ProductForm({ product, onSave, onCancel, formScope = "it
                   <div className="space-y-2 sm:col-span-2">
                     <Label>Meal Availability (BLD/C)</Label>
                     <p className="text-xs text-muted-foreground">
-                      Choose the meals where this catalog item should appear. Condiments operate independently and
-                      cannot mix with breakfast/lunch/dinner.
+                      Choose the meals where this catalog item should appear. Condiments operate
+                      independently and cannot mix with breakfast/lunch/dinner.
                     </p>
                     <div className="flex flex-wrap gap-2">
                       {MEAL_OPTIONS.map((option) => {
-                        const selected = selectedMeals.includes(option.id)
-                        const disabled =
-                          isCondiment && option.id !== CONDIMENTS_BLD_ID
+                        const selected = selectedMeals.includes(option.id);
+                        const disabled = isCondiment && option.id !== CONDIMENTS_BLD_ID;
                         return (
                           <Button
                             key={option.id}
@@ -440,14 +478,18 @@ export default function ProductForm({ product, onSave, onCancel, formScope = "it
                           >
                             {option.label}
                           </Button>
-                        )
+                        );
                       })}
                     </div>
                   </div>
                 )}
                 <div className="space-y-2">
-                  <Label htmlFor="uom_customer">Customer UOM <span className="text-red-500">*</span></Label>
-                  <p className="text-xs text-muted-foreground">Column: <code>uom_customer</code></p>
+                  <Label htmlFor="uom_customer">
+                    Customer UOM <span className="text-red-500">*</span>
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Column: <code>uom_customer</code>
+                  </p>
                   <Input
                     id="uom_customer"
                     value={formData.uom_customer ?? ""}
@@ -461,7 +503,9 @@ export default function ProductForm({ product, onSave, onCancel, formScope = "it
                     id="unit_packing"
                     type="number"
                     value={formData.unit_packing ?? ""}
-                    onChange={(e) => handleChange("unit_packing", Number.parseFloat(e.target.value) || 0)}
+                    onChange={(e) =>
+                      handleChange("unit_packing", Number.parseFloat(e.target.value) || 0)
+                    }
                     step="0.001"
                     min={0}
                   />
@@ -496,7 +540,12 @@ export default function ProductForm({ product, onSave, onCancel, formScope = "it
                     id="packing_to_production_rate"
                     type="number"
                     value={formData.packing_to_production_rate ?? ""}
-                    onChange={(e) => handleChange("packing_to_production_rate", Number.parseFloat(e.target.value) || 1)}
+                    onChange={(e) =>
+                      handleChange(
+                        "packing_to_production_rate",
+                        Number.parseFloat(e.target.value) || 1,
+                      )
+                    }
                     min={0}
                     step="0.000001"
                   />
@@ -507,33 +556,36 @@ export default function ProductForm({ product, onSave, onCancel, formScope = "it
                     id="buffer_percentage"
                     type="number"
                     value={formData.buffer_percentage ?? ""}
-                    onChange={(e) => handleChange("buffer_percentage", Number.parseFloat(e.target.value) || 0)}
+                    onChange={(e) =>
+                      handleChange("buffer_percentage", Number.parseFloat(e.target.value) || 0)
+                    }
                     min={0}
                     max={100}
                     step="0.01"
                   />
                 </div>
                 {!isCondimentScope &&
-                  MEAL_OPTIONS.filter((meal) => meal.id !== CONDIMENTS_BLD_ID).map((meal) => (
-                    selectedMeals.includes(meal.id) && (
-                      <div className="space-y-2" key={`max-field-${meal.id}`}>
-                        <Label htmlFor={meal.maxField}>Max Qty · {meal.label}</Label>
-                        <Input
-                          id={meal.maxField}
-                          type="number"
-                          min={0}
-                          value={formData[meal.maxField] ?? 0}
-                          onChange={(e) => {
-                            const parsed = Number.parseInt(e.target.value, 10)
-                            handleChange(
-                              meal.maxField,
-                              Number.isNaN(parsed) ? 0 : Math.max(parsed, 0),
-                            )
-                          }}
-                        />
-                      </div>
-                    )
-                  ))}
+                  MEAL_OPTIONS.filter((meal) => meal.id !== CONDIMENTS_BLD_ID).map(
+                    (meal) =>
+                      selectedMeals.includes(meal.id) && (
+                        <div className="space-y-2" key={`max-field-${meal.id}`}>
+                          <Label htmlFor={meal.maxField}>Max Qty · {meal.label}</Label>
+                          <Input
+                            id={meal.maxField}
+                            type="number"
+                            min={0}
+                            value={formData[meal.maxField] ?? 0}
+                            onChange={(e) => {
+                              const parsed = Number.parseInt(e.target.value, 10);
+                              handleChange(
+                                meal.maxField,
+                                Number.isNaN(parsed) ? 0 : Math.max(parsed, 0),
+                              );
+                            }}
+                          />
+                        </div>
+                      ),
+                  )}
                 {isCondiment && (
                   <div className="space-y-2">
                     <Label htmlFor="max_qty_condiments">Max Qty · Condiments</Label>
@@ -543,11 +595,11 @@ export default function ProductForm({ product, onSave, onCancel, formScope = "it
                       min={0}
                       value={formData.max_qty_condiments ?? 0}
                       onChange={(e) => {
-                        const parsed = Number.parseInt(e.target.value, 10)
+                        const parsed = Number.parseInt(e.target.value, 10);
                         handleChange(
                           "max_qty_condiments",
                           Number.isNaN(parsed) ? 0 : Math.max(parsed, 0),
-                        )
+                        );
                       }}
                     />
                     <p className="text-xs text-muted-foreground">
@@ -562,8 +614,8 @@ export default function ProductForm({ product, onSave, onCancel, formScope = "it
                     type="file"
                     accept="image/*"
                     onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      handleChange("picture_url", file)
+                      const file = e.target.files?.[0];
+                      handleChange("picture_url", file);
                     }}
                   />
                 </div>
@@ -581,7 +633,9 @@ export default function ProductForm({ product, onSave, onCancel, formScope = "it
                         id="breakfast_price"
                         type="number"
                         value={formData.breakfast_price ?? ""}
-                        onChange={(e) => handleChange("breakfast_price", Number.parseFloat(e.target.value) || 0)}
+                        onChange={(e) =>
+                          handleChange("breakfast_price", Number.parseFloat(e.target.value) || 0)
+                        }
                         min={0}
                         step="0.01"
                       />
@@ -592,7 +646,9 @@ export default function ProductForm({ product, onSave, onCancel, formScope = "it
                         id="lunch_price"
                         type="number"
                         value={formData.lunch_price ?? ""}
-                        onChange={(e) => handleChange("lunch_price", Number.parseFloat(e.target.value) || 0)}
+                        onChange={(e) =>
+                          handleChange("lunch_price", Number.parseFloat(e.target.value) || 0)
+                        }
                         min={0}
                         step="0.01"
                       />
@@ -603,7 +659,9 @@ export default function ProductForm({ product, onSave, onCancel, formScope = "it
                         id="dinner_price"
                         type="number"
                         value={formData.dinner_price ?? ""}
-                        onChange={(e) => handleChange("dinner_price", Number.parseFloat(e.target.value) || 0)}
+                        onChange={(e) =>
+                          handleChange("dinner_price", Number.parseFloat(e.target.value) || 0)
+                        }
                         min={0}
                         step="0.01"
                       />
@@ -616,7 +674,9 @@ export default function ProductForm({ product, onSave, onCancel, formScope = "it
                     id="condiments_price"
                     type="number"
                     value={formData.condiments_price ?? ""}
-                    onChange={(e) => handleChange("condiments_price", Number.parseFloat(e.target.value) || 0)}
+                    onChange={(e) =>
+                      handleChange("condiments_price", Number.parseFloat(e.target.value) || 0)
+                    }
                     min={0}
                     step="0.01"
                   />
@@ -627,7 +687,9 @@ export default function ProductForm({ product, onSave, onCancel, formScope = "it
                     id="festival_price"
                     type="number"
                     value={formData.festival_price ?? ""}
-                    onChange={(e) => handleChange("festival_price", Number.parseFloat(e.target.value) || 0)}
+                    onChange={(e) =>
+                      handleChange("festival_price", Number.parseFloat(e.target.value) || 0)
+                    }
                     min={0}
                     step="0.01"
                   />
@@ -638,7 +700,9 @@ export default function ProductForm({ product, onSave, onCancel, formScope = "it
                     id="net_price"
                     type="number"
                     value={formData.net_price ?? ""}
-                    onChange={(e) => handleChange("net_price", Number.parseFloat(e.target.value) || 0)}
+                    onChange={(e) =>
+                      handleChange("net_price", Number.parseFloat(e.target.value) || 0)
+                    }
                     min={0}
                     step="0.01"
                   />
@@ -690,11 +754,17 @@ export default function ProductForm({ product, onSave, onCancel, formScope = "it
               Cancel
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting ? (isEditing ? "Updating…" : "Creating…") : isEditing ? "Update" : "Create"}
+              {submitting
+                ? isEditing
+                  ? "Updating…"
+                  : "Creating…"
+                : isEditing
+                  ? "Update"
+                  : "Create"}
             </Button>
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

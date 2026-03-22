@@ -8,6 +8,7 @@ import { ArrowLeft, CalendarDays, Info, Loader2 } from "lucide-react";
 import { MobileCustomerBottomNav } from "@/components/mobile/customer/bottom-nav";
 import { mobilePalette, playfairMobile, workSans } from "@/components/mobile/customer/theme";
 import { useAuthStore } from "@/store/store";
+import { http } from "@/lib/http";
 
 type CustomerProfile = {
   customer_id: number;
@@ -39,12 +40,6 @@ type OrderSummary = {
 
 const PAYMENT_FREQUENCIES = ["Daily", "Weekly", "Monthly"] as const;
 
-const buildAuthHeaders = (): Record<string, string> => {
-  if (typeof window === "undefined") return {};
-  const token = localStorage.getItem("access_token");
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
-
 export default function MobileCustomerManageSubscriptionPage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
@@ -58,7 +53,10 @@ export default function MobileCustomerManageSubscriptionPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   const handleBack = () => {
-    const idx = typeof window !== "undefined" ? (window.history.state as { idx?: number } | null)?.idx : undefined;
+    const idx =
+      typeof window !== "undefined"
+        ? (window.history.state as { idx?: number } | null)?.idx
+        : undefined;
     if (typeof idx === "number" && idx > 0) {
       router.back();
       return;
@@ -93,10 +91,8 @@ export default function MobileCustomerManageSubscriptionPage() {
       setError(null);
       try {
         const [profileRes, ordersRes] = await Promise.all([
-          fetch(`http://localhost:8000/get-customer/${customerId}`),
-          fetch(`http://localhost:8000/api/customers/${customerId}/orders`, {
-            headers: buildAuthHeaders(),
-          }),
+          http.get(`/get-customer/${customerId}`),
+          http.get(`/api/customers/${customerId}/orders`),
         ]);
 
         if (!profileRes.ok) throw new Error("Unable to load profile");
@@ -163,11 +159,10 @@ export default function MobileCustomerManageSubscriptionPage() {
         is_default: true,
       };
 
-      const response = await fetch(`http://localhost:8000/update-customer/${profile.customer_id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const response = await http.put(
+        `/update-customer/${profile.customer_id}`,
+        payload as Record<string, unknown>,
+      );
       if (!response.ok) throw new Error("Unable to save");
       setProfile((prev) => (prev ? { ...prev, payment_frequency: paymentFrequency } : prev));
       setMessage("Changes saved.");
@@ -179,15 +174,27 @@ export default function MobileCustomerManageSubscriptionPage() {
   };
 
   return (
-    <main className={`${workSans.variable} ${playfairMobile.variable} min-h-screen pb-28`} style={{ backgroundColor: mobilePalette.background }}>
+    <main
+      className={`${workSans.variable} ${playfairMobile.variable} min-h-screen pb-28`}
+      style={{ backgroundColor: mobilePalette.background }}
+    >
       <div className="mx-auto w-full max-w-[448px]">
         <header className="sticky top-0 z-20 border-b border-[rgba(141,73,37,0.1)] bg-[rgba(253,250,241,0.95)] px-4 py-4 backdrop-blur-md">
           <div className="relative flex items-center justify-between">
-          <button type="button" onClick={handleBack} className="flex h-9 w-9 items-center justify-center rounded-full">
-            <ArrowLeft size={20} color="#8D4925" />
-          </button>
-          <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-lg font-bold text-[#8D4925]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>Manage Subscription</h1>
-          <span className="h-9 w-9" />
+            <button
+              type="button"
+              onClick={handleBack}
+              className="flex h-9 w-9 items-center justify-center rounded-full"
+            >
+              <ArrowLeft size={20} color="#8D4925" />
+            </button>
+            <h1
+              className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-lg font-bold text-[#8D4925]"
+              style={{ fontFamily: "var(--font-mobile-playfair), serif" }}
+            >
+              Manage Subscription
+            </h1>
+            <span className="h-9 w-9" />
           </div>
         </header>
 
@@ -196,24 +203,48 @@ export default function MobileCustomerManageSubscriptionPage() {
             <div className="h-28 w-full bg-[url('/images/hero/thali.png')] bg-cover bg-center" />
             <div className="space-y-2 p-5">
               {loading ? (
-                <p className="flex items-center gap-2 text-sm"><Loader2 className="h-4 w-4 animate-spin" /> Loading subscription...</p>
+                <p className="flex items-center gap-2 text-sm">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading subscription...
+                </p>
               ) : activeSubscription ? (
                 <>
-                  <span className="rounded-full bg-[#FDFAF1] px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[#1B4332]">Plan Active</span>
-                  <h2 className="pt-2 text-lg font-bold" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>
+                  <span className="rounded-full bg-[#FDFAF1] px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[#1B4332]">
+                    Plan Active
+                  </span>
+                  <h2
+                    className="pt-2 text-lg font-bold"
+                    style={{ fontFamily: "var(--font-mobile-playfair), serif" }}
+                  >
                     Active Subscription • #{activeSubscription.order_id}
                   </h2>
-                  <p className="text-sm text-[#FDFAF1]/85">{monthlySubscriptions.length} deliveries this month</p>
+                  <p className="text-sm text-[#FDFAF1]/85">
+                    {monthlySubscriptions.length} deliveries this month
+                  </p>
                   <p className="text-sm font-medium">
-                    Last order: {activeSubscription.created_at ? formatDate(new Date(activeSubscription.created_at), "dd MMM yyyy • hh:mm a") : "N/A"}
+                    Last order:{" "}
+                    {activeSubscription.created_at
+                      ? formatDate(new Date(activeSubscription.created_at), "dd MMM yyyy • hh:mm a")
+                      : "N/A"}
                   </p>
                 </>
               ) : (
                 <>
-                  <span className="rounded-full bg-[#FDFAF1] px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[#1B4332]">No Active Plan</span>
-                  <h2 className="pt-2 text-lg font-bold" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>No subscription this month</h2>
-                  <p className="text-sm text-[#FDFAF1]/85">Start a plan to get regular meal deliveries.</p>
-                  <Link href="/mobile/customer/order" className="mt-2 inline-flex rounded-xl bg-white px-4 py-2 text-xs font-bold text-[#8D4925]">
+                  <span className="rounded-full bg-[#FDFAF1] px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[#1B4332]">
+                    No Active Plan
+                  </span>
+                  <h2
+                    className="pt-2 text-lg font-bold"
+                    style={{ fontFamily: "var(--font-mobile-playfair), serif" }}
+                  >
+                    No subscription this month
+                  </h2>
+                  <p className="text-sm text-[#FDFAF1]/85">
+                    Start a plan to get regular meal deliveries.
+                  </p>
+                  <Link
+                    href="/mobile/customer/order"
+                    className="mt-2 inline-flex rounded-xl bg-white px-4 py-2 text-xs font-bold text-[#8D4925]"
+                  >
                     Start Now
                   </Link>
                 </>
@@ -248,26 +279,46 @@ export default function MobileCustomerManageSubscriptionPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <label className="space-y-2">
-                <span className="ml-1 text-xs font-semibold uppercase tracking-wider text-[#8D4925]/70">Pause From</span>
+                <span className="ml-1 text-xs font-semibold uppercase tracking-wider text-[#8D4925]/70">
+                  Pause From
+                </span>
                 <div className="relative">
-                  <input defaultValue="Oct 24, 2023" className="h-12 w-full rounded-2xl border border-[#8D4925]/20 bg-white px-4 pl-10 text-sm text-[#3E2723]" />
-                  <CalendarDays size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8D4925]" />
+                  <input
+                    defaultValue="Oct 24, 2023"
+                    className="h-12 w-full rounded-2xl border border-[#8D4925]/20 bg-white px-4 pl-10 text-sm text-[#3E2723]"
+                  />
+                  <CalendarDays
+                    size={16}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8D4925]"
+                  />
                 </div>
               </label>
 
               <label className="space-y-2">
-                <span className="ml-1 text-xs font-semibold uppercase tracking-wider text-[#8D4925]/70">Resume On</span>
+                <span className="ml-1 text-xs font-semibold uppercase tracking-wider text-[#8D4925]/70">
+                  Resume On
+                </span>
                 <div className="relative">
-                  <input defaultValue="Oct 30, 2023" className="h-12 w-full rounded-2xl border border-[#8D4925]/20 bg-white px-4 pl-10 text-sm text-[#3E2723]" />
-                  <CalendarDays size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8D4925]" />
+                  <input
+                    defaultValue="Oct 30, 2023"
+                    className="h-12 w-full rounded-2xl border border-[#8D4925]/20 bg-white px-4 pl-10 text-sm text-[#3E2723]"
+                  />
+                  <CalendarDays
+                    size={16}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8D4925]"
+                  />
                 </div>
               </label>
             </div>
-            <p className="mt-2 px-1 text-[11px] italic text-[#8D4925]/60">*Deliveries resume automatically on the selected date.</p>
+            <p className="mt-2 px-1 text-[11px] italic text-[#8D4925]/60">
+              *Deliveries resume automatically on the selected date.
+            </p>
           </div>
 
           {error ? <p className="rounded-xl bg-red-50 p-3 text-sm text-red-600">{error}</p> : null}
-          {message ? <p className="rounded-xl bg-green-50 p-3 text-sm text-green-700">{message}</p> : null}
+          {message ? (
+            <p className="rounded-xl bg-green-50 p-3 text-sm text-green-700">{message}</p>
+          ) : null}
 
           <button
             type="button"
@@ -278,7 +329,9 @@ export default function MobileCustomerManageSubscriptionPage() {
             {saving ? "Saving..." : "Save Changes"}
           </button>
           <div className="text-center">
-            <button className="text-sm font-medium text-[#8D4925]/70 underline underline-offset-4">Cancel Plan</button>
+            <button className="text-sm font-medium text-[#8D4925]/70 underline underline-offset-4">
+              Cancel Plan
+            </button>
           </div>
         </section>
       </div>

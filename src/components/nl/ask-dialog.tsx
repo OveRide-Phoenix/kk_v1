@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { http } from "@/lib/http";
 import {
   Dialog,
   DialogContent,
@@ -85,8 +86,6 @@ type IntentMeta = {
   emptyMessage: string;
 };
 
-const FALLBACK_API_BASE = "http://127.0.0.1:8000";
-
 const DEFAULT_ACTION = {
   label: "Go to Admin Dashboard",
   href: "/admin",
@@ -166,20 +165,11 @@ export function AskDialog({ open, onOpenChange }: AskDialogProps) {
     }
   }, [open]);
 
-  const endpoint = useMemo(() => {
-    const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? FALLBACK_API_BASE;
-    return `${base}/api/nl/sql`;
-  }, []);
-
   async function executeQuery(requestQuery: string, confirmed = false) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ q: requestQuery, confirm: confirmed }),
-      });
+      const res = await http.post("/api/nl/sql", { q: requestQuery, confirm: confirmed });
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}));
         throw new Error(payload?.detail || `Request failed (${res.status})`);
@@ -200,8 +190,7 @@ export function AskDialog({ open, onOpenChange }: AskDialogProps) {
       setConfirmWriteOpen(false);
       setResult(payload);
     } catch (err) {
-      const detail =
-        err instanceof Error ? err.message : "Failed to contact NL router.";
+      const detail = err instanceof Error ? err.message : "Failed to contact NL router.";
       setError(detail);
       setResult(null);
       setPendingConfirmation(null);
@@ -228,105 +217,100 @@ export function AskDialog({ open, onOpenChange }: AskDialogProps) {
   }
 
   const meta = getIntentMeta(result);
-  const examples = isError(result) ? result.examples ?? [] : [];
+  const examples = isError(result) ? (result.examples ?? []) : [];
 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl border border-border/60 shadow-xl">
-        <DialogHeader>
-          <DialogTitle>Ask Kuteera Kitchen</DialogTitle>
-          <DialogDescription>
-            Type what you need and we will route it to the right report or
-            control panel.
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div className="flex gap-3">
-            <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search menus, orders, revenue, customers, buffers..."
-                disabled={loading}
-                className="pl-9"
-                autoFocus
-              />
+        <DialogContent className="max-w-3xl border border-border/60 shadow-xl">
+          <DialogHeader>
+            <DialogTitle>Ask Kuteera Kitchen</DialogTitle>
+            <DialogDescription>
+              Type what you need and we will route it to the right report or control panel.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div className="flex gap-3">
+              <div className="relative flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search menus, orders, revenue, customers, buffers..."
+                  disabled={loading}
+                  className="pl-9"
+                  autoFocus
+                />
+              </div>
+              <Button type="submit" disabled={loading}>
+                {loading ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Asking…
+                  </span>
+                ) : (
+                  "Ask"
+                )}
+              </Button>
             </div>
-            <Button type="submit" disabled={loading}>
-              {loading ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Asking…
-                </span>
-              ) : (
-                "Ask"
-              )}
+          </form>
+          {error ? (
+            <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {error}
+            </p>
+          ) : null}
+          <ScrollArea className="max-h-[26rem] rounded-md border border-dashed border-border/60 bg-muted/30 p-4">
+            {result ? (
+              <div className="space-y-4 text-sm">
+                {renderIntentBadge(result, meta)}
+                {isError(result) ? (
+                  <Card className="border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
+                    <p className="font-medium">{result.error}</p>
+                    {result.sql ? (
+                      <pre className="mt-2 rounded bg-white/70 p-2 text-xs text-destructive-foreground">
+                        {result.sql}
+                      </pre>
+                    ) : null}
+                  </Card>
+                ) : null}
+                {isUpdate(result) ? renderUpdateSummary(result) : null}
+                {isSelect(result) ? renderRows(result, meta) : null}
+                {isSuccess(result) && result.sql ? renderSQLSnippet(result.sql) : null}
+                {examples.length ? (
+                  <Card className="border border-border/50 bg-background p-3">
+                    <p className="font-medium text-muted-foreground">Try asking:</p>
+                    <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+                      {examples.map((sample) => (
+                        <li key={sample}>{sample}</li>
+                      ))}
+                    </ul>
+                  </Card>
+                ) : null}
+              </div>
+            ) : (
+              <div className="flex h-44 flex-col items-center justify-center gap-2 text-muted-foreground">
+                <Compass className="h-8 w-8" />
+                <p className="text-sm font-medium">
+                  Ask about menus, orders, revenue, customers, or buffers.
+                </p>
+              </div>
+            )}
+          </ScrollArea>
+          <DialogFooter className="flex items-center justify-between gap-3 sm:flex-row">
+            <p className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Wand2 className="h-3.5 w-3.5" />
+              Tips: “top items this month 5” · “tomorrow dinner menu” · “update buffer for rasam to
+              20”
+            </p>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => handleNavigate((meta ?? DEFAULT_META).action.href)}
+            >
+              {(meta ?? DEFAULT_META).action.label}
             </Button>
-          </div>
-        </form>
-        {error ? (
-          <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {error}
-          </p>
-        ) : null}
-        <ScrollArea className="max-h-[26rem] rounded-md border border-dashed border-border/60 bg-muted/30 p-4">
-          {result ? (
-            <div className="space-y-4 text-sm">
-              {renderIntentBadge(result, meta)}
-              {isError(result) ? (
-                <Card className="border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
-                  <p className="font-medium">{result.error}</p>
-                  {result.sql ? (
-                    <pre className="mt-2 rounded bg-white/70 p-2 text-xs text-destructive-foreground">
-                      {result.sql}
-                    </pre>
-                  ) : null}
-                </Card>
-              ) : null}
-              {isUpdate(result) ? renderUpdateSummary(result) : null}
-              {isSelect(result) ? renderRows(result, meta) : null}
-              {isSuccess(result) && result.sql ? renderSQLSnippet(result.sql) : null}
-              {examples.length ? (
-                <Card className="border border-border/50 bg-background p-3">
-                  <p className="font-medium text-muted-foreground">
-                    Try asking:
-                  </p>
-                  <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
-                    {examples.map((sample) => (
-                      <li key={sample}>{sample}</li>
-                    ))}
-                  </ul>
-                </Card>
-              ) : null}
-            </div>
-          ) : (
-            <div className="flex h-44 flex-col items-center justify-center gap-2 text-muted-foreground">
-              <Compass className="h-8 w-8" />
-              <p className="text-sm font-medium">
-                Ask about menus, orders, revenue, customers, or buffers.
-              </p>
-            </div>
-          )}
-        </ScrollArea>
-        <DialogFooter className="flex items-center justify-between gap-3 sm:flex-row">
-          <p className="flex items-center gap-1 text-xs text-muted-foreground">
-            <Wand2 className="h-3.5 w-3.5" />
-            Tips: “top items this month 5” · “tomorrow dinner menu” · “update
-            buffer for rasam to 20”
-          </p>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() =>
-              handleNavigate((meta ?? DEFAULT_META).action.href)
-            }
-          >
-            {(meta ?? DEFAULT_META).action.label}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
       <AlertDialog
         open={confirmWriteOpen}
@@ -380,8 +364,7 @@ function getIntentMeta(result: NLResult | null) {
   if (!result || isError(result)) {
     return null;
   }
-  const intentKey =
-    result.intent === "SET_MENU_BUFFER" ? "SET_MENU_BUFFER" : result.intent;
+  const intentKey = result.intent === "SET_MENU_BUFFER" ? "SET_MENU_BUFFER" : result.intent;
   return intentMeta[intentKey] ?? null;
 }
 
@@ -399,20 +382,14 @@ function renderIntentBadge(result: NLResult, meta: IntentMeta | null) {
       <Badge variant="outline" className="bg-background/70 text-xs">
         Intent · {result.intent}
       </Badge>
-      {meta ? (
-        <span className="text-sm font-medium text-foreground">
-          {meta.title}
-        </span>
-      ) : null}
+      {meta ? <span className="text-sm font-medium text-foreground">{meta.title}</span> : null}
       {isUpdate(result) ? (
         <Badge className="bg-emerald-100 text-emerald-700">
           {result.affected} row{result.affected === 1 ? "" : "s"} updated
         </Badge>
       ) : null}
       {isSelect(result) && result.rows.length === 0 ? (
-        <Badge className="bg-amber-100 text-amber-800">
-          {effectiveMeta.emptyMessage}
-        </Badge>
+        <Badge className="bg-amber-100 text-amber-800">{effectiveMeta.emptyMessage}</Badge>
       ) : null}
     </div>
   );
@@ -424,21 +401,15 @@ function renderUpdateSummary(result: NLUpdateSuccess) {
   }
   return (
     <Card className="space-y-3 border border-emerald-200 bg-emerald-50/60 p-4">
-      <p className="text-sm font-medium text-emerald-900">
-        Buffer updated successfully.
-      </p>
+      <p className="text-sm font-medium text-emerald-900">Buffer updated successfully.</p>
       {result.previous ? (
         <div className="grid gap-3 md:grid-cols-2">
           <div>
-            <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
-              Before
-            </p>
+            <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Before</p>
             {renderSimpleTable([result.previous])}
           </div>
           <div>
-            <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
-              After
-            </p>
+            <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">After</p>
             {renderSimpleTable([result.row])}
           </div>
         </div>
@@ -456,9 +427,7 @@ function renderUpdatePreview(pending: PendingConfirmation) {
     <div className="space-y-3">
       {preview.target ? (
         <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase text-muted-foreground">
-            Target row
-          </p>
+          <p className="text-xs font-semibold uppercase text-muted-foreground">Target row</p>
           {renderSimpleTable([preview.target])}
         </div>
       ) : (
@@ -467,9 +436,7 @@ function renderUpdatePreview(pending: PendingConfirmation) {
         </p>
       )}
       <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase text-muted-foreground">
-          Proposed changes
-        </p>
+        <p className="text-xs font-semibold uppercase text-muted-foreground">Proposed changes</p>
         {changeEntries.length ? (
           <ul className="space-y-2 rounded-md border border-border bg-background/70 p-3">
             {changeEntries.map(([field, diff]) => (
@@ -581,9 +548,7 @@ function formatKey(key: string): string {
   return key
     .replace(/[_-]/g, " ")
     .split(" ")
-    .map((word) =>
-      word ? word[0].toUpperCase() + word.slice(1).toLowerCase() : ""
-    )
+    .map((word) => (word ? word[0].toUpperCase() + word.slice(1).toLowerCase() : ""))
     .join(" ");
 }
 

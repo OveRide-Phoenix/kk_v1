@@ -1,45 +1,72 @@
-"use client"
+"use client";
 
-import { useCallback, useEffect, useState } from "react"
-import { Pencil, Trash2, Plus, Search, Eye, ChevronUp, MoreHorizontal, Crown } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import {Dialog,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle,DialogTrigger} from "@/components/ui/dialog"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import {AlertDialog,AlertDialogAction,AlertDialogCancel,AlertDialogContent,AlertDialogDescription,AlertDialogFooter,AlertDialogHeader,AlertDialogTitle,AlertDialogTrigger,} from "@/components/ui/alert-dialog"
-import { Badge } from "@/components/ui/badge"
-import { Label } from "@/components/ui/label"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
+import { useCallback, useEffect, useState } from "react";
+import { http } from "@/lib/http";
+import { Pencil, Trash2, Plus, Search, Eye, ChevronUp, MoreHorizontal, Crown } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import RegisterForm from "@/components/registerform";
-import { AdminLayout } from "@/components/admin-layout"
-import { CustomerForm } from "./customer-form"
-import { toast, useToast } from "@/hooks/use-toast"
-import { useIsMobile } from "@/hooks/use-mobile"
-import { useAuthStore } from "@/store/store"
+import { AdminLayout } from "@/components/admin-layout";
+import { CustomerForm } from "./customer-form";
+import { toast, useToast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useAuthStore } from "@/store/store";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { http } from "@/lib/http"
+} from "@/components/ui/dropdown-menu";
 
 const normaliseRoles = (value: unknown): number[] => {
   if (Array.isArray(value)) {
-    return value
-      .map((item) => Number(item))
-      .filter((item) => Number.isInteger(item));
+    return value.map((item) => Number(item)).filter((item) => Number.isInteger(item));
   }
   if (typeof value === "string") {
     try {
       const parsed = JSON.parse(value);
       if (Array.isArray(parsed)) {
-        return parsed
-          .map((item) => Number(item))
-          .filter((item) => Number.isInteger(item));
+        return parsed.map((item) => Number(item)).filter((item) => Number.isInteger(item));
       }
     } catch {
       return [];
@@ -49,139 +76,147 @@ const normaliseRoles = (value: unknown): number[] => {
 };
 
 // Define customer types
-type CustomerType = "Regular" | "Reseller" | "Agent"
-type PaymentFrequency = "Daily" | "Weekly" | "Monthly"
-type CustomerStatus = "Active" | "Pending" | "Inactive"
+type CustomerType = "Regular" | "Reseller" | "Agent";
+type PaymentFrequency = "Daily" | "Weekly" | "Monthly";
+type CustomerStatus = "Active" | "Pending" | "Inactive";
 
 // Update the Customer interface to match the API response
 interface Customer {
-  customer_id: number
-  referred_by: string | null
-  alternative_mobile: string | null
-  name: string
-  primary_mobile: string
-  email: string
-  written_address: string
+  customer_id: number;
+  referred_by: string | null;
+  alternative_mobile: string | null;
+  name: string;
+  primary_mobile: string;
+  email: string;
+  written_address: string;
   // Add other fields from your API response
-  address_id: number
-  house_apartment_no: string | null
-  city: string
-  pin_code: string
-  latitude: number
-  longitude: number
-  address_type: string | null
-  route_assignment: string | null
-  recipient_name: string
-  payment_frequency: string | null
-  completed_orders: number
-  pending_orders: number
-  is_admin?: number | boolean
-  roles?: number[] | null
-  role_codes?: string[] | null
-  admin_is_active?: boolean
+  address_id: number;
+  house_apartment_no: string | null;
+  city: string;
+  pin_code: string;
+  latitude: number;
+  longitude: number;
+  address_type: string | null;
+  route_assignment: string | null;
+  recipient_name: string;
+  payment_frequency: string | null;
+  completed_orders: number;
+  pending_orders: number;
+  is_admin?: number | boolean;
+  roles?: number[] | null;
+  role_codes?: string[] | null;
+  admin_is_active?: boolean;
 }
 
 export default function CustomerManagement() {
   // Remove the destructuring
-  const { toast } = useToast()
-  const [open, setOpen] = useState(false)
-  const [dialogMode, setDialogMode] = useState<"create" | "edit">("create")
-  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
-  const [viewCustomer, setViewCustomer] = useState<Customer | null>(null)
-  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
-  const isMobile = useIsMobile()
-  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
-  const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null)
-  const [isDeleting, setIsDeleting] = useState(false)
-  const adminCity = useAuthStore((state) => state.adminCity || state.user?.city_code || "MYS")
-  
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [dialogMode, setDialogMode] = useState<"create" | "edit">("create");
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [viewCustomer, setViewCustomer] = useState<Customer | null>(null);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const isMobile = useIsMobile();
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const adminCity = useAuthStore((state) => state.adminCity || state.user?.city_code || "MYS");
+
   // Initialize with empty array
-  const [customers, setCustomers] = useState<Customer[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [roleCatalog, setRoleCatalog] = useState<Record<number, string>>({})
-  const [adminRoleId, setAdminRoleId] = useState<number | null>(null)
-  
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [roleCatalog, setRoleCatalog] = useState<Record<number, string>>({});
+  const [adminRoleId, setAdminRoleId] = useState<number | null>(null);
+
   const refreshCustomers = useCallback(async () => {
     try {
-      setIsLoading(true)
-      const response = await http.get(`/api/admin/customers?city_code=${adminCity}`)
+      setIsLoading(true);
+      const response = await http.get(`/api/admin/customers?city_code=${adminCity}`);
       if (!response.ok) {
-        setCustomers([])
-        return
+        setCustomers([]);
+        return;
       }
-      const raw = await response.json()
+      const raw = await response.json();
       if (!Array.isArray(raw)) {
-        setCustomers([])
-        return
+        setCustomers([]);
+        return;
       }
       const enriched = raw.map((customer: Customer & { roles?: unknown; role_codes?: unknown }) => {
-        const roles = normaliseRoles(customer.roles)
+        const roles = normaliseRoles(customer.roles);
         const roleCodes = Array.isArray(customer.role_codes)
           ? customer.role_codes.filter((code): code is string => typeof code === "string")
-          : []
+          : [];
         return {
           ...customer,
           roles,
           role_codes: roleCodes,
-        }
-      })
-      setCustomers(enriched)
+        };
+      });
+      setCustomers(enriched);
     } catch (error) {
-      console.error('Error fetching customers:', error)
-      setCustomers([])
+      console.error("Error fetching customers:", error);
+      setCustomers([]);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }, [adminCity])
+  }, [adminCity]);
   const [filters, setFilters] = useState({
     orderCount: "all",
     address: "",
-  })
+  });
 
   // Update the fetch and data handling
   useEffect(() => {
-    void refreshCustomers()
-  }, [refreshCustomers])
+    void refreshCustomers();
+  }, [refreshCustomers]);
 
   useEffect(() => {
     const loadRoles = async () => {
       try {
-        const res = await fetch("/api/backend/api/rbac/roles")
-        if (!res.ok) return
-        const payload = await res.json()
-        if (!payload?.roles || !Array.isArray(payload.roles)) return
-        const catalog: Record<number, string> = {}
-        let adminId: number | null = null
-        for (const role of payload.roles as Array<{ role_id: number; name: string; code?: string }>) {
+        const res = await fetch("/api/backend/api/rbac/roles");
+        if (!res.ok) return;
+        const payload = await res.json();
+        if (!payload?.roles || !Array.isArray(payload.roles)) return;
+        const catalog: Record<number, string> = {};
+        let adminId: number | null = null;
+        for (const role of payload.roles as Array<{
+          role_id: number;
+          name: string;
+          code?: string;
+        }>) {
           if (Number.isInteger(role.role_id)) {
-            catalog[role.role_id] = role.name
+            catalog[role.role_id] = role.name;
             if (role.code === "admin") {
-              adminId = role.role_id
+              adminId = role.role_id;
             }
           }
         }
-        setRoleCatalog(catalog)
-        setAdminRoleId(adminId)
+        setRoleCatalog(catalog);
+        setAdminRoleId(adminId);
       } catch (error) {
-        console.error("Failed to load roles", error)
+        console.error("Failed to load roles", error);
       }
-    }
+    };
 
-    loadRoles()
-  }, [])
+    loadRoles();
+  }, []);
 
   // Update the filter function to use the correct field names
-  const filteredCustomers = Array.isArray(customers) ? customers.filter((customer) => {
-    const matchesSearch = 
-      (customer?.name?.toLowerCase() || '').includes(searchQuery.toLowerCase());
+  const filteredCustomers = Array.isArray(customers)
+    ? customers.filter((customer) => {
+        const matchesSearch = (customer?.name?.toLowerCase() || "").includes(
+          searchQuery.toLowerCase(),
+        );
 
-    const matchesOrderCount = true; // Remove if not needed
-    const matchesAddress = !filters.address || 
-      (customer?.written_address?.toLowerCase() || '').includes(filters.address.toLowerCase());
+        const matchesOrderCount = true; // Remove if not needed
+        const matchesAddress =
+          !filters.address ||
+          (customer?.written_address?.toLowerCase() || "").includes(filters.address.toLowerCase());
 
-    return matchesSearch && matchesOrderCount && matchesAddress;
-  }) : [];
+        return matchesSearch && matchesOrderCount && matchesAddress;
+      })
+    : [];
 
   // Define columns with priority for responsive display
   const columns = [
@@ -192,44 +227,42 @@ export default function CustomerManagement() {
     { key: "written_address", header: "Address", priority: 3 },
     { key: "orders", header: "Orders", priority: 3 },
     { key: "actions", header: "Actions", priority: 1 },
-  ]
+  ];
 
   // Filter columns based on screen size
-  const visibleColumns = isMobile 
-    ? columns.filter(col => col.priority === 1 || col.priority === 2)
-    : columns
+  const visibleColumns = isMobile
+    ? columns.filter((col) => col.priority === 1 || col.priority === 2)
+    : columns;
 
   // Handle view customer details
   const handleViewCustomer = (customerId: number) => {
-    const customer = customers.find(c => c.customer_id === customerId)
+    const customer = customers.find((c) => c.customer_id === customerId);
     if (customer) {
-      setViewCustomer(customer)
-      setIsViewDialogOpen(true)
+      setViewCustomer(customer);
+      setIsViewDialogOpen(true);
     }
-  }
+  };
 
   const handleEditCustomer = (customerId: number) => {
-    const customer = customers.find((c) => c.customer_id === customerId)
-    if (!customer) return
-    setEditingCustomer(customer)
-    setDialogMode("edit")
-    setOpen(true)
-  }
+    const customer = customers.find((c) => c.customer_id === customerId);
+    if (!customer) return;
+    setEditingCustomer(customer);
+    setDialogMode("edit");
+    setOpen(true);
+  };
 
   const requestDeleteCustomer = (customer: Customer) => {
-    setCustomerToDelete(customer)
-    setConfirmDeleteOpen(true)
-  }
+    setCustomerToDelete(customer);
+    setConfirmDeleteOpen(true);
+  };
 
   const handleDeleteCustomer = async () => {
-    if (!customerToDelete) return
-    setIsDeleting(true)
+    if (!customerToDelete) return;
+    setIsDeleting(true);
     try {
-      const response = await fetch(`http://localhost:8000/delete-customer/${customerToDelete.customer_id}`, {
-        method: "DELETE",
-      })
+      const response = await http.delete(`/delete-customer/${customerToDelete.customer_id}`);
 
-      const data = await response.json()
+      const data = await response.json();
 
       if (!response.ok) {
         if (data.detail && data.detail.includes("foreign key constraint fails (`kk_v1`.`orders`")) {
@@ -237,30 +270,30 @@ export default function CustomerManagement() {
             variant: "destructive",
             description: "Cannot delete customer because they have orders linked to them",
             duration: 3000,
-          })
-          return
+          });
+          return;
         }
-        throw new Error(data.detail || "Failed to delete customer")
+        throw new Error(data.detail || "Failed to delete customer");
       }
 
       toast({
         description: "Customer deleted successfully",
         duration: 3000,
-      })
+      });
 
-      await refreshCustomers()
-      setConfirmDeleteOpen(false)
-      setCustomerToDelete(null)
+      await refreshCustomers();
+      setConfirmDeleteOpen(false);
+      setCustomerToDelete(null);
     } catch (error: any) {
       toast({
         variant: "destructive",
         description: error.message || "Failed to delete customer",
         duration: 3000,
-      })
+      });
     } finally {
-      setIsDeleting(false)
+      setIsDeleting(false);
     }
-  }
+  };
 
   // Remove the throwing error function and update the Dialog component
   return (
@@ -273,18 +306,18 @@ export default function CustomerManagement() {
               <Dialog
                 open={open}
                 onOpenChange={(value) => {
-                  setOpen(value)
+                  setOpen(value);
                   if (!value) {
-                    setDialogMode("create")
-                    setEditingCustomer(null)
+                    setDialogMode("create");
+                    setEditingCustomer(null);
                   }
                 }}
               >
                 <DialogTrigger asChild>
                   <Button
                     onClick={() => {
-                      setDialogMode("create")
-                      setEditingCustomer(null)
+                      setDialogMode("create");
+                      setEditingCustomer(null);
                     }}
                   >
                     <Plus className="mr-2 h-4 w-4" />
@@ -302,7 +335,7 @@ export default function CustomerManagement() {
                         : "Enter the details of the new customer below."}
                     </DialogDescription>
                   </DialogHeader>
-                  <CustomerForm 
+                  <CustomerForm
                     customer={
                       editingCustomer
                         ? {
@@ -339,36 +372,31 @@ export default function CustomerManagement() {
                           written_address: customerData.writtenAddress?.trim(),
                           city: customerData.city?.trim(),
                           pin_code: customerData.pinCode?.toString(),
-                          latitude: customerData.latitude ? parseFloat(String(customerData.latitude)) : 0,
-                          longitude: customerData.longitude ? parseFloat(String(customerData.longitude)) : 0,
+                          latitude: customerData.latitude
+                            ? parseFloat(String(customerData.latitude))
+                            : 0,
+                          longitude: customerData.longitude
+                            ? parseFloat(String(customerData.longitude))
+                            : 0,
                           address_type: customerData.addressType || "Home",
                           route_assignment: customerData.routeAssignment || null,
-                          is_default: true
+                          is_default: true,
                         };
-                        let response: Response
-                        let responseData: any
+                        let response: Response;
+                        let responseData: any;
 
                         if (dialogMode === "edit" && editingCustomer) {
-                          response = await fetch(
-                            `http://localhost:8000/update-customer/${editingCustomer.customer_id}`,
-                            {
-                              method: "PUT",
-                              headers: {
-                                "Content-Type": "application/json",
-                              },
-                              body: JSON.stringify(formattedData),
-                            }
-                          )
-                          responseData = await response.json()
+                          response = await http.put(
+                            `/update-customer/${editingCustomer.customer_id}`,
+                            formattedData as Record<string, unknown>,
+                          );
+                          responseData = await response.json();
                         } else {
-                          response = await fetch("http://localhost:8000/api/register", {
-                            method: "POST",
-                            headers: {
-                              "Content-Type": "application/json",
-                            },
-                            body: JSON.stringify(formattedData),
-                          })
-                          responseData = await response.json()
+                          response = await http.post(
+                            "/api/register",
+                            formattedData as Record<string, unknown>,
+                          );
+                          responseData = await response.json();
                         }
 
                         if (!response.ok) {
@@ -381,11 +409,11 @@ export default function CustomerManagement() {
                         }
                         // Close dialog first
                         setOpen(false);
-                        setDialogMode("create")
-                        setEditingCustomer(null)
+                        setDialogMode("create");
+                        setEditingCustomer(null);
                         // Refresh customers
                         await refreshCustomers();
-                        
+
                         // Show success toast - this is where we call it
                         toast({
                           description:
@@ -393,7 +421,7 @@ export default function CustomerManagement() {
                               ? "Customer updated successfully"
                               : "Customer added successfully",
                         });
-                        
+
                         return { success: true, data: responseData };
                       } catch (error: any) {
                         // Show error toast
@@ -416,9 +444,9 @@ export default function CustomerManagement() {
                       }
                     }}
                     onCancel={() => {
-                      setOpen(false)
-                      setDialogMode("create")
-                      setEditingCustomer(null)
+                      setOpen(false);
+                      setDialogMode("create");
+                      setEditingCustomer(null);
                     }}
                   />
                 </DialogContent>
@@ -439,14 +467,14 @@ export default function CustomerManagement() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
-              
+
               {/* Filters */}
               <div className="flex flex-wrap gap-2">
                 <Select
                   value={filters.orderCount}
-                  onValueChange={(value) => setFilters(prev => ({ ...prev, orderCount: value }))}
+                  onValueChange={(value) => setFilters((prev) => ({ ...prev, orderCount: value }))}
                 >
-                  <SelectTrigger className={`${isMobile ? 'w-full' : 'w-[180px]'}`}>
+                  <SelectTrigger className={`${isMobile ? "w-full" : "w-[180px]"}`}>
                     <SelectValue placeholder="Filter by orders" />
                   </SelectTrigger>
                   <SelectContent>
@@ -460,9 +488,9 @@ export default function CustomerManagement() {
                 <Input
                   placeholder="Filter by address..."
                   value={filters.address}
-                  onChange={(e) => setFilters(prev => ({ ...prev, address: e.target.value }))}
-                  className={`${isMobile ? 'w-full' : 'w-[200px]'}`}
-                  autoComplete="new-address-filter" 
+                  onChange={(e) => setFilters((prev) => ({ ...prev, address: e.target.value }))}
+                  className={`${isMobile ? "w-full" : "w-[200px]"}`}
+                  autoComplete="new-address-filter"
                 />
               </div>
             </div>
@@ -473,15 +501,17 @@ export default function CustomerManagement() {
                 <TableHeader>
                   <TableRow>
                     {visibleColumns.map((column) => (
-                      <TableHead 
+                      <TableHead
                         key={column.key}
-                        className={`${column.key === 'customer_id' ? 'w-[100px] pl-4' : ''} 
-                                   ${column.key === 'actions' ? 'text-center px-2 align-middle' : ''}
-                                   ${isMobile ? 'text-xs' : 'text-sm'}`}
+                        className={`${column.key === "customer_id" ? "w-[100px] pl-4" : ""} 
+                                   ${column.key === "actions" ? "text-center px-2 align-middle" : ""}
+                                   ${isMobile ? "text-xs" : "text-sm"}`}
                       >
-                        {column.key === 'actions' ? (
+                        {column.key === "actions" ? (
                           <div className="flex justify-center">Actions</div>
-                        ) : column.header}
+                        ) : (
+                          column.header
+                        )}
                       </TableHead>
                     ))}
                   </TableRow>
@@ -497,7 +527,10 @@ export default function CustomerManagement() {
                     </TableRow>
                   ) : filteredCustomers.length === 0 ? (
                     <TableRow key="empty-row">
-                      <TableCell colSpan={visibleColumns.length} className="text-center py-6 text-muted-foreground">
+                      <TableCell
+                        colSpan={visibleColumns.length}
+                        className="text-center py-6 text-muted-foreground"
+                      >
                         No customers found
                       </TableCell>
                     </TableRow>
@@ -508,7 +541,10 @@ export default function CustomerManagement() {
                         {visibleColumns.map((column) => {
                           if (column.key === "actions") {
                             return (
-                              <TableCell key="actions" className={`text-center pr-4 ${isMobile ? 'text-xs' : ''}`}>
+                              <TableCell
+                                key="actions"
+                                className={`text-center pr-4 ${isMobile ? "text-xs" : ""}`}
+                              >
                                 {isMobile ? (
                                   <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
@@ -517,15 +553,21 @@ export default function CustomerManagement() {
                                       </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
-                                      <DropdownMenuItem onClick={() => handleViewCustomer(customer.customer_id)}>
+                                      <DropdownMenuItem
+                                        onClick={() => handleViewCustomer(customer.customer_id)}
+                                      >
                                         <Eye className="h-4 w-4 mr-2" />
                                         View
                                       </DropdownMenuItem>
-                                      <DropdownMenuItem onClick={() => handleEditCustomer(customer.customer_id)}>
+                                      <DropdownMenuItem
+                                        onClick={() => handleEditCustomer(customer.customer_id)}
+                                      >
                                         <Pencil className="h-4 w-4 mr-2" />
                                         Edit
                                       </DropdownMenuItem>
-                                      <DropdownMenuItem onClick={() => requestDeleteCustomer(customer)}>
+                                      <DropdownMenuItem
+                                        onClick={() => requestDeleteCustomer(customer)}
+                                      >
                                         <Trash2 className="h-4 w-4 mr-2 text-destructive" />
                                         Delete
                                       </DropdownMenuItem>
@@ -533,10 +575,18 @@ export default function CustomerManagement() {
                                   </DropdownMenu>
                                 ) : (
                                   <div className="flex justify-center gap-2">
-                                    <Button variant="ghost" size="sm" onClick={() => handleViewCustomer(customer.customer_id)}>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleViewCustomer(customer.customer_id)}
+                                    >
                                       <Eye className="h-4 w-4" />
                                     </Button>
-                                    <Button variant="ghost" size="sm" onClick={() => handleEditCustomer(customer.customer_id)}>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleEditCustomer(customer.customer_id)}
+                                    >
                                       <Pencil className="h-4 w-4" />
                                     </Button>
                                     <Button
@@ -550,23 +600,29 @@ export default function CustomerManagement() {
                                   </div>
                                 )}
                               </TableCell>
-                            )
+                            );
                           }
                           if (column.key === "customer_id") {
                             return (
-                              <TableCell key={column.key} className={`font-medium pl-4 ${isMobile ? 'text-xs' : ''}`}>
+                              <TableCell
+                                key={column.key}
+                                className={`font-medium pl-4 ${isMobile ? "text-xs" : ""}`}
+                              >
                                 {customer.customer_id}
                               </TableCell>
-                            )
+                            );
                           }
                           if (column.key === "name") {
-                            const roles = Array.isArray(customer.roles) ? customer.roles : []
-                            const isAdmin = adminRoleId !== null && roles.includes(adminRoleId)
+                            const roles = Array.isArray(customer.roles) ? customer.roles : [];
+                            const isAdmin = adminRoleId !== null && roles.includes(adminRoleId);
                             const roleLabels = roles
                               .map((roleId) => roleCatalog[roleId])
-                              .filter((label): label is string => Boolean(label))
+                              .filter((label): label is string => Boolean(label));
                             return (
-                              <TableCell key={column.key} className={`${isMobile ? 'text-xs' : ''}`}>
+                              <TableCell
+                                key={column.key}
+                                className={`${isMobile ? "text-xs" : ""}`}
+                              >
                                 <span className="inline-flex items-center gap-1 font-medium">
                                   {customer.name}
                                   {isAdmin && (
@@ -586,33 +642,45 @@ export default function CustomerManagement() {
                                   </div>
                                 )}
                               </TableCell>
-                            )
+                            );
                           }
                           if (column.key === "email") {
                             return (
-                              <TableCell key={column.key} className={`${isMobile ? 'text-xs' : ''}`}>
-                                {customer.email || '-'}
+                              <TableCell
+                                key={column.key}
+                                className={`${isMobile ? "text-xs" : ""}`}
+                              >
+                                {customer.email || "-"}
                               </TableCell>
-                            )
+                            );
                           }
                           if (column.key === "primary_mobile") {
                             return (
-                              <TableCell key={column.key} className={`${isMobile ? 'text-xs' : ''}`}>
+                              <TableCell
+                                key={column.key}
+                                className={`${isMobile ? "text-xs" : ""}`}
+                              >
                                 <span className="font-medium">+91 {customer.primary_mobile}</span>
                               </TableCell>
-                            )
+                            );
                           }
                           if (column.key === "written_address") {
                             return (
-                              <TableCell key={column.key} className={`${isMobile ? 'text-xs truncate max-w-[120px]' : ''}`}>
+                              <TableCell
+                                key={column.key}
+                                className={`${isMobile ? "text-xs truncate max-w-[120px]" : ""}`}
+                              >
                                 {customer.written_address}
                               </TableCell>
-                            )
+                            );
                           }
                           if (column.key === "orders") {
-                            const pending = customer.pending_orders ?? 0
+                            const pending = customer.pending_orders ?? 0;
                             return (
-                              <TableCell key={column.key} className={`text-center ${isMobile ? 'text-xs' : ''}`}>
+                              <TableCell
+                                key={column.key}
+                                className={`text-center ${isMobile ? "text-xs" : ""}`}
+                              >
                                 <span className="relative inline-flex items-center justify-center text-base">
                                   {customer.completed_orders ?? 0}
                                   {pending > 0 && (
@@ -622,9 +690,9 @@ export default function CustomerManagement() {
                                   )}
                                 </span>
                               </TableCell>
-                            )
+                            );
                           }
-                          return null
+                          return null;
                         })}
                       </TableRow>
                     ))
@@ -650,9 +718,11 @@ export default function CustomerManagement() {
                 <div className="space-y-4">
                   {Object.entries(viewCustomer).map(([key, value]) => (
                     <div key={key} className="border-b pb-2">
-                      <div className="font-medium text-sm">{key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</div>
+                      <div className="font-medium text-sm">
+                        {key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+                      </div>
                       <div className="text-sm">
-                        {typeof value === 'object' ? JSON.stringify(value) : String(value || '-')}
+                        {typeof value === "object" ? JSON.stringify(value) : String(value || "-")}
                       </div>
                     </div>
                   ))}
@@ -661,9 +731,11 @@ export default function CustomerManagement() {
                 <div className="grid grid-cols-2 gap-4">
                   {Object.entries(viewCustomer).map(([key, value]) => (
                     <div key={key} className="border-b pb-2">
-                      <div className="font-medium text-sm">{key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</div>
+                      <div className="font-medium text-sm">
+                        {key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+                      </div>
                       <div className="text-sm">
-                        {typeof value === 'object' ? JSON.stringify(value) : String(value || '-')}
+                        {typeof value === "object" ? JSON.stringify(value) : String(value || "-")}
                       </div>
                     </div>
                   ))}
@@ -678,9 +750,9 @@ export default function CustomerManagement() {
         open={confirmDeleteOpen}
         onOpenChange={(open) => {
           if (!open && !isDeleting) {
-            setCustomerToDelete(null)
+            setCustomerToDelete(null);
           }
-          setConfirmDeleteOpen(open)
+          setConfirmDeleteOpen(open);
         }}
       >
         <AlertDialogContent>
@@ -696,7 +768,7 @@ export default function CustomerManagement() {
             <AlertDialogCancel
               onClick={() => {
                 if (!isDeleting) {
-                  setCustomerToDelete(null)
+                  setCustomerToDelete(null);
                 }
               }}
               disabled={isDeleting}
@@ -714,5 +786,5 @@ export default function CustomerManagement() {
         </AlertDialogContent>
       </AlertDialog>
     </AdminLayout>
-  )
+  );
 }

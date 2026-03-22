@@ -7,6 +7,7 @@ import { ArrowLeft, ChevronRight, Leaf, LogOut } from "lucide-react";
 import { MobileCustomerBottomNav } from "@/components/mobile/customer/bottom-nav";
 import { mobilePalette, playfairMobile, workSans } from "@/components/mobile/customer/theme";
 import { useAuthStore } from "@/store/store";
+import { http } from "@/lib/http";
 
 type CustomerProfile = {
   customer_id: number;
@@ -38,7 +39,8 @@ export default function MobileCustomerProfilePage() {
   const handleBack = () => {
     const canGoBack =
       typeof window !== "undefined" &&
-      (((window.history.state as { idx?: number } | null)?.idx ?? 0) > 0 || window.history.length > 1);
+      (((window.history.state as { idx?: number } | null)?.idx ?? 0) > 0 ||
+        window.history.length > 1);
     if (canGoBack) {
       router.back();
       return;
@@ -69,7 +71,7 @@ export default function MobileCustomerProfilePage() {
     (async () => {
       setLoading(true);
       try {
-        const response = await fetch(`http://localhost:8000/get-customer/${user.customer_id}`);
+        const response = await http.get(`/get-customer/${user.customer_id}`);
         if (!response.ok) return;
         const data = (await response.json()) as CustomerProfile;
         if (!cancelled) setProfile(data);
@@ -82,7 +84,10 @@ export default function MobileCustomerProfilePage() {
     };
   }, [user?.customer_id]);
 
-  const displayName = useMemo(() => profile?.name || user?.name || "Customer", [profile?.name, user?.name]);
+  const displayName = useMemo(
+    () => profile?.name || user?.name || "Customer",
+    [profile?.name, user?.name],
+  );
   const displayPhone = useMemo(() => {
     const raw = profile?.primary_mobile || user?.phone || "";
     if (!raw) return "";
@@ -99,30 +104,51 @@ export default function MobileCustomerProfilePage() {
   };
 
   return (
-    <main className={`${workSans.variable} ${playfairMobile.variable} min-h-screen pb-28`} style={{ backgroundColor: mobilePalette.background }}>
+    <main
+      className={`${workSans.variable} ${playfairMobile.variable} min-h-screen pb-28`}
+      style={{ backgroundColor: mobilePalette.background }}
+    >
       <div className="mx-auto w-full max-w-[448px]">
         <header className="sticky top-0 z-20 bg-[rgba(253,250,241,0.95)] px-4 py-4 backdrop-blur-md">
           <div className="relative flex items-center justify-between">
-          <button type="button" onClick={handleBack} className="flex h-9 w-9 items-center justify-center rounded-full">
-            <ArrowLeft size={20} color="#8D4925" />
-          </button>
-          <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-lg font-bold text-[#8D4925]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>Profile</h1>
-          <span className="h-9 w-9" />
+            <button
+              type="button"
+              onClick={handleBack}
+              className="flex h-9 w-9 items-center justify-center rounded-full"
+            >
+              <ArrowLeft size={20} color="#8D4925" />
+            </button>
+            <h1
+              className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-lg font-bold text-[#8D4925]"
+              style={{ fontFamily: "var(--font-mobile-playfair), serif" }}
+            >
+              Profile
+            </h1>
+            <span className="h-9 w-9" />
           </div>
         </header>
 
         <section className="mb-8 mt-6 flex flex-col items-center">
           <div className="h-28 w-28 overflow-hidden rounded-full border-4 border-white shadow-[0_4px_20px_rgba(141,73,37,0.08)]">
-            <img src="/icons/contact-card.png" alt="profile" className="h-full w-full object-cover" />
+            <img
+              src="/icons/contact-card.png"
+              alt="profile"
+              className="h-full w-full object-cover"
+            />
           </div>
 
-          <h2 className="mt-4 text-2xl font-bold text-[#3E2723]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>
+          <h2
+            className="mt-4 text-2xl font-bold text-[#3E2723]"
+            style={{ fontFamily: "var(--font-mobile-playfair), serif" }}
+          >
             {loading ? "Loading..." : displayName}
           </h2>
           <p className="font-medium text-[#3E2723]/60">{displayPhone || "—"}</p>
           <div className="mt-4 flex items-center gap-2 rounded-full border border-[#1B4332]/20 bg-[#1B4332]/10 px-4 py-1.5">
             <Leaf size={14} color="#1B4332" />
-            <span className="text-xs font-bold uppercase tracking-wider text-[#1B4332]">{profile?.payment_frequency || "Daily"} Plan</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-[#1B4332]">
+              {profile?.payment_frequency || "Daily"} Plan
+            </span>
           </div>
         </section>
 
@@ -130,7 +156,10 @@ export default function MobileCustomerProfilePage() {
           <ProfileGroup title="Account Settings" items={ACCOUNT_ITEMS} />
           <ProfileGroup title="Support" items={SUPPORT_ITEMS} />
 
-          <button onClick={handleLogout} className="mb-2 flex h-14 w-full items-center justify-center gap-2 rounded-2xl border border-[#8D4925]/10 bg-white font-bold text-[#8D4925] shadow-[0_4px_20px_rgba(141,73,37,0.08)]">
+          <button
+            onClick={handleLogout}
+            className="mb-2 flex h-14 w-full items-center justify-center gap-2 rounded-2xl border border-[#8D4925]/10 bg-white font-bold text-[#8D4925] shadow-[0_4px_20px_rgba(141,73,37,0.08)]"
+          >
             <LogOut size={18} />
             Logout
           </button>
@@ -142,10 +171,18 @@ export default function MobileCustomerProfilePage() {
   );
 }
 
-function ProfileGroup({ title, items }: { title: string; items: ReadonlyArray<{ label: string; href: string }> }) {
+function ProfileGroup({
+  title,
+  items,
+}: {
+  title: string;
+  items: ReadonlyArray<{ label: string; href: string }>;
+}) {
   return (
     <div>
-      <h3 className="mb-2 px-4 text-[11px] font-bold uppercase tracking-widest text-[#3E2723]/40">{title}</h3>
+      <h3 className="mb-2 px-4 text-[11px] font-bold uppercase tracking-widest text-[#3E2723]/40">
+        {title}
+      </h3>
       <div className="overflow-hidden rounded-2xl border border-[#8D4925]/5 bg-white/80 shadow-[0_4px_20px_rgba(141,73,37,0.08)]">
         {items.map((item, idx) => (
           <Link

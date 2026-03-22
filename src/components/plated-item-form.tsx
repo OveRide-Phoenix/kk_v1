@@ -1,247 +1,261 @@
-"use client"
+"use client";
 
-import { useEffect, useMemo, useState } from "react"
-import { Search, Trash2 } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import type { CategoryProduct, PlatedProduct, Product } from "@/types/product"
+import { useEffect, useMemo, useState } from "react";
+import { Search, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import type { CategoryProduct, PlatedProduct, Product } from "@/types/product";
+import { http } from "@/lib/http";
 
 interface ComponentTypeOption {
-  component_type_id: number
-  name: string
-  description?: string | null
+  component_type_id: number;
+  name: string;
+  description?: string | null;
 }
 
 export interface PlatedItemFormValues {
-  item_id?: number
-  name: string
-  description?: string
-  alias?: string
-  category_id: number
-  bld_ids: number[]
-  uom_customer: string
-  unit_packing?: number
-  uom_packing?: string
-  uom_production?: string
-  packing_to_production_rate?: number
-  buffer_percentage?: number
-  max_qty_breakfast?: number
-  max_qty_lunch?: number
-  max_qty_dinner?: number
-  max_qty_condiments?: number
-  breakfast_price?: number
-  lunch_price?: number
-  dinner_price?: number
-  condiments_price?: number
-  net_price?: number
-  components: Array<{ item_id?: number; component_type_id?: number; quantity: number }>
+  item_id?: number;
+  name: string;
+  description?: string;
+  alias?: string;
+  category_id: number;
+  bld_ids: number[];
+  uom_customer: string;
+  unit_packing?: number;
+  uom_packing?: string;
+  uom_production?: string;
+  packing_to_production_rate?: number;
+  buffer_percentage?: number;
+  max_qty_breakfast?: number;
+  max_qty_lunch?: number;
+  max_qty_dinner?: number;
+  max_qty_condiments?: number;
+  breakfast_price?: number;
+  lunch_price?: number;
+  dinner_price?: number;
+  condiments_price?: number;
+  net_price?: number;
+  components: Array<{ item_id?: number; component_type_id?: number; quantity: number }>;
 }
 
 interface PlatedItemFormProps {
-  onSave: (payload: PlatedItemFormValues) => void | Promise<void>
-  onCancel: () => void
-  platedItem?: PlatedProduct | null
+  onSave: (payload: PlatedItemFormValues) => void | Promise<void>;
+  onCancel: () => void;
+  platedItem?: PlatedProduct | null;
 }
 
 interface SelectedComponent {
-  kind: "item" | "type"
-  itemId?: number
-  componentTypeId?: number
-  name: string
-  quantity: number
+  kind: "item" | "type";
+  itemId?: number;
+  componentTypeId?: number;
+  name: string;
+  quantity: number;
 }
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
 
 const MEAL_OPTIONS = [
   { id: 1, label: "Breakfast", maxField: "max_qty_breakfast" },
   { id: 2, label: "Lunch", maxField: "max_qty_lunch" },
   { id: 3, label: "Dinner", maxField: "max_qty_dinner" },
   { id: 4, label: "Condiments", maxField: "max_qty_condiments" },
-] as const
+] as const;
 
 export default function PlatedItemForm({ onSave, onCancel, platedItem }: PlatedItemFormProps) {
-  const [availableItems, setAvailableItems] = useState<Product[]>([])
-  const [categories, setCategories] = useState<CategoryProduct[]>([])
-  const [componentTypes, setComponentTypes] = useState<ComponentTypeOption[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [formError, setFormError] = useState<string | null>(null)
+  const [availableItems, setAvailableItems] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<CategoryProduct[]>([]);
+  const [componentTypes, setComponentTypes] = useState<ComponentTypeOption[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
-  const [name, setName] = useState(platedItem?.name ?? "")
-  const [description, setDescription] = useState(platedItem?.description ?? "")
-  const [alias, setAlias] = useState(platedItem?.alias ?? "")
+  const [name, setName] = useState(platedItem?.name ?? "");
+  const [description, setDescription] = useState(platedItem?.description ?? "");
+  const [alias, setAlias] = useState(platedItem?.alias ?? "");
   const [categoryId, setCategoryId] = useState(
-    platedItem?.category_id ? String(platedItem.category_id) : ""
-  )
-  const [selectedMeals, setSelectedMeals] = useState<number[]>(platedItem?.bld_ids ?? [])
-  const [uomCustomer, setUomCustomer] = useState(platedItem?.uom_customer ?? "")
+    platedItem?.category_id ? String(platedItem.category_id) : "",
+  );
+  const [selectedMeals, setSelectedMeals] = useState<number[]>(platedItem?.bld_ids ?? []);
+  const [uomCustomer, setUomCustomer] = useState(platedItem?.uom_customer ?? "");
   const [unitPacking, setUnitPacking] = useState(
-    platedItem?.unit_packing != null ? String(platedItem.unit_packing) : ""
-  )
-  const [uomPacking, setUomPacking] = useState(platedItem?.uom_packing ?? "")
-  const [uomProduction, setUomProduction] = useState(platedItem?.uom_production ?? "")
+    platedItem?.unit_packing != null ? String(platedItem.unit_packing) : "",
+  );
+  const [uomPacking, setUomPacking] = useState(platedItem?.uom_packing ?? "");
+  const [uomProduction, setUomProduction] = useState(platedItem?.uom_production ?? "");
   const [conversionRate, setConversionRate] = useState(
     platedItem?.packing_to_production_rate != null
       ? String(platedItem.packing_to_production_rate)
-      : "1"
-  )
+      : "1",
+  );
   const [bufferPercentage, setBufferPercentage] = useState(
-    platedItem?.buffer_percentage != null ? String(platedItem.buffer_percentage) : ""
-  )
+    platedItem?.buffer_percentage != null ? String(platedItem.buffer_percentage) : "",
+  );
   const [maxBreakfast, setMaxBreakfast] = useState(
-    platedItem?.max_qty_breakfast != null ? String(platedItem.max_qty_breakfast) : ""
-  )
+    platedItem?.max_qty_breakfast != null ? String(platedItem.max_qty_breakfast) : "",
+  );
   const [maxLunch, setMaxLunch] = useState(
-    platedItem?.max_qty_lunch != null ? String(platedItem.max_qty_lunch) : ""
-  )
+    platedItem?.max_qty_lunch != null ? String(platedItem.max_qty_lunch) : "",
+  );
   const [maxDinner, setMaxDinner] = useState(
-    platedItem?.max_qty_dinner != null ? String(platedItem.max_qty_dinner) : ""
-  )
+    platedItem?.max_qty_dinner != null ? String(platedItem.max_qty_dinner) : "",
+  );
   const [maxCondiments, setMaxCondiments] = useState(
-    platedItem?.max_qty_condiments != null ? String(platedItem.max_qty_condiments) : ""
-  )
+    platedItem?.max_qty_condiments != null ? String(platedItem.max_qty_condiments) : "",
+  );
   const [breakfastPrice, setBreakfastPrice] = useState(
-    platedItem?.breakfast_price != null ? String(platedItem.breakfast_price) : ""
-  )
+    platedItem?.breakfast_price != null ? String(platedItem.breakfast_price) : "",
+  );
   const [lunchPrice, setLunchPrice] = useState(
-    platedItem?.lunch_price != null ? String(platedItem.lunch_price) : ""
-  )
+    platedItem?.lunch_price != null ? String(platedItem.lunch_price) : "",
+  );
   const [dinnerPrice, setDinnerPrice] = useState(
-    platedItem?.dinner_price != null ? String(platedItem.dinner_price) : ""
-  )
+    platedItem?.dinner_price != null ? String(platedItem.dinner_price) : "",
+  );
   const [condimentsPrice, setCondimentsPrice] = useState(
-    platedItem?.condiments_price != null ? String(platedItem.condiments_price) : ""
-  )
+    platedItem?.condiments_price != null ? String(platedItem.condiments_price) : "",
+  );
   const [netPrice, setNetPrice] = useState(
-    platedItem?.net_price != null ? String(platedItem.net_price) : ""
-  )
-  const [itemSearch, setItemSearch] = useState("")
-  const [typeSearch, setTypeSearch] = useState("")
+    platedItem?.net_price != null ? String(platedItem.net_price) : "",
+  );
+  const [itemSearch, setItemSearch] = useState("");
+  const [typeSearch, setTypeSearch] = useState("");
   const [selectedItems, setSelectedItems] = useState<SelectedComponent[]>(
     () =>
       platedItem?.platedComponents?.map((item) => ({
         kind: item.kind === "type" ? "type" : "item",
         itemId: item.itemId ?? undefined,
         componentTypeId: item.componentTypeId ?? undefined,
-        name: item.name ?? (item.kind === "type" ? item.componentTypeName ?? "Generic Component" : `Item #${item.itemId}`),
+        name:
+          item.name ??
+          (item.kind === "type"
+            ? (item.componentTypeName ?? "Generic Component")
+            : `Item #${item.itemId}`),
         quantity: item.quantity ?? 1,
-      })) ?? []
-  )
+      })) ?? [],
+  );
 
   useEffect(() => {
-    let isMounted = true
-    const controller = new AbortController()
+    let isMounted = true;
 
     const loadDependencies = async () => {
-      setIsLoading(true)
-      setLoadError(null)
+      setIsLoading(true);
+      setLoadError(null);
       try {
         const [itemsResponse, categoriesResponse, componentTypesResponse] = await Promise.all([
-          fetch(`${API_BASE_URL}/api/products/items`, { signal: controller.signal }),
-          fetch(`${API_BASE_URL}/api/products/categories`, { signal: controller.signal }),
-          fetch(`${API_BASE_URL}/api/products/component-types`, { signal: controller.signal }),
-        ])
+          http.get("/api/products/items"),
+          http.get("/api/products/categories"),
+          http.get("/api/products/component-types"),
+        ]);
 
-        if (!itemsResponse.ok) throw new Error("Failed to fetch items")
-        if (!categoriesResponse.ok) throw new Error("Failed to fetch categories")
-        if (!componentTypesResponse.ok) throw new Error("Failed to fetch component types")
+        if (!itemsResponse.ok) throw new Error("Failed to fetch items");
+        if (!categoriesResponse.ok) throw new Error("Failed to fetch categories");
+        if (!componentTypesResponse.ok) throw new Error("Failed to fetch component types");
 
         const [itemsData, categoriesData, componentTypesData] = await Promise.all([
           itemsResponse.json(),
           categoriesResponse.json(),
           componentTypesResponse.json(),
-        ])
+        ]);
 
-        if (!isMounted) return
+        if (!isMounted) return;
         setAvailableItems(
           Array.isArray(itemsData)
             ? itemsData.filter((item) => !item.is_combo && !item.is_plated)
-            : []
-        )
-        setCategories(Array.isArray(categoriesData) ? categoriesData : [])
-        setComponentTypes(Array.isArray(componentTypesData) ? componentTypesData : [])
+            : [],
+        );
+        setCategories(Array.isArray(categoriesData) ? categoriesData : []);
+        setComponentTypes(Array.isArray(componentTypesData) ? componentTypesData : []);
       } catch (error) {
-        if (!controller.signal.aborted) {
-          setLoadError(error instanceof Error ? error.message : "Failed to load plated item dependencies")
+        if (isMounted) {
+          setLoadError(
+            error instanceof Error ? error.message : "Failed to load plated item dependencies",
+          );
         }
       } finally {
         if (isMounted) {
-          setIsLoading(false)
+          setIsLoading(false);
         }
       }
-    }
+    };
 
-    loadDependencies()
+    loadDependencies();
 
     return () => {
-      isMounted = false
-      controller.abort()
-    }
-  }, [])
+      isMounted = false;
+    };
+  }, []);
 
   const itemsMap = useMemo(() => {
-    const map = new Map<number, Product>()
+    const map = new Map<number, Product>();
     availableItems.forEach((item) => {
       if (typeof item.item_id === "number") {
-        map.set(item.item_id, item)
+        map.set(item.item_id, item);
       }
-    })
-    return map
-  }, [availableItems])
+    });
+    return map;
+  }, [availableItems]);
 
   const filteredItems = useMemo(() => {
-    const query = itemSearch.trim().toLowerCase()
+    const query = itemSearch.trim().toLowerCase();
     return availableItems.filter((item) => {
-      if (!item.name) return false
-      const matchesSearch = item.name.toLowerCase().includes(query) || !query
-      const alreadySelected = selectedItems.some((entry) => entry.kind === "item" && entry.itemId === item.item_id)
-      return matchesSearch && !alreadySelected
-    })
-  }, [availableItems, itemSearch, selectedItems])
+      if (!item.name) return false;
+      const matchesSearch = item.name.toLowerCase().includes(query) || !query;
+      const alreadySelected = selectedItems.some(
+        (entry) => entry.kind === "item" && entry.itemId === item.item_id,
+      );
+      return matchesSearch && !alreadySelected;
+    });
+  }, [availableItems, itemSearch, selectedItems]);
 
   const filteredComponentTypes = useMemo(() => {
-    const query = typeSearch.trim().toLowerCase()
+    const query = typeSearch.trim().toLowerCase();
     return componentTypes.filter((componentType) => {
-      const matchesSearch = componentType.name.toLowerCase().includes(query) || !query
+      const matchesSearch = componentType.name.toLowerCase().includes(query) || !query;
       const alreadySelected = selectedItems.some(
-        (entry) => entry.kind === "type" && entry.componentTypeId === componentType.component_type_id
-      )
-      return matchesSearch && !alreadySelected
-    })
-  }, [componentTypes, typeSearch, selectedItems])
+        (entry) =>
+          entry.kind === "type" && entry.componentTypeId === componentType.component_type_id,
+      );
+      return matchesSearch && !alreadySelected;
+    });
+  }, [componentTypes, typeSearch, selectedItems]);
 
   const toggleMeal = (mealId: number) => {
     setSelectedMeals((prev) => {
-      const set = new Set(prev)
+      const set = new Set(prev);
       if (set.has(mealId)) {
-        set.delete(mealId)
+        set.delete(mealId);
       } else {
-        set.add(mealId)
+        set.add(mealId);
       }
-      return Array.from(set).sort((a, b) => a - b)
-    })
-  }
+      return Array.from(set).sort((a, b) => a - b);
+    });
+  };
 
   const resolveItemComponentNote = (itemId: number) => {
-    const item = itemsMap.get(itemId)
-    if (!item) return ""
+    const item = itemsMap.get(itemId);
+    if (!item) return "";
     const unitPackingLabel =
       item.unit_packing != null && item.uom_packing
         ? `1 qty = ${item.unit_packing} ${item.uom_packing}`
         : item.uom_customer
           ? `1 qty = 1 ${item.uom_customer}`
-          : "1 qty"
-    return `${unitPackingLabel}${item.uom_production ? ` -> ${item.uom_production}` : ""}`
-  }
+          : "1 qty";
+    return `${unitPackingLabel}${item.uom_production ? ` -> ${item.uom_production}` : ""}`;
+  };
 
   const resolveGenericComponentNote = (componentTypeId?: number) => {
-    const componentType = componentTypes.find((entry) => entry.component_type_id === componentTypeId)
-    return componentType?.description ?? "Resolves to the item of the day"
-  }
+    const componentType = componentTypes.find(
+      (entry) => entry.component_type_id === componentTypeId,
+    );
+    return componentType?.description ?? "Resolves to the item of the day";
+  };
 
   const handleQuantityChange = (target: SelectedComponent, value: string) => {
     setSelectedItems((prev) =>
@@ -249,54 +263,54 @@ export default function PlatedItemForm({ onSave, onCancel, platedItem }: PlatedI
         const isSameEntry =
           entry.kind === target.kind &&
           entry.itemId === target.itemId &&
-          entry.componentTypeId === target.componentTypeId
-        if (!isSameEntry) return entry
-        const parsed = Number(value)
+          entry.componentTypeId === target.componentTypeId;
+        if (!isSameEntry) return entry;
+        const parsed = Number(value);
         return {
           ...entry,
           quantity: Number.isFinite(parsed) && parsed > 0 ? parsed : 1,
-        }
-      })
-    )
-  }
+        };
+      }),
+    );
+  };
 
   const parseNumber = (value: string): number | undefined => {
-    const parsed = Number(value)
-    return Number.isFinite(parsed) ? parsed : undefined
-  }
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
 
   const parseInteger = (value: string): number | undefined => {
-    const parsed = Number.parseInt(value, 10)
-    return Number.isFinite(parsed) ? parsed : undefined
-  }
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+    event.preventDefault();
 
-    const trimmedName = name.trim()
-    const parsedCategory = Number(categoryId)
+    const trimmedName = name.trim();
+    const parsedCategory = Number(categoryId);
     if (!trimmedName) {
-      setFormError("Plated item name is required.")
-      return
+      setFormError("Plated item name is required.");
+      return;
     }
     if (!Number.isInteger(parsedCategory) || parsedCategory <= 0) {
-      setFormError("Please pick a category.")
-      return
+      setFormError("Please pick a category.");
+      return;
     }
     if (selectedMeals.length === 0) {
-      setFormError("Pick at least one meal.")
-      return
+      setFormError("Pick at least one meal.");
+      return;
     }
     if (!uomCustomer.trim()) {
-      setFormError("Customer UOM is required.")
-      return
+      setFormError("Customer UOM is required.");
+      return;
     }
     if (selectedItems.length === 0) {
-      setFormError("Add at least one component item.")
-      return
+      setFormError("Add at least one component item.");
+      return;
     }
 
-    setFormError(null)
+    setFormError(null);
     onSave({
       item_id: platedItem?.item_id,
       name: trimmedName,
@@ -324,11 +338,13 @@ export default function PlatedItemForm({ onSave, onCancel, platedItem }: PlatedI
         component_type_id: item.kind === "type" ? item.componentTypeId : undefined,
         quantity: item.quantity,
       })),
-    })
-  }
+    });
+  };
 
   if (isLoading) {
-    return <div className="py-10 text-center text-muted-foreground">Loading plated item builder…</div>
+    return (
+      <div className="py-10 text-center text-muted-foreground">Loading plated item builder…</div>
+    );
   }
 
   if (loadError) {
@@ -341,7 +357,7 @@ export default function PlatedItemForm({ onSave, onCancel, platedItem }: PlatedI
           </Button>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -349,7 +365,12 @@ export default function PlatedItemForm({ onSave, onCancel, platedItem }: PlatedI
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="plated-name">Plated Item Name</Label>
-          <Input id="plated-name" value={name} onChange={(event) => setName(event.target.value)} required />
+          <Input
+            id="plated-name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            required
+          />
         </div>
         <div className="space-y-2">
           <Label>Category</Label>
@@ -368,11 +389,19 @@ export default function PlatedItemForm({ onSave, onCancel, platedItem }: PlatedI
         </div>
         <div className="space-y-2 md:col-span-2">
           <Label htmlFor="plated-description">Description</Label>
-          <Input id="plated-description" value={description} onChange={(event) => setDescription(event.target.value)} />
+          <Input
+            id="plated-description"
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="plated-alias">Alias</Label>
-          <Input id="plated-alias" value={alias} onChange={(event) => setAlias(event.target.value)} />
+          <Input
+            id="plated-alias"
+            value={alias}
+            onChange={(event) => setAlias(event.target.value)}
+          />
         </div>
         <div className="space-y-2">
           <Label>Meals</Label>
@@ -391,63 +420,156 @@ export default function PlatedItemForm({ onSave, onCancel, platedItem }: PlatedI
         </div>
         <div className="space-y-2">
           <Label htmlFor="plated-uom-customer">Customer UOM</Label>
-          <Input id="plated-uom-customer" value={uomCustomer} onChange={(event) => setUomCustomer(event.target.value)} required />
+          <Input
+            id="plated-uom-customer"
+            value={uomCustomer}
+            onChange={(event) => setUomCustomer(event.target.value)}
+            required
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="plated-unit-packing">Unit Packing</Label>
-          <Input id="plated-unit-packing" type="number" step="0.001" min="0" value={unitPacking} onChange={(event) => setUnitPacking(event.target.value)} />
+          <Input
+            id="plated-unit-packing"
+            type="number"
+            step="0.001"
+            min="0"
+            value={unitPacking}
+            onChange={(event) => setUnitPacking(event.target.value)}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="plated-uom-packing">Packing UOM</Label>
-          <Input id="plated-uom-packing" value={uomPacking} onChange={(event) => setUomPacking(event.target.value)} />
+          <Input
+            id="plated-uom-packing"
+            value={uomPacking}
+            onChange={(event) => setUomPacking(event.target.value)}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="plated-uom-production">Production UOM</Label>
-          <Input id="plated-uom-production" value={uomProduction} onChange={(event) => setUomProduction(event.target.value)} />
+          <Input
+            id="plated-uom-production"
+            value={uomProduction}
+            onChange={(event) => setUomProduction(event.target.value)}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="plated-conversion-rate">Conversion Rate</Label>
-          <Input id="plated-conversion-rate" type="number" step="0.000001" min="0" value={conversionRate} onChange={(event) => setConversionRate(event.target.value)} />
+          <Input
+            id="plated-conversion-rate"
+            type="number"
+            step="0.000001"
+            min="0"
+            value={conversionRate}
+            onChange={(event) => setConversionRate(event.target.value)}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="plated-buffer">Buffer Percentage</Label>
-          <Input id="plated-buffer" type="number" step="0.01" min="0" value={bufferPercentage} onChange={(event) => setBufferPercentage(event.target.value)} />
+          <Input
+            id="plated-buffer"
+            type="number"
+            step="0.01"
+            min="0"
+            value={bufferPercentage}
+            onChange={(event) => setBufferPercentage(event.target.value)}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="plated-breakfast-price">Breakfast Price</Label>
-          <Input id="plated-breakfast-price" type="number" min="0" step="0.5" value={breakfastPrice} onChange={(event) => setBreakfastPrice(event.target.value)} />
+          <Input
+            id="plated-breakfast-price"
+            type="number"
+            min="0"
+            step="0.5"
+            value={breakfastPrice}
+            onChange={(event) => setBreakfastPrice(event.target.value)}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="plated-lunch-price">Lunch Price</Label>
-          <Input id="plated-lunch-price" type="number" min="0" step="0.5" value={lunchPrice} onChange={(event) => setLunchPrice(event.target.value)} />
+          <Input
+            id="plated-lunch-price"
+            type="number"
+            min="0"
+            step="0.5"
+            value={lunchPrice}
+            onChange={(event) => setLunchPrice(event.target.value)}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="plated-dinner-price">Dinner Price</Label>
-          <Input id="plated-dinner-price" type="number" min="0" step="0.5" value={dinnerPrice} onChange={(event) => setDinnerPrice(event.target.value)} />
+          <Input
+            id="plated-dinner-price"
+            type="number"
+            min="0"
+            step="0.5"
+            value={dinnerPrice}
+            onChange={(event) => setDinnerPrice(event.target.value)}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="plated-condiments-price">Condiments Price</Label>
-          <Input id="plated-condiments-price" type="number" min="0" step="0.5" value={condimentsPrice} onChange={(event) => setCondimentsPrice(event.target.value)} />
+          <Input
+            id="plated-condiments-price"
+            type="number"
+            min="0"
+            step="0.5"
+            value={condimentsPrice}
+            onChange={(event) => setCondimentsPrice(event.target.value)}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="plated-net-price">Net Price</Label>
-          <Input id="plated-net-price" type="number" min="0" step="0.5" value={netPrice} onChange={(event) => setNetPrice(event.target.value)} />
+          <Input
+            id="plated-net-price"
+            type="number"
+            min="0"
+            step="0.5"
+            value={netPrice}
+            onChange={(event) => setNetPrice(event.target.value)}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="plated-max-breakfast">Max Qty Breakfast</Label>
-          <Input id="plated-max-breakfast" type="number" min="0" value={maxBreakfast} onChange={(event) => setMaxBreakfast(event.target.value)} />
+          <Input
+            id="plated-max-breakfast"
+            type="number"
+            min="0"
+            value={maxBreakfast}
+            onChange={(event) => setMaxBreakfast(event.target.value)}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="plated-max-lunch">Max Qty Lunch</Label>
-          <Input id="plated-max-lunch" type="number" min="0" value={maxLunch} onChange={(event) => setMaxLunch(event.target.value)} />
+          <Input
+            id="plated-max-lunch"
+            type="number"
+            min="0"
+            value={maxLunch}
+            onChange={(event) => setMaxLunch(event.target.value)}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="plated-max-dinner">Max Qty Dinner</Label>
-          <Input id="plated-max-dinner" type="number" min="0" value={maxDinner} onChange={(event) => setMaxDinner(event.target.value)} />
+          <Input
+            id="plated-max-dinner"
+            type="number"
+            min="0"
+            value={maxDinner}
+            onChange={(event) => setMaxDinner(event.target.value)}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="plated-max-condiments">Max Qty Condiments</Label>
-          <Input id="plated-max-condiments" type="number" min="0" value={maxCondiments} onChange={(event) => setMaxCondiments(event.target.value)} />
+          <Input
+            id="plated-max-condiments"
+            type="number"
+            min="0"
+            value={maxCondiments}
+            onChange={(event) => setMaxCondiments(event.target.value)}
+          />
         </div>
       </div>
 
@@ -457,7 +579,13 @@ export default function PlatedItemForm({ onSave, onCancel, platedItem }: PlatedI
             <Label htmlFor="plated-search">Add Concrete Items</Label>
             <div className="relative mt-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input id="plated-search" value={itemSearch} onChange={(event) => setItemSearch(event.target.value)} placeholder="Search items by name" className="pl-9" />
+              <Input
+                id="plated-search"
+                value={itemSearch}
+                onChange={(event) => setItemSearch(event.target.value)}
+                placeholder="Search items by name"
+                className="pl-9"
+              />
             </div>
           </div>
           <ScrollArea className="max-h-[320px] rounded-md border">
@@ -474,12 +602,14 @@ export default function PlatedItemForm({ onSave, onCancel, platedItem }: PlatedI
                       setSelectedItems((prev) => [
                         ...prev,
                         { kind: "item", itemId: item.item_id, name: item.name, quantity: 1 },
-                      ])
-                      setItemSearch("")
+                      ]);
+                      setItemSearch("");
                     }}
                   >
                     <p className="font-medium">{item.name}</p>
-                    <p className="text-xs text-muted-foreground">{resolveItemComponentNote(item.item_id)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {resolveItemComponentNote(item.item_id)}
+                    </p>
                   </button>
                 ))}
               </div>
@@ -500,7 +630,9 @@ export default function PlatedItemForm({ onSave, onCancel, platedItem }: PlatedI
           </div>
           <ScrollArea className="max-h-[220px] rounded-md border">
             {filteredComponentTypes.length === 0 ? (
-              <p className="py-10 text-center text-muted-foreground">No component types match that search.</p>
+              <p className="py-10 text-center text-muted-foreground">
+                No component types match that search.
+              </p>
             ) : (
               <div className="divide-y">
                 {filteredComponentTypes.map((componentType) => (
@@ -517,8 +649,8 @@ export default function PlatedItemForm({ onSave, onCancel, platedItem }: PlatedI
                           name: componentType.name,
                           quantity: 1,
                         },
-                      ])
-                      setTypeSearch("")
+                      ]);
+                      setTypeSearch("");
                     }}
                   >
                     <p className="font-medium">{componentType.name}</p>
@@ -559,7 +691,13 @@ export default function PlatedItemForm({ onSave, onCancel, platedItem }: PlatedI
                     </div>
                     <div className="w-24">
                       <Label className="text-xs text-muted-foreground">Qty</Label>
-                      <Input type="number" min="0.001" step="0.001" value={entry.quantity} onChange={(event) => handleQuantityChange(entry, event.target.value)} />
+                      <Input
+                        type="number"
+                        min="0.001"
+                        step="0.001"
+                        value={entry.quantity}
+                        onChange={(event) => handleQuantityChange(entry, event.target.value)}
+                      />
                     </div>
                     <Button
                       type="button"
@@ -573,8 +711,8 @@ export default function PlatedItemForm({ onSave, onCancel, platedItem }: PlatedI
                               item.kind === entry.kind &&
                               item.itemId === entry.itemId &&
                               item.componentTypeId === entry.componentTypeId
-                            )
-                          })
+                            );
+                          }),
                         )
                       }
                     >
@@ -597,5 +735,5 @@ export default function PlatedItemForm({ onSave, onCancel, platedItem }: PlatedI
         <Button type="submit">{platedItem ? "Update Plated Item" : "Create Plated Item"}</Button>
       </div>
     </form>
-  )
+  );
 }

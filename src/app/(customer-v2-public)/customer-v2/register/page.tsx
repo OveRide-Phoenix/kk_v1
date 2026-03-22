@@ -1,21 +1,24 @@
-"use client"
+"use client";
 
-import { useCallback, useMemo, useState } from "react"
-import type React from "react"
-import { useRouter } from "next/navigation"
+import { useCallback, useMemo, useState } from "react";
+import type React from "react";
+import { useRouter } from "next/navigation";
 
-import CustomerV2AuthShell from "@/components/customer-v2/auth-shell"
-import GoogleMapPicker from "@/components/gmap/GoogleMapPicker"
+import CustomerV2AuthShell from "@/components/customer-v2/auth-shell";
+import GoogleMapPicker from "@/components/gmap/GoogleMapPicker";
+import { http } from "@/lib/http";
 
 const CITY_OPTIONS = [
   { label: "Mysore", code: "MYS" },
   { label: "Bangalore", code: "BLR" },
-]
+];
 
 const resolveCityCode = (value: string) => {
-  const match = CITY_OPTIONS.find((option) => option.label.toLowerCase() === value.trim().toLowerCase())
-  return match ? match.code : "MYS"
-}
+  const match = CITY_OPTIONS.find(
+    (option) => option.label.toLowerCase() === value.trim().toLowerCase(),
+  );
+  return match ? match.code : "MYS";
+};
 
 export default function CustomerV2RegistrationPage() {
   const [formData, setFormData] = useState({
@@ -36,58 +39,61 @@ export default function CustomerV2RegistrationPage() {
     addressType: "",
     routeAssignment: "",
     isDefault: true,
-  })
+  });
 
-  const router = useRouter()
-  const [addressType, setAddressType] = useState("")
-  const [otherAddressName, setOtherAddressName] = useState("")
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isRegistered, setIsRegistered] = useState(false)
-  const [errorMessage, setErrorMessage] = useState("")
+  const router = useRouter();
+  const [addressType, setAddressType] = useState("");
+  const [otherAddressName, setOtherAddressName] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRegistered, setIsRegistered] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
-  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      const { name, value } = e.target;
 
-    setFormData((prev) => {
-      if (name === "latitude" || name === "longitude") return { ...prev, [name]: value }
+      setFormData((prev) => {
+        if (name === "latitude" || name === "longitude") return { ...prev, [name]: value };
 
-      if (name === "primaryMobile" || name === "alternativeMobile") {
-        let newValue = value.startsWith("+91 ") ? value.slice(4) : value
-        if (newValue.startsWith("+91")) newValue = newValue.slice(3)
-        newValue = newValue.replace(/\D/g, "").slice(0, 10)
-        return { ...prev, [name]: newValue }
-      }
+        if (name === "primaryMobile" || name === "alternativeMobile") {
+          let newValue = value.startsWith("+91 ") ? value.slice(4) : value;
+          if (newValue.startsWith("+91")) newValue = newValue.slice(3);
+          newValue = newValue.replace(/\D/g, "").slice(0, 10);
+          return { ...prev, [name]: newValue };
+        }
 
-      if (name === "pinCode") return { ...prev, [name]: value.replace(/\D/g, "").slice(0, 6) }
-      if (name === "email") return { ...prev, [name]: value.toLowerCase() }
+        if (name === "pinCode") return { ...prev, [name]: value.replace(/\D/g, "").slice(0, 6) };
+        if (name === "email") return { ...prev, [name]: value.toLowerCase() };
 
-      return { ...prev, [name]: value }
-    })
-  }, [])
+        return { ...prev, [name]: value };
+      });
+    },
+    [],
+  );
 
   const handleAddressTypeChange = (value: string) => {
-    setAddressType(value)
-    setFormData((prev) => ({ ...prev, addressType: value }))
-    if (value !== "Other") setOtherAddressName("")
-  }
+    setAddressType(value);
+    setFormData((prev) => ({ ...prev, addressType: value }));
+    if (value !== "Other") setOtherAddressName("");
+  };
 
   const handleSelectChange = (name: string, value: string) => {
     if (name === "city") {
-      setFormData((prev) => ({ ...prev, city: value, cityCode: resolveCityCode(value) }))
-      return
+      setFormData((prev) => ({ ...prev, city: value, cityCode: resolveCityCode(value) }));
+      return;
     }
-    setFormData((prev) => ({ ...prev, [name]: value }))
-  }
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
   const handleLocationSelect = (lat: number, lng: number) => {
-    setFormData((prev) => ({ ...prev, latitude: lat, longitude: lng }))
-  }
+    setFormData((prev) => ({ ...prev, latitude: lat, longitude: lng }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (isSubmitting) return
-    setIsSubmitting(true)
-    setErrorMessage("")
+    e.preventDefault();
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    setErrorMessage("");
 
     const formattedData = {
       referred_by: formData.referredBy || null,
@@ -107,38 +113,37 @@ export default function CustomerV2RegistrationPage() {
       address_type: formData.addressType || "Home",
       route_assignment: formData.routeAssignment || null,
       is_default: formData.isDefault ?? true,
-    }
+    };
 
     try {
-      const response = await fetch("http://localhost:8000/api/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formattedData),
-      })
-      const data = await response.json()
-      setIsSubmitting(false)
+      const response = await http.post("/api/register", formattedData as Record<string, unknown>);
+      const data = await response.json();
+      setIsSubmitting(false);
 
       if (response.ok) {
-        setIsRegistered(true)
-        return
+        setIsRegistered(true);
+        return;
       }
 
       if (data.detail && data.detail.includes("Duplicate entry")) {
-        setErrorMessage("This phone number is already registered. Please use a different number.")
-        return
+        setErrorMessage("This phone number is already registered. Please use a different number.");
+        return;
       }
-      setErrorMessage(data.detail || "Something went wrong. Please try again.")
+      setErrorMessage(data.detail || "Something went wrong. Please try again.");
     } catch {
-      setIsSubmitting(false)
-      setErrorMessage("Failed to send request. Please check your connection and try again.")
+      setIsSubmitting(false);
+      setErrorMessage("Failed to send request. Please check your connection and try again.");
     }
-  }
+  };
 
-  const memoizedGoogleMap = useMemo(() => <GoogleMapPicker onLocationSelect={handleLocationSelect} />, [])
+  const memoizedGoogleMap = useMemo(
+    () => <GoogleMapPicker onLocationSelect={handleLocationSelect} />,
+    [],
+  );
 
   const inputClass =
-    "w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none transition focus:border-[#8D4925]"
-  const labelClass = "block text-sm font-semibold text-gray-700"
+    "w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none transition focus:border-[#8D4925]";
+  const labelClass = "block text-sm font-semibold text-gray-700";
 
   return (
     <CustomerV2AuthShell
@@ -149,11 +154,15 @@ export default function CustomerV2RegistrationPage() {
     >
       <main className="mx-auto w-full max-w-4xl px-6 py-12">
         <div className="mb-10">
-          <h1 className="mb-2 text-4xl font-bold text-[#3D3028]" style={{ fontFamily: "var(--font-v2-playfair)" }}>
+          <h1
+            className="mb-2 text-4xl font-bold text-[#3D3028]"
+            style={{ fontFamily: "var(--font-v2-playfair)" }}
+          >
             Customer Registration
           </h1>
           <p className="text-gray-600">
-            Join our community for healthy, home-cooked South Indian meals delivered to your doorstep.
+            Join our community for healthy, home-cooked South Indian meals delivered to your
+            doorstep.
           </p>
         </div>
 
@@ -167,11 +176,26 @@ export default function CustomerV2RegistrationPage() {
                     <label className={labelClass} htmlFor="name">
                       Customer Name <span className="text-red-500">*</span>
                     </label>
-                    <input className={inputClass} id="name" name="name" value={formData.name} onChange={handleChange} required />
+                    <input
+                      className={inputClass}
+                      id="name"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleChange}
+                      required
+                    />
                   </div>
                   <div className="space-y-2">
-                    <label className={labelClass} htmlFor="referredBy">Referred By (Optional)</label>
-                    <input className={inputClass} id="referredBy" name="referredBy" value={formData.referredBy} onChange={handleChange} />
+                    <label className={labelClass} htmlFor="referredBy">
+                      Referred By (Optional)
+                    </label>
+                    <input
+                      className={inputClass}
+                      id="referredBy"
+                      name="referredBy"
+                      value={formData.referredBy}
+                      onChange={handleChange}
+                    />
                   </div>
                   <div className="space-y-2">
                     <label className={labelClass} htmlFor="primaryMobile">
@@ -193,7 +217,9 @@ export default function CustomerV2RegistrationPage() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <label className={labelClass} htmlFor="alternativeMobile">Alternative Mobile (Optional)</label>
+                    <label className={labelClass} htmlFor="alternativeMobile">
+                      Alternative Mobile (Optional)
+                    </label>
                     <div className="flex">
                       <span className="inline-flex items-center rounded-l-xl border border-r-0 border-gray-200 bg-gray-100 px-4 font-medium text-gray-500">
                         +91
@@ -228,7 +254,9 @@ export default function CustomerV2RegistrationPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className={labelClass} htmlFor="addressType">Address Type</label>
+                    <label className={labelClass} htmlFor="addressType">
+                      Address Type
+                    </label>
                     <select
                       className={inputClass}
                       id="addressType"
@@ -242,7 +270,9 @@ export default function CustomerV2RegistrationPage() {
                     </select>
                     {addressType === "Other" ? (
                       <div className="space-y-2">
-                        <label className={labelClass} htmlFor="otherAddressName">Other Address Name</label>
+                        <label className={labelClass} htmlFor="otherAddressName">
+                          Other Address Name
+                        </label>
                         <input
                           className={inputClass}
                           id="otherAddressName"
@@ -336,7 +366,9 @@ export default function CustomerV2RegistrationPage() {
               <section className="border-t border-gray-100 pt-8">
                 <h2 className="mb-6 text-xl font-bold text-[#3D3028]">Email Information</h2>
                 <div className="space-y-2">
-                  <label className={labelClass} htmlFor="email">Email Address (Optional)</label>
+                  <label className={labelClass} htmlFor="email">
+                    Email Address (Optional)
+                  </label>
                   <input
                     className={inputClass}
                     id="email"
@@ -346,7 +378,8 @@ export default function CustomerV2RegistrationPage() {
                     onChange={handleChange}
                   />
                   <p className="text-xs text-gray-500">
-                    Payment receipts and subscription updates will be sent to this email address if provided.
+                    Payment receipts and subscription updates will be sent to this email address if
+                    provided.
                   </p>
                 </div>
               </section>
@@ -379,7 +412,9 @@ export default function CustomerV2RegistrationPage() {
                   >
                     Go to Login
                   </button>
-                  <p className="text-sm font-semibold text-green-700">User registered successfully!</p>
+                  <p className="text-sm font-semibold text-green-700">
+                    User registered successfully!
+                  </p>
                 </div>
               )}
               {errorMessage ? <p className="mt-3 text-sm text-red-600">{errorMessage}</p> : null}
@@ -388,5 +423,5 @@ export default function CustomerV2RegistrationPage() {
         </div>
       </main>
     </CustomerV2AuthShell>
-  )
+  );
 }

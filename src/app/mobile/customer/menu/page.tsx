@@ -5,12 +5,22 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { format as formatDate } from "date-fns";
-import { ArrowLeft, ArrowRight, LayoutGrid, List, Minus, Plus, ShoppingBasket, ShoppingCart } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  LayoutGrid,
+  List,
+  Minus,
+  Plus,
+  ShoppingBasket,
+  ShoppingCart,
+} from "lucide-react";
 import { MobileCustomerBottomNav } from "@/components/mobile/customer/bottom-nav";
 import { LeaveCartDialog } from "@/components/mobile/customer/leave-cart-dialog";
 import { mobilePalette, playfairMobile, workSans } from "@/components/mobile/customer/theme";
 import { getSupportedMeals } from "@/config/cities";
 import { useAuthStore } from "@/store/store";
+import { http } from "@/lib/http";
 
 type MealType = "breakfast" | "lunch" | "dinner" | "condiments";
 
@@ -68,12 +78,6 @@ const normalizeQty = (value: unknown): number => {
   return Math.floor(parsed);
 };
 
-const buildAuthHeaders = (): Record<string, string> => {
-  if (typeof window === "undefined") return {};
-  const token = localStorage.getItem("access_token");
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
-
 export default function MobileCustomerMenuPage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
@@ -102,7 +106,10 @@ export default function MobileCustomerMenuPage() {
       setLeaveDialogOpen(true);
       return;
     }
-    const idx = typeof window !== "undefined" ? (window.history.state as { idx?: number } | null)?.idx : undefined;
+    const idx =
+      typeof window !== "undefined"
+        ? (window.history.state as { idx?: number } | null)?.idx
+        : undefined;
     if (typeof idx === "number" && idx > 0) {
       router.back();
       return;
@@ -142,7 +149,6 @@ export default function MobileCustomerMenuPage() {
 
     (async () => {
       try {
-        const headers = buildAuthHeaders();
         const nextMenu: Partial<Record<MealType, MenuItem[]>> = {};
 
         await Promise.all(
@@ -152,21 +158,21 @@ export default function MobileCustomerMenuPage() {
               return;
             }
 
-            const url = new URL("http://localhost:8000/api/menu");
-            url.searchParams.set("bld_type", meal);
-            url.searchParams.set("include_combos", "1");
+            const params = new URLSearchParams();
+            params.set("bld_type", meal);
+            params.set("include_combos", "1");
             if (userHasCityOverride) {
-              url.searchParams.set("city_code", cityCode);
+              params.set("city_code", cityCode);
             }
             if (meal === "condiments") {
-              url.searchParams.set("menu_type", "CONDIMENTS");
+              params.set("menu_type", "CONDIMENTS");
             } else {
-              url.searchParams.set("date", todayISO);
-              url.searchParams.set("period_type", "one_day");
-              url.searchParams.set("menu_type", "ONE_DAY");
+              params.set("date", todayISO);
+              params.set("period_type", "one_day");
+              params.set("menu_type", "ONE_DAY");
             }
 
-            const response = await fetch(url.toString(), { headers });
+            const response = await http.get(`/api/menu?${params}`);
             if (response.status === 404 || !response.ok) {
               nextMenu[meal] = [];
               return;
@@ -275,8 +281,14 @@ export default function MobileCustomerMenuPage() {
     }
   }, [cartSelection, cartInitialized]);
 
-  const cartCount = useMemo(() => cartSelection.reduce((sum, line) => sum + line.quantity, 0), [cartSelection]);
-  const cartTotal = useMemo(() => cartSelection.reduce((sum, line) => sum + line.quantity * line.price, 0), [cartSelection]);
+  const cartCount = useMemo(
+    () => cartSelection.reduce((sum, line) => sum + line.quantity, 0),
+    [cartSelection],
+  );
+  const cartTotal = useMemo(
+    () => cartSelection.reduce((sum, line) => sum + line.quantity * line.price, 0),
+    [cartSelection],
+  );
 
   const setItemQty = (item: MenuItem, nextQty: number) => {
     const clamped = Math.max(0, Math.min(Math.floor(nextQty), item.available_qty));
@@ -299,7 +311,8 @@ export default function MobileCustomerMenuPage() {
 
   const requestLeave = (targetPath: string) => {
     if (targetPath === "/mobile/customer/cart") return true;
-    if (targetPath === "/mobile/customer/menu" || targetPath === "/mobile/customer/order") return true;
+    if (targetPath === "/mobile/customer/menu" || targetPath === "/mobile/customer/order")
+      return true;
     if (cartCount <= 0) return true;
     setPendingGoBack(false);
     setPendingLeavePath(targetPath);
@@ -326,7 +339,10 @@ export default function MobileCustomerMenuPage() {
     setPendingLeavePath(null);
     setPendingGoBack(false);
     if (shouldGoBack) {
-      const idx = typeof window !== "undefined" ? (window.history.state as { idx?: number } | null)?.idx : undefined;
+      const idx =
+        typeof window !== "undefined"
+          ? (window.history.state as { idx?: number } | null)?.idx
+          : undefined;
       if (typeof idx === "number" && idx > 0) {
         router.back();
       } else {
@@ -342,17 +358,37 @@ export default function MobileCustomerMenuPage() {
   const activeItems = menuByMeal[activeMeal] ?? [];
 
   return (
-    <main className={`${workSans.variable} ${playfairMobile.variable} min-h-screen pb-28`} style={{ backgroundColor: mobilePalette.background }}>
+    <main
+      className={`${workSans.variable} ${playfairMobile.variable} min-h-screen pb-28`}
+      style={{ backgroundColor: mobilePalette.background }}
+    >
       <div className="mx-auto w-full max-w-[448px]">
         <header className="sticky top-0 z-20 bg-[rgba(253,250,241,0.95)] px-4 pb-3 pt-4 backdrop-blur-md">
           <div className="relative mb-4 flex items-center justify-between">
-            <button type="button" onClick={handleBack} className="flex h-9 w-9 items-center justify-center rounded-full">
+            <button
+              type="button"
+              onClick={handleBack}
+              className="flex h-9 w-9 items-center justify-center rounded-full"
+            >
               <ArrowLeft size={20} color="#8D4925" />
             </button>
-            <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-lg font-bold text-[#8D4925]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>Order</h1>
-            <Link href="/mobile/customer/cart" onClick={goToCart} className="relative flex h-9 w-9 items-center justify-center rounded-full">
+            <h1
+              className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-lg font-bold text-[#8D4925]"
+              style={{ fontFamily: "var(--font-mobile-playfair), serif" }}
+            >
+              Order
+            </h1>
+            <Link
+              href="/mobile/customer/cart"
+              onClick={goToCart}
+              className="relative flex h-9 w-9 items-center justify-center rounded-full"
+            >
               <ShoppingBasket size={22} color="#8D4925" />
-              {cartCount > 0 ? <span className="absolute right-0 top-0 rounded-full bg-[#8D4925] px-1.5 text-[10px] font-bold text-white">{cartCount}</span> : null}
+              {cartCount > 0 ? (
+                <span className="absolute right-0 top-0 rounded-full bg-[#8D4925] px-1.5 text-[10px] font-bold text-white">
+                  {cartCount}
+                </span>
+              ) : null}
             </Link>
           </div>
 
@@ -394,45 +430,73 @@ export default function MobileCustomerMenuPage() {
           </div>
         </header>
 
-        <section className={`${menuView === "grid" ? "grid grid-cols-2 gap-3" : "space-y-3"} px-4 pt-3`}>
+        <section
+          className={`${menuView === "grid" ? "grid grid-cols-2 gap-3" : "space-y-3"} px-4 pt-3`}
+        >
           {menuLoading ? (
             <>
               <div className="h-44 animate-pulse rounded-2xl bg-white/70" />
               <div className="h-44 animate-pulse rounded-2xl bg-white/70" />
             </>
           ) : menuError ? (
-            <p className="col-span-2 rounded-xl bg-white px-4 py-3 text-sm text-red-600">{menuError}</p>
+            <p className="col-span-2 rounded-xl bg-white px-4 py-3 text-sm text-red-600">
+              {menuError}
+            </p>
           ) : activeItems.length === 0 ? (
-            <p className="col-span-2 rounded-xl bg-white px-4 py-3 text-sm text-[#64748b]">No items available in this section.</p>
+            <p className="col-span-2 rounded-xl bg-white px-4 py-3 text-sm text-[#64748b]">
+              No items available in this section.
+            </p>
           ) : (
             activeItems.map((item) => {
               const qty = quantities[item.menu_item_id] ?? 0;
               return menuView === "list" ? (
-                <article key={`${activeMeal}-${item.menu_item_id}`} className="rounded-xl border border-[#8D4925]/8 bg-white px-3 py-3 shadow-[0_4px_12px_rgba(27,67,50,0.06)]">
+                <article
+                  key={`${activeMeal}-${item.menu_item_id}`}
+                  className="rounded-xl border border-[#8D4925]/8 bg-white px-3 py-3 shadow-[0_4px_12px_rgba(27,67,50,0.06)]"
+                >
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0 pr-2">
-                      <h3 className="truncate text-[13px] font-bold text-[#8D4925]">{item.item_name}</h3>
-                      <span className="text-sm font-bold text-[#1B4332]">₹{Math.round(item.rate || 0)}</span>
+                      <h3 className="truncate text-[13px] font-bold text-[#8D4925]">
+                        {item.item_name}
+                      </h3>
+                      <span className="text-sm font-bold text-[#1B4332]">
+                        ₹{Math.round(item.rate || 0)}
+                      </span>
                     </div>
                     {qty > 0 ? (
                       <div className="flex items-center gap-1 rounded-lg bg-[#8D4925] px-1 py-1 text-[#FDFAF1]">
-                        <button type="button" onClick={() => setItemQty(item, qty - 1)} className="flex h-6 w-6 items-center justify-center rounded-md bg-white/15">
+                        <button
+                          type="button"
+                          onClick={() => setItemQty(item, qty - 1)}
+                          className="flex h-6 w-6 items-center justify-center rounded-md bg-white/15"
+                        >
                           <Minus size={14} />
                         </button>
                         <span className="min-w-6 text-center text-xs font-bold">{qty}</span>
-                        <button type="button" onClick={() => setItemQty(item, qty + 1)} className="flex h-6 w-6 items-center justify-center rounded-md bg-white/15">
+                        <button
+                          type="button"
+                          onClick={() => setItemQty(item, qty + 1)}
+                          className="flex h-6 w-6 items-center justify-center rounded-md bg-white/15"
+                        >
                           <Plus size={14} />
                         </button>
                       </div>
                     ) : (
-                      <button type="button" onClick={() => setItemQty(item, 1)} className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#8D4925] text-[#FDFAF1]">
+                      <button
+                        type="button"
+                        onClick={() => setItemQty(item, 1)}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#8D4925] text-[#FDFAF1]"
+                      >
                         <Plus size={16} />
                       </button>
                     )}
                   </div>
                 </article>
               ) : (
-                <article key={`${activeMeal}-${item.menu_item_id}`} className="flex flex-col overflow-hidden rounded-2xl border border-stone-50 bg-white shadow-[0_4px_12px_rgba(27,67,50,0.06)]">
+                <article
+                  key={`${activeMeal}-${item.menu_item_id}`}
+                  className="flex flex-col overflow-hidden rounded-2xl border border-stone-50 bg-white shadow-[0_4px_12px_rgba(27,67,50,0.06)]"
+                >
                   <div className="relative p-1.5">
                     <Image
                       src={item.picture_url || PLACEHOLDER_IMAGE}
@@ -444,21 +508,37 @@ export default function MobileCustomerMenuPage() {
                     />
                   </div>
                   <div className="flex flex-1 flex-col px-3 pb-3">
-                    <h3 className="truncate text-[13px] font-bold text-[#8D4925]">{item.item_name}</h3>
+                    <h3 className="truncate text-[13px] font-bold text-[#8D4925]">
+                      {item.item_name}
+                    </h3>
                     <div className="mt-auto flex items-center justify-between pt-2">
-                      <span className="text-sm font-bold text-[#1B4332]">₹{Math.round(item.rate || 0)}</span>
+                      <span className="text-sm font-bold text-[#1B4332]">
+                        ₹{Math.round(item.rate || 0)}
+                      </span>
                       {qty > 0 ? (
                         <div className="flex items-center gap-1 rounded-lg bg-[#8D4925] px-1 py-1 text-[#FDFAF1]">
-                          <button type="button" onClick={() => setItemQty(item, qty - 1)} className="flex h-5 w-5 items-center justify-center rounded-md bg-white/15">
+                          <button
+                            type="button"
+                            onClick={() => setItemQty(item, qty - 1)}
+                            className="flex h-5 w-5 items-center justify-center rounded-md bg-white/15"
+                          >
                             <Minus size={14} />
                           </button>
                           <span className="min-w-5 text-center text-xs font-bold">{qty}</span>
-                          <button type="button" onClick={() => setItemQty(item, qty + 1)} className="flex h-5 w-5 items-center justify-center rounded-md bg-white/15">
+                          <button
+                            type="button"
+                            onClick={() => setItemQty(item, qty + 1)}
+                            className="flex h-5 w-5 items-center justify-center rounded-md bg-white/15"
+                          >
                             <Plus size={14} />
                           </button>
                         </div>
                       ) : (
-                        <button type="button" onClick={() => setItemQty(item, 1)} className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#8D4925] text-[#FDFAF1]">
+                        <button
+                          type="button"
+                          onClick={() => setItemQty(item, 1)}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#8D4925] text-[#FDFAF1]"
+                        >
                           <Plus size={16} />
                         </button>
                       )}
@@ -473,15 +553,23 @@ export default function MobileCustomerMenuPage() {
 
       {cartCount > 0 ? (
         <div className="fixed bottom-24 left-1/2 z-40 w-[calc(100%-2rem)] max-w-[398px] -translate-x-1/2">
-          <Link href="/mobile/customer/cart" onClick={goToCart} className="flex w-full items-center justify-between">
+          <Link
+            href="/mobile/customer/cart"
+            onClick={goToCart}
+            className="flex w-full items-center justify-between"
+          >
             <div className="flex w-full items-center justify-between rounded-2xl border border-white/10 bg-[#8D4925] p-4 text-white shadow-[0px_10px_15px_-3px_rgba(141,73,37,0.35),0px_4px_6px_-4px_rgba(141,73,37,0.35)]">
               <div className="flex items-center gap-2">
                 <ShoppingCart size={18} className="text-white/90" />
                 <div className="text-left">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-white/70">Selected Items</p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-white/70">
+                    Selected Items
+                  </p>
                   <p className="text-base font-bold">
                     ₹{Math.round(cartTotal)}
-                    <span className="ml-1 text-xs font-normal text-white/70">({cartCount} item{cartCount === 1 ? "" : "s"})</span>
+                    <span className="ml-1 text-xs font-normal text-white/70">
+                      ({cartCount} item{cartCount === 1 ? "" : "s"})
+                    </span>
                   </p>
                 </div>
               </div>

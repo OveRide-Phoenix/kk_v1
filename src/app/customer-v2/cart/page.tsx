@@ -1,73 +1,74 @@
-"use client"
+"use client";
 
-import { format as formatDate } from "date-fns"
-import { useRouter } from "next/navigation"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { format as formatDate } from "date-fns";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { normalizeCityCode } from "@/config/cities"
-import { Skeleton } from "@/components/ui/skeleton"
-import { useAuthStore } from "@/store/store"
+import { normalizeCityCode } from "@/config/cities";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useAuthStore } from "@/store/store";
+import { http } from "@/lib/http";
 
-type MealType = "breakfast" | "lunch" | "dinner" | "condiments"
+type MealType = "breakfast" | "lunch" | "dinner" | "condiments";
 
 type CartLine = {
-  menu_item_id: number
-  item_id?: number | null
-  combo_id?: number | null
-  meal: MealType
-  item_name: string
-  price: number
-  quantity: number
-  available_qty: number
-  picture_url?: string | null
-}
+  menu_item_id: number;
+  item_id?: number | null;
+  combo_id?: number | null;
+  meal: MealType;
+  item_name: string;
+  price: number;
+  quantity: number;
+  available_qty: number;
+  picture_url?: string | null;
+};
 
 type CartContext = {
-  order_date: string
-  address_id: number
-  order_type?: string
-}
+  order_date: string;
+  address_id: number;
+  order_type?: string;
+};
 
 type AddressEntry = {
-  address_id: number
-  address_type: string
-  house_apartment_no: string | null
-  written_address: string
-  city: string
-  city_code?: string
-  pin_code: string
-  is_default: boolean
-  latitude?: number | null
-  longitude?: number | null
-  route_assignment?: string | null
-}
+  address_id: number;
+  address_type: string;
+  house_apartment_no: string | null;
+  written_address: string;
+  city: string;
+  city_code?: string;
+  pin_code: string;
+  is_default: boolean;
+  latitude?: number | null;
+  longitude?: number | null;
+  route_assignment?: string | null;
+};
 
 type OrderResponse = {
-  message: string
-  order_id: number
-  total_price: number
-  subtotal: number
-  discount: number
-  cgst: number
-  sgst: number
-  coupon_codes?: string[]
-  status: string
-}
+  message: string;
+  order_id: number;
+  total_price: number;
+  subtotal: number;
+  discount: number;
+  cgst: number;
+  sgst: number;
+  coupon_codes?: string[];
+  status: string;
+};
 
 type OrderQuoteResponse = {
-  subtotal: number
-  discount: number
-  cgst: number
-  sgst: number
-  total_price: number
-  coupon_codes?: string[]
-}
+  subtotal: number;
+  discount: number;
+  cgst: number;
+  sgst: number;
+  total_price: number;
+  coupon_codes?: string[];
+};
 
-const CART_STORAGE_KEY = "customer_cart_items"
-const CART_CONTEXT_KEY = "customer_cart_context"
-const CART_REFRESH_KEY = "customer_cart_refresh"
-const CART_KEEP_KEY = "kk_keep_cart"
-const PLACEHOLDER_IMAGE = "/images/menu/idli-sambar.jpg"
+const CART_STORAGE_KEY = "customer_cart_items";
+const CART_CONTEXT_KEY = "customer_cart_context";
+const CART_REFRESH_KEY = "customer_cart_refresh";
+const CART_KEEP_KEY = "kk_keep_cart";
+const PLACEHOLDER_IMAGE = "/images/menu/idli-sambar.jpg";
 
 const PAYMENT_METHODS = [
   {
@@ -91,7 +92,7 @@ const PAYMENT_METHODS = [
     icon: "local_atm",
     chip: null,
   },
-]
+];
 
 const currency = (value: number) =>
   new Intl.NumberFormat("en-IN", {
@@ -99,181 +100,173 @@ const currency = (value: number) =>
     currency: "INR",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(value)
+  }).format(value);
 
 const mealLabel = (meal: MealType) => {
-  if (meal === "condiments") return "Condiments"
-  return meal.charAt(0).toUpperCase() + meal.slice(1)
-}
-
-const buildAuthHeaders = (): Record<string, string> => {
-  if (typeof window === "undefined") return {}
-  const token = localStorage.getItem("access_token")
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
+  if (meal === "condiments") return "Condiments";
+  return meal.charAt(0).toUpperCase() + meal.slice(1);
+};
 
 export default function CustomerV2CartPage() {
-  const router = useRouter()
-  const user = useAuthStore((state) => state.user)
-  const setUser = useAuthStore((state) => state.setUser)
+  const router = useRouter();
+  const user = useAuthStore((state) => state.user);
+  const setUser = useAuthStore((state) => state.setUser);
 
-  const [cartItems, setCartItems] = useState<CartLine[]>([])
-  const [cartContext, setCartContext] = useState<CartContext | null>(null)
+  const [cartItems, setCartItems] = useState<CartLine[]>([]);
+  const [cartContext, setCartContext] = useState<CartContext | null>(null);
 
-  const [addresses, setAddresses] = useState<AddressEntry[]>([])
-  const [addressesLoading, setAddressesLoading] = useState(false)
-  const [addressesError, setAddressesError] = useState<string | null>(null)
-  const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null)
+  const [addresses, setAddresses] = useState<AddressEntry[]>([]);
+  const [addressesLoading, setAddressesLoading] = useState(false);
+  const [addressesError, setAddressesError] = useState<string | null>(null);
+  const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
 
-  const [paymentMethod, setPaymentMethod] = useState("UPI")
-  const [couponCode, setCouponCode] = useState("")
-  const [appliedCoupons, setAppliedCoupons] = useState<string[]>([])
-  const [placingOrder, setPlacingOrder] = useState(false)
-  const [orderResult, setOrderResult] = useState<OrderResponse | null>(null)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [quote, setQuote] = useState<OrderQuoteResponse | null>(null)
-  const [quoteLoading, setQuoteLoading] = useState(false)
-  const [quoteError, setQuoteError] = useState<string | null>(null)
-  const [couponError, setCouponError] = useState<string | null>(null)
+  const [paymentMethod, setPaymentMethod] = useState("UPI");
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupons, setAppliedCoupons] = useState<string[]>([]);
+  const [placingOrder, setPlacingOrder] = useState(false);
+  const [orderResult, setOrderResult] = useState<OrderResponse | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [quote, setQuote] = useState<OrderQuoteResponse | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
 
   useEffect(() => {
     try {
-      const rawItems = localStorage.getItem(CART_STORAGE_KEY)
+      const rawItems = localStorage.getItem(CART_STORAGE_KEY);
       if (rawItems) {
-        setCartItems(JSON.parse(rawItems) as CartLine[])
+        setCartItems(JSON.parse(rawItems) as CartLine[]);
       }
-      const rawContext = localStorage.getItem(CART_CONTEXT_KEY)
+      const rawContext = localStorage.getItem(CART_CONTEXT_KEY);
       if (rawContext) {
-        setCartContext(JSON.parse(rawContext) as CartContext)
+        setCartContext(JSON.parse(rawContext) as CartContext);
       }
     } catch {
       // no-op
     }
-  }, [])
+  }, []);
 
   useEffect(() => {
-    if (user) return
-    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null
-    if (!token) return
-    ;(async () => {
+    if (user) return;
+    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+    if (!token) return;
+    (async () => {
       try {
         const response = await fetch("/api/backend/auth/me", {
           headers: { Authorization: `Bearer ${token}` },
-        })
-        if (!response.ok) return
-        const me = await response.json()
-        setUser(me)
+        });
+        if (!response.ok) return;
+        const me = await response.json();
+        setUser(me);
       } catch {
         // no-op
       }
-    })()
-  }, [user, setUser])
+    })();
+  }, [user, setUser]);
 
   useEffect(() => {
-    const customerId = user?.customer_id
-    if (!customerId) return
-
-    ;(async () => {
-      setAddressesLoading(true)
-      setAddressesError(null)
+    const customerId = user?.customer_id;
+    if (!customerId) return;
+    (async () => {
+      setAddressesLoading(true);
+      setAddressesError(null);
       try {
-        const headers = buildAuthHeaders()
-        const response = await fetch(`http://localhost:8000/api/customers/${customerId}/addresses`, {
-          headers,
-        })
+        const response = await http.get(`/api/customers/${customerId}/addresses`);
         if (!response.ok) {
-          throw new Error("Unable to fetch addresses")
+          throw new Error("Unable to fetch addresses");
         }
-        const data = (await response.json()) as AddressEntry[]
-        setAddresses(data)
+        const data = (await response.json()) as AddressEntry[];
+        setAddresses(data);
       } catch {
-        setAddressesError("Unable to load addresses.")
+        setAddressesError("Unable to load addresses.");
       } finally {
-        setAddressesLoading(false)
+        setAddressesLoading(false);
       }
-    })()
-  }, [user?.customer_id])
+    })();
+  }, [user?.customer_id]);
 
   const cityCode = useMemo(() => {
-    const rawUser = typeof user?.city_code === "string" ? user.city_code.trim() : ""
+    const rawUser = typeof user?.city_code === "string" ? user.city_code.trim() : "";
     if (typeof window === "undefined") {
-      return normalizeCityCode(rawUser)
+      return normalizeCityCode(rawUser);
     }
-    const persisted = localStorage.getItem("admin_city_code") || ""
-    const raw = rawUser || persisted
-    return normalizeCityCode(raw)
-  }, [user?.city_code])
+    const persisted = localStorage.getItem("admin_city_code") || "";
+    const raw = rawUser || persisted;
+    return normalizeCityCode(raw);
+  }, [user?.city_code]);
 
   const filteredAddresses = useMemo(() => {
     return addresses.filter((address) => {
-      if (!address.city_code) return true
-      return normalizeCityCode(address.city_code) === cityCode
-    })
-  }, [addresses, cityCode])
+      if (!address.city_code) return true;
+      return normalizeCityCode(address.city_code) === cityCode;
+    });
+  }, [addresses, cityCode]);
 
   useEffect(() => {
     if (!filteredAddresses.length) {
-      setSelectedAddressId(null)
-      return
+      setSelectedAddressId(null);
+      return;
     }
     if (cartContext?.address_id) {
-      const match = filteredAddresses.find((address) => address.address_id === cartContext.address_id)
+      const match = filteredAddresses.find(
+        (address) => address.address_id === cartContext.address_id,
+      );
       if (match) {
-        setSelectedAddressId(match.address_id)
-        return
+        setSelectedAddressId(match.address_id);
+        return;
       }
     }
-    const defaultAddress = filteredAddresses.find((address) => address.is_default)
+    const defaultAddress = filteredAddresses.find((address) => address.is_default);
     if (defaultAddress) {
-      setSelectedAddressId(defaultAddress.address_id)
-      return
+      setSelectedAddressId(defaultAddress.address_id);
+      return;
     }
-    setSelectedAddressId(filteredAddresses[0].address_id)
-  }, [filteredAddresses, cartContext])
+    setSelectedAddressId(filteredAddresses[0].address_id);
+  }, [filteredAddresses, cartContext]);
 
   const selectedAddress = useMemo(
-    () => (selectedAddressId ? filteredAddresses.find((address) => address.address_id === selectedAddressId) ?? null : null),
-    [filteredAddresses, selectedAddressId]
-  )
+    () =>
+      selectedAddressId
+        ? (filteredAddresses.find((address) => address.address_id === selectedAddressId) ?? null)
+        : null,
+    [filteredAddresses, selectedAddressId],
+  );
 
   const subtotalFromCart = useMemo(
     () => cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
-    [cartItems]
-  )
+    [cartItems],
+  );
 
-  const totalQuantity = useMemo(() => cartItems.reduce((sum, item) => sum + item.quantity, 0), [cartItems])
+  const totalQuantity = useMemo(
+    () => cartItems.reduce((sum, item) => sum + item.quantity, 0),
+    [cartItems],
+  );
 
   const setLineQuantity = (menuItemId: number, nextQuantity: number) => {
     setCartItems((prev) => {
-      const item = prev.find((line) => line.menu_item_id === menuItemId)
-      if (!item) return prev
-      const clamped = Math.max(0, Math.min(Math.floor(nextQuantity), item.available_qty))
+      const item = prev.find((line) => line.menu_item_id === menuItemId);
+      if (!item) return prev;
+      const clamped = Math.max(0, Math.min(Math.floor(nextQuantity), item.available_qty));
       if (clamped <= 0) {
-        return prev.filter((line) => line.menu_item_id !== menuItemId)
+        return prev.filter((line) => line.menu_item_id !== menuItemId);
       }
       return prev.map((line) =>
-        line.menu_item_id === menuItemId ? { ...line, quantity: clamped } : line
-      )
-    })
-  }
+        line.menu_item_id === menuItemId ? { ...line, quantity: clamped } : line,
+      );
+    });
+  };
 
-  const fetchQuote = useCallback(async (couponOverride?: string[], showCouponError = false) => {
-    if (!cartItems.length) {
-      setQuote(null)
-      setQuoteError(null)
-      return false
-    }
-    setQuoteLoading(true)
-    setQuoteError(null)
-    try {
-      const headers = {
-        "Content-Type": "application/json",
-        ...buildAuthHeaders(),
+  const fetchQuote = useCallback(
+    async (couponOverride?: string[], showCouponError = false) => {
+      if (!cartItems.length) {
+        setQuote(null);
+        setQuoteError(null);
+        return false;
       }
-      const response = await fetch("http://localhost:8000/api/orders/quote", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
+      setQuoteLoading(true);
+      setQuoteError(null);
+      try {
+        const response = await http.post("/api/orders/quote", {
           items: cartItems.map((item) => ({
             item_id: item.item_id,
             combo_id: item.combo_id,
@@ -281,68 +274,69 @@ export default function CustomerV2CartPage() {
             price: item.price,
           })),
           coupon_codes: couponOverride ?? appliedCoupons,
-        }),
-      })
-      const data = await response.json()
-      if (!response.ok) {
-        const message = data?.detail || "Invalid coupon"
-        if (showCouponError) {
-          setCouponError(message)
-          setTimeout(() => setCouponError(null), 1200)
-          setQuoteError(null)
-          return false
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          const message = data?.detail || "Invalid coupon";
+          if (showCouponError) {
+            setCouponError(message);
+            setTimeout(() => setCouponError(null), 1200);
+            setQuoteError(null);
+            return false;
+          }
+          throw new Error(message);
         }
-        throw new Error(message)
+        setQuote(data as OrderQuoteResponse);
+        return true;
+      } catch (error) {
+        setQuote(null);
+        setQuoteError(error instanceof Error ? error.message : "Unable to calculate totals");
+        return false;
+      } finally {
+        setQuoteLoading(false);
       }
-      setQuote(data as OrderQuoteResponse)
-      return true
-    } catch (error) {
-      setQuote(null)
-      setQuoteError(error instanceof Error ? error.message : "Unable to calculate totals")
-      return false
-    } finally {
-      setQuoteLoading(false)
-    }
-  }, [appliedCoupons, cartItems])
+    },
+    [appliedCoupons, cartItems],
+  );
 
   useEffect(() => {
-    fetchQuote()
-  }, [fetchQuote])
+    fetchQuote();
+  }, [fetchQuote]);
 
   const handleApplyCoupon = async () => {
-    const next = couponCode.trim()
-    if (!next) return
-    const normalized = next.toUpperCase()
-    if (appliedCoupons.includes(normalized)) return
-    const updated = [normalized]
-    const ok = await fetchQuote(updated, true)
+    const next = couponCode.trim();
+    if (!next) return;
+    const normalized = next.toUpperCase();
+    if (appliedCoupons.includes(normalized)) return;
+    const updated = [normalized];
+    const ok = await fetchQuote(updated, true);
     if (ok) {
-      setAppliedCoupons(updated)
-      setCouponCode(normalized)
+      setAppliedCoupons(updated);
+      setCouponCode(normalized);
     }
-  }
+  };
 
   const handleClearCoupon = () => {
-    setAppliedCoupons([])
-    setCouponCode("")
-    setCouponError(null)
-    fetchQuote([])
-  }
+    setAppliedCoupons([]);
+    setCouponCode("");
+    setCouponError(null);
+    fetchQuote([]);
+  };
 
   const handlePlaceOrder = async () => {
-    if (!cartItems.length) return
+    if (!cartItems.length) return;
     if (!user?.customer_id) {
-      setErrorMessage("Please sign in to place an order.")
-      return
+      setErrorMessage("Please sign in to place an order.");
+      return;
     }
     if (!selectedAddress) {
-      setErrorMessage("Please select a delivery address.")
-      return
+      setErrorMessage("Please select a delivery address.");
+      return;
     }
 
-    setPlacingOrder(true)
-    setErrorMessage(null)
-    setOrderResult(null)
+    setPlacingOrder(true);
+    setErrorMessage(null);
+    setOrderResult(null);
 
     const payload = {
       customer_id: user.customer_id,
@@ -359,57 +353,49 @@ export default function CustomerV2CartPage() {
         menu_item_id: item.menu_item_id,
         meal_type: item.meal,
       })),
-    }
+    };
 
     try {
-      const headers = {
-        "Content-Type": "application/json",
-        ...buildAuthHeaders(),
-      }
-      const response = await fetch("http://localhost:8000/api/orders/create", {
-        method: "POST",
-        headers,
-        body: JSON.stringify(payload),
-      })
-      const data = await response.json()
+      const response = await http.post("/api/orders/create", payload);
+      const data = await response.json();
       if (!response.ok) {
-        throw new Error(data?.detail || "Failed to place order")
+        throw new Error(data?.detail || "Failed to place order");
       }
 
-      setOrderResult(data as OrderResponse)
-      setCartItems([])
-      setCartContext(null)
-      localStorage.removeItem(CART_STORAGE_KEY)
-      localStorage.removeItem(CART_CONTEXT_KEY)
-      localStorage.setItem(CART_REFRESH_KEY, "1")
+      setOrderResult(data as OrderResponse);
+      setCartItems([]);
+      setCartContext(null);
+      localStorage.removeItem(CART_STORAGE_KEY);
+      localStorage.removeItem(CART_CONTEXT_KEY);
+      localStorage.setItem(CART_REFRESH_KEY, "1");
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Unexpected error")
+      setErrorMessage(error instanceof Error ? error.message : "Unexpected error");
     } finally {
-      setPlacingOrder(false)
+      setPlacingOrder(false);
     }
-  }
+  };
 
   useEffect(() => {
     if (!cartItems.length) {
-      localStorage.removeItem(CART_STORAGE_KEY)
-      localStorage.removeItem(CART_CONTEXT_KEY)
-      return
+      localStorage.removeItem(CART_STORAGE_KEY);
+      localStorage.removeItem(CART_CONTEXT_KEY);
+      return;
     }
-    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartItems))
+    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartItems));
     localStorage.setItem(
       CART_CONTEXT_KEY,
       JSON.stringify({
         order_date: cartContext?.order_date ?? formatDate(new Date(), "yyyy-MM-dd"),
         address_id: selectedAddress?.address_id ?? 0,
         order_type: cartContext?.order_type ?? "one_time",
-      })
-    )
-  }, [cartItems, cartContext?.order_date, cartContext?.order_type, selectedAddress?.address_id])
+      }),
+    );
+  }, [cartItems, cartContext?.order_date, cartContext?.order_type, selectedAddress?.address_id]);
 
   const handleContinueShopping = () => {
-    sessionStorage.setItem(CART_KEEP_KEY, "1")
-    router.push("/customer-v2/new-order")
-  }
+    sessionStorage.setItem(CART_KEEP_KEY, "1");
+    router.push("/customer-v2/new-order");
+  };
 
   if (cartItems.length === 0 && !orderResult) {
     return (
@@ -417,10 +403,15 @@ export default function CustomerV2CartPage() {
         <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#8D4925]/10 text-[#8D4925]">
           <span className="material-symbols-outlined text-2xl">shopping_cart</span>
         </div>
-        <h1 className="text-3xl font-bold text-[#8D4925]" style={{ fontFamily: "var(--font-v2-playfair)" }}>
+        <h1
+          className="text-3xl font-bold text-[#8D4925]"
+          style={{ fontFamily: "var(--font-v2-playfair)" }}
+        >
           Your cart is empty
         </h1>
-        <p className="mt-2 text-sm text-gray-600">Add meals from today&apos;s menu to place your order.</p>
+        <p className="mt-2 text-sm text-gray-600">
+          Add meals from today&apos;s menu to place your order.
+        </p>
         <button
           onClick={handleContinueShopping}
           className="mt-6 rounded-xl bg-[#8D4925] px-6 py-3 font-bold text-white shadow-md shadow-[#8D4925]/20 transition-colors hover:bg-[#7a3f20]"
@@ -428,13 +419,16 @@ export default function CustomerV2CartPage() {
           Back to Menu
         </button>
       </main>
-    )
+    );
   }
 
   return (
     <main className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
       <div className="mb-8 flex items-center justify-between gap-4">
-        <h1 className="text-4xl font-bold text-[#8D4925]" style={{ fontFamily: "var(--font-v2-playfair)" }}>
+        <h1
+          className="text-4xl font-bold text-[#8D4925]"
+          style={{ fontFamily: "var(--font-v2-playfair)" }}
+        >
           Checkout & Cart
         </h1>
         <button
@@ -449,14 +443,19 @@ export default function CustomerV2CartPage() {
         <div className="space-y-8 lg:w-2/3">
           <section>
             <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-[#8D4925]" style={{ fontFamily: "var(--font-v2-playfair)" }}>
+              <h2
+                className="text-2xl font-bold text-[#8D4925]"
+                style={{ fontFamily: "var(--font-v2-playfair)" }}
+              >
                 Delivery Address
               </h2>
               <button
                 onClick={() => router.push("/customer-v2/account?section=addresses")}
                 className="group flex items-center gap-1.5 text-sm font-bold text-[#8D4925] transition-colors hover:text-[#7a3f20]"
               >
-                <span className="material-symbols-outlined text-base transition-transform duration-200 group-hover:scale-105">add_circle</span>
+                <span className="material-symbols-outlined text-base transition-transform duration-200 group-hover:scale-105">
+                  add_circle
+                </span>
                 Add New Address
               </button>
             </div>
@@ -477,17 +476,21 @@ export default function CustomerV2CartPage() {
             ) : (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 {filteredAddresses.map((address) => {
-                  const active = selectedAddressId === address.address_id
+                  const active = selectedAddressId === address.address_id;
                   return (
                     <button
                       key={address.address_id}
                       onClick={() => setSelectedAddressId(address.address_id)}
                       className={`relative rounded-3xl border bg-white p-6 text-left shadow-sm transition-all ${
-                        active ? "border-[#8D4925] ring-2 ring-[#8D4925]/20" : "border-orange-100 hover:border-[#8D4925]/40"
+                        active
+                          ? "border-[#8D4925] ring-2 ring-[#8D4925]/20"
+                          : "border-orange-100 hover:border-[#8D4925]/40"
                       }`}
                     >
                       {active ? (
-                        <span className="material-symbols-outlined absolute right-4 top-4 text-[#8D4925]">check_circle</span>
+                        <span className="material-symbols-outlined absolute right-4 top-4 text-[#8D4925]">
+                          check_circle
+                        </span>
                       ) : null}
                       <div className="mb-2 flex items-center gap-2 text-[#8D4925]">
                         <span className="material-symbols-outlined text-base">
@@ -496,19 +499,27 @@ export default function CustomerV2CartPage() {
                         <span className="text-sm font-bold">{address.address_type}</span>
                       </div>
                       <p className="text-sm leading-relaxed text-gray-600">
-                        {[address.house_apartment_no, address.written_address, address.city, address.pin_code]
+                        {[
+                          address.house_apartment_no,
+                          address.written_address,
+                          address.city,
+                          address.pin_code,
+                        ]
                           .filter(Boolean)
                           .join(", ")}
                       </p>
                     </button>
-                  )
+                  );
                 })}
               </div>
             )}
           </section>
 
           <section>
-            <h2 className="mb-5 text-2xl font-bold text-[#8D4925]" style={{ fontFamily: "var(--font-v2-playfair)" }}>
+            <h2
+              className="mb-5 text-2xl font-bold text-[#8D4925]"
+              style={{ fontFamily: "var(--font-v2-playfair)" }}
+            >
               Payment Method
             </h2>
             <div className="overflow-hidden rounded-3xl border border-orange-100 bg-white shadow-sm">
@@ -559,7 +570,10 @@ export default function CustomerV2CartPage() {
         <div className="lg:w-1/3">
           <div className="sticky top-28 space-y-4">
             <div className="rounded-[2.25rem] border border-orange-100 bg-white p-6 shadow-xl shadow-[#8D4925]/5 sm:p-8">
-              <h2 className="mb-6 text-2xl font-bold text-[#8D4925]" style={{ fontFamily: "var(--font-v2-playfair)" }}>
+              <h2
+                className="mb-6 text-2xl font-bold text-[#8D4925]"
+                style={{ fontFamily: "var(--font-v2-playfair)" }}
+              >
                 Order Summary
               </h2>
 
@@ -580,7 +594,9 @@ export default function CustomerV2CartPage() {
                         </h3>
                         <p className="text-sm font-bold text-[#8D4925]">{currency(item.price)}</p>
                       </div>
-                      <p className="mb-2 text-xs font-medium text-gray-500">{mealLabel(item.meal)}</p>
+                      <p className="mb-2 text-xs font-medium text-gray-500">
+                        {mealLabel(item.meal)}
+                      </p>
                       <div className="inline-flex h-9 min-w-[108px] items-center overflow-hidden rounded-full bg-[#8D4925] text-white">
                         <button
                           onClick={() => setLineQuantity(item.menu_item_id, item.quantity - 1)}
@@ -589,7 +605,9 @@ export default function CustomerV2CartPage() {
                         >
                           -
                         </button>
-                        <span className="flex flex-1 items-center justify-center px-2 text-sm font-bold">{item.quantity}</span>
+                        <span className="flex flex-1 items-center justify-center px-2 text-sm font-bold">
+                          {item.quantity}
+                        </span>
                         <button
                           onClick={() => setLineQuantity(item.menu_item_id, item.quantity + 1)}
                           disabled={item.quantity >= item.available_qty}
@@ -607,7 +625,9 @@ export default function CustomerV2CartPage() {
               <div className="space-y-2 border-t border-dashed border-orange-200 py-5 text-sm">
                 <div className="flex justify-between text-gray-600">
                   <span>Subtotal</span>
-                  <span className="font-bold text-gray-800">{currency(quote?.subtotal ?? subtotalFromCart)}</span>
+                  <span className="font-bold text-gray-800">
+                    {currency(quote?.subtotal ?? subtotalFromCart)}
+                  </span>
                 </div>
                 <div className="flex justify-between text-gray-600">
                   <span>Delivery Fee</span>
@@ -641,8 +661,8 @@ export default function CustomerV2CartPage() {
                       onChange={(event) => setCouponCode(event.target.value)}
                       onKeyDown={(event) => {
                         if (event.key === "Enter") {
-                          event.preventDefault()
-                          handleApplyCoupon()
+                          event.preventDefault();
+                          handleApplyCoupon();
                         }
                       }}
                       placeholder="Enter coupon code"
@@ -672,7 +692,9 @@ export default function CustomerV2CartPage() {
                 <div className="mt-2 flex justify-between border-t border-orange-100 pt-3 text-lg font-bold text-gray-900">
                   <span>Total Pay</span>
                   <span className="text-[#8D4925]">
-                    {quoteLoading ? "Calculating..." : currency(quote?.total_price ?? subtotalFromCart)}
+                    {quoteLoading
+                      ? "Calculating..."
+                      : currency(quote?.total_price ?? subtotalFromCart)}
                   </span>
                 </div>
               </div>
@@ -687,7 +709,8 @@ export default function CustomerV2CartPage() {
                 <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
                   <p className="font-bold">Order placed successfully</p>
                   <p className="mt-1 text-xs">
-                    Order #{orderResult.order_id} • {currency(orderResult.total_price)} • {orderResult.status}
+                    Order #{orderResult.order_id} • {currency(orderResult.total_price)} •{" "}
+                    {orderResult.status}
                   </p>
                 </div>
               ) : (
@@ -701,10 +724,9 @@ export default function CustomerV2CartPage() {
                 </button>
               )}
             </div>
-
           </div>
         </div>
       </div>
     </main>
-  )
+  );
 }

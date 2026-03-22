@@ -7,6 +7,7 @@ import { ArrowLeft } from "lucide-react";
 import { MobileCustomerBottomNav } from "@/components/mobile/customer/bottom-nav";
 import { mobilePalette, playfairMobile, workSans } from "@/components/mobile/customer/theme";
 import { useAuthStore } from "@/store/store";
+import { http } from "@/lib/http";
 
 type CustomerProfile = {
   customer_id: number;
@@ -41,7 +42,8 @@ export default function MobileCustomerPersonalInfoPage() {
   const handleBack = () => {
     const canGoBack =
       typeof window !== "undefined" &&
-      (((window.history.state as { idx?: number } | null)?.idx ?? 0) > 0 || window.history.length > 1);
+      (((window.history.state as { idx?: number } | null)?.idx ?? 0) > 0 ||
+        window.history.length > 1);
     if (canGoBack) {
       router.back();
       return;
@@ -73,7 +75,7 @@ export default function MobileCustomerPersonalInfoPage() {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch(`http://localhost:8000/get-customer/${user.customer_id}`);
+        const response = await http.get(`/get-customer/${user.customer_id}`);
         if (!response.ok) throw new Error("Unable to load profile");
         const data = (await response.json()) as CustomerProfile;
         if (!cancelled) {
@@ -121,11 +123,7 @@ export default function MobileCustomerPersonalInfoPage() {
         is_default: true,
       };
 
-      const response = await fetch(`http://localhost:8000/update-customer/${form.customer_id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const response = await http.put(`/update-customer/${form.customer_id}`, payload);
       if (!response.ok) throw new Error("Unable to save");
       setMessage("Saved successfully.");
       setInitialForm(form);
@@ -144,50 +142,106 @@ export default function MobileCustomerPersonalInfoPage() {
     setMessage(null);
   };
 
-  const phoneDisplay = (value?: string | null) => (value ? `+91 ${value.replace(/\D/g, "").slice(-10)}` : "");
+  const phoneDisplay = (value?: string | null) =>
+    value ? `+91 ${value.replace(/\D/g, "").slice(-10)}` : "";
 
   return (
-    <main className={`${workSans.variable} ${playfairMobile.variable} min-h-screen pb-28`} style={{ backgroundColor: mobilePalette.background }}>
+    <main
+      className={`${workSans.variable} ${playfairMobile.variable} min-h-screen pb-28`}
+      style={{ backgroundColor: mobilePalette.background }}
+    >
       <div className="mx-auto w-full max-w-[448px] px-4">
         <header className="sticky top-0 z-20 bg-[rgba(253,250,241,0.95)] py-4 backdrop-blur-md">
           <div className="relative flex items-center justify-between">
-          <button type="button" onClick={handleBack} className="flex h-9 w-9 items-center justify-center rounded-full">
-            <ArrowLeft size={20} color="#8D4925" />
-          </button>
-          <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-lg font-bold text-[#8D4925]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>Personal Info</h1>
-          <span className="h-9 w-9" />
+            <button
+              type="button"
+              onClick={handleBack}
+              className="flex h-9 w-9 items-center justify-center rounded-full"
+            >
+              <ArrowLeft size={20} color="#8D4925" />
+            </button>
+            <h1
+              className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-lg font-bold text-[#8D4925]"
+              style={{ fontFamily: "var(--font-mobile-playfair), serif" }}
+            >
+              Personal Info
+            </h1>
+            <span className="h-9 w-9" />
           </div>
         </header>
 
-        {loading ? <p className="rounded-xl bg-white p-4 text-sm text-[#64748b]">Loading profile...</p> : null}
-        {error ? <p className="mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-600">{error}</p> : null}
-        {message ? <p className="mb-3 rounded-xl bg-green-50 p-3 text-sm text-green-700">{message}</p> : null}
+        {loading ? (
+          <p className="rounded-xl bg-white p-4 text-sm text-[#64748b]">Loading profile...</p>
+        ) : null}
+        {error ? (
+          <p className="mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-600">{error}</p>
+        ) : null}
+        {message ? (
+          <p className="mb-3 rounded-xl bg-green-50 p-3 text-sm text-green-700">{message}</p>
+        ) : null}
 
         {form ? (
           <section className="space-y-3">
             <div className="flex items-center justify-end gap-2">
               {isEditing ? (
                 <>
-                  <button type="button" onClick={onCancelEdit} className="h-10 rounded-lg border border-[#8D4925]/20 px-4 text-xs font-bold text-[#8D4925]">
+                  <button
+                    type="button"
+                    onClick={onCancelEdit}
+                    className="h-10 rounded-lg border border-[#8D4925]/20 px-4 text-xs font-bold text-[#8D4925]"
+                  >
                     Cancel
                   </button>
-                  <button type="button" onClick={onSave} disabled={saving} className="h-10 rounded-lg bg-[#8D4925] px-4 text-xs font-bold text-white disabled:opacity-60">
+                  <button
+                    type="button"
+                    onClick={onSave}
+                    disabled={saving}
+                    className="h-10 rounded-lg bg-[#8D4925] px-4 text-xs font-bold text-white disabled:opacity-60"
+                  >
                     {saving ? "Saving..." : "Save"}
                   </button>
                 </>
               ) : (
-                <button type="button" onClick={() => setIsEditing(true)} className="h-10 rounded-lg border border-[#8D4925]/20 px-4 text-xs font-bold text-[#8D4925]">
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(true)}
+                  className="h-10 rounded-lg border border-[#8D4925]/20 px-4 text-xs font-bold text-[#8D4925]"
+                >
                   Edit
                 </button>
               )}
             </div>
 
-            <Field label="Name" value={form.name} onChange={(e) => update("name", e.target.value)} disabled={!isEditing} />
-            <Field label="Receiver Name" value={form.recipient_name} onChange={(e) => update("recipient_name", e.target.value)} disabled={!isEditing} />
+            <Field
+              label="Name"
+              value={form.name}
+              onChange={(e) => update("name", e.target.value)}
+              disabled={!isEditing}
+            />
+            <Field
+              label="Receiver Name"
+              value={form.recipient_name}
+              onChange={(e) => update("recipient_name", e.target.value)}
+              disabled={!isEditing}
+            />
             <Field label="Primary Mobile" value={phoneDisplay(form.primary_mobile)} disabled />
-            <Field label="Alternative Mobile" value={phoneDisplay(form.alternative_mobile)} disabled />
-            <Field label="Email" value={form.email ?? ""} onChange={(e) => update("email", e.target.value)} disabled={!isEditing} />
-            <Field label="Referred By" value={form.referred_by ?? ""} onChange={(e) => update("referred_by", e.target.value)} disabled={!isEditing} />
+            <Field
+              label="Alternative Mobile"
+              value={phoneDisplay(form.alternative_mobile)}
+              disabled
+            />
+            <Field
+              label="Email"
+              value={form.email ?? ""}
+              onChange={(e) => update("email", e.target.value)}
+              disabled={!isEditing}
+            />
+            <Field
+              label="Referred By"
+              value={form.referred_by ?? ""}
+              onChange={(e) => update("referred_by", e.target.value)}
+              disabled={!isEditing}
+            />
           </section>
         ) : null}
       </div>
@@ -210,7 +264,9 @@ function Field({
 }) {
   return (
     <label className="block rounded-xl border border-[#8D4925]/10 bg-white p-3">
-      <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-[#8D4925]/70">{label}</span>
+      <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-[#8D4925]/70">
+        {label}
+      </span>
       <input
         value={value}
         onChange={onChange}

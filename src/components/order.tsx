@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { http } from "@/lib/http";
 import { useRouter } from "next/navigation";
 import { format as formatDate } from "date-fns";
 import { ShoppingCart, Minus, Plus } from "lucide-react";
@@ -69,9 +70,7 @@ export default function CustomerDailyMenu({
     dinner: [],
     condiments: [],
   });
-  const [isReleasedByMeal, setIsReleasedByMeal] = useState<
-    Record<MealType, boolean>
-  >({
+  const [isReleasedByMeal, setIsReleasedByMeal] = useState<Record<MealType, boolean>>({
     breakfast: false,
     lunch: false,
     dinner: false,
@@ -90,14 +89,10 @@ export default function CustomerDailyMenu({
     rate: number;
   };
   const [cart, setCart] = useState<CartLine[]>([]);
-  const subtotal = useMemo(
-    () => cart.reduce((sum, l) => sum + l.qty * l.rate, 0),
-    [cart]
-  );
+  const subtotal = useMemo(() => cart.reduce((sum, l) => sum + l.qty * l.rate, 0), [cart]);
 
   // Helpers
-  const startOfDay = (d: Date) =>
-    new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
   const today = () => startOfDay(new Date());
   const tomorrow = () => {
     const d = new Date();
@@ -116,8 +111,7 @@ export default function CustomerDailyMenu({
   // Default: before 6 PM => today; else tomorrow
   useEffect(() => {
     const now = new Date();
-    const defaultDate =
-      now.getHours() >= DINNER_CUTOFF_HOUR ? tomorrow() : today();
+    const defaultDate = now.getHours() >= DINNER_CUTOFF_HOUR ? tomorrow() : today();
     setSelectedDate(defaultDate);
     setConfirmedDate(defaultDate);
   }, []);
@@ -135,19 +129,20 @@ export default function CustomerDailyMenu({
         await Promise.all(
           availableMeals.map(async (meal) => {
             try {
-              const url = new URL("http://localhost:8000/api/menu");
-              url.searchParams.set("bld_type", meal);
-              url.searchParams.set("city_code", cityCode);
+              const params = new URLSearchParams({
+                bld_type: meal,
+                city_code: cityCode,
+                include_combos: "1",
+              });
               if (meal === "condiments") {
-                url.searchParams.set("menu_type", "CONDIMENTS");
+                params.set("menu_type", "CONDIMENTS");
               } else {
-                url.searchParams.set("date", date);
-                url.searchParams.set("period_type", "one_day");
-                url.searchParams.set("menu_type", "ONE_DAY");
+                params.set("date", date);
+                params.set("period_type", "one_day");
+                params.set("menu_type", "ONE_DAY");
               }
-              url.searchParams.set("include_combos", "1");
 
-              const res = await fetch(url.toString());
+              const res = await http.get(`/api/menu?${params}`);
               if (res.status === 404) {
                 nextItems[meal] = [];
                 nextReleased[meal] = false;
@@ -188,7 +183,7 @@ export default function CustomerDailyMenu({
               nextItems[meal] = [];
               nextReleased[meal] = false;
             }
-          })
+          }),
         );
 
         setItemsByMeal({
@@ -253,9 +248,7 @@ export default function CustomerDailyMenu({
   const canAdd = (meal: MealType, item: MenuItem) => {
     const limit = getLimit(item);
     if (limit <= 0) return false;
-    const line = cart.find(
-      (l) => l.meal === meal && l.menu_item_id === item.menu_item_id
-    );
+    const line = cart.find((l) => l.meal === meal && l.menu_item_id === item.menu_item_id);
     const already = line?.qty ?? 0;
     return already < limit;
   };
@@ -265,9 +258,7 @@ export default function CustomerDailyMenu({
     if (limit <= 0) return;
     if (!canAdd(meal, item)) return;
     setCart((prev) => {
-      const i = prev.findIndex(
-        (l) => l.meal === meal && l.menu_item_id === item.menu_item_id
-      );
+      const i = prev.findIndex((l) => l.meal === meal && l.menu_item_id === item.menu_item_id);
       if (i === -1)
         return [
           ...prev,
@@ -290,9 +281,7 @@ export default function CustomerDailyMenu({
 
   const removeOne = (meal: MealType, item: MenuItem) => {
     setCart((prev) => {
-      const i = prev.findIndex(
-        (l) => l.meal === meal && l.menu_item_id === item.menu_item_id
-      );
+      const i = prev.findIndex((l) => l.meal === meal && l.menu_item_id === item.menu_item_id);
       if (i === -1) return prev;
       const copy = [...prev];
       const newQty = copy[i].qty - 1;
@@ -312,8 +301,7 @@ export default function CustomerDailyMenu({
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <Button
           variant={
-            selectedDate &&
-            formatISODate(selectedDate) === formatISODate(today())
+            selectedDate && formatISODate(selectedDate) === formatISODate(today())
               ? "default"
               : "outline"
           }
@@ -328,8 +316,7 @@ export default function CustomerDailyMenu({
 
         <Button
           variant={
-            selectedDate &&
-            formatISODate(selectedDate) === formatISODate(tomorrow())
+            selectedDate && formatISODate(selectedDate) === formatISODate(tomorrow())
               ? "default"
               : "outline"
           }
@@ -345,9 +332,7 @@ export default function CustomerDailyMenu({
         {/* Selected date shown next to the buttons */}
         <span className="text-sm text-muted-foreground">
           Selected Date:&nbsp;
-          <span className="font-medium">
-            {confirmedDate ? fmtBtnDate(confirmedDate) : "—"}
-          </span>
+          <span className="font-medium">{confirmedDate ? fmtBtnDate(confirmedDate) : "—"}</span>
         </span>
         {orderingLabel && (
           <span className="text-sm font-semibold text-muted-foreground/80">
@@ -367,9 +352,7 @@ export default function CustomerDailyMenu({
             <section key={meal}>
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-xl font-semibold capitalize">
-                  {meal === "condiments"
-                    ? "Condiments · Till stocks last"
-                    : meal}
+                  {meal === "condiments" ? "Condiments · Till stocks last" : meal}
                 </h2>
                 {!released && (
                   <Badge variant="outline" className="text-xs">
@@ -379,9 +362,7 @@ export default function CustomerDailyMenu({
               </div>
 
               {loading ? (
-                <div className="text-sm text-muted-foreground">
-                  Loading {meal}…
-                </div>
+                <div className="text-sm text-muted-foreground">Loading {meal}…</div>
               ) : visibleItems.length === 0 ? (
                 <div className="text-sm text-muted-foreground">
                   No items for {meal === "condiments" ? "condiments" : meal}.
@@ -397,9 +378,7 @@ export default function CustomerDailyMenu({
                       <Card
                         key={`${meal}-${it.menu_item_id}`}
                         className={
-                          soldOut
-                            ? "overflow-hidden bg-muted/70 border-dashed"
-                            : "overflow-hidden"
+                          soldOut ? "overflow-hidden bg-muted/70 border-dashed" : "overflow-hidden"
                         }
                         aria-disabled={soldOut}
                       >
@@ -426,12 +405,12 @@ export default function CustomerDailyMenu({
                           ].join(" ")}
                         >
                           {/* Left thumbnail */}
-            <img
-              src={it.picture_url || "/images/menu/idli-sambar.jpg"}
-              alt={it.item_name}
-              className="h-16 w-16 rounded-lg object-cover flex-shrink-0"
-              loading="lazy"
-            />
+                          <img
+                            src={it.picture_url || "/images/menu/idli-sambar.jpg"}
+                            alt={it.item_name}
+                            className="h-16 w-16 rounded-lg object-cover flex-shrink-0"
+                            loading="lazy"
+                          />
 
                           {/* Middle info */}
                           <div className="min-w-0 flex-1 self-start">
@@ -444,10 +423,7 @@ export default function CustomerDailyMenu({
                             <div className="mt-1 text-xs min-h-[1.25rem]">
                               {soldOut ? (
                                 // keep-color => prevents our gray/opacity overrides from muting this
-                                <Badge
-                                  variant="destructive"
-                                  className="keep-color text-xs"
-                                >
+                                <Badge variant="destructive" className="keep-color text-xs">
                                   Sold out
                                 </Badge>
                               ) : (
@@ -478,9 +454,7 @@ export default function CustomerDailyMenu({
                                   <Minus className="h-4 w-4" />
                                 </Button>
 
-                                <div className="min-w-[2.5rem] text-center text-sm">
-                                  {qty}
-                                </div>
+                                <div className="min-w-[2.5rem] text-center text-sm">{qty}</div>
 
                                 <Button
                                   size="icon"
@@ -520,18 +494,12 @@ export default function CustomerDailyMenu({
             <div className="flex items-center gap-2">
               <ShoppingCart className="h-5 w-5" />
               <div className="text-sm">
-                <span className="font-medium">
-                  {cart.reduce((a, l) => a + l.qty, 0)}
-                </span>{" "}
-                items • <span className="font-semibold">{inr(subtotal)}</span>
+                <span className="font-medium">{cart.reduce((a, l) => a + l.qty, 0)}</span> items •{" "}
+                <span className="font-semibold">{inr(subtotal)}</span>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setCart([])}
-                disabled={cart.length === 0}
-              >
+              <Button variant="outline" onClick={() => setCart([])} disabled={cart.length === 0}>
                 Clear
               </Button>
               <Button onClick={() => router.push("/cart")}>Place Order</Button>

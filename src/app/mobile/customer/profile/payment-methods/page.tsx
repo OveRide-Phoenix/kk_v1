@@ -8,6 +8,7 @@ import { ArrowLeft, Banknote, CreditCard, Wallet } from "lucide-react";
 import { MobileCustomerBottomNav } from "@/components/mobile/customer/bottom-nav";
 import { mobilePalette, playfairMobile, workSans } from "@/components/mobile/customer/theme";
 import { useAuthStore } from "@/store/store";
+import { http } from "@/lib/http";
 
 type CustomerProfile = {
   customer_id: number;
@@ -43,7 +44,8 @@ export default function MobileCustomerPaymentMethodsPage() {
   const handleBack = () => {
     const canGoBack =
       typeof window !== "undefined" &&
-      (((window.history.state as { idx?: number } | null)?.idx ?? 0) > 0 || window.history.length > 1);
+      (((window.history.state as { idx?: number } | null)?.idx ?? 0) > 0 ||
+        window.history.length > 1);
     if (canGoBack) {
       router.back();
       return;
@@ -75,7 +77,7 @@ export default function MobileCustomerPaymentMethodsPage() {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch(`http://localhost:8000/get-customer/${user.customer_id}`);
+        const response = await http.get(`/get-customer/${user.customer_id}`);
         if (!response.ok) throw new Error("Unable to load");
         const data = (await response.json()) as CustomerProfile;
         if (cancelled) return;
@@ -116,11 +118,7 @@ export default function MobileCustomerPaymentMethodsPage() {
         route_assignment: profile.route_assignment ?? null,
         is_default: true,
       };
-      const response = await fetch(`http://localhost:8000/update-customer/${profile.customer_id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const response = await http.put(`/update-customer/${profile.customer_id}`, payload);
       if (!response.ok) throw new Error();
       setMessage("Payment preference saved.");
     } catch {
@@ -131,21 +129,41 @@ export default function MobileCustomerPaymentMethodsPage() {
   };
 
   return (
-    <main className={`${workSans.variable} ${playfairMobile.variable} min-h-screen pb-28`} style={{ backgroundColor: mobilePalette.background }}>
+    <main
+      className={`${workSans.variable} ${playfairMobile.variable} min-h-screen pb-28`}
+      style={{ backgroundColor: mobilePalette.background }}
+    >
       <div className="mx-auto w-full max-w-[448px] px-4">
         <header className="sticky top-0 z-20 bg-[rgba(253,250,241,0.95)] py-4 backdrop-blur-md">
           <div className="relative flex items-center justify-between">
-          <button type="button" onClick={handleBack} className="flex h-9 w-9 items-center justify-center rounded-full">
-            <ArrowLeft size={20} color="#8D4925" />
-          </button>
-          <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-lg font-bold text-[#8D4925]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>Payment Methods</h1>
-          <span className="h-9 w-9" />
+            <button
+              type="button"
+              onClick={handleBack}
+              className="flex h-9 w-9 items-center justify-center rounded-full"
+            >
+              <ArrowLeft size={20} color="#8D4925" />
+            </button>
+            <h1
+              className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-lg font-bold text-[#8D4925]"
+              style={{ fontFamily: "var(--font-mobile-playfair), serif" }}
+            >
+              Payment Methods
+            </h1>
+            <span className="h-9 w-9" />
           </div>
         </header>
 
-        {loading ? <p className="rounded-xl bg-white p-4 text-sm text-[#64748b]">Loading payment settings...</p> : null}
-        {error ? <p className="mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-600">{error}</p> : null}
-        {message ? <p className="mb-3 rounded-xl bg-green-50 p-3 text-sm text-green-700">{message}</p> : null}
+        {loading ? (
+          <p className="rounded-xl bg-white p-4 text-sm text-[#64748b]">
+            Loading payment settings...
+          </p>
+        ) : null}
+        {error ? (
+          <p className="mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-600">{error}</p>
+        ) : null}
+        {message ? (
+          <p className="mb-3 rounded-xl bg-green-50 p-3 text-sm text-green-700">{message}</p>
+        ) : null}
 
         <section className="space-y-3">
           <article className="rounded-xl border border-[#8D4925]/10 bg-white p-4 shadow-[0_4px_12px_-1px_rgba(141,73,37,0.08)]">
@@ -159,23 +177,42 @@ export default function MobileCustomerPaymentMethodsPage() {
                   <p className="text-lg font-bold text-[#8D4925]">₹450.00</p>
                 </div>
               </div>
-              <button type="button" className="rounded-xl bg-[#8D4925] px-5 py-2 text-xs font-bold text-white">
+              <button
+                type="button"
+                className="rounded-xl bg-[#8D4925] px-5 py-2 text-xs font-bold text-white"
+              >
                 Top Up
               </button>
             </div>
           </article>
 
           <article className="rounded-xl border border-[#8D4925]/10 bg-white p-4">
-            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#8D4925]/70">Accepted Methods</p>
+            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#8D4925]/70">
+              Accepted Methods
+            </p>
             <div className="space-y-2">
-              <Method icon={<Wallet size={16} />} title="UPI Payments" hint="Google Pay, PhonePe, Paytm" />
-              <Method icon={<CreditCard size={16} />} title="Credit / Debit Card" hint="Visa, Mastercard, RuPay" />
-              <Method icon={<Banknote size={16} />} title="Cash on Delivery" hint="Pay at your doorstep" />
+              <Method
+                icon={<Wallet size={16} />}
+                title="UPI Payments"
+                hint="Google Pay, PhonePe, Paytm"
+              />
+              <Method
+                icon={<CreditCard size={16} />}
+                title="Credit / Debit Card"
+                hint="Visa, Mastercard, RuPay"
+              />
+              <Method
+                icon={<Banknote size={16} />}
+                title="Cash on Delivery"
+                hint="Pay at your doorstep"
+              />
             </div>
           </article>
 
           <article className="rounded-xl border border-[#8D4925]/10 bg-white p-4">
-            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#8D4925]/70">Payment Frequency</p>
+            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#8D4925]/70">
+              Payment Frequency
+            </p>
             <div className="grid grid-cols-3 gap-2">
               {PAYMENT_FREQUENCIES.map((option) => (
                 <button
@@ -183,7 +220,9 @@ export default function MobileCustomerPaymentMethodsPage() {
                   type="button"
                   onClick={() => setPaymentFrequency(option)}
                   className={`rounded-lg border px-2 py-2 text-xs font-semibold ${
-                    paymentFrequency === option ? "border-[#8D4925] bg-[#8D4925]/10 text-[#8D4925]" : "border-[#8D4925]/20 text-[#64748b]"
+                    paymentFrequency === option
+                      ? "border-[#8D4925] bg-[#8D4925]/10 text-[#8D4925]"
+                      : "border-[#8D4925]/20 text-[#64748b]"
                   }`}
                 >
                   {option}
@@ -192,7 +231,11 @@ export default function MobileCustomerPaymentMethodsPage() {
             </div>
           </article>
 
-          <button onClick={onSave} disabled={saving || !profile} className="h-12 w-full rounded-xl bg-[#8D4925] text-sm font-bold text-white disabled:opacity-60">
+          <button
+            onClick={onSave}
+            disabled={saving || !profile}
+            className="h-12 w-full rounded-xl bg-[#8D4925] text-sm font-bold text-white disabled:opacity-60"
+          >
             {saving ? "Saving..." : "Save Preference"}
           </button>
         </section>
