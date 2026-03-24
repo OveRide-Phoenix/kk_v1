@@ -5,6 +5,7 @@ import { format as formatDate } from "date-fns";
 import { Crown, FileText, Loader2, Mail, MapPin, PencilLine, Plus, User2 } from "lucide-react";
 
 import { useSearchParams } from "next/navigation";
+import { useHydrateAuthUser } from "@/hooks/useHydrateAuthUser";
 import { useAuthStore } from "@/store/store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -155,7 +156,6 @@ export default function AccountPage() {
   const searchParams = useSearchParams();
   const user = useAuthStore((state) => state.user);
   const isAdminStore = useAuthStore((state) => state.isAdmin);
-  const setUser = useAuthStore((state) => state.setUser);
 
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
   const [form, setForm] = useState<CustomerProfile | null>(null);
@@ -201,24 +201,7 @@ export default function AccountPage() {
     setActiveSection("profile");
   }, [searchParams]);
 
-  // Restore user session if the store is empty
-  useEffect(() => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-    if (user || !token) return;
-    (async () => {
-      try {
-        const response = await fetch("/api/backend/auth/me", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!response.ok) return;
-        const me = await response.json();
-        setUser(me);
-        // roles handled via setUser
-      } catch (err) {
-        console.warn("Failed to load user", err);
-      }
-    })();
-  }, [user, setUser]);
+  useHydrateAuthUser();
 
   const customerId = user?.customer_id;
   const currentCityLabel = useMemo(() => {

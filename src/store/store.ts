@@ -43,7 +43,7 @@ export type RoleSummary = {
   is_system?: boolean;
 };
 
-type AuthUser = {
+export type AuthUser = {
   admin_id?: number;
   customer_id?: number;
   phone?: string;

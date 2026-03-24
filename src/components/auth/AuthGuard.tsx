@@ -34,6 +34,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
     let cancelled = false;
 
     (async () => {
+      let redirecting = false;
       try {
         let access = localStorage.getItem("access_token") || undefined;
         let me;
@@ -55,19 +56,23 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
           ? me.role_codes.includes("admin")
           : me.role === "admin";
         if (!hasAdminRole) {
+          redirecting = true;
           router.replace("/");
           return;
         }
       } catch {
+        redirecting = true;
         const next = encodeURIComponent(pathname || "/admin");
         router.replace(`/login?next=${next}`);
         return;
       } finally {
-        if (!cancelled) setChecking(false);
+        if (!cancelled && !redirecting) setChecking(false);
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [router, pathname, setUser]);
 
   if (checking) {

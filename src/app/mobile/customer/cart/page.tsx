@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { mobilePalette, playfairMobile, workSans } from "@/components/mobile/customer/theme";
 import { normalizeCityCode } from "@/config/cities";
+import { useHydrateAuthUser } from "@/hooks/useHydrateAuthUser";
 import { useAuthStore } from "@/store/store";
 import { http } from "@/lib/http";
 
@@ -94,7 +95,6 @@ const currency = (value: number) =>
 export default function MobileCartPage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
-  const setUser = useAuthStore((state) => state.setUser);
 
   const [cartItems, setCartItems] = useState<CartLine[]>([]);
   const [cartContext, setCartContext] = useState<CartContext | null>(null);
@@ -131,24 +131,7 @@ export default function MobileCartPage() {
     }
   }, []);
 
-  useEffect(() => {
-    if (user) return;
-    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-    if (!token) return;
-
-    (async () => {
-      try {
-        const response = await fetch("/api/backend/auth/me", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!response.ok) return;
-        const me = await response.json();
-        setUser(me);
-      } catch {
-        // ignore
-      }
-    })();
-  }, [user, setUser]);
+  useHydrateAuthUser();
 
   useEffect(() => {
     const customerId = user?.customer_id;

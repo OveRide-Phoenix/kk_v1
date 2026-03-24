@@ -19,6 +19,7 @@ import { MobileCustomerBottomNav } from "@/components/mobile/customer/bottom-nav
 import { LeaveCartDialog } from "@/components/mobile/customer/leave-cart-dialog";
 import { mobilePalette, playfairMobile, workSans } from "@/components/mobile/customer/theme";
 import { getSupportedMeals } from "@/config/cities";
+import { useHydrateAuthUser } from "@/hooks/useHydrateAuthUser";
 import { useAuthStore } from "@/store/store";
 import { http } from "@/lib/http";
 
@@ -81,7 +82,6 @@ const normalizeQty = (value: unknown): number => {
 export default function MobileCustomerMenuPage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
-  const setUser = useAuthStore((state) => state.setUser);
 
   const [menuByMeal, setMenuByMeal] = useState<Record<MealType, MenuItem[]>>({
     breakfast: [],
@@ -126,21 +126,7 @@ export default function MobileCustomerMenuPage() {
   const availableMeals = useMemo(() => getSupportedMeals(cityCode), [cityCode]);
   const availableMealsKey = useMemo(() => availableMeals.join(","), [availableMeals]);
 
-  useEffect(() => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-    if (user || !token) return;
-    (async () => {
-      try {
-        const response = await fetch("/api/backend/auth/me", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!response.ok) return;
-        setUser(await response.json());
-      } catch {
-        // no-op
-      }
-    })();
-  }, [user, setUser]);
+  useHydrateAuthUser();
 
   useEffect(() => {
     let cancelled = false;

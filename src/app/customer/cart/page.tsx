@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { useHydrateAuthUser } from "@/hooks/useHydrateAuthUser";
 import { useAuthStore } from "@/store/store";
 import { normalizeCityCode } from "@/config/cities";
 import { http } from "@/lib/http";
@@ -96,7 +97,6 @@ type OrderQuoteResponse = {
 export default function CartPage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
-  const setUser = useAuthStore((state) => state.setUser);
 
   const [cartItems, setCartItems] = useState<CartLine[]>([]);
   const [cartContext, setCartContext] = useState<CartContext | null>(null);
@@ -132,23 +132,7 @@ export default function CartPage() {
     }
   }, []);
 
-  useEffect(() => {
-    if (user) return;
-    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-    if (!token) return;
-    (async () => {
-      try {
-        const response = await fetch("/api/backend/auth/me", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!response.ok) return;
-        const me = await response.json();
-        setUser(me);
-      } catch (error) {
-        console.error("Unable to restore user", error);
-      }
-    })();
-  }, [user, setUser]);
+  useHydrateAuthUser();
 
   useEffect(() => {
     const customerId = user?.customer_id;

@@ -1,12 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { ArrowLeft, Banknote, CreditCard, Wallet } from "lucide-react";
 import { MobileCustomerBottomNav } from "@/components/mobile/customer/bottom-nav";
 import { mobilePalette, playfairMobile, workSans } from "@/components/mobile/customer/theme";
+import { useHydrateAuthUser } from "@/hooks/useHydrateAuthUser";
 import { useAuthStore } from "@/store/store";
 import { http } from "@/lib/http";
 
@@ -34,7 +34,6 @@ const PAYMENT_FREQUENCIES = ["Daily", "Weekly", "Monthly"] as const;
 export default function MobileCustomerPaymentMethodsPage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
-  const setUser = useAuthStore((state) => state.setUser);
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
   const [paymentFrequency, setPaymentFrequency] = useState("Daily");
   const [saving, setSaving] = useState(false);
@@ -53,22 +52,7 @@ export default function MobileCustomerPaymentMethodsPage() {
     router.push("/mobile/customer/home");
   };
 
-  useEffect(() => {
-    if (user) return;
-    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-    if (!token) return;
-    (async () => {
-      try {
-        const response = await fetch("/api/backend/auth/me", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!response.ok) return;
-        setUser(await response.json());
-      } catch {
-        // ignore
-      }
-    })();
-  }, [user, setUser]);
+  useHydrateAuthUser();
 
   useEffect(() => {
     if (!user?.customer_id) return;
