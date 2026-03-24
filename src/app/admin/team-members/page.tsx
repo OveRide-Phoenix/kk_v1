@@ -76,7 +76,7 @@ const minPasswordLength = 6;
 
 export default function AccessControlPage() {
   const { toast } = useToast();
-  const adminCity = useAuthStore((state) => state.adminCity || state.user?.city_code || "MYS")
+  const adminCity = useAuthStore((state) => state.adminCity || state.user?.city_code || "MYS");
 
   const [roles, setRoles] = useState<Role[]>([]);
   const [rolesLoading, setRolesLoading] = useState(true);
@@ -182,9 +182,7 @@ export default function AccessControlPage() {
       setMembers(
         list.map((member) => ({
           ...member,
-          roles: Array.isArray(member.roles)
-            ? member.roles.map((value) => Number(value))
-            : [],
+          roles: Array.isArray(member.roles) ? member.roles.map((value) => Number(value)) : [],
           role_codes: Array.isArray(member.role_codes)
             ? member.role_codes.filter((code): code is string => typeof code === "string")
             : [],
@@ -210,13 +208,13 @@ export default function AccessControlPage() {
   const loadCustomers = useCallback(async () => {
     setCustomersLoading(true);
     try {
-      const res = await http.get(`/api/admin/customers?city_code=${adminCity}`);
+      const res = await http.get(`/api/admin/customers?city_code=${adminCity}&limit=500`);
       const data = await res.json();
-      if (!res.ok || !Array.isArray(data)) {
+      if (!res.ok || !Array.isArray(data.customers)) {
         throw new Error("Unable to load customers.");
       }
       setCustomers(
-        data.map((customer: any) => ({
+        data.customers.map((customer: any) => ({
           customer_id: Number(customer.customer_id),
           name: customer.name ?? customer.primary_mobile ?? "Unknown",
         })),
@@ -252,7 +250,11 @@ export default function AccessControlPage() {
       setCreateMemberError("Assign at least one role.");
       return;
     }
-    if (newMemberPassword && newMemberPassword.trim().length > 0 && newMemberPassword.trim().length < minPasswordLength) {
+    if (
+      newMemberPassword &&
+      newMemberPassword.trim().length > 0 &&
+      newMemberPassword.trim().length < minPasswordLength
+    ) {
       setCreateMemberError(`Password must be at least ${minPasswordLength} characters.`);
       return;
     }
@@ -268,10 +270,7 @@ export default function AccessControlPage() {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        const message =
-          body?.detail ??
-          body?.message ??
-          "Unable to create team member.";
+        const message = body?.detail ?? body?.message ?? "Unable to create team member.";
         throw new Error(message);
       }
       setAddMemberOpen(false);
@@ -293,10 +292,7 @@ export default function AccessControlPage() {
       });
       if (!res.ok) {
         const payload = await res.json().catch(() => null);
-        const message =
-          payload?.detail ??
-          payload?.message ??
-          "Unable to update access.";
+        const message = payload?.detail ?? payload?.message ?? "Unable to update access.";
         throw new Error(message);
       }
       setMembers((prev) =>
@@ -326,7 +322,11 @@ export default function AccessControlPage() {
   const handleSaveEdit = async () => {
     if (!editingMember) return;
     const removingAllRoles = editRoleIds.size === 0;
-    if (editPassword && editPassword.trim().length > 0 && editPassword.trim().length < minPasswordLength) {
+    if (
+      editPassword &&
+      editPassword.trim().length > 0 &&
+      editPassword.trim().length < minPasswordLength
+    ) {
       setEditError(`Password must be at least ${minPasswordLength} characters.`);
       return;
     }
@@ -340,10 +340,7 @@ export default function AccessControlPage() {
       });
       if (!res.ok) {
         const payload = await res.json().catch(() => null);
-        const message =
-          payload?.detail ??
-          payload?.message ??
-          "Unable to update team member.";
+        const message = payload?.detail ?? payload?.message ?? "Unable to update team member.";
         throw new Error(message);
       }
       setEditingMember(null);
@@ -382,7 +379,7 @@ export default function AccessControlPage() {
         const message =
           payload?.detail ??
           payload?.message ??
-           (editingRoleId ? "Unable to update role." : "Unable to create role.");
+          (editingRoleId ? "Unable to update role." : "Unable to create role.");
         throw new Error(message);
       }
       setCreateRoleOpen(false);
@@ -399,7 +396,7 @@ export default function AccessControlPage() {
           ? error.message
           : editingRoleId
             ? "Failed to update role."
-            : "Failed to create role."
+            : "Failed to create role.",
       );
     } finally {
       setCreatingRole(false);
@@ -424,10 +421,7 @@ export default function AccessControlPage() {
       const res = await http.delete(`/api/rbac/roles/${role.role_id}`);
       if (!res.ok) {
         const payload = await res.json().catch(() => null);
-        const message =
-          payload?.detail ??
-          payload?.message ??
-          "Unable to delete role.";
+        const message = payload?.detail ?? payload?.message ?? "Unable to delete role.";
         throw new Error(message);
       }
       await loadRoles();
@@ -506,7 +500,10 @@ export default function AccessControlPage() {
                     </TableRow>
                   ) : members.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="py-6 text-center text-sm text-muted-foreground">
+                      <TableCell
+                        colSpan={6}
+                        className="py-6 text-center text-sm text-muted-foreground"
+                      >
                         No team members added yet.
                       </TableCell>
                     </TableRow>
@@ -515,16 +512,12 @@ export default function AccessControlPage() {
                       <TableRow key={member.customer_id}>
                         <TableCell className="align-top">
                           <div className="flex flex-col gap-0.5">
-                            <span className="font-semibold">
-                              {member.name || "Unnamed Member"}
-                            </span>
+                            <span className="font-semibold">{member.name || "Unnamed Member"}</span>
                             <span className="text-sm text-muted-foreground">
                               {member.phone ? `+91 ${member.phone}` : "No phone on file"}
                             </span>
                             {member.email && (
-                              <span className="text-xs text-muted-foreground">
-                                {member.email}
-                              </span>
+                              <span className="text-xs text-muted-foreground">{member.email}</span>
                             )}
                           </div>
                         </TableCell>
@@ -636,7 +629,10 @@ export default function AccessControlPage() {
                     </TableRow>
                   ) : sortedRoles.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="py-6 text-center text-sm text-muted-foreground">
+                      <TableCell
+                        colSpan={5}
+                        className="py-6 text-center text-sm text-muted-foreground"
+                      >
                         No roles defined yet.
                       </TableCell>
                     </TableRow>
@@ -653,12 +649,12 @@ export default function AccessControlPage() {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {role.code}
-                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{role.code}</TableCell>
                         <TableCell>{role.assigned_count}</TableCell>
                         <TableCell className="max-w-[260px] text-sm text-muted-foreground">
-                          {role.description ? role.description : (
+                          {role.description ? (
+                            role.description
+                          ) : (
                             <span className="italic text-muted-foreground/70">No description</span>
                           )}
                         </TableCell>
@@ -699,12 +695,15 @@ export default function AccessControlPage() {
       </div>
 
       {/* Add team member dialog */}
-      <Dialog open={addMemberOpen} onOpenChange={(open) => {
-        setAddMemberOpen(open);
-        if (!open) {
-          resetCreateMemberForm();
-        }
-      }}>
+      <Dialog
+        open={addMemberOpen}
+        onOpenChange={(open) => {
+          setAddMemberOpen(open);
+          if (!open) {
+            resetCreateMemberForm();
+          }
+        }}
+      >
         <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>Add Team Member</DialogTitle>
@@ -723,7 +722,9 @@ export default function AccessControlPage() {
                 disabled={customersLoading}
               >
                 <SelectTrigger id="member-customer">
-                  <SelectValue placeholder={customersLoading ? "Loading customers…" : "Select customer"} />
+                  <SelectValue
+                    placeholder={customersLoading ? "Loading customers…" : "Select customer"}
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {customerOptions.map((customer) => (
@@ -864,9 +865,7 @@ export default function AccessControlPage() {
                 placeholder="Describe the responsibilities or access granted"
               />
             </div>
-            {createRoleError && (
-              <div className="text-sm text-destructive">{createRoleError}</div>
-            )}
+            {createRoleError && <div className="text-sm text-destructive">{createRoleError}</div>}
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setCreateRoleOpen(false)}>
@@ -881,7 +880,10 @@ export default function AccessControlPage() {
       </Dialog>
 
       {/* Manage team member dialog */}
-      <Dialog open={Boolean(editingMember)} onOpenChange={(open) => !open && setEditingMember(null)}>
+      <Dialog
+        open={Boolean(editingMember)}
+        onOpenChange={(open) => !open && setEditingMember(null)}
+      >
         <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>Manage Team Member</DialogTitle>
@@ -926,7 +928,8 @@ export default function AccessControlPage() {
                 </div>
                 {editRoleIds.size === 0 && (
                   <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                    Saving without any roles will remove this member from the admin portal until roles are added again.
+                    Saving without any roles will remove this member from the admin portal until
+                    roles are added again.
                   </p>
                 )}
               </div>
