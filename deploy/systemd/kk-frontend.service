@@ -1,0 +1,35 @@
+# Kuteera Kitchen — Next.js frontend service
+# Place at: /etc/systemd/system/kk-frontend.service
+# Enable:   sudo systemctl enable kk-frontend
+# Start:    sudo systemctl start kk-frontend
+#
+# Run `npm run build` after every deploy before restarting this service.
+
+[Unit]
+Description=Kuteera Kitchen Next.js frontend
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/kk_v1
+
+# BACKEND_URL points directly to the local FastAPI process.
+# NGINX handles the /api/backend/* prefix — Next.js rewrites are only used
+# if someone hits port 3000 directly (dev/testing fallback).
+Environment=NODE_ENV=production
+Environment=BACKEND_URL=http://127.0.0.1:8000
+
+ExecStart=/usr/bin/node_modules/.bin/next start --port 3000
+# If next is not on PATH, use the full path:
+# ExecStart=/var/www/kk_v1/node_modules/.bin/next start --port 3000
+
+Restart=on-failure
+RestartSec=5s
+
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
