@@ -14,7 +14,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Eye, EyeOff } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { getCityLabel, normalizeCityCode, type CityCode } from "@/config/cities";
 import { useAuthStore } from "@/store/store";
 import CustomerNavBar from "@/components/customer-nav-bar";
@@ -47,9 +53,7 @@ export default function LoginPage() {
     let formattedValue = "";
     if (digitsOnly.length > 0) {
       // Remove any leading 91 if present
-      const cleanNumber = digitsOnly.startsWith("91")
-        ? digitsOnly.slice(2)
-        : digitsOnly;
+      const cleanNumber = digitsOnly.startsWith("91") ? digitsOnly.slice(2) : digitsOnly;
 
       // Add +91 prefix and limit to 10 digits
       formattedValue = "+91 " + cleanNumber.slice(0, 10);
@@ -64,26 +68,30 @@ export default function LoginPage() {
       setErrorMessage("");
       setIsLoading(true);
       try {
-        const response = await fetch(
-          `/api/backend/api/get-city?phone=${numericValue}`,
-          { credentials: "include" }
-        );
+        const response = await fetch(`/api/backend/api/get-city?phone=${numericValue}`, {
+          credentials: "include",
+        });
         const data = await response.json();
         if (response.ok) {
           const normalizedDefault = normalizeCityCode(data.city_code);
-          const eligible = Array.isArray(data.eligible_city_codes) && data.eligible_city_codes.length
-            ? data.eligible_city_codes
-            : [normalizedDefault];
+          const eligible =
+            Array.isArray(data.eligible_city_codes) && data.eligible_city_codes.length
+              ? data.eligible_city_codes
+              : [normalizedDefault];
           const normalizedEligible = Array.from(
             new Set(
               eligible
-                .filter((code: unknown): code is string => typeof code === "string" && code.trim().length > 0)
+                .filter(
+                  (code: unknown): code is string =>
+                    typeof code === "string" && code.trim().length > 0,
+                )
                 .map((code: string) => normalizeCityCode(code)),
             ),
           );
           setCityOptions(normalizedEligible);
-          const preferredCity =
-            normalizedEligible.includes(normalizedDefault) ? normalizedDefault : normalizedEligible[0] ?? normalizedDefault;
+          const preferredCity = normalizedEligible.includes(normalizedDefault)
+            ? normalizedDefault
+            : (normalizedEligible[0] ?? normalizedDefault);
           setCityCode(preferredCity);
           setCity(getCityLabel(preferredCity));
 
@@ -96,9 +104,7 @@ export default function LoginPage() {
           }
           setShowRegisterHighlight(false);
         } else {
-          setErrorMessage(
-            data.detail || "User does not exist. Please register."
-          );
+          setErrorMessage(data.detail || "User does not exist. Please register.");
           setCity("");
           setCityCode("");
           setCityOptions([]);
@@ -162,11 +168,11 @@ export default function LoginPage() {
     try {
       const formattedPhone = digitsOnly.replace(/^91/, "");
 
-    const payload = {
-      phone: formattedPhone,
-      admin_password: isAdminAttempt ? adminPassword : null,
-      city_code: cityCode || undefined,
-    };
+      const payload = {
+        phone: formattedPhone,
+        admin_password: isAdminAttempt ? adminPassword : null,
+        city_code: cityCode || undefined,
+      };
 
       const response = await fetch("/api/backend/api/login", {
         method: "POST",
@@ -202,10 +208,13 @@ export default function LoginPage() {
           | null;
 
         const rawRoles = (baseUser?.roles ?? []) as Array<number | string>;
-        const rawRoleCodes = (baseUser?.role_codes ?? data.role_codes ?? []) as Array<string | number>;
-        const rawRoleDetails = (baseUser?.role_details ?? data.role_details ?? []) as Array<
-          { role_id: number; code: string }
+        const rawRoleCodes = (baseUser?.role_codes ?? data.role_codes ?? []) as Array<
+          string | number
         >;
+        const rawRoleDetails = (baseUser?.role_details ?? data.role_details ?? []) as Array<{
+          role_id: number;
+          code: string;
+        }>;
 
         const adminRoleIds = rawRoleDetails
           .filter((detail) => detail.code === "admin")
@@ -234,8 +243,12 @@ export default function LoginPage() {
 
         if (isAdminLoginRequested) {
           const responseCityCode =
-            (resolvedUser && typeof resolvedUser.city_code === "string" ? resolvedUser.city_code : undefined) ||
-            (data?.user && typeof data.user.city_code === "string" ? data.user.city_code : undefined) ||
+            (resolvedUser && typeof resolvedUser.city_code === "string"
+              ? resolvedUser.city_code
+              : undefined) ||
+            (data?.user && typeof data.user.city_code === "string"
+              ? data.user.city_code
+              : undefined) ||
             (typeof data?.city_code === "string" ? data.city_code : undefined);
           const selectedCity = normalizeCityCode(cityCode || responseCityCode);
           setAdminCity(selectedCity);
@@ -254,7 +267,7 @@ export default function LoginPage() {
           setRoleState(filteredRoleIds, filteredRoleCodes);
         }
 
-        const destination = mode === "admin" ? "/admin" : "/customer/home";
+        const destination = mode === "admin" ? "/admin" : "/customer-v2/home";
         router.push(destination);
       } else {
         const errorDetail = data.detail || data.msg || "Login failed. Try again.";
@@ -265,7 +278,7 @@ export default function LoginPage() {
       setErrorMessage(
         !navigator.onLine
           ? "No internet connection. Please check your network."
-          : "Something went wrong. Please try again."
+          : "Something went wrong. Please try again.",
       );
     } finally {
       setIsLoading(false);
@@ -287,16 +300,13 @@ export default function LoginPage() {
       <CustomerNavBar unauthLinks={[{ href: "/register", label: "Register" }]} />
 
       <main className="flex flex-1 items-center justify-center px-4 pb-12 pt-24">
-        <form
-          className="w-full max-w-md"
-          onSubmit={handleSubmit}
-        >
+        <form className="w-full max-w-md" onSubmit={handleSubmit}>
           <Card className="border-primary/20">
             <CardHeader>
-            <CardTitle className="text-2xl font-bold">Welcome back</CardTitle>
-            <CardDescription>
-              Enter your phone number and city to login or register
-            </CardDescription>
+              <CardTitle className="text-2xl font-bold">Welcome back</CardTitle>
+              <CardDescription>
+                Enter your phone number and city to login or register
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
@@ -356,11 +366,7 @@ export default function LoginPage() {
                       className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                       onClick={() => setShowPassword(!showPassword)}
                     >
-                      {showPassword ? (
-                        <Eye className="h-4 w-4" />
-                      ) : (
-                        <EyeOff className="h-4 w-4" />
-                      )}
+                      {showPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                     </Button>
                   </div>
                 </div>
@@ -392,8 +398,10 @@ export default function LoginPage() {
                       <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                       <span>Logging in...</span>
                     </div>
+                  ) : canLoginAsAdmin ? (
+                    "Login as Customer"
                   ) : (
-                    canLoginAsAdmin ? "Login as Customer" : "Login"
+                    "Login"
                   )}
                 </Button>
                 {canLoginAsAdmin && (
@@ -417,9 +425,7 @@ export default function LoginPage() {
               <Button
                 type="button"
                 className={`w-full transition-all ${
-                  showRegisterHighlight
-                    ? "shadow-lg shadow-red-500/25 ring-2 ring-red-400"
-                    : ""
+                  showRegisterHighlight ? "shadow-lg shadow-red-500/25 ring-2 ring-red-400" : ""
                 }`}
                 variant="outline"
                 onClick={() => router.push("/register")}
@@ -427,9 +433,7 @@ export default function LoginPage() {
                 Register
               </Button>
               {errorMessage && (
-                <p className="text-red-600 text-sm text-center mt-6">
-                  {errorMessage}
-                </p>
+                <p className="text-red-600 text-sm text-center mt-6">{errorMessage}</p>
               )}
               <button type="submit" className="hidden" aria-hidden="true" />
             </CardFooter>
