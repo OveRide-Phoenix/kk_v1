@@ -24,6 +24,7 @@ import Autoplay from "embla-carousel-autoplay";
 import CustomerNavBar from "@/components/customer-nav-bar";
 import { Button } from "@/components/ui/button";
 import { Carousel, CarouselApi, CarouselContent, CarouselItem } from "@/components/ui/carousel";
+import { useHydrateAuthUser } from "@/hooks/useHydrateAuthUser";
 import { useAuthStore } from "@/store/store";
 import Footer from "@/components/footer";
 import { cn } from "@/lib/utils";
@@ -155,7 +156,6 @@ const currency = (value: number) =>
 export default function CustomerHomePage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
-  const setUser = useAuthStore((state) => state.setUser);
   const [hydrated, setHydrated] = useState(false);
 
   const todayISO = useMemo(() => formatDate(new Date(), "yyyy-MM-dd"), []);
@@ -202,23 +202,7 @@ export default function CustomerHomePage() {
   const availableMeals = useMemo(() => getSupportedMeals(cityCode), [cityCode]);
   const availableMealsKey = useMemo(() => availableMeals.join(","), [availableMeals]);
 
-  useEffect(() => {
-    if (!hydrated) return;
-    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-    if (user || !token) return;
-    (async () => {
-      try {
-        const response = await fetch("/api/backend/auth/me", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!response.ok) return;
-        const me = await response.json();
-        setUser(me);
-      } catch (err) {
-        console.warn("Unable to restore session", err);
-      }
-    })();
-  }, [hydrated, user, setUser]);
+  useHydrateAuthUser({ enabled: hydrated });
 
   useEffect(() => {
     setHydrated(true);

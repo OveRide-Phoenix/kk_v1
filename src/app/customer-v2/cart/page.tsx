@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { normalizeCityCode } from "@/config/cities";
+import { useHydrateAuthUser } from "@/hooks/useHydrateAuthUser";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/store/store";
 import { http } from "@/lib/http";
@@ -110,7 +111,6 @@ const mealLabel = (meal: MealType) => {
 export default function CustomerV2CartPage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
-  const setUser = useAuthStore((state) => state.setUser);
 
   const [cartItems, setCartItems] = useState<CartLine[]>([]);
   const [cartContext, setCartContext] = useState<CartContext | null>(null);
@@ -146,23 +146,7 @@ export default function CustomerV2CartPage() {
     }
   }, []);
 
-  useEffect(() => {
-    if (user) return;
-    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-    if (!token) return;
-    (async () => {
-      try {
-        const response = await fetch("/api/backend/auth/me", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!response.ok) return;
-        const me = await response.json();
-        setUser(me);
-      } catch {
-        // no-op
-      }
-    })();
-  }, [user, setUser]);
+  useHydrateAuthUser();
 
   useEffect(() => {
     const customerId = user?.customer_id;

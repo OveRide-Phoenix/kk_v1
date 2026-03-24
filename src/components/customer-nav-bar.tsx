@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ComponentProps } from "react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
 import { Crown, LogOut, User } from "lucide-react"
+import { useHydrateAuthUser } from "@/hooks/useHydrateAuthUser"
 import { Button } from "@/components/ui/button"
 import { useAuthStore } from "@/store/store"
 
@@ -21,7 +22,6 @@ export default function CustomerNavBar({ unauthLinks }: CustomerNavBarProps = {}
   const [isScrolled, setIsScrolled] = useState(false)
   const [hydrated, setHydrated] = useState(false)
   const user = useAuthStore((state) => state.user)
-  const setUser = useAuthStore((state) => state.setUser)
   const logout = useAuthStore((state) => state.logout)
   const router = useRouter()
   const pathname = usePathname()
@@ -57,24 +57,7 @@ export default function CustomerNavBar({ unauthLinks }: CustomerNavBarProps = {}
     setHydrated(true)
   }, [])
 
-  useEffect(() => {
-    if (!hydrated) return
-    if (user) return
-    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null
-    if (!token) return
-    ;(async () => {
-      try {
-        const meResponse = await fetch("/api/backend/auth/me", {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (!meResponse.ok) return
-        const me = await meResponse.json()
-        setUser(me)
-      } catch (error) {
-        console.error("Failed to fetch user context", error)
-      }
-    })()
-  }, [hydrated, user, setUser])
+  useHydrateAuthUser({ enabled: hydrated })
 
   const derivedRoleCodes = useMemo(() => {
     const codes = new Set<string>()

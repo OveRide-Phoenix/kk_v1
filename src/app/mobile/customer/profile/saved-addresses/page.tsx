@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ArrowLeft, MapPin } from "lucide-react";
 import { MobileCustomerBottomNav } from "@/components/mobile/customer/bottom-nav";
 import { mobilePalette, playfairMobile, workSans } from "@/components/mobile/customer/theme";
+import { useHydrateAuthUser } from "@/hooks/useHydrateAuthUser";
 import { useAuthStore } from "@/store/store";
 import { http } from "@/lib/http";
 
@@ -23,7 +23,6 @@ type AddressEntry = {
 export default function MobileCustomerSavedAddressesPage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
-  const setUser = useAuthStore((state) => state.setUser);
   const [addresses, setAddresses] = useState<AddressEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,22 +38,7 @@ export default function MobileCustomerSavedAddressesPage() {
     router.push("/mobile/customer/home");
   };
 
-  useEffect(() => {
-    if (user) return;
-    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-    if (!token) return;
-    (async () => {
-      try {
-        const response = await fetch("/api/backend/auth/me", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!response.ok) return;
-        setUser(await response.json());
-      } catch {
-        // ignore
-      }
-    })();
-  }, [user, setUser]);
+  useHydrateAuthUser();
 
   const fetchAddresses = async (customerId: number) => {
     setLoading(true);

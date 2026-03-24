@@ -7,6 +7,7 @@ import { format as formatDate, isSameMonth } from "date-fns";
 import { ArrowLeft, CalendarDays, Info, Loader2 } from "lucide-react";
 import { MobileCustomerBottomNav } from "@/components/mobile/customer/bottom-nav";
 import { mobilePalette, playfairMobile, workSans } from "@/components/mobile/customer/theme";
+import { useHydrateAuthUser } from "@/hooks/useHydrateAuthUser";
 import { useAuthStore } from "@/store/store";
 import { http } from "@/lib/http";
 
@@ -43,7 +44,6 @@ const PAYMENT_FREQUENCIES = ["Daily", "Weekly", "Monthly"] as const;
 export default function MobileCustomerManageSubscriptionPage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
-  const setUser = useAuthStore((state) => state.setUser);
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [paymentFrequency, setPaymentFrequency] = useState("Daily");
@@ -64,22 +64,7 @@ export default function MobileCustomerManageSubscriptionPage() {
     router.push("/mobile/customer/home");
   };
 
-  useEffect(() => {
-    if (user) return;
-    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-    if (!token) return;
-    (async () => {
-      try {
-        const response = await fetch("/api/backend/auth/me", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!response.ok) return;
-        setUser(await response.json());
-      } catch {
-        // ignore
-      }
-    })();
-  }, [user, setUser]);
+  useHydrateAuthUser();
 
   useEffect(() => {
     const customerId = user?.customer_id;

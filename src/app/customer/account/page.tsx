@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 
 import CustomerNavBar from "@/components/customer-nav-bar";
+import { useHydrateAuthUser } from "@/hooks/useHydrateAuthUser";
 import { useAuthStore } from "@/store/store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -167,7 +168,6 @@ const createAddressForm = (overrides: Partial<AddressFormState> = {}): AddressFo
 export default function AccountPage() {
   const user = useAuthStore((state) => state.user);
   const isAdminStore = useAuthStore((state) => state.isAdmin);
-  const setUser = useAuthStore((state) => state.setUser);
 
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
   const [form, setForm] = useState<CustomerProfile | null>(null);
@@ -195,24 +195,7 @@ export default function AccountPage() {
   } | null>(null);
   const [billOrderId, setBillOrderId] = useState<number | null>(null);
 
-  // Restore user session if the store is empty
-  useEffect(() => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-    if (user || !token) return;
-    (async () => {
-      try {
-        const response = await fetch("/api/backend/auth/me", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!response.ok) return;
-        const me = await response.json();
-        setUser(me);
-        // roles handled via setUser
-      } catch (err) {
-        console.warn("Failed to load user", err);
-      }
-    })();
-  }, [user, setUser]);
+  useHydrateAuthUser();
 
   const customerId = user?.customer_id;
   const currentCityLabel = useMemo(() => {
@@ -253,7 +236,7 @@ export default function AccountPage() {
       }
       const data = (await response.json()) as OrderSummary[];
       setOrders(data.map((order) => ({ ...order, order_type: order.order_type ?? "one_time" })));
-    } catch (err) {
+    } catch {
       setOrders([]);
       setOrdersError("Unable to load your order history right now.");
     } finally {
@@ -270,7 +253,7 @@ export default function AccountPage() {
       setError(null);
       try {
         await Promise.all([fetchProfile(), fetchAddresses()]);
-      } catch (err) {
+      } catch {
         if (!cancelled) {
           setError("Unable to load your account details. Please try again later.");
         }

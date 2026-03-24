@@ -15,6 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useHydrateAuthUser } from "@/hooks/useHydrateAuthUser";
 import { useAuthStore } from "@/store/store";
 import { toast } from "@/hooks/use-toast";
 import { getSupportedMeals, citySupportsFood, citySupportsCondiments } from "@/config/cities";
@@ -103,7 +104,6 @@ const normalizeQty = (value: unknown): number => {
 export default function NewOrderPage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
-  const setUser = useAuthStore((state) => state.setUser);
   const [hydrated, setHydrated] = useState(false);
 
   const orderDate = useMemo(() => formatDate(new Date(), "yyyy-MM-dd"), []);
@@ -184,23 +184,7 @@ export default function NewOrderPage() {
       setActiveCategory(availableMeals[0] ?? null);
     }
   }, [activeCategory, availableMeals]);
-  useEffect(() => {
-    if (user) return;
-    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-    if (!token) return;
-    (async () => {
-      try {
-        const response = await fetch("/api/backend/auth/me", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!response.ok) return;
-        const me = await response.json();
-        setUser(me);
-      } catch (error) {
-        console.error("Unable to restore session", error);
-      }
-    })();
-  }, [user, setUser]);
+  useHydrateAuthUser({ enabled: hydrated });
 
   useEffect(() => {
     setHydrated(true);

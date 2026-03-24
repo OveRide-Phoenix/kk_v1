@@ -4,6 +4,7 @@ import { format as formatDate } from "date-fns";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { useHydrateAuthUser } from "@/hooks/useHydrateAuthUser";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/store/store";
 import { http } from "@/lib/http";
@@ -101,7 +102,6 @@ const createMenuItemMap = (menuByMeal: Record<MealType, MenuItem[]>): Record<num
 export default function CustomerV2OrderPage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
-  const setUser = useAuthStore((state) => state.setUser);
 
   const [hydrated, setHydrated] = useState(false);
   const [menuLoading, setMenuLoading] = useState(false);
@@ -136,23 +136,7 @@ export default function CustomerV2OrderPage() {
     setHydrated(true);
   }, []);
 
-  useEffect(() => {
-    if (!hydrated) return;
-    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-    if (user || !token) return;
-    (async () => {
-      try {
-        const response = await fetch("/api/backend/auth/me", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!response.ok) return;
-        const me = await response.json();
-        setUser(me);
-      } catch {
-        // no-op
-      }
-    })();
-  }, [hydrated, user, setUser]);
+  useHydrateAuthUser({ enabled: hydrated });
 
   useEffect(() => {
     let cancelled = false;

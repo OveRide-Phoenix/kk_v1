@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { useHydrateAuthUser } from "@/hooks/useHydrateAuthUser";
 import { useAuthStore } from "@/store/store";
 
 function LoadingScreen() {
@@ -22,61 +23,28 @@ export default function MobileCustomerGuard({ children }: { children: React.Reac
   const router = useRouter();
   const pathname = usePathname();
   const user = useAuthStore((state) => state.user);
-  const setUser = useAuthStore((state) => state.setUser);
   const logout = useAuthStore((state) => state.logout);
-  const [checking, setChecking] = useState(true);
+  const [mounted, setMounted] = useState(false);
+
+  const redirectToLogin = useCallback(async () => {
+    await logout();
+    router.replace("/mobile/customer/login");
+  }, [logout, router]);
+
+  const { isHydrating } = useHydrateAuthUser({
+    enabled: !isPublicMobileCustomerRoute(pathname),
+    onError: async (error) => {
+      console.error("Mobile customer auth guard error", error);
+      await redirectToLogin();
+    },
+    onUnauthenticated: redirectToLogin,
+  });
 
   useEffect(() => {
-    let cancelled = false;
+    setMounted(true);
+  }, []);
 
-    const ensureAuthenticated = async () => {
-      if (isPublicMobileCustomerRoute(pathname)) {
-        if (!cancelled) setChecking(false);
-        return;
-      }
-
-      try {
-        const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-
-        if (!token) {
-          await logout();
-          if (!cancelled) router.replace("/mobile/customer/login");
-          return;
-        }
-
-        if (!user) {
-          const response = await fetch("/api/backend/auth/me", {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-
-          if (!response.ok) {
-            await logout();
-            if (!cancelled) router.replace("/mobile/customer/login");
-            return;
-          }
-
-          const me = await response.json();
-          if (cancelled) return;
-          setUser(me);
-        }
-      } catch (error) {
-        console.error("Mobile customer auth guard error", error);
-        await logout();
-        if (!cancelled) router.replace("/mobile/customer/login");
-        return;
-      } finally {
-        if (!cancelled) setChecking(false);
-      }
-    };
-
-    ensureAuthenticated();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [pathname, router, user, setUser, logout]);
-
-  if (!isPublicMobileCustomerRoute(pathname) && checking) {
+  if (!isPublicMobileCustomerRoute(pathname) && (!mounted || isHydrating || !user)) {
     return <LoadingScreen />;
   }
 

@@ -1,7 +1,8 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
+import { useHydrateAuthUser } from "@/hooks/useHydrateAuthUser"
 import { useAuthStore } from "@/store/store"
 
 function LoadingScreen() {
@@ -17,52 +18,26 @@ export default function CustomerGuard({ children }: { children: React.ReactNode 
   const router = useRouter()
   const pathname = usePathname()
   const user = useAuthStore((state) => state.user)
-  const setUser = useAuthStore((state) => state.setUser)
   const logout = useAuthStore((state) => state.logout)
-  const [checking, setChecking] = useState(true)
+  const [mounted, setMounted] = useState(false)
+
+  const redirectToLogin = useCallback(async () => {
+    await logout()
+    const next = encodeURIComponent(pathname || "/customer/home")
+    router.replace(`/login?next=${next}`)
+  }, [logout, pathname, router])
+
+  const { isHydrating } = useHydrateAuthUser({
+    onError: async (error) => {
+      console.error("Customer auth guard error", error)
+      await redirectToLogin()
+    },
+    onUnauthenticated: redirectToLogin,
+  })
 
   useEffect(() => {
-    let cancelled = false
-
-    const ensureAuthenticated = async () => {
-      try {
-        const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null
-
-        if (!token) {
-          logout()
-          if (!cancelled) router.replace("/login")
-          return
-        }
-
-        if (!user) {
-          const response = await fetch("/api/backend/auth/me", {
-            headers: { Authorization: `Bearer ${token}` },
-          })
-          if (!response.ok) {
-            logout()
-            if (!cancelled) router.replace("/login")
-            return
-          }
-          const me = await response.json()
-          if (cancelled) return
-          setUser(me)
-        }
-      } catch (error) {
-        console.error("Customer auth guard error", error)
-        logout()
-        if (!cancelled) router.replace("/login")
-        return
-      } finally {
-        if (!cancelled) setChecking(false)
-      }
-    }
-
-    ensureAuthenticated()
-
-    return () => {
-      cancelled = true
-    }
-  }, [router, pathname, user, setUser, logout])
+    setMounted(true)
+  }, [])
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -74,7 +49,7 @@ export default function CustomerGuard({ children }: { children: React.ReactNode 
     }
   }, [])
 
-  if (checking) {
+  if (!mounted || isHydrating || !user) {
     return <LoadingScreen />
   }
 
