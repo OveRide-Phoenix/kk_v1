@@ -69,3 +69,29 @@ REFRESH_TOKEN_TTL_SEC = _refresh_token_ttl()
 COOKIE_SECURE = (_clean(os.getenv("COOKIE_SECURE", "false")) or "").lower() == "true"
 COOKIE_SAMESITE = _clean(os.getenv("COOKIE_SAMESITE", "Lax")) or "Lax"
 COOKIE_DOMAIN = _clean(os.getenv("BACKEND_DOMAIN")) or None
+
+_DEV_ORIGINS = ["http://127.0.0.1:3000", "http://localhost:3000", "http://127.0.0.1:8000"]
+
+
+def _cors_origins() -> list[str]:
+    """Resolve allowed CORS origins from the CORS_ORIGINS env var.
+
+    Reads a comma-separated list from ``CORS_ORIGINS``. Falls back to
+    localhost dev origins and warns so that misconfigured production
+    deployments are obvious rather than silently broken.
+
+    Returns:
+        List of origin strings to pass to ``CORSMiddleware``.
+    """
+    raw = _clean(os.getenv("CORS_ORIGINS"))
+    if raw:
+        return [o.strip().rstrip("/") for o in raw.split(",") if o.strip()]
+    warnings.warn(
+        "CORS_ORIGINS is not set. Defaulting to localhost-only origins. "
+        "Set CORS_ORIGINS in backend/.env for production deployments.",
+        stacklevel=1,
+    )
+    return list(_DEV_ORIGINS)
+
+
+CORS_ORIGINS: list[str] = _cors_origins()

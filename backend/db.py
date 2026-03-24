@@ -16,6 +16,7 @@ Pool sizing (env overrides):
 from __future__ import annotations
 
 import os
+import warnings
 from urllib.parse import urlparse
 
 try:
@@ -58,9 +59,14 @@ def _parse_db_url(url: str) -> dict:
     }
 
 
-_DATABASE_URL: str = os.getenv(
-    "DATABASE_URL", "mysql+pymysql://fastapi_user:password@localhost/kk_v1"
-)
+_DEV_DATABASE_URL = "mysql+pymysql://fastapi_user:password@localhost/kk_v1"
+_DATABASE_URL: str = os.getenv("DATABASE_URL", _DEV_DATABASE_URL)
+if _DATABASE_URL == _DEV_DATABASE_URL:
+    warnings.warn(
+        "DATABASE_URL is not set. Using insecure dev default credentials. "
+        "Set DATABASE_URL in backend/.env before deploying to production.",
+        stacklevel=1,
+    )
 _POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", "10"))
 
 _pool = MySQLConnectionPool(
