@@ -124,21 +124,42 @@ def get_customer_by_id(db, customer_id):
         cursor.close()
 
 
-def get_all_customers(db, city_code: Optional[str] = None):
+def get_all_customers(
+    db,
+    city_code: Optional[str] = None,
+    search: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> dict:
+    """Return a paginated list of customers with optional city and search filters.
+
+    Args:
+        db: Database connection.
+        city_code: Optional city filter; when set, only customers with an address in that city
+            are returned.
+        search: Optional substring filter applied to customer name, phone, or email.
+        limit: Maximum number of rows to return (capped at 500).
+        offset: Pagination offset.
+
+    Returns:
+        Dict with ``customers`` list and ``total`` count.
+    """
+    limit = min(limit, 500)
     try:
         cursor = db.cursor(dictionary=True)
         params: list = []
+        search_clause = ""
+        search_params: list = []
+        if search:
+            term = f"%{search}%"
+            search_clause = (
+                " AND (c.name LIKE %s OR c.primary_mobile LIKE %s"
+                " OR c.email LIKE %s OR a.written_address LIKE %s)"
+            )
+            search_params = [term, term, term, term]
+
         if city_code:
-            query = """
-            SELECT 
-                c.customer_id, c.referred_by, c.primary_mobile, c.alternative_mobile, 
-                c.name, c.recipient_name, c.payment_frequency, c.email, c.created_at,
-                c.roles, c.admin_is_active,
-                a.address_id, a.house_apartment_no, a.written_address, a.city, 
-                a.pin_code, a.latitude, a.longitude, a.address_type, a.route_id,
-                dr.route_name, dr.route_code,
-                COALESCE(o.completed_orders, 0) AS completed_orders,
-                COALESCE(p.pending_orders, 0) AS pending_orders
+            base_from = """
             FROM customers c
             INNER JOIN (
                 SELECT *
@@ -170,20 +191,11 @@ def get_all_customers(db, city_code: Optional[str] = None):
                    AND ao.city_code = %s
                  GROUP BY o.customer_id
             ) p ON p.customer_id = c.customer_id
-            ORDER BY c.created_at ASC
+            WHERE 1=1
             """
-            params.extend([city_code, city_code, city_code])
+            base_params = [city_code, city_code, city_code]
         else:
-            query = """
-            SELECT 
-                c.customer_id, c.referred_by, c.primary_mobile, c.alternative_mobile, 
-                c.name, c.recipient_name, c.payment_frequency, c.email, c.created_at,
-                c.roles, c.admin_is_active,
-                a.address_id, a.house_apartment_no, a.written_address, a.city, 
-                a.pin_code, a.latitude, a.longitude, a.address_type, a.route_id,
-                dr.route_name, dr.route_code,
-                COALESCE(o.completed_orders, 0) AS completed_orders,
-                COALESCE(p.pending_orders, 0) AS pending_orders
+            base_from = """
             FROM customers c
             INNER JOIN addresses a ON c.customer_id = a.customer_id
             LEFT JOIN delivery_routes dr ON dr.route_id = a.route_id
@@ -200,9 +212,28 @@ def get_all_customers(db, city_code: Optional[str] = None):
                 GROUP BY customer_id
             ) p ON p.customer_id = c.customer_id
             WHERE a.is_default = 1
-            ORDER BY c.created_at ASC
             """
-        cursor.execute(query, tuple(params))
+            base_params = []
+
+        count_query = f"SELECT COUNT(DISTINCT c.customer_id) AS total {base_from}{search_clause}"
+        cursor.execute(count_query, tuple(base_params + search_params))
+        total = int((cursor.fetchone() or {}).get("total") or 0)
+
+        data_query = f"""
+            SELECT
+                c.customer_id, c.referred_by, c.primary_mobile, c.alternative_mobile,
+                c.name, c.recipient_name, c.payment_frequency, c.email, c.created_at,
+                c.roles, c.admin_is_active,
+                a.address_id, a.house_apartment_no, a.written_address, a.city,
+                a.pin_code, a.latitude, a.longitude, a.address_type, a.route_id,
+                dr.route_name, dr.route_code,
+                COALESCE(o.completed_orders, 0) AS completed_orders,
+                COALESCE(p.pending_orders, 0) AS pending_orders
+            {base_from}{search_clause}
+            ORDER BY c.created_at ASC
+            LIMIT %s OFFSET %s
+        """
+        cursor.execute(data_query, tuple(base_params + search_params + [limit, offset]))
         rows = cursor.fetchall()
 
         admin_role_id = get_role_id(cursor, "admin")
@@ -211,7 +242,7 @@ def get_all_customers(db, city_code: Optional[str] = None):
             row["roles"] = roles
             row["is_admin"] = 1 if admin_role_id and admin_role_id in roles else 0
             row["admin_is_active"] = bool(row.get("admin_is_active", True))
-        return rows
+        return {"customers": rows, "total": total}
     finally:
         cursor.close()
 

@@ -149,41 +149,53 @@ def fetch_customer(customer_id: int, db=Depends(_get_db)):
     return get_customer_by_id(db, customer_id)
 
 
-@router.get("/get-all-customers", response_model=list)
+@router.get("/get-all-customers", response_model=dict)
 def fetch_all_customers(
     city_code: Optional[str] = Query(None, description="Optional city filter"),
+    search: Optional[str] = Query(None, description="Search by name, phone, or email"),
+    limit: int = Query(100, ge=1, le=500, description="Page size"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
     db=Depends(_get_db),
 ):
-    """Return all customers, optionally filtered by city.
+    """Return paginated customers, optionally filtered by city and search term.
 
     Args:
         city_code: Optional city code filter.
+        search: Optional substring search on name, phone, or email.
+        limit: Page size (max 500).
+        offset: Pagination offset.
         db: Database connection (injected).
 
     Returns:
-        List of customer dicts.
+        Dict with ``customers`` list and ``total`` count.
     """
-    return get_all_customers(db, city_code)
+    return get_all_customers(db, city_code, search=search, limit=limit, offset=offset)
 
 
 @router.get("/api/admin/customers", tags=["Admin"])
 def fetch_admin_customers(
     city_code: Optional[str] = Query(None, description="Override city scope"),
+    search: Optional[str] = Query(None, description="Search by name, phone, or email"),
+    limit: int = Query(100, ge=1, le=500, description="Page size"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
     user: Dict[str, Any] = Depends(admin_required),
     db=Depends(_get_db),
 ):
-    """Return all customers scoped to the admin's active city.
+    """Return paginated customers scoped to the admin's active city.
 
     Args:
         city_code: Optional city_code override.
+        search: Optional substring search on name, phone, or email.
+        limit: Page size (max 500).
+        offset: Pagination offset.
         user: Current admin user (injected).
         db: Database connection (injected).
 
     Returns:
-        List of customer dicts.
+        Dict with ``customers`` list and ``total`` count.
     """
     resolved_city = _resolve_city_context(city_code, user)
-    return get_all_customers(db, resolved_city)
+    return get_all_customers(db, resolved_city, search=search, limit=limit, offset=offset)
 
 
 @router.put("/update-customer/{customer_id}", response_model=dict)

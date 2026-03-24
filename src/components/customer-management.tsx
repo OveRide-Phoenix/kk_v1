@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { http } from "@/lib/http";
 import { Pencil, Trash2, Plus, Search, Eye, ChevronUp, MoreHorizontal, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -37,13 +37,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import RegisterForm from "@/components/registerform";
 import { AdminLayout } from "@/components/admin-layout";
@@ -108,8 +101,9 @@ interface Customer {
   admin_is_active?: boolean;
 }
 
+const PAGE_SIZE = 50;
+
 export default function CustomerManagement() {
-  // Remove the destructuring
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<"create" | "edit">("create");
@@ -122,51 +116,61 @@ export default function CustomerManagement() {
   const [isDeleting, setIsDeleting] = useState(false);
   const adminCity = useAuthStore((state) => state.adminCity || state.user?.city_code || "MYS");
 
-  // Initialize with empty array
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [roleCatalog, setRoleCatalog] = useState<Record<number, string>>({});
   const [adminRoleId, setAdminRoleId] = useState<number | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setPage(0);
+      setDebouncedSearch(value);
+    }, 400);
+  };
 
   const refreshCustomers = useCallback(async () => {
     try {
       setIsLoading(true);
-      const response = await http.get(`/api/admin/customers?city_code=${adminCity}`);
+      const params = new URLSearchParams({
+        city_code: adminCity,
+        limit: String(PAGE_SIZE),
+        offset: String(page * PAGE_SIZE),
+      });
+      if (debouncedSearch) params.set("search", debouncedSearch);
+      const response = await http.get(`/api/admin/customers?${params}`);
       if (!response.ok) {
         setCustomers([]);
+        setTotal(0);
         return;
       }
       const raw = await response.json();
-      if (!Array.isArray(raw)) {
-        setCustomers([]);
-        return;
-      }
-      const enriched = raw.map((customer: Customer & { roles?: unknown; role_codes?: unknown }) => {
-        const roles = normaliseRoles(customer.roles);
-        const roleCodes = Array.isArray(customer.role_codes)
-          ? customer.role_codes.filter((code): code is string => typeof code === "string")
-          : [];
-        return {
-          ...customer,
-          roles,
-          role_codes: roleCodes,
-        };
-      });
-      setCustomers(enriched);
+      const rows: Customer[] = (Array.isArray(raw.customers) ? raw.customers : []).map(
+        (customer: Customer & { roles?: unknown; role_codes?: unknown }) => {
+          const roles = normaliseRoles(customer.roles);
+          const roleCodes = Array.isArray(customer.role_codes)
+            ? customer.role_codes.filter((code): code is string => typeof code === "string")
+            : [];
+          return { ...customer, roles, role_codes: roleCodes };
+        },
+      );
+      setCustomers(rows);
+      setTotal(typeof raw.total === "number" ? raw.total : 0);
     } catch (error) {
       console.error("Error fetching customers:", error);
       setCustomers([]);
+      setTotal(0);
     } finally {
       setIsLoading(false);
     }
-  }, [adminCity]);
-  const [filters, setFilters] = useState({
-    orderCount: "all",
-    address: "",
-  });
+  }, [adminCity, debouncedSearch, page]);
 
-  // Update the fetch and data handling
   useEffect(() => {
     void refreshCustomers();
   }, [refreshCustomers]);
@@ -202,21 +206,7 @@ export default function CustomerManagement() {
     loadRoles();
   }, []);
 
-  // Update the filter function to use the correct field names
-  const filteredCustomers = Array.isArray(customers)
-    ? customers.filter((customer) => {
-        const matchesSearch = (customer?.name?.toLowerCase() || "").includes(
-          searchQuery.toLowerCase(),
-        );
-
-        const matchesOrderCount = true; // Remove if not needed
-        const matchesAddress =
-          !filters.address ||
-          (customer?.written_address?.toLowerCase() || "").includes(filters.address.toLowerCase());
-
-        return matchesSearch && matchesOrderCount && matchesAddress;
-      })
-    : [];
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   // Define columns with priority for responsive display
   const columns = [
@@ -455,42 +445,15 @@ export default function CustomerManagement() {
           </CardHeader>
 
           <CardContent className="space-y-6">
-            {/* Search and Filters */}
+            {/* Search */}
             <div className="flex flex-col sm:flex-row gap-4">
-              {/* Search input */}
               <div className="relative flex-1">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   className="w-full customer-form-field pl-8 pr-3 py-2"
-                  placeholder="Search customers..."
+                  placeholder="Search by name, phone, email, or address..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-
-              {/* Filters */}
-              <div className="flex flex-wrap gap-2">
-                <Select
-                  value={filters.orderCount}
-                  onValueChange={(value) => setFilters((prev) => ({ ...prev, orderCount: value }))}
-                >
-                  <SelectTrigger className={`${isMobile ? "w-full" : "w-[180px]"}`}>
-                    <SelectValue placeholder="Filter by orders" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Orders</SelectItem>
-                    <SelectItem value="5">5+ Orders</SelectItem>
-                    <SelectItem value="10">10+ Orders</SelectItem>
-                    <SelectItem value="20">20+ Orders</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <Input
-                  placeholder="Filter by address..."
-                  value={filters.address}
-                  onChange={(e) => setFilters((prev) => ({ ...prev, address: e.target.value }))}
-                  className={`${isMobile ? "w-full" : "w-[200px]"}`}
-                  autoComplete="new-address-filter"
+                  onChange={(e) => handleSearchChange(e.target.value)}
                 />
               </div>
             </div>
@@ -525,7 +488,7 @@ export default function CustomerManagement() {
                         </div>
                       </TableCell>
                     </TableRow>
-                  ) : filteredCustomers.length === 0 ? (
+                  ) : customers.length === 0 ? (
                     <TableRow key="empty-row">
                       <TableCell
                         colSpan={visibleColumns.length}
@@ -536,7 +499,7 @@ export default function CustomerManagement() {
                     </TableRow>
                   ) : (
                     // Update the TableRow and TableCell in the mapping section
-                    filteredCustomers.map((customer) => (
+                    customers.map((customer) => (
                       <TableRow key={customer.customer_id} className="h-14">
                         {visibleColumns.map((column) => {
                           if (column.key === "actions") {
@@ -700,6 +663,34 @@ export default function CustomerManagement() {
                 </TableBody>
               </Table>
             </div>
+
+            {/* Pagination */}
+            {total > PAGE_SIZE && (
+              <div className="flex items-center justify-between pt-2 text-sm text-muted-foreground">
+                <span>
+                  {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}{" "}
+                  customers
+                </span>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page === 0 || isLoading}
+                    onClick={() => setPage((p) => p - 1)}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page >= totalPages - 1 || isLoading}
+                    onClick={() => setPage((p) => p + 1)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

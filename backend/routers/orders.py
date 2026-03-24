@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 import mysql.connector
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..db import get_raw_db
@@ -393,6 +394,7 @@ def admin_order_history(
     """
     db = get_raw_db()
     cursor = db.cursor(dictionary=True)
+    _streaming = False
     try:
         resolved_city = _resolve_city_context(city_code, user)
         where_clauses: List[str] = []
@@ -472,11 +474,106 @@ def admin_order_history(
             ORDER BY o.created_at DESC, o.order_id DESC
         """
 
-        data_params = list(params)
-        if export != "csv":
-            data_query += " LIMIT %s OFFSET %s"
-            data_params.extend([limit, offset])
+        if export == "csv":
+            # Stream the CSV to avoid loading all rows into memory.
+            # Close the count cursor and open a new one for the streaming query.
+            cursor.close()
+            stream_cursor = db.cursor(dictionary=True)
+            stream_query = f"""
+                SELECT
+                    o.order_id,
+                    o.created_at,
+                    o.total_price,
+                    o.status,
+                    o.paid,
+                    o.payment_method,
+                    c.name AS customer_name,
+                    c.primary_mobile,
+                    COALESCE(i.name, co.combo_name) AS item_name,
+                    COALESCE(oi.quantity, 0) AS quantity,
+                    COALESCE(oi.price, 0.0) AS price,
+                    COALESCE(oi.quantity, 0) * COALESCE(oi.price, 0.0) AS line_total
+                FROM orders o
+                JOIN customers c ON o.customer_id = c.customer_id
+                LEFT JOIN addresses a ON o.address_id = a.address_id
+                LEFT JOIN order_items oi ON o.order_id = oi.order_id
+                LEFT JOIN items i ON oi.item_id = i.item_id
+                LEFT JOIN combos co ON oi.combo_id = co.combo_id
+                {where_fragment}
+                ORDER BY o.created_at DESC, o.order_id DESC,
+                         COALESCE(i.name, co.combo_name) ASC
+            """
 
+            def _generate_csv():
+                """Yield CSV rows in chunks, then close the cursor and connection."""
+                try:
+                    stream_cursor.execute(stream_query, tuple(params))
+                    buf = io.StringIO()
+                    writer = csv.writer(buf)
+                    writer.writerow(
+                        [
+                            "Order ID",
+                            "Placed At",
+                            "Customer",
+                            "Phone",
+                            "Status",
+                            "Payment Method",
+                            "Payment Status",
+                            "Item",
+                            "Quantity",
+                            "Price",
+                            "Line Total",
+                            "Order Total",
+                        ]
+                    )
+                    yield buf.getvalue()
+                    buf.seek(0)
+                    buf.truncate()
+                    while True:
+                        rows = stream_cursor.fetchmany(200)
+                        if not rows:
+                            break
+                        for row in rows:
+                            paid_flag = bool(row.get("paid"))
+                            writer.writerow(
+                                [
+                                    row["order_id"],
+                                    (
+                                        row["created_at"].strftime("%Y-%m-%d %H:%M:%S")
+                                        if row.get("created_at")
+                                        else ""
+                                    ),
+                                    row.get("customer_name") or "",
+                                    row.get("primary_mobile") or "",
+                                    format_status_with_payment(row.get("status"), paid_flag),
+                                    row.get("payment_method") or "",
+                                    "Paid" if paid_flag else "Payment Due",
+                                    row.get("item_name") or "",
+                                    int(row.get("quantity") or 0),
+                                    float(row.get("price") or 0),
+                                    float(row.get("line_total") or 0),
+                                    float(row.get("total_price") or 0),
+                                ]
+                            )
+                            yield buf.getvalue()
+                            buf.seek(0)
+                            buf.truncate()
+                finally:
+                    stream_cursor.close()
+                    db.close()
+
+            # Signal the outer finally not to close db — the generator handles cleanup.
+            _streaming = True
+            return StreamingResponse(
+                _generate_csv(),
+                media_type="text/csv",
+                headers={
+                    "Content-Disposition": "attachment; filename=order-history.csv",
+                },
+            )
+
+        data_query += " LIMIT %s OFFSET %s"
+        data_params = list(params) + [limit, offset]
         cursor.execute(data_query, tuple(data_params))
         orders = cursor.fetchall() or []
 
@@ -511,64 +608,6 @@ def admin_order_history(
                     }
                 )
 
-        if export == "csv":
-            output = io.StringIO()
-            writer = csv.writer(output)
-            writer.writerow(
-                [
-                    "Order ID",
-                    "Placed At",
-                    "Customer",
-                    "Phone",
-                    "Status",
-                    "Payment Method",
-                    "Payment Status",
-                    "Item",
-                    "Quantity",
-                    "Price",
-                    "Line Total",
-                    "Order Total",
-                ]
-            )
-
-            for record in orders:
-                paid_flag = bool(record.get("paid"))
-                normalized_status = format_status_with_payment(record.get("status"), paid_flag)
-                payment_label = "Paid" if paid_flag else "Payment Due"
-                order_items = items_by_order.get(record["order_id"], []) or [
-                    {"name": "", "quantity": 0, "price": 0.0, "line_total": 0.0}
-                ]
-                for item in order_items:
-                    writer.writerow(
-                        [
-                            record["order_id"],
-                            (
-                                record["created_at"].strftime("%Y-%m-%d %H:%M:%S")
-                                if record.get("created_at")
-                                else ""
-                            ),
-                            record.get("customer_name") or "",
-                            record.get("primary_mobile") or "",
-                            normalized_status,
-                            record.get("payment_method") or "",
-                            payment_label,
-                            item["name"],
-                            item["quantity"],
-                            item["price"],
-                            item["line_total"],
-                            float(record.get("total_price") or 0),
-                        ]
-                    )
-
-            output.seek(0)
-            return Response(
-                content=output.getvalue(),
-                media_type="text/csv",
-                headers={
-                    "Content-Disposition": "attachment; filename=order-history.csv",
-                },
-            )
-
         result = []
         for record in orders:
             paid_flag = bool(record.get("paid"))
@@ -599,8 +638,9 @@ def admin_order_history(
 
         return {"orders": result, "total": total_orders}
     finally:
-        cursor.close()
-        db.close()
+        if not _streaming:
+            cursor.close()
+            db.close()
 
 
 @router.post("/api/admin/orders/{order_id}/status")
