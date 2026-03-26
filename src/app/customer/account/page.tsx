@@ -52,6 +52,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import GoogleMapPicker from "@/components/gmap/GoogleMapPicker";
 import { http } from "@/lib/http";
+import { normalizeOrderStatusKey, orderStatusLabel } from "@/lib/order-status";
 
 const CITY_OPTIONS = [
   { label: "Mysore", code: "MYS" },
@@ -119,6 +120,7 @@ type OrderSummary = {
   created_at: string | null;
   total_price: number;
   status: string;
+  payment_status?: string;
   payment_method: string;
   order_type?: string | null;
   address: {
@@ -333,13 +335,15 @@ export default function AccountPage() {
   const renderOrderCard = useCallback(
     (order: OrderSummary, options?: { variant?: "default" | "dialog" }) => {
       const variant = options?.variant ?? "default";
-      const statusKey = order.status.toLowerCase();
+      const statusKey = normalizeOrderStatusKey(order.status);
       const statusStyle =
         statusKey === "delivered"
           ? "border-emerald-200 bg-emerald-100 text-emerald-700"
-          : statusKey === "in progress"
-            ? "border-amber-200 bg-amber-100 text-amber-700"
-            : "border-brand-subtle bg-[#f3ebe2] text-[#705446]";
+          : statusKey === "dispatched"
+            ? "border-indigo-200 bg-indigo-100 text-indigo-700"
+            : statusKey === "confirmed"
+              ? "border-sky-200 bg-sky-100 text-sky-700"
+              : "border-brand-subtle bg-[#f3ebe2] text-[#705446]";
 
       const isSubscriptionOrder = (order.order_type ?? "").toLowerCase() === "subscription";
 
@@ -356,7 +360,7 @@ export default function AccountPage() {
             </p>
           </div>
           <Badge variant="outline" className={`${statusStyle} uppercase`}>
-            {order.status}
+            {orderStatusLabel(order.status)}
           </Badge>
         </div>
       );
@@ -453,10 +457,11 @@ export default function AccountPage() {
     : Boolean(profile?.is_admin);
 
   const isAdmin = useMemo(() => {
-    const userRoleCodes = Array.isArray((user as any)?.role_codes)
-      ? (user as any).role_codes
-      : Array.isArray((user as any)?.roleCodes)
-        ? (user as any).roleCodes
+    const userWithRoles = user as { role_codes?: string[]; roleCodes?: string[] } | null;
+    const userRoleCodes = Array.isArray(userWithRoles?.role_codes)
+      ? userWithRoles.role_codes
+      : Array.isArray(userWithRoles?.roleCodes)
+        ? userWithRoles.roleCodes
         : [];
     return Boolean(isAdminStore || profileHasAdminRole || userRoleCodes.includes("admin"));
   }, [isAdminStore, profileHasAdminRole, user]);

@@ -60,8 +60,9 @@ def _parse_db_url(url: str) -> dict:
 
 
 _DEV_DATABASE_URL = "mysql+pymysql://fastapi_user:password@localhost/kk_v1"
-_DATABASE_URL: str = os.getenv("DATABASE_URL", _DEV_DATABASE_URL)
-if _DATABASE_URL == _DEV_DATABASE_URL:
+_RAW_DATABASE_URL = (os.getenv("DATABASE_URL") or "").strip()
+_DATABASE_URL: str = _RAW_DATABASE_URL or _DEV_DATABASE_URL
+if not _RAW_DATABASE_URL:
     warnings.warn(
         "DATABASE_URL is not set. Using insecure dev default credentials. "
         "Set DATABASE_URL in backend/.env before deploying to production.",

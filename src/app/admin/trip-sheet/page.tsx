@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { http } from "@/lib/http";
+import { normalizeOrderStatusKey, orderStatusLabel, paymentStatusLabel } from "@/lib/order-status";
 import { useAuthStore } from "@/store/store";
 import { getSupportedMeals } from "@/config/cities";
 import {
@@ -57,6 +58,7 @@ type TripSheetOrder = {
   total_price: number;
   payment_method: string;
   paid: boolean;
+  payment_status?: string;
   status: string;
   address: {
     address_id: number | null;
@@ -124,15 +126,9 @@ const formatCurrency = (value: number) =>
   }).format(value);
 
 const statusBadgeClass = (status: string) => {
-  const raw = status.toLowerCase();
-  const normalized = raw
-    .replace(/\(payment due\)/g, "")
-    .replace(/\s+-\s+payment due/g, "")
-    .trim();
-  if (raw.includes("payment due")) return "bg-amber-50 text-amber-900 border border-amber-100";
+  const normalized = normalizeOrderStatusKey(status);
   if (normalized === "confirmed") return "bg-sky-50 text-sky-700 border border-sky-100";
-  if (normalized === "preparing") return "bg-amber-50 text-amber-800 border border-amber-100";
-  if (normalized === "on the way") return "bg-indigo-50 text-indigo-700 border border-indigo-100";
+  if (normalized === "dispatched") return "bg-indigo-50 text-indigo-700 border border-indigo-100";
   if (normalized === "delivered") return "bg-emerald-50 text-emerald-700 border border-emerald-100";
   if (normalized === "cancelled" || normalized === "canceled")
     return "bg-rose-50 text-rose-700 border border-rose-100";
@@ -234,7 +230,7 @@ export default function TripSheetPage() {
         title: `${selectedMeal} trip sheet generated`,
         description:
           payload.status_updates > 0
-            ? `${payload.status_updates} orders marked as On the Way.`
+            ? `${payload.status_updates} orders marked as Dispatched.`
             : payload.routes.length > 0
               ? "No status changes required."
               : "No orders found for this meal.",
@@ -394,8 +390,8 @@ export default function TripSheetPage() {
       <div className="mb-6 space-y-1">
         <h1 className="text-2xl font-serif font-semibold text-foreground">Trip Sheet Generation</h1>
         <p className="text-sm text-muted-foreground">
-          Generate delivery manifests per meal, grouped by route. Orders advance to "On the Way" on
-          generation.
+          Generate delivery manifests per meal, grouped by route. Orders advance to{" "}
+          &quot;Dispatched&quot; on generation.
         </p>
       </div>
 
@@ -414,8 +410,8 @@ export default function TripSheetPage() {
               <strong>City:</strong> {adminCity}
             </p>
             <p className="flex items-center gap-2 text-xs">
-              <Info className="h-4 w-4 text-muted-foreground" /> Confirmed / Preparing orders move
-              to "On the Way".
+              <Info className="h-4 w-4 text-muted-foreground" /> Confirmed orders move to{" "}
+              &quot;Dispatched&quot;.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -545,7 +541,7 @@ export default function TripSheetPage() {
         <div className="space-y-6">
           {currentSheet.status_updates > 0 && (
             <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-              {currentSheet.status_updates} orders updated to <strong>On the Way</strong>.
+              {currentSheet.status_updates} orders updated to <strong>Dispatched</strong>.
             </div>
           )}
 
@@ -629,12 +625,13 @@ export default function TripSheetPage() {
                             {formatCurrency(order.total_price)}
                           </div>
                           <div className="text-xs text-muted-foreground">
-                            {order.payment_method} · {order.paid ? "Paid" : "Collect"}
+                            {order.payment_method} ·{" "}
+                            {order.payment_status ?? paymentStatusLabel(order.paid)}
                           </div>
                         </TableCell>
                         <TableCell>
                           <Badge className={cn("text-xs", statusBadgeClass(order.status))}>
-                            {order.status}
+                            {orderStatusLabel(order.status)}
                           </Badge>
                         </TableCell>
                       </TableRow>

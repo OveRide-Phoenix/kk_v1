@@ -177,17 +177,17 @@ def get_all_customers(
             LEFT JOIN delivery_routes dr ON dr.route_id = a.route_id
             LEFT JOIN (
                 SELECT o.customer_id, COUNT(*) AS completed_orders
-                  FROM orders o
+                 FROM orders o
                   JOIN addresses ao ON ao.address_id = o.address_id
-                 WHERE LOWER(COALESCE(o.status, '')) = 'completed'
+                 WHERE LOWER(COALESCE(o.status, '')) = 'delivered'
                    AND ao.city_code = %s
                  GROUP BY o.customer_id
             ) o ON o.customer_id = c.customer_id
             LEFT JOIN (
                 SELECT o.customer_id, COUNT(*) AS pending_orders
-                  FROM orders o
+                 FROM orders o
                   JOIN addresses ao ON ao.address_id = o.address_id
-                 WHERE LOWER(COALESCE(o.status, '')) IN ('pending', 'in progress', 'processing')
+                 WHERE LOWER(COALESCE(o.status, '')) IN ('confirmed', 'dispatched')
                    AND ao.city_code = %s
                  GROUP BY o.customer_id
             ) p ON p.customer_id = c.customer_id
@@ -202,13 +202,13 @@ def get_all_customers(
             LEFT JOIN (
                 SELECT customer_id, COUNT(*) AS completed_orders
                 FROM orders
-                WHERE status = 'Completed'
+                WHERE status = 'Delivered'
                 GROUP BY customer_id
             ) o ON o.customer_id = c.customer_id
             LEFT JOIN (
                 SELECT customer_id, COUNT(*) AS pending_orders
                 FROM orders
-                WHERE status = 'Pending'
+                WHERE status IN ('Confirmed', 'Dispatched')
                 GROUP BY customer_id
             ) p ON p.customer_id = c.customer_id
             WHERE a.is_default = 1

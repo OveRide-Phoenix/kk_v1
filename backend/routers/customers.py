@@ -24,7 +24,8 @@ from ..utils.helpers import (
     _normalize_city_label,
     _resolve_city_code,
     _resolve_city_context,
-    format_status_with_payment,
+    normalize_status_for_response,
+    payment_status_label,
 )
 
 router = APIRouter()
@@ -632,7 +633,8 @@ def list_customer_orders(customer_id: int, limit: int = Query(50, ge=1, le=200))
                     "order_id": order_id,
                     "created_at": created.isoformat() if created else None,
                     "total_price": float(order.get("total_price") or 0),
-                    "status": format_status_with_payment(order.get("status"), paid_flag),
+                    "status": normalize_status_for_response(order.get("status")),
+                    "payment_status": payment_status_label(paid_flag),
                     "payment_method": order.get("payment_method") or "Cash",
                     "paid": paid_flag,
                     "address": {

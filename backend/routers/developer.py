@@ -17,6 +17,10 @@ from ..utils.auth_deps import developer_required
 from ..utils.helpers import (
     MENU_TYPE_CONDIMENTS,
     MENU_TYPE_ONE_DAY,
+    ORDER_STATUS_CANCELLED,
+    ORDER_STATUS_CONFIRMED,
+    ORDER_STATUS_DELIVERED,
+    ORDER_STATUS_DISPATCHED,
     _parse_optional_date,
     _resolve_city_context,
     attach_bld_ids,
@@ -604,10 +608,27 @@ def seed_orders_for_testing(
 
         created_ids: List[int] = []
         payment_methods = ["Cash", "UPI", "Card"]
+        seeded_status_counts: Dict[str, int] = {
+            ORDER_STATUS_CONFIRMED: 0,
+            ORDER_STATUS_DISPATCHED: 0,
+            ORDER_STATUS_DELIVERED: 0,
+            ORDER_STATUS_CANCELLED: 0,
+        }
+        status_choices: List[Tuple[str, int]] = [
+            (ORDER_STATUS_CONFIRMED, 4),
+            (ORDER_STATUS_DISPATCHED, 3),
+            (ORDER_STATUS_DELIVERED, 3),
+            (ORDER_STATUS_CANCELLED, 1),
+        ]
 
         for _ in range(payload.count):
             customer = random.choice(candidates)
             payment_method = random.choice(payment_methods)
+            seeded_status = random.choices(
+                [status for status, _ in status_choices],
+                weights=[weight for _, weight in status_choices],
+                k=1,
+            )[0]
 
             item_count = random.randint(1, min(3, len(released_items)))
             if item_count == 0:
@@ -648,11 +669,17 @@ def seed_orders_for_testing(
                 target_date,
                 datetime.min.time(),
             ) + timedelta(hours=random.randint(6, 12), minutes=random.randint(0, 59))
+            paid_flag = payment_method.lower() in {"upi", "card", "online"}
+            if seeded_status == ORDER_STATUS_DELIVERED:
+                paid_flag = random.random() < 0.8
+            elif seeded_status == ORDER_STATUS_CANCELLED:
+                paid_flag = random.random() < 0.35
             cursor.execute(
-                "UPDATE orders SET created_at = %s WHERE order_id = %s",
-                (created_time, order_id),
+                "UPDATE orders SET created_at = %s, status = %s, paid = %s WHERE order_id = %s",
+                (created_time, seeded_status, int(paid_flag), order_id),
             )
             created_ids.append(order_id)
+            seeded_status_counts[seeded_status] += 1
 
         db.commit()
         return {
@@ -661,6 +688,7 @@ def seed_orders_for_testing(
             "cleared_orders": deleted_orders,
             "created_orders": len(created_ids),
             "sample_order_ids": created_ids[:5],
+            "status_counts": seeded_status_counts,
         }
     except mysql.connector.Error as err:
         db.rollback()

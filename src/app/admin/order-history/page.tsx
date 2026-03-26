@@ -46,12 +46,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { DateRange } from "react-day-picker";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -69,12 +64,9 @@ import {
   Check,
 } from "lucide-react";
 import { http } from "@/lib/http";
+import { normalizeOrderStatusKey, orderStatusLabel, paymentStatusLabel } from "@/lib/order-status";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Pagination,
   PaginationContent,
@@ -96,6 +88,7 @@ type OrderRecord = {
   order_id: number;
   created_at: string | null;
   status: string;
+  payment_status?: string;
   payment_method: string;
   paid: boolean;
   total_price: number;
@@ -158,10 +151,8 @@ const PAGE_SIZE = 10;
 
 const statusOptions = [
   { label: "All", value: "all" },
-  { label: "Confirmed (Payment Due)", value: "pending" },
   { label: "Confirmed", value: "confirmed" },
-  { label: "Preparing", value: "preparing" },
-  { label: "On the Way", value: "on the way" },
+  { label: "Dispatched", value: "dispatched" },
   { label: "Delivered", value: "delivered" },
   { label: "Cancelled", value: "cancelled" },
 ];
@@ -184,30 +175,32 @@ const formatDateTime = (value: string | null) => {
 };
 
 const statusBadgeClass = (status: string) => {
-  const raw = status.toLowerCase();
-  const normalized = raw
-    .replace(/\(payment due\)/g, "")
-    .replace(/\s+-\s+payment due/g, "")
-    .trim();
-  if (raw.includes("payment due")) {
-    return "bg-amber-50 text-amber-900 border border-amber-200";
-  }
+  const normalized = normalizeOrderStatusKey(status);
   if (normalized === "confirmed") {
     return "bg-sky-50 text-sky-700 border border-sky-200";
   }
-  if (normalized === "preparing") {
-    return "bg-orange-50 text-orange-800 border border-orange-200";
-  }
-  if (normalized === "on the way") {
+  if (normalized === "dispatched") {
     return "bg-indigo-50 text-indigo-700 border border-indigo-200";
   }
-  if (normalized === "delivered" || normalized === "completed") {
+  if (normalized === "delivered") {
     return "bg-emerald-50 text-emerald-700 border border-emerald-200";
   }
-  if (normalized === "cancelled" || normalized === "canceled") {
+  if (normalized === "cancelled") {
     return "bg-rose-50 text-rose-700 border border-rose-200";
   }
   return "bg-slate-50 text-slate-700 border border-slate-200";
+};
+
+const paymentBadgeClass = (paid: boolean) =>
+  paid
+    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+    : "bg-amber-50 text-amber-900 border border-amber-200";
+
+const adminStatusPillLabel = (status: string, paid: boolean) => {
+  const label = orderStatusLabel(status);
+  return normalizeOrderStatusKey(status) === "confirmed"
+    ? `${label} - ${paymentStatusLabel(paid)}`
+    : label;
 };
 
 const formatOrderId = (raw: number) => `ORD-${String(raw).padStart(5, "0")}`;
@@ -221,7 +214,7 @@ const buildInvoiceHtml = (invoice: InvoiceResponse) => {
         <td style="padding:8px;border:1px solid #ddd;text-align:center;">${item.quantity}</td>
         <td style="padding:8px;border:1px solid #ddd;text-align:right;">${formatCurrency(item.price)}</td>
         <td style="padding:8px;border:1px solid #ddd;text-align:right;">${formatCurrency(item.line_total)}</td>
-      </tr>`
+      </tr>`,
     )
     .join("");
 
@@ -366,6 +359,8 @@ export default function OrderHistoryPage() {
       const data = (await res.json()) as OrdersApiResponse;
       const normalizedOrders = (data.orders ?? []).map((order) => ({
         ...order,
+        status: orderStatusLabel(order.status),
+        payment_status: order.payment_status ?? paymentStatusLabel(Boolean(order.paid)),
         paid: Boolean(order.paid),
       }));
       setOrders(normalizedOrders);
@@ -389,10 +384,7 @@ export default function OrderHistoryPage() {
     fetchOrders();
   }, [fetchOrders]);
 
-  const handleFilterChange = <Key extends keyof Filters>(
-    key: Key,
-    value: Filters[Key],
-  ) => {
+  const handleFilterChange = <Key extends keyof Filters>(key: Key, value: Filters[Key]) => {
     setFilters((prev) => ({
       ...prev,
       [key]: value,
@@ -430,11 +422,14 @@ export default function OrderHistoryPage() {
   };
 
   const handleStatusUpdate = async (orderId: number, nextStatus: string) => {
-    const trimmedStatus = nextStatus.trim();
+    const trimmedStatus = orderStatusLabel(nextStatus);
     if (!trimmedStatus) return;
 
     const targetOrder = orders.find((order) => order.order_id === orderId);
-    if (targetOrder && targetOrder.status.toLowerCase() === trimmedStatus.toLowerCase()) {
+    if (
+      targetOrder &&
+      normalizeOrderStatusKey(targetOrder.status) === normalizeOrderStatusKey(trimmedStatus)
+    ) {
       return;
     }
 
@@ -451,7 +446,7 @@ export default function OrderHistoryPage() {
         throw new Error(message);
       }
       const body = (await res.json()) as { order_id: number; status: string };
-      const updatedStatus = body.status ?? trimmedStatus;
+      const updatedStatus = orderStatusLabel(body.status ?? trimmedStatus);
       setOrders((prev) =>
         prev.map((order) =>
           order.order_id === orderId ? { ...order, status: updatedStatus } : order,
@@ -463,6 +458,38 @@ export default function OrderHistoryPage() {
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unexpected error updating status.");
+    } finally {
+      setUpdatingOrderId(null);
+    }
+  };
+
+  const handlePaymentUpdate = async (orderId: number, paid: boolean) => {
+    setUpdatingOrderId(orderId);
+    try {
+      const res = await http.post(`/api/admin/orders/${orderId}/payment?city_code=${adminCity}`, {
+        paid,
+      });
+      if (!res.ok) {
+        throw new Error("Failed to update payment status.");
+      }
+      const body = (await res.json()) as { paid: boolean; payment_status?: string };
+      const nextPaid = Boolean(body.paid);
+      const nextPaymentStatus = body.payment_status ?? paymentStatusLabel(nextPaid);
+      setOrders((prev) =>
+        prev.map((order) =>
+          order.order_id === orderId
+            ? { ...order, paid: nextPaid, payment_status: nextPaymentStatus }
+            : order,
+        ),
+      );
+      setSelectedOrder((prev) =>
+        prev && prev.order_id === orderId
+          ? { ...prev, paid: nextPaid, payment_status: nextPaymentStatus }
+          : prev,
+      );
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unexpected error updating payment.");
     } finally {
       setUpdatingOrderId(null);
     }
@@ -561,7 +588,8 @@ export default function OrderHistoryPage() {
             <div>
               <CardTitle>Order History</CardTitle>
               <CardDescription>
-                Review, filter, and export past customer orders. Generate printable invoices with a single click.
+                Review, filter, and export past customer orders. Generate printable invoices with a
+                single click.
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
@@ -589,15 +617,11 @@ export default function OrderHistoryPage() {
                       )}
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {dateRange?.from ? (
-                        dateRange.to ? (
-                          `${format(dateRange.from, "dd MMM yyyy")} – ${format(dateRange.to, "dd MMM yyyy")}`
-                        ) : (
-                          format(dateRange.from, "dd MMM yyyy")
-                        )
-                      ) : (
-                        "Select date range"
-                      )}
+                      {dateRange?.from
+                        ? dateRange.to
+                          ? `${format(dateRange.from, "dd MMM yyyy")} – ${format(dateRange.to, "dd MMM yyyy")}`
+                          : format(dateRange.from, "dd MMM yyyy")
+                        : "Select date range"}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
@@ -617,7 +641,9 @@ export default function OrderHistoryPage() {
                 </Popover>
               </div>
               <div className="space-y-2">
-                <span className="block text-sm font-medium text-muted-foreground">Delivery Status</span>
+                <span className="block text-sm font-medium text-muted-foreground">
+                  Delivery Status
+                </span>
                 <Select
                   value={filters.status}
                   onValueChange={(value) => handleFilterChange("status", value)}
@@ -647,7 +673,9 @@ export default function OrderHistoryPage() {
                 </div>
               </div>
               <div className="space-y-2 lg:col-span-2">
-                <span className="block text-sm font-medium text-muted-foreground">Customer / Phone</span>
+                <span className="block text-sm font-medium text-muted-foreground">
+                  Customer / Phone
+                </span>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
@@ -699,115 +727,131 @@ export default function OrderHistoryPage() {
                 )}
                 <TooltipProvider>
                   <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Order</TableHead>
-                      <TableHead>Placed</TableHead>
-                      <TableHead>Customer</TableHead>
-                      <TableHead>Items</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Total</TableHead>
-                      <TableHead className="w-[90px] text-center">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {orders.map((order) => (
-                      <TableRow key={order.order_id}>
-                        <TableCell>
-                          <div className="flex flex-col gap-1">
-                            <span className="font-medium text-foreground">
-                              {formatOrderId(order.order_id)}
-                            </span>
-                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                              {paymentMethodIcon(order.payment_method)}
-                              {normalizePaymentMethod(order.payment_method)}
-                            </span>
-                            <span
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Order</TableHead>
+                        <TableHead>Placed</TableHead>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>Items</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Total</TableHead>
+                        <TableHead className="w-[90px] text-center">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {orders.map((order) => (
+                        <TableRow key={order.order_id}>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              <span className="font-medium text-foreground">
+                                {formatOrderId(order.order_id)}
+                              </span>
+                              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                {paymentMethodIcon(order.payment_method)}
+                                {normalizePaymentMethod(order.payment_method)}
+                              </span>
+                              <span
+                                className={cn(
+                                  "text-xs",
+                                  order.paid ? "text-emerald-700" : "text-amber-700 font-medium",
+                                )}
+                              >
+                                {order.payment_status ?? paymentStatusLabel(order.paid)}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell>{formatDateTime(order.created_at)}</TableCell>
+                          <TableCell>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="font-medium text-foreground">
+                                  {order.customer_name}
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>{order.customer_phone ?? "No phone"}</TooltipContent>
+                            </Tooltip>
+                          </TableCell>
+                          <TableCell>{order.item_count} items</TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="outline"
                               className={cn(
-                                "text-xs",
-                                order.paid ? "text-muted-foreground" : "text-destructive font-medium",
+                                "px-2.5 py-1 text-xs font-medium rounded-full",
+                                statusBadgeClass(order.status),
                               )}
                             >
-                              {order.paid ? "Paid" : "Payment due"}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>{formatDateTime(order.created_at)}</TableCell>
-                        <TableCell>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="font-medium text-foreground">
-                                {order.customer_name}
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>{order.customer_phone ?? "No phone"}</TooltipContent>
-                          </Tooltip>
-                        </TableCell>
-                        <TableCell>{order.item_count} items</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={cn(
-                              "capitalize px-2.5 py-1 text-xs font-medium rounded-full",
-                              statusBadgeClass(order.status),
-                            )}
-                          >
-                            {order.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {formatCurrency(order.total_price)}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleViewOrder(order)}
-                              aria-label={`View order ${formatOrderId(order.order_id)}`}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  aria-label={`Update status for ${formatOrderId(order.order_id)}`}
-                                  disabled={updatingOrderId === order.order_id}
-                                >
-                                  {updatingOrderId === order.order_id ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  )}
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-48">
-                                <DropdownMenuLabel>Update status</DropdownMenuLabel>
-                                {statusUpdateOptions.map((option) => {
-                                  const isActive =
-                                    order.status.toLowerCase() === option.label.toLowerCase();
-                                  return (
-                                    <DropdownMenuItem
-                                      key={option.value}
-                                      disabled={isActive || updatingOrderId === order.order_id}
-                                      onClick={() => handleStatusUpdate(order.order_id, option.label)}
-                                    >
-                                      <span className="flex w-full items-center justify-between">
-                                        {option.label}
-                                        {isActive && <Check className="h-3.5 w-3.5" />}
-                                      </span>
-                                    </DropdownMenuItem>
-                                  );
-                                })}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
+                              {adminStatusPillLabel(order.status, order.paid)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {formatCurrency(order.total_price)}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleViewOrder(order)}
+                                aria-label={`View order ${formatOrderId(order.order_id)}`}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    aria-label={`Update status for ${formatOrderId(order.order_id)}`}
+                                    disabled={updatingOrderId === order.order_id}
+                                  >
+                                    {updatingOrderId === order.order_id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <MoreHorizontal className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-48">
+                                  <DropdownMenuLabel>Update status</DropdownMenuLabel>
+                                  {statusUpdateOptions.map((option) => {
+                                    const isActive =
+                                      normalizeOrderStatusKey(order.status) === option.value;
+                                    return (
+                                      <DropdownMenuItem
+                                        key={option.value}
+                                        disabled={isActive || updatingOrderId === order.order_id}
+                                        onClick={() =>
+                                          handleStatusUpdate(order.order_id, option.label)
+                                        }
+                                      >
+                                        <span className="flex w-full items-center justify-between">
+                                          {option.label}
+                                          {isActive && <Check className="h-3.5 w-3.5" />}
+                                        </span>
+                                      </DropdownMenuItem>
+                                    );
+                                  })}
+                                  <Separator className="my-1" />
+                                  <DropdownMenuLabel>Update payment</DropdownMenuLabel>
+                                  <DropdownMenuItem
+                                    disabled={order.paid || updatingOrderId === order.order_id}
+                                    onClick={() => handlePaymentUpdate(order.order_id, true)}
+                                  >
+                                    Mark payment done
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    disabled={!order.paid || updatingOrderId === order.order_id}
+                                    onClick={() => handlePaymentUpdate(order.order_id, false)}
+                                  >
+                                    Mark payment due
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
                   </Table>
                 </TooltipProvider>
               </div>
@@ -890,13 +934,20 @@ export default function OrderHistoryPage() {
                   <p>{formatDateTime(selectedOrder.created_at)}</p>
                   <p className="font-semibold text-foreground">Status</p>
                   <Badge className={cn("capitalize", statusBadgeClass(selectedOrder.status))}>
-                    {selectedOrder.status}
+                    {adminStatusPillLabel(selectedOrder.status, selectedOrder.paid)}
                   </Badge>
                   <p className="font-semibold text-foreground">Payment</p>
-                  <p className={selectedOrder.paid ? "text-muted-foreground" : "text-destructive"}>
-                    {normalizePaymentMethod(selectedOrder.payment_method)} ·{" "}
-                    {selectedOrder.paid ? "Paid" : "Payment due"}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-muted-foreground">
+                      {normalizePaymentMethod(selectedOrder.payment_method)}
+                    </p>
+                    <Badge
+                      variant="outline"
+                      className={cn("text-xs", paymentBadgeClass(selectedOrder.paid))}
+                    >
+                      {selectedOrder.payment_status ?? paymentStatusLabel(selectedOrder.paid)}
+                    </Badge>
+                  </div>
                 </div>
               </div>
 
@@ -945,12 +996,17 @@ export default function OrderHistoryPage() {
                 <div className="space-y-2 text-sm">
                   <p className="font-semibold text-foreground">Invoice</p>
                   <p className="text-muted-foreground">
-                    Number: {invoiceData.invoice_number} · Issued: {formatDateTime(invoiceData.issued_at)}
+                    Number: {invoiceData.invoice_number} · Issued:{" "}
+                    {formatDateTime(invoiceData.issued_at)}
                   </p>
                   <p className="text-muted-foreground">
                     Delivery address:{" "}
                     {invoiceData.address.line1
-                      ? [invoiceData.address.line1, invoiceData.address.city, invoiceData.address.pin_code]
+                      ? [
+                          invoiceData.address.line1,
+                          invoiceData.address.city,
+                          invoiceData.address.pin_code,
+                        ]
                           .filter(Boolean)
                           .join(", ")
                       : "—"}

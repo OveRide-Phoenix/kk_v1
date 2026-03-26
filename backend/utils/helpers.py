@@ -307,26 +307,26 @@ def resolve_delivers_by_value(
 # Order status helpers
 # ---------------------------------------------------------------------------
 
-ORDER_STATUS_PENDING = "Confirmed - Payment Due"
 ORDER_STATUS_CONFIRMED = "Confirmed"
-ORDER_STATUS_PREPARING = "Preparing"
-ORDER_STATUS_ON_THE_WAY = "On the Way"
+ORDER_STATUS_DISPATCHED = "Dispatched"
 ORDER_STATUS_DELIVERED = "Delivered"
 ORDER_STATUS_CANCELLED = "Cancelled"
 
 _ORDER_STATUS_ALIASES: Dict[str, str] = {
-    "pending": ORDER_STATUS_PENDING,
-    "payment due": ORDER_STATUS_PENDING,
-    "awaiting payment": ORDER_STATUS_PENDING,
-    "confirmed - payment due": ORDER_STATUS_PENDING,
-    "confirmed but needs to pay": ORDER_STATUS_PENDING,
+    "pending": ORDER_STATUS_CONFIRMED,
+    "payment due": ORDER_STATUS_CONFIRMED,
+    "awaiting payment": ORDER_STATUS_CONFIRMED,
+    "confirmed - payment due": ORDER_STATUS_CONFIRMED,
+    "confirmed but needs to pay": ORDER_STATUS_CONFIRMED,
+    "confirmed (payment due)": ORDER_STATUS_CONFIRMED,
     "confirmed": ORDER_STATUS_CONFIRMED,
-    "preparing": ORDER_STATUS_PREPARING,
-    "in progress": ORDER_STATUS_PREPARING,
-    "processing": ORDER_STATUS_PREPARING,
-    "on the way": ORDER_STATUS_ON_THE_WAY,
-    "out for delivery": ORDER_STATUS_ON_THE_WAY,
-    "en route": ORDER_STATUS_ON_THE_WAY,
+    "preparing": ORDER_STATUS_CONFIRMED,
+    "in progress": ORDER_STATUS_DISPATCHED,
+    "processing": ORDER_STATUS_CONFIRMED,
+    "on the way": ORDER_STATUS_DISPATCHED,
+    "out for delivery": ORDER_STATUS_DISPATCHED,
+    "en route": ORDER_STATUS_DISPATCHED,
+    "dispatched": ORDER_STATUS_DISPATCHED,
     "delivered": ORDER_STATUS_DELIVERED,
     "completed": ORDER_STATUS_DELIVERED,
     "complete": ORDER_STATUS_DELIVERED,
@@ -336,13 +336,9 @@ _ORDER_STATUS_ALIASES: Dict[str, str] = {
 
 ORDER_STATUS_ALLOWED = set(_ORDER_STATUS_ALIASES.values())
 PENDING_ORDER_STATUS_NAMES: Set[str] = {
-    ORDER_STATUS_PENDING.lower(),
     ORDER_STATUS_CONFIRMED.lower(),
-    ORDER_STATUS_PREPARING.lower(),
-    ORDER_STATUS_ON_THE_WAY.lower(),
+    ORDER_STATUS_DISPATCHED.lower(),
     "pending",
-    "in progress",
-    "processing",
 }
 
 
@@ -377,23 +373,35 @@ def normalize_status_for_response(value: Optional[str]) -> str:
     try:
         return normalize_order_status(value or "")
     except HTTPException:
-        return value or ORDER_STATUS_PENDING
+        return value or ORDER_STATUS_CONFIRMED
+
+
+def payment_status_label(paid: Optional[bool]) -> str:
+    """Return the admin-facing payment label for an order.
+
+    Args:
+        paid: Whether the order is marked paid.
+
+    Returns:
+        ``"Payment Done"`` when paid, else ``"Payment Due"``.
+    """
+    return "Payment Done" if paid else "Payment Due"
 
 
 def format_status_with_payment(status: Optional[str], paid: Optional[bool]) -> str:
-    """Append "(Payment Due)" suffix when an order is unpaid.
+    """Return a legacy combined status label.
 
     Args:
         status: Raw status string.
         paid: Whether the order has been paid.
 
     Returns:
-        Display status string.
+        Canonical status string, optionally suffixed with ``"(Payment Due)"``.
     """
     base = normalize_status_for_response(status)
     if paid:
         return base
-    if "payment due" in base.lower():
+    if base != ORDER_STATUS_CONFIRMED or "payment due" in base.lower():
         return base
     return f"{base} (Payment Due)"
 
@@ -421,13 +429,13 @@ def _bulk_update_order_status_for_date(
     if not normalized_previous:
         return 0
     placeholders = ", ".join(["%s"] * len(normalized_previous))
-    params = [new_status, new_status, target_date, city_code, *normalized_previous]
+    params = [new_status, target_date, city_code, *normalized_previous]
     status_compare_expr = "LOWER(REPLACE(COALESCE(o.status, ''), ' (Payment Due)', ''))"
     cursor.execute(
         f"""
         UPDATE orders o
         JOIN addresses a ON o.address_id = a.address_id
-           SET o.status = CASE WHEN o.paid = 1 THEN %s ELSE CONCAT(%s, ' (Payment Due)') END
+           SET o.status = %s
          WHERE DATE(o.created_at) = %s
            AND a.city_code = %s
            AND {status_compare_expr} IN ({placeholders})

@@ -32,6 +32,7 @@ type SeedResponse = {
   cleared_orders: number;
   created_orders: number;
   sample_order_ids: number[];
+  status_counts?: Record<string, number>;
 };
 
 type CartLine = {
@@ -78,13 +79,10 @@ export default function OrderTestPage() {
   const [purgeDialogOpen, setPurgeDialogOpen] = useState(false);
   const adminCity = useAuthStore((state) => state.adminCity || state.user?.city_code || "MYS");
 
-  const handleCartChange = useCallback(
-    (cart: CartLine[], context: CartContext) => {
-      setCartSelection(cart);
-      setCartContext(context);
-    },
-    [],
-  );
+  const handleCartChange = useCallback((cart: CartLine[], context: CartContext) => {
+    setCartSelection(cart);
+    setCartContext(context);
+  }, []);
 
   const totalSelected = useMemo(
     () => cartSelection.reduce((acc, item) => acc + item.qty * item.rate, 0),
@@ -119,7 +117,9 @@ export default function OrderTestPage() {
 
     const addressId = await fetchTestCustomerAddressId();
     if (!addressId) {
-      setErrorMessage("Test customer has no default address. Seed customer data or set a default address first.");
+      setErrorMessage(
+        "Test customer has no default address. Seed customer data or set a default address first.",
+      );
       setPlacingOrder(false);
       return;
     }
@@ -153,7 +153,7 @@ export default function OrderTestPage() {
       setRefreshSignal((value) => value + 1);
       setCartSelection([]);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Unexpected error');
+      setErrorMessage(error instanceof Error ? error.message : "Unexpected error");
     } finally {
       setPlacingOrder(false);
     }
@@ -224,7 +224,8 @@ export default function OrderTestPage() {
               <div>
                 <h2 className="text-lg font-semibold text-foreground">Seed Orders (Mysore)</h2>
                 <p className="text-sm text-muted-foreground">
-                  Purge and re-create synthetic orders for a specific service date to test status automation.
+                  Purge and re-create synthetic orders for a specific service date to test status
+                  automation.
                 </p>
               </div>
               <Button onClick={handleSeedOrders} disabled={seeding}>
@@ -232,18 +233,18 @@ export default function OrderTestPage() {
               </Button>
             </div>
             <div className="grid gap-4 md:grid-cols-3">
-            <div className="space-y-1">
-              <label htmlFor="seed-date" className="text-sm font-medium text-muted-foreground">
-                Delivery date
-              </label>
-              <DatePickerWithPresets
-                selectedDate={seedDate ?? undefined}
-                onSelectDate={(date) => setSeedDate(date)}
-                showQuickSelect={false}
-                disablePast={false}
-                triggerClassName="w-full"
-              />
-            </div>
+              <div className="space-y-1">
+                <label htmlFor="seed-date" className="text-sm font-medium text-muted-foreground">
+                  Delivery date
+                </label>
+                <DatePickerWithPresets
+                  selectedDate={seedDate ?? undefined}
+                  onSelectDate={(date) => setSeedDate(date)}
+                  showQuickSelect={false}
+                  disablePast={false}
+                  triggerClassName="w-full"
+                />
+              </div>
               <div className="space-y-1">
                 <label htmlFor="seed-count" className="text-sm font-medium text-muted-foreground">
                   Number of orders
@@ -258,7 +259,11 @@ export default function OrderTestPage() {
                 />
               </div>
               <div className="flex items-center gap-2 pt-6">
-                <Checkbox id="seed-clear" checked={seedClear} onCheckedChange={(value) => setSeedClear(Boolean(value))} />
+                <Checkbox
+                  id="seed-clear"
+                  checked={seedClear}
+                  onCheckedChange={(value) => setSeedClear(Boolean(value))}
+                />
                 <label htmlFor="seed-clear" className="text-sm text-muted-foreground">
                   Purge existing orders for this date
                 </label>
@@ -273,7 +278,19 @@ export default function OrderTestPage() {
                 </p>
                 {seedResult.sample_order_ids?.length > 0 && (
                   <p className="text-xs">
-                    Sample IDs: {seedResult.sample_order_ids.map((id) => `ORD-${String(id).padStart(5, "0")}`).join(", ")}
+                    Sample IDs:{" "}
+                    {seedResult.sample_order_ids
+                      .map((id) => `ORD-${String(id).padStart(5, "0")}`)
+                      .join(", ")}
+                  </p>
+                )}
+                {seedResult.status_counts && Object.keys(seedResult.status_counts).length > 0 && (
+                  <p className="text-xs">
+                    Status mix:{" "}
+                    {Object.entries(seedResult.status_counts)
+                      .filter(([, count]) => Number(count) > 0)
+                      .map(([status, count]) => `${status} (${count})`)
+                      .join(" · ")}
                   </p>
                 )}
               </div>
@@ -285,7 +302,8 @@ export default function OrderTestPage() {
               <div>
                 <h2 className="text-lg font-semibold text-destructive">Purge ALL Orders</h2>
                 <p className="text-sm text-destructive/80">
-                  Permanently deletes every order & order item (Mysore and Bangalore). Use only on dev data.
+                  Permanently deletes every order & order item (Mysore and Bangalore). Use only on
+                  dev data.
                 </p>
               </div>
               <Button variant="destructive" onClick={() => setPurgeDialogOpen(true)}>
@@ -309,12 +327,13 @@ export default function OrderTestPage() {
                 onClick={handlePlaceTestOrder}
                 disabled={placingOrder || cartSelection.length === 0}
               >
-                {placingOrder ? 'Placing…' : 'Place Test Order'}
+                {placingOrder ? "Placing…" : "Place Test Order"}
               </Button>
             </div>
             <p className="text-sm text-muted-foreground">
-              Sends the current selection to <code>/api/orders/create</code> for customer <strong>#13</strong>. The
-              available quantity is automatically reduced for the items you submit.
+              Sends the current selection to <code>/api/orders/create</code> for customer{" "}
+              <strong>#13</strong>. The available quantity is automatically reduced for the items
+              you submit.
             </p>
 
             <div className="rounded-md border border-muted p-3 text-sm">
@@ -324,9 +343,11 @@ export default function OrderTestPage() {
               ) : (
                 <ul className="mt-2 space-y-1 text-muted-foreground">
                   {cartSelection.map((item) => (
-                    <li key={`${item.meal}-${item.menu_item_id ?? item.combo_id ?? item.item_id ?? item.item_name}`}>
-                      <span className="font-medium text-foreground">{item.item_name}</span> · {item.meal} · qty {item.qty}{" "}
-                      (₹{(item.rate * item.qty).toFixed(2)})
+                    <li
+                      key={`${item.meal}-${item.menu_item_id ?? item.combo_id ?? item.item_id ?? item.item_name}`}
+                    >
+                      <span className="font-medium text-foreground">{item.item_name}</span> ·{" "}
+                      {item.meal} · qty {item.qty} (₹{(item.rate * item.qty).toFixed(2)})
                     </li>
                   ))}
                 </ul>
@@ -334,7 +355,9 @@ export default function OrderTestPage() {
               <p className="mt-2 font-semibold text-foreground">
                 Total: ₹{totalSelected.toFixed(2)}{" "}
                 {cartContext.confirmedDateISO && (
-                  <span className="text-sm text-muted-foreground">· Date {cartContext.confirmedDateISO}</span>
+                  <span className="text-sm text-muted-foreground">
+                    · Date {cartContext.confirmedDateISO}
+                  </span>
                 )}
               </p>
             </div>
@@ -348,10 +371,12 @@ export default function OrderTestPage() {
             {orderResult && (
               <div className="rounded-md border border-primary/20 bg-primary/10 p-4 text-sm text-primary-foreground">
                 <p>
-                  <span className="font-semibold text-primary">Order ID:</span> {orderResult.order_id}
+                  <span className="font-semibold text-primary">Order ID:</span>{" "}
+                  {orderResult.order_id}
                 </p>
                 <p>
-                  <span className="font-semibold text-primary">Total:</span> ₹{orderResult.total_price.toFixed(2)}
+                  <span className="font-semibold text-primary">Total:</span> ₹
+                  {orderResult.total_price.toFixed(2)}
                 </p>
                 <p>
                   <span className="font-semibold text-primary">Status:</span> {orderResult.status}
@@ -367,7 +392,8 @@ export default function OrderTestPage() {
           <DialogHeader>
             <DialogTitle>Delete all orders?</DialogTitle>
             <DialogDescription>
-              This permanently deletes every order and order item across Mysore and Bangalore. This action cannot be undone.
+              This permanently deletes every order and order item across Mysore and Bangalore. This
+              action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">

@@ -39,6 +39,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import GoogleMapPicker from "@/components/gmap/GoogleMapPicker";
 import { http } from "@/lib/http";
+import { normalizeOrderStatusKey, orderStatusLabel } from "@/lib/order-status";
 
 const CITY_OPTIONS = [
   { label: "Mysore", code: "MYS" },
@@ -106,6 +107,7 @@ type OrderSummary = {
   created_at: string | null;
   total_price: number;
   status: string;
+  payment_status?: string;
   payment_method: string;
   order_type?: string | null;
   address: {
@@ -334,7 +336,7 @@ export default function AccountPage() {
     const query = orderSearch.trim().toLowerCase();
     return sortedOrders.filter((order) => {
       const matchesStatus =
-        orderStatusFilter === "all" || order.status.toLowerCase() === orderStatusFilter;
+        orderStatusFilter === "all" || normalizeOrderStatusKey(order.status) === orderStatusFilter;
       if (!matchesStatus) return false;
       if (!query) return true;
 
@@ -1069,8 +1071,9 @@ export default function AccountPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All statuses</SelectItem>
+                    <SelectItem value="confirmed">Confirmed</SelectItem>
+                    <SelectItem value="dispatched">Dispatched</SelectItem>
                     <SelectItem value="delivered">Delivered</SelectItem>
-                    <SelectItem value="in progress">In progress</SelectItem>
                     <SelectItem value="cancelled">Cancelled</SelectItem>
                   </SelectContent>
                 </Select>
@@ -1110,13 +1113,15 @@ export default function AccountPage() {
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {filteredOrders.map((order) => {
-                        const statusKey = order.status.toLowerCase();
+                        const statusKey = normalizeOrderStatusKey(order.status);
                         const badgeClass =
                           statusKey === "delivered"
                             ? "bg-emerald-100 text-emerald-700"
-                            : statusKey === "in progress"
-                              ? "bg-amber-100 text-amber-700"
-                              : "bg-gray-100 text-gray-700";
+                            : statusKey === "dispatched"
+                              ? "bg-indigo-100 text-indigo-700"
+                              : statusKey === "confirmed"
+                                ? "bg-sky-100 text-sky-700"
+                                : "bg-gray-100 text-gray-700";
 
                         return (
                           <tr key={order.order_id} className="hover:bg-[#FAF7F0]/70">
@@ -1130,7 +1135,7 @@ export default function AccountPage() {
                             </td>
                             <td className="px-4 py-4">
                               <Badge variant="outline" className={`${badgeClass} border-0`}>
-                                {order.status}
+                                {orderStatusLabel(order.status)}
                               </Badge>
                             </td>
                             <td className="px-4 py-4 text-gray-600">

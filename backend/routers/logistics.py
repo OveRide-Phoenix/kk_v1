@@ -14,14 +14,12 @@ from ..db import get_raw_db
 from ..utils.auth_deps import admin_required
 from ..utils.helpers import (
     ORDER_STATUS_CONFIRMED,
-    ORDER_STATUS_ON_THE_WAY,
-    ORDER_STATUS_PENDING,
-    ORDER_STATUS_PREPARING,
+    ORDER_STATUS_DISPATCHED,
     _parse_optional_date,
     _resolve_city_context,
-    format_status_with_payment,
     get_food_meals_for_city,
     normalize_status_for_response,
+    payment_status_label,
 )
 
 router = APIRouter()
@@ -370,7 +368,7 @@ def generate_trip_sheet_report(
     """Generate a trip sheet grouped by delivery route for a given date and city.
 
     Validates that production has been finalized for all released meals before
-    generating. Updates qualifying order statuses to "On the Way".
+    generating. Updates qualifying order statuses to "Dispatched".
 
     Args:
         payload: Date, optional city_code, and optional meal_type filter.
@@ -510,21 +508,23 @@ def generate_trip_sheet_report(
 
         route_groups: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
         route_sort_order: Dict[str, int] = {}
-        updatable_statuses = {
-            ORDER_STATUS_PENDING.lower(),
-            ORDER_STATUS_CONFIRMED.lower(),
-            ORDER_STATUS_PREPARING.lower(),
-        }
+        updatable_statuses = {ORDER_STATUS_CONFIRMED.lower()}
+        legacy_updatable_statuses = {"preparing", "processing"}
 
         for row in rows:
             route_label = row.get("route_name") or "Unassigned"
             route_sort_order.setdefault(route_label, int(row.get("sort_order") or 9999))
             normalized_display = normalize_status_for_response(row.get("status"))
-            if normalized_display.lower() in updatable_statuses:
-                display_status = ORDER_STATUS_ON_THE_WAY
+            raw_status_key = (
+                str(row.get("status") or "").strip().lower().replace(" (payment due)", "")
+            )
+            if (
+                normalized_display.lower() in updatable_statuses
+                or raw_status_key in legacy_updatable_statuses
+            ):
+                display_status = ORDER_STATUS_DISPATCHED
             else:
                 display_status = normalized_display
-            display_status = format_status_with_payment(display_status, row.get("paid"))
             route_groups[route_label].append(
                 {
                     "order_id": row["order_id"],
@@ -535,6 +535,7 @@ def generate_trip_sheet_report(
                     "total_price": float(row.get("total_price") or 0),
                     "payment_method": row.get("payment_method"),
                     "paid": bool(row.get("paid")),
+                    "payment_status": payment_status_label(bool(row.get("paid"))),
                     "status": display_status,
                     "address": {
                         "address_id": row.get("address_id"),
@@ -552,24 +553,26 @@ def generate_trip_sheet_report(
             row["order_id"]
             for row in rows
             if normalize_status_for_response(row.get("status")).lower() in updatable_statuses
+            or str(row.get("status") or "").strip().lower().replace(" (payment due)", "")
+            in legacy_updatable_statuses
         ]
         updated_rows = 0
         if updatable_order_ids:
             id_ph = ", ".join(["%s"] * len(updatable_order_ids))
             status_compare_expr = "LOWER(REPLACE(COALESCE(status, ''), ' (Payment Due)', ''))"
-            prev_ph = ", ".join(["%s"] * len(updatable_statuses))
+            previous_statuses = sorted(updatable_statuses | legacy_updatable_statuses)
+            prev_ph = ", ".join(["%s"] * len(previous_statuses))
             cursor.execute(
                 f"""
                 UPDATE orders
-                   SET status = CASE WHEN paid = 1 THEN %s ELSE CONCAT(%s, ' (Payment Due)') END
+                   SET status = %s
                  WHERE order_id IN ({id_ph})
                    AND {status_compare_expr} IN ({prev_ph})
                 """,
                 (
-                    ORDER_STATUS_ON_THE_WAY,
-                    ORDER_STATUS_ON_THE_WAY,
+                    ORDER_STATUS_DISPATCHED,
                     *updatable_order_ids,
-                    *sorted(updatable_statuses),
+                    *previous_statuses,
                 ),
             )
             updated_rows = cursor.rowcount

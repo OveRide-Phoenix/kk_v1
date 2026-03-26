@@ -15,15 +15,13 @@ from pydantic import BaseModel, Field
 from ..db import get_raw_db
 from ..utils.auth_deps import admin_required
 from ..utils.helpers import (
-    ORDER_STATUS_DELIVERED,
-    ORDER_STATUS_PENDING,
     ORDER_STATUS_CONFIRMED,
-    PENDING_ORDER_STATUS_NAMES,
     _format_datetime,
     _parse_optional_date,
     _resolve_city_context,
+    normalize_status_for_response,
     normalize_order_status,
-    format_status_with_payment,
+    payment_status_label,
 )
 
 router = APIRouter()
@@ -68,6 +66,12 @@ class OrderStatusUpdate(BaseModel):
     """Payload for updating an order's status."""
 
     status: str = Field(..., min_length=1, max_length=50)
+
+
+class OrderPaymentUpdate(BaseModel):
+    """Payload for updating an order's payment state."""
+
+    paid: bool
 
 
 # ---------------------------------------------------------------------------
@@ -291,8 +295,8 @@ def create_order(payload: CreateOrderPayload) -> Dict[str, Any]:
 
         normalized_method = (payload.payment_method or "").strip()
         paid_flag = 1 if normalized_method.lower() in {"upi", "card", "online"} else 0
-        initial_status = ORDER_STATUS_CONFIRMED if paid_flag else ORDER_STATUS_PENDING
-        stored_status = initial_status if paid_flag else f"{initial_status} (Payment Due)"
+        initial_status = ORDER_STATUS_CONFIRMED
+        stored_status = initial_status
 
         cursor.execute(
             """
@@ -545,9 +549,9 @@ def admin_order_history(
                                     ),
                                     row.get("customer_name") or "",
                                     row.get("primary_mobile") or "",
-                                    format_status_with_payment(row.get("status"), paid_flag),
+                                    normalize_status_for_response(row.get("status")),
                                     row.get("payment_method") or "",
-                                    "Paid" if paid_flag else "Payment Due",
+                                    payment_status_label(paid_flag),
                                     row.get("item_name") or "",
                                     int(row.get("quantity") or 0),
                                     float(row.get("price") or 0),
@@ -611,13 +615,14 @@ def admin_order_history(
         result = []
         for record in orders:
             paid_flag = bool(record.get("paid"))
-            normalized_status = format_status_with_payment(record.get("status"), paid_flag)
+            normalized_status = normalize_status_for_response(record.get("status"))
             order_id = record["order_id"]
             result.append(
                 {
                     "order_id": order_id,
                     "created_at": _format_datetime(record.get("created_at")),
                     "status": normalized_status,
+                    "payment_status": payment_status_label(paid_flag),
                     "payment_method": record.get("payment_method") or "Unknown",
                     "paid": paid_flag,
                     "total_price": float(record.get("total_price") or 0),
@@ -676,18 +681,10 @@ def admin_update_order_status(
         row = cursor.fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail="Order not found")
-        current_paid = bool(row["paid"]) if isinstance(row, dict) else bool(row[0])
-
         new_status = normalize_order_status(payload.status)
-        paid_after = current_paid or new_status == ORDER_STATUS_DELIVERED
-        stored_status = new_status if paid_after else f"{new_status} (Payment Due)"
         cursor.execute(
-            "UPDATE orders SET status = %s, paid = %s WHERE order_id = %s",
-            (
-                stored_status,
-                int(paid_after),
-                order_id,
-            ),
+            "UPDATE orders SET status = %s WHERE order_id = %s",
+            (new_status, order_id),
         )
         if cursor.rowcount == 0:
             db.rollback()
@@ -697,6 +694,53 @@ def admin_update_order_status(
     except mysql.connector.Error as err:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to update order status: {err.msg}")
+    finally:
+        cursor.close()
+        db.close()
+
+
+@router.post("/api/admin/orders/{order_id}/payment")
+def admin_update_order_payment(
+    order_id: int,
+    payload: OrderPaymentUpdate,
+    user: Dict[str, Any] = Depends(admin_required),
+) -> Dict[str, Any]:
+    """Update the payment state of a specific order.
+
+    Args:
+        order_id: ID of the order to update.
+        payload: New paid / unpaid state.
+        user: Current admin user (injected).
+
+    Returns:
+        Dict with order_id, paid, and payment_status.
+    """
+    db = get_raw_db()
+    cursor = db.cursor()
+    try:
+        target_city = _resolve_city_context(None, user)
+        cursor.execute(
+            """
+            UPDATE orders o
+            JOIN addresses a ON o.address_id = a.address_id
+               SET o.paid = %s
+             WHERE o.order_id = %s
+               AND a.city_code = %s
+            """,
+            (int(payload.paid), order_id, target_city),
+        )
+        if cursor.rowcount == 0:
+            db.rollback()
+            raise HTTPException(status_code=404, detail="Order not found")
+        db.commit()
+        return {
+            "order_id": order_id,
+            "paid": bool(payload.paid),
+            "payment_status": payment_status_label(payload.paid),
+        }
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update order payment: {err.msg}")
     finally:
         cursor.close()
         db.close()
@@ -790,7 +834,7 @@ def admin_order_invoice(
             "order": {
                 "order_id": order_id,
                 "created_at": _format_datetime(order_row.get("created_at")),
-                "status": order_row.get("status") or "Pending",
+                "status": normalize_status_for_response(order_row.get("status")),
                 "total_price": float(order_row.get("total_price") or 0),
                 "payment_method": order_row.get("payment_method") or "Unknown",
             },
