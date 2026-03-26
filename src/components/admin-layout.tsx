@@ -466,6 +466,8 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
         return "Developer · DB Schema";
       case "dev-auto-menu":
         return "Developer · Auto Menu";
+      case "dev-api-docs":
+        return "Developer · API Docs";
       case "account":
         return "My Account";
       default:
