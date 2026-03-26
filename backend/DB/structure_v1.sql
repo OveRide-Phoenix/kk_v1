@@ -255,7 +255,7 @@ CREATE TABLE `orders` (
   `customer_id` int NOT NULL,
   `address_id` int NOT NULL,
   `total_price` decimal(10,2) NOT NULL,
-  `status` varchar(50) DEFAULT 'Pending',
+  `status` varchar(50) DEFAULT 'Confirmed',
   `payment_method` varchar(50) NOT NULL,
   `order_date` date DEFAULT NULL,
   `discount` decimal(10,2) DEFAULT '0.00',

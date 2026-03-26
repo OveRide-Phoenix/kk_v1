@@ -27,6 +27,7 @@ from backend.city_config import DEFAULT_CITY, normalize_city_code
 from backend.db import get_raw_db
 from backend.utils.helpers import (
     MENU_TYPE_ONE_DAY,
+    normalize_status_for_response,
     resolve_bld_id,
 )
 
@@ -175,7 +176,7 @@ def get_orders_for_date(
                     "order_id": row["order_id"],
                     "customer_name": row.get("customer_name"),
                     "phone": row.get("primary_mobile"),
-                    "status": row.get("status"),
+                    "status": normalize_status_for_response(row.get("status")),
                     "total_price": float(row.get("total_price") or 0),
                     "payment_method": row.get("payment_method"),
                     "paid": bool(row.get("paid")),

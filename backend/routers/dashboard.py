@@ -14,8 +14,8 @@ from ..utils.auth_deps import admin_required
 from ..utils.helpers import (
     PENDING_ORDER_STATUS_NAMES,
     _resolve_city_context,
-    format_status_with_payment,
     get_supported_meals_for_city,
+    normalize_status_for_response,
 )
 
 router = APIRouter()
@@ -241,7 +241,7 @@ def get_dashboard_metrics(
             order_id = int(row.get("order_id") or 0)
             created_at = row.get("created_at")
             paid_flag = bool(row.get("paid"))
-            status_formatted = format_status_with_payment(row.get("status"), paid_flag)
+            status_formatted = normalize_status_for_response(row.get("status"))
             recent_orders.append(
                 {
                     "id": (f"ORD-{order_id:05d}" if order_id else str(row.get("order_id") or "")),

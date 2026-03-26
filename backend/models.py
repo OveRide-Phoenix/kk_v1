@@ -315,7 +315,7 @@ class Order(Base):
     customer_id = Column(Integer, ForeignKey("customers.customer_id"), nullable=False)
     address_id = Column(Integer, ForeignKey("addresses.address_id"), nullable=False)
     total_price = Column(DECIMAL(10, 2), nullable=False)
-    status = Column(String(50), nullable=True, default="Pending")
+    status = Column(String(50), nullable=True, default="Confirmed")
     payment_method = Column(String(50), nullable=False)
     order_date = Column(Date, nullable=True)
     discount = Column(DECIMAL(10, 2), nullable=True, default=0.00)

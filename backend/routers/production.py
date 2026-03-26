@@ -13,10 +13,6 @@ from ..db import get_raw_db
 from ..utils.auth_deps import admin_required, get_optional_user
 from ..utils.helpers import (
     MENU_TYPE_ONE_DAY,
-    ORDER_STATUS_CONFIRMED,
-    ORDER_STATUS_PENDING,
-    ORDER_STATUS_PREPARING,
-    _bulk_update_order_status_for_date,
     _resolve_city_context,
     get_food_meals_for_city,
     normalize_city_code,
@@ -743,8 +739,6 @@ def generate_production_plan(payload: ProductionPlanRequest) -> Dict[str, Any]:
 def reopen_production_plan(payload: ProductionPlanResetRequest) -> Dict[str, Any]:
     """Reopen a previously finalized production plan by resetting its generated flag.
 
-    Also reverts any orders in Preparing status back to Confirmed for that date/city.
-
     Args:
         payload: Date, menu_type, and optional city_code.
 
@@ -773,14 +767,6 @@ def reopen_production_plan(payload: ProductionPlanResetRequest) -> Dict[str, Any
             (menu_id,),
         )
 
-        reverted_orders = _bulk_update_order_status_for_date(
-            cursor,
-            payload.date,
-            target_city,
-            ORDER_STATUS_CONFIRMED,
-            [ORDER_STATUS_PREPARING],
-        )
-
         db.commit()
 
         log_admin_action(
@@ -795,7 +781,7 @@ def reopen_production_plan(payload: ProductionPlanResetRequest) -> Dict[str, Any
         return {
             "success": True,
             "menu_type": canonical_menu_type,
-            "orders_reverted": reverted_orders,
+            "orders_reverted": 0,
         }
     except mysql.connector.Error as err:
         db.rollback()
@@ -807,7 +793,7 @@ def reopen_production_plan(payload: ProductionPlanResetRequest) -> Dict[str, Any
 
 @router.post("/api/production/finalize")
 def finalize_production_plan(payload: ProductionPlanFinalizeRequest) -> Dict[str, Any]:
-    """Finalize a production plan, marking it generated and advancing order statuses.
+    """Finalize a production plan, marking it generated for downstream logistics.
 
     Args:
         payload: Date, menu_type, optional city_code, and optional updated plan items.
@@ -847,14 +833,6 @@ def finalize_production_plan(payload: ProductionPlanFinalizeRequest) -> Dict[str
         cursor.execute(
             "UPDATE menu SET is_production_generated = 1 WHERE menu_id = %s",
             (menu_id,),
-        )
-
-        _bulk_update_order_status_for_date(
-            cursor,
-            payload.date,
-            target_city,
-            ORDER_STATUS_PREPARING,
-            [ORDER_STATUS_PENDING, ORDER_STATUS_CONFIRMED],
         )
 
         db.commit()

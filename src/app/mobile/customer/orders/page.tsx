@@ -18,6 +18,7 @@ import { mobilePalette, outfit, playfairMobile } from "@/components/mobile/custo
 import { useHydrateAuthUser } from "@/hooks/useHydrateAuthUser";
 import { useAuthStore } from "@/store/store";
 import { http } from "@/lib/http";
+import { normalizeOrderStatusKey, orderStatusLabel } from "@/lib/order-status";
 
 type OrderItem = {
   item_name: string;
@@ -30,6 +31,7 @@ type OrderSummary = {
   created_at: string | null;
   total_price: number;
   status: string;
+  payment_status?: string;
   payment_method: string;
   order_type?: string | null;
   address?: {
@@ -184,7 +186,7 @@ export default function MobileCustomerOrdersPage() {
   const statusOptions = useMemo(() => {
     const options = new Set<string>();
     orders.forEach((order) => {
-      const value = (order.status || "").trim();
+      const value = orderStatusLabel(order.status);
       if (value) options.add(value);
     });
     return ["all", ...Array.from(options)];
@@ -194,7 +196,9 @@ export default function MobileCustomerOrdersPage() {
     let next = orders.filter((order) => matchesDateRange(order, filters));
 
     if (filters.status !== "all") {
-      next = next.filter((order) => order.status.toLowerCase() === filters.status.toLowerCase());
+      next = next.filter(
+        (order) => orderStatusLabel(order.status).toLowerCase() === filters.status.toLowerCase(),
+      );
     }
 
     if (filters.orderType !== "all") {
@@ -444,9 +448,10 @@ export default function MobileCustomerOrdersPage() {
                   .slice(0, 2)
                   .map((item) => `${item.item_name} ×${item.quantity}`)
                   .join(" • ");
-                const statusKey = (order.status || "").toLowerCase();
+                const statusKey = normalizeOrderStatusKey(order.status);
                 const delivered = statusKey.includes("deliver");
-                const inProgress = statusKey.includes("progress");
+                const dispatched = statusKey === "dispatched";
+                const confirmed = statusKey === "confirmed";
 
                 return (
                   <article
@@ -464,13 +469,15 @@ export default function MobileCustomerOrdersPage() {
                         className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold ${
                           delivered
                             ? "bg-[#1B4332] text-white"
-                            : inProgress
+                            : dispatched
                               ? "bg-[#1B4332]/10 text-[#1B4332]"
-                              : "bg-[#8D4925]/10 text-[#8D4925]"
+                              : confirmed
+                                ? "bg-[#8D4925]/10 text-[#8D4925]"
+                                : "bg-[#8D4925]/10 text-[#8D4925]"
                         }`}
                       >
                         {delivered ? <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> : null}
-                        {order.status}
+                        {orderStatusLabel(order.status)}
                       </span>
                     </div>
                     <div className="mb-4 space-y-2">
@@ -684,7 +691,7 @@ export default function MobileCustomerOrdersPage() {
                 </h3>
               </div>
               <span className="rounded-full bg-[#8D4925]/10 px-2.5 py-1 text-xs font-bold text-[#8D4925]">
-                {selectedOrder.status}
+                {orderStatusLabel(selectedOrder.status)}
               </span>
             </div>
 
