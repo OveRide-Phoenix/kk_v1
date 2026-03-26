@@ -7,7 +7,6 @@ import { Crown, FileText, Loader2, Mail, MapPin, PencilLine, Plus, User2 } from 
 import { useSearchParams } from "next/navigation";
 import { useHydrateAuthUser } from "@/hooks/useHydrateAuthUser";
 import { useAuthStore } from "@/store/store";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -39,7 +38,8 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import GoogleMapPicker from "@/components/gmap/GoogleMapPicker";
 import { http } from "@/lib/http";
-import { normalizeOrderStatusKey, orderStatusLabel } from "@/lib/order-status";
+import { normalizeOrderStatusKey } from "@/lib/order-status";
+import { OrderStatusPill } from "@/components/order-status-pill";
 
 const CITY_OPTIONS = [
   { label: "Mysore", code: "MYS" },
@@ -1113,16 +1113,6 @@ export default function AccountPage() {
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {filteredOrders.map((order) => {
-                        const statusKey = normalizeOrderStatusKey(order.status);
-                        const badgeClass =
-                          statusKey === "delivered"
-                            ? "bg-emerald-100 text-emerald-700"
-                            : statusKey === "dispatched"
-                              ? "bg-indigo-100 text-indigo-700"
-                              : statusKey === "confirmed"
-                                ? "bg-sky-100 text-sky-700"
-                                : "bg-gray-100 text-gray-700";
-
                         return (
                           <tr key={order.order_id} className="hover:bg-[#FAF7F0]/70">
                             <td className="px-4 py-4 font-semibold text-[#463028]">
@@ -1134,9 +1124,7 @@ export default function AccountPage() {
                                 : "Scheduled"}
                             </td>
                             <td className="px-4 py-4">
-                              <Badge variant="outline" className={`${badgeClass} border-0`}>
-                                {orderStatusLabel(order.status)}
-                              </Badge>
+                              <OrderStatusPill status={order.status} />
                             </td>
                             <td className="px-4 py-4 text-gray-600">
                               {order.order_type ?? "one_time"}

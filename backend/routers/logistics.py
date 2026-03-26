@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime
+import json
 from typing import Any, Dict, List, Optional, Set
 
 import mysql.connector
@@ -13,7 +14,9 @@ from pydantic import BaseModel, Field
 from ..db import get_raw_db
 from ..utils.auth_deps import admin_required
 from ..utils.helpers import (
+    ORDER_STATUS_CANCELLED,
     ORDER_STATUS_CONFIRMED,
+    ORDER_STATUS_DELIVERED,
     ORDER_STATUS_DISPATCHED,
     _parse_optional_date,
     _resolve_city_context,
@@ -32,6 +35,14 @@ router = APIRouter()
 
 class TripSheetRequest(BaseModel):
     """Payload for generating a trip sheet."""
+
+    date: str
+    city_code: Optional[str] = None
+    meal_type: Optional[str] = None
+
+
+class TripSheetBulkStatusRequest(BaseModel):
+    """Payload for bulk-updating trip-sheet order statuses for a date."""
 
     date: str
     city_code: Optional[str] = None
@@ -87,6 +98,44 @@ def _ensure_delivery_routes_table(db) -> None:
         db.commit()
     finally:
         cursor.close()
+
+
+def _ensure_trip_sheets_table(db) -> None:
+    """Create the trip_sheets table if it does not yet exist.
+
+    Args:
+        db: mysql.connector connection.
+    """
+    cursor = db.cursor()
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS trip_sheets (
+                trip_sheet_id INT NOT NULL AUTO_INCREMENT,
+                service_date DATE NOT NULL,
+                city_code VARCHAR(10) NOT NULL,
+                meal_type VARCHAR(50) NOT NULL DEFAULT '',
+                payload JSON NOT NULL,
+                generated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (trip_sheet_id),
+                UNIQUE KEY uq_trip_sheets_service_city_meal (service_date, city_code, meal_type)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+            """)
+        db.commit()
+    finally:
+        cursor.close()
+
+
+def _normalized_meal_type(meal_type: Optional[str]) -> str:
+    """Normalize a trip sheet meal type for persistence and lookups.
+
+    Args:
+        meal_type: Raw meal type from the request.
+
+    Returns:
+        Trimmed meal type, or an empty string for all-meal sheets.
+    """
+    return (meal_type or "").strip()
 
 
 # ---------------------------------------------------------------------------
@@ -360,6 +409,188 @@ def get_unassigned_route_customers(
         db.close()
 
 
+@router.get("/api/logistics/trip-sheet")
+def get_saved_trip_sheet(
+    date: str = Query(..., description="Date in YYYY-MM-DD format"),
+    city_code: Optional[str] = Query(None),
+    meal_type: Optional[str] = Query(None, description="Load the saved sheet for this meal type"),
+    user: Dict[str, Any] = Depends(admin_required),
+) -> Dict[str, Any]:
+    """Return a previously generated trip sheet for a date, city, and meal.
+
+    Args:
+        date: Service date in YYYY-MM-DD format.
+        city_code: City to filter by; defaults to admin's active city.
+        meal_type: Optional meal type scope (e.g. "Breakfast").
+        user: Current admin user (injected).
+
+    Returns:
+        The stored trip sheet payload.
+    """
+    parsed_date = _parse_optional_date(date)
+    if not parsed_date:
+        raise HTTPException(status_code=400, detail="Valid date required (YYYY-MM-DD)")
+
+    target_city = _resolve_city_context(city_code, user)
+    normalized_meal = _normalized_meal_type(meal_type)
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        _ensure_trip_sheets_table(db)
+        cursor.execute(
+            """
+            SELECT payload
+              FROM trip_sheets
+             WHERE service_date = %s
+               AND city_code = %s
+               AND meal_type = %s
+            """,
+            (parsed_date, target_city, normalized_meal),
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Trip sheet not found")
+
+        payload = row.get("payload")
+        if isinstance(payload, str):
+            return json.loads(payload)
+        return payload
+    finally:
+        cursor.close()
+        db.close()
+
+
+@router.post("/api/logistics/trip-sheet/mark-delivered")
+def mark_trip_sheet_orders_delivered(
+    payload: TripSheetBulkStatusRequest,
+    user: Dict[str, Any] = Depends(admin_required),
+) -> Dict[str, Any]:
+    """Mark all active orders for a service date and city as delivered.
+
+    This bulk action is intended for admins completing daily delivery runs from
+    the trip-sheet page. It updates both the orders table and the stored trip
+    sheet payload for the same date, city, and meal.
+
+    Args:
+        payload: Service date, optional city_code, and optional meal_type.
+        user: Current admin user (injected).
+
+    Returns:
+        Dict with the service date, city_code, meal_type, and number of orders updated.
+    """
+    parsed_date = _parse_optional_date(payload.date)
+    if not parsed_date:
+        raise HTTPException(status_code=400, detail="Valid date required (YYYY-MM-DD)")
+
+    target_city = _resolve_city_context(payload.city_code, user)
+    normalized_meal = _normalized_meal_type(payload.meal_type)
+    meal_type = normalized_meal or None
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        _ensure_trip_sheets_table(db)
+        meal_filter_sql = ""
+        query_params: tuple = (parsed_date, target_city)
+        if meal_type:
+            meal_filter_sql = """
+              AND EXISTS (
+                SELECT 1 FROM order_items oi_m
+                WHERE oi_m.order_id = o.order_id
+                  AND LOWER(oi_m.meal_type) = LOWER(%s)
+              )"""
+            query_params = (parsed_date, target_city, meal_type)
+        cursor.execute(
+            f"""
+            SELECT o.order_id, o.status
+              FROM orders o
+              JOIN addresses a ON o.address_id = a.address_id
+             WHERE DATE(o.created_at) = %s
+               AND a.city_code = %s
+               {meal_filter_sql}
+            """,
+            query_params,
+        )
+        rows = cursor.fetchall() or []
+        deliverable_ids = [
+            int(row["order_id"])
+            for row in rows
+            if normalize_status_for_response(row.get("status")).lower()
+            not in {ORDER_STATUS_DELIVERED.lower(), "cancelled"}
+        ]
+
+        updated_rows = 0
+        if deliverable_ids:
+            placeholders = ", ".join(["%s"] * len(deliverable_ids))
+            cursor.execute(
+                f"""
+                UPDATE orders
+                   SET status = %s
+                 WHERE order_id IN ({placeholders})
+                """,
+                (ORDER_STATUS_DELIVERED, *deliverable_ids),
+            )
+            updated_rows = cursor.rowcount
+
+            cursor.execute(
+                """
+                SELECT trip_sheet_id, payload
+                  FROM trip_sheets
+                 WHERE service_date = %s
+                   AND city_code = %s
+                   AND meal_type = %s
+                """,
+                (parsed_date, target_city, normalized_meal),
+            )
+            for sheet_row in cursor.fetchall() or []:
+                raw_payload = sheet_row.get("payload")
+                payload_obj = (
+                    json.loads(raw_payload) if isinstance(raw_payload, str) else raw_payload
+                )
+                if not isinstance(payload_obj, dict):
+                    continue
+                routes = payload_obj.get("routes")
+                if not isinstance(routes, list):
+                    continue
+
+                payload_changed = False
+                for route in routes:
+                    orders = route.get("orders")
+                    if not isinstance(orders, list):
+                        continue
+                    for order in orders:
+                        order_id = order.get("order_id")
+                        if (
+                            order_id in deliverable_ids
+                            and order.get("status") != ORDER_STATUS_CANCELLED
+                        ):
+                            order["status"] = ORDER_STATUS_DELIVERED
+                            payload_changed = True
+
+                if payload_changed:
+                    cursor.execute(
+                        """
+                        UPDATE trip_sheets
+                           SET payload = CAST(%s AS JSON)
+                         WHERE trip_sheet_id = %s
+                        """,
+                        (json.dumps(payload_obj), sheet_row["trip_sheet_id"]),
+                    )
+
+        db.commit()
+        return {
+            "date": parsed_date.isoformat(),
+            "city_code": target_city,
+            "meal_type": meal_type,
+            "updated_orders": updated_rows,
+        }
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
 @router.post("/api/logistics/trip-sheet")
 def generate_trip_sheet_report(
     payload: TripSheetRequest,
@@ -381,11 +612,16 @@ def generate_trip_sheet_report(
     if not parsed_date:
         raise HTTPException(status_code=400, detail="Valid date required (YYYY-MM-DD)")
     target_city = _resolve_city_context(payload.city_code, user)
+    normalized_meal = _normalized_meal_type(payload.meal_type)
+    meal_type = normalized_meal or None
     db = get_raw_db()
     cursor = db.cursor(dictionary=True)
     try:
         _ensure_delivery_routes_table(db)
-        meals_requiring_production = get_food_meals_for_city(target_city)
+        _ensure_trip_sheets_table(db)
+        meals_requiring_production = (
+            [meal_type] if meal_type else get_food_meals_for_city(target_city)
+        )
         if meals_requiring_production:
             meal_placeholders = ", ".join(["%s"] * len(meals_requiring_production))
             cursor.execute(
@@ -419,7 +655,6 @@ def generate_trip_sheet_report(
                     detail=f"Generate kitchen production for {missing_label} before creating the trip sheet.",
                 )
 
-        meal_type = payload.meal_type
         meal_filter_sql = ""
         orders_params: tuple = (parsed_date, target_city)
         if meal_type:
@@ -576,8 +811,6 @@ def generate_trip_sheet_report(
                 ),
             )
             updated_rows = cursor.rowcount
-        db.commit()
-
         routes_payload = []
         for route, orders in sorted(
             route_groups.items(),
@@ -593,7 +826,7 @@ def generate_trip_sheet_report(
                 }
             )
 
-        return {
+        response_payload = {
             "date": parsed_date.isoformat(),
             "city_code": target_city,
             "meal_type": meal_type,
@@ -601,6 +834,23 @@ def generate_trip_sheet_report(
             "status_updates": updated_rows,
             "generated_at": datetime.utcnow().isoformat() + "Z",
         }
+        cursor.execute(
+            """
+            INSERT INTO trip_sheets (service_date, city_code, meal_type, payload)
+            VALUES (%s, %s, %s, CAST(%s AS JSON))
+            ON DUPLICATE KEY UPDATE
+                payload = VALUES(payload),
+                generated_at = CURRENT_TIMESTAMP
+            """,
+            (
+                parsed_date,
+                target_city,
+                normalized_meal,
+                json.dumps(response_payload),
+            ),
+        )
+        db.commit()
+        return response_payload
     finally:
         cursor.close()
         db.close()

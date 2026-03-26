@@ -76,6 +76,7 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { useAuthStore } from "@/store/store";
+import { OrderStatusPill } from "@/components/order-status-pill";
 
 type OrderItem = {
   name: string;
@@ -143,6 +144,7 @@ type Filters = {
   startDate: Date | null;
   endDate: Date | null;
   status: string;
+  mealType: string;
   customerQuery: string;
   productQuery: string;
 };
@@ -155,6 +157,14 @@ const statusOptions = [
   { label: "Dispatched", value: "dispatched" },
   { label: "Delivered", value: "delivered" },
   { label: "Cancelled", value: "cancelled" },
+];
+
+const mealTypeOptions = [
+  { label: "All meals", value: "all" },
+  { label: "Breakfast", value: "Breakfast" },
+  { label: "Lunch", value: "Lunch" },
+  { label: "Dinner", value: "Dinner" },
+  { label: "Condiments", value: "Condiments" },
 ];
 
 const formatCurrency = (value: number) =>
@@ -174,34 +184,10 @@ const formatDateTime = (value: string | null) => {
   }
 };
 
-const statusBadgeClass = (status: string) => {
-  const normalized = normalizeOrderStatusKey(status);
-  if (normalized === "confirmed") {
-    return "bg-sky-50 text-sky-700 border border-sky-200";
-  }
-  if (normalized === "dispatched") {
-    return "bg-indigo-50 text-indigo-700 border border-indigo-200";
-  }
-  if (normalized === "delivered") {
-    return "bg-emerald-50 text-emerald-700 border border-emerald-200";
-  }
-  if (normalized === "cancelled") {
-    return "bg-rose-50 text-rose-700 border border-rose-200";
-  }
-  return "bg-slate-50 text-slate-700 border border-slate-200";
-};
-
 const paymentBadgeClass = (paid: boolean) =>
   paid
     ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
     : "bg-amber-50 text-amber-900 border border-amber-200";
-
-const adminStatusPillLabel = (status: string, paid: boolean) => {
-  const label = orderStatusLabel(status);
-  return normalizeOrderStatusKey(status) === "confirmed"
-    ? `${label} - ${paymentStatusLabel(paid)}`
-    : label;
-};
 
 const formatOrderId = (raw: number) => `ORD-${String(raw).padStart(5, "0")}`;
 
@@ -296,6 +282,7 @@ const defaultFilters = (): Filters => {
     startDate: null,
     endDate: null,
     status: "all",
+    mealType: "all",
     customerQuery: "",
     productQuery: "",
   };
@@ -332,6 +319,9 @@ export default function OrderHistoryPage() {
     }
     if (filters.status !== "all") {
       params.set("status", filters.status);
+    }
+    if (filters.mealType !== "all") {
+      params.set("meal_type", filters.mealType);
     }
     if (filters.customerQuery.trim()) {
       params.set("customer", filters.customerQuery.trim());
@@ -575,6 +565,7 @@ export default function OrderHistoryPage() {
 
   const filtersApplied =
     filters.status !== "all" ||
+    filters.mealType !== "all" ||
     filters.customerQuery.trim().length > 0 ||
     filters.productQuery.trim().length > 0 ||
     filters.startDate !== null ||
@@ -653,6 +644,24 @@ export default function OrderHistoryPage() {
                   </SelectTrigger>
                   <SelectContent>
                     {statusOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <span className="block text-sm font-medium text-muted-foreground">Meal Type</span>
+                <Select
+                  value={filters.mealType}
+                  onValueChange={(value) => handleFilterChange("mealType", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Filter by meal type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {mealTypeOptions.map((option) => (
                       <SelectItem key={option.value} value={option.value}>
                         {option.label}
                       </SelectItem>
@@ -773,15 +782,11 @@ export default function OrderHistoryPage() {
                           </TableCell>
                           <TableCell>{order.item_count} items</TableCell>
                           <TableCell>
-                            <Badge
-                              variant="outline"
-                              className={cn(
-                                "px-2.5 py-1 text-xs font-medium rounded-full",
-                                statusBadgeClass(order.status),
-                              )}
-                            >
-                              {adminStatusPillLabel(order.status, order.paid)}
-                            </Badge>
+                            <OrderStatusPill
+                              status={order.status}
+                              paid={order.paid}
+                              showPaymentForConfirmed
+                            />
                           </TableCell>
                           <TableCell className="font-medium">
                             {formatCurrency(order.total_price)}
@@ -933,9 +938,12 @@ export default function OrderHistoryPage() {
                   <p className="font-semibold text-foreground">Placed</p>
                   <p>{formatDateTime(selectedOrder.created_at)}</p>
                   <p className="font-semibold text-foreground">Status</p>
-                  <Badge className={cn("capitalize", statusBadgeClass(selectedOrder.status))}>
-                    {adminStatusPillLabel(selectedOrder.status, selectedOrder.paid)}
-                  </Badge>
+                  <OrderStatusPill
+                    status={selectedOrder.status}
+                    paid={selectedOrder.paid}
+                    showPaymentForConfirmed
+                    className="capitalize"
+                  />
                   <p className="font-semibold text-foreground">Payment</p>
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-muted-foreground">
