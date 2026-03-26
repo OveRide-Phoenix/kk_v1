@@ -86,6 +86,19 @@ CREATE TABLE `delivery_routes` (
   UNIQUE KEY `uq_delivery_routes_city_route_code` (`city_code`,`route_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- TABLE: trip_sheets
+CREATE TABLE `trip_sheets` (
+  `trip_sheet_id` int NOT NULL AUTO_INCREMENT,
+  `service_date` date NOT NULL,
+  `city_code` varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `meal_type` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `payload` json NOT NULL,
+  `generated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`trip_sheet_id`),
+  UNIQUE KEY `uq_trip_sheets_service_city_meal` (`service_date`,`city_code`,`meal_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- TABLE: items
 CREATE TABLE `items` (
   `item_id` int NOT NULL AUTO_INCREMENT,

@@ -136,6 +136,18 @@ class DeliveryRoute(Base):
     updated_at = Column(TIMESTAMP, nullable=False)
 
 
+class TripSheet(Base):
+    __tablename__ = "trip_sheets"
+
+    trip_sheet_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    service_date = Column(Date, nullable=False)
+    city_code = Column(String(10), nullable=False)
+    meal_type = Column(String(50), nullable=False, default="")
+    payload = Column(JSON, nullable=False)
+    generated_at = Column(TIMESTAMP, nullable=False)
+    updated_at = Column(TIMESTAMP, nullable=False)
+
+
 class Item(Base):
     __tablename__ = "items"
 

@@ -20,7 +20,6 @@ import {
 import CustomerNavBar from "@/components/customer-nav-bar";
 import { useHydrateAuthUser } from "@/hooks/useHydrateAuthUser";
 import { useAuthStore } from "@/store/store";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -52,7 +51,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import GoogleMapPicker from "@/components/gmap/GoogleMapPicker";
 import { http } from "@/lib/http";
-import { normalizeOrderStatusKey, orderStatusLabel } from "@/lib/order-status";
+import { OrderStatusPill } from "@/components/order-status-pill";
 
 const CITY_OPTIONS = [
   { label: "Mysore", code: "MYS" },
@@ -335,15 +334,6 @@ export default function AccountPage() {
   const renderOrderCard = useCallback(
     (order: OrderSummary, options?: { variant?: "default" | "dialog" }) => {
       const variant = options?.variant ?? "default";
-      const statusKey = normalizeOrderStatusKey(order.status);
-      const statusStyle =
-        statusKey === "delivered"
-          ? "border-emerald-200 bg-emerald-100 text-emerald-700"
-          : statusKey === "dispatched"
-            ? "border-indigo-200 bg-indigo-100 text-indigo-700"
-            : statusKey === "confirmed"
-              ? "border-sky-200 bg-sky-100 text-sky-700"
-              : "border-brand-subtle bg-[#f3ebe2] text-[#705446]";
 
       const isSubscriptionOrder = (order.order_type ?? "").toLowerCase() === "subscription";
 
@@ -359,9 +349,7 @@ export default function AccountPage() {
               {[order.address.line, order.address.city].filter(Boolean).join(", ")}
             </p>
           </div>
-          <Badge variant="outline" className={`${statusStyle} uppercase`}>
-            {orderStatusLabel(order.status)}
-          </Badge>
+          <OrderStatusPill status={order.status} />
         </div>
       );
 

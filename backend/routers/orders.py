@@ -19,6 +19,7 @@ from ..utils.helpers import (
     _format_datetime,
     _parse_optional_date,
     _resolve_city_context,
+    normalize_meal_type,
     normalize_status_for_response,
     normalize_order_status,
     payment_status_label,
@@ -203,6 +204,7 @@ def _apply_order_filters(
     status: Optional[str],
     customer: Optional[str],
     product: Optional[str],
+    meal_type: Optional[str],
 ) -> None:
     """Append WHERE clause fragments for admin order history filters.
 
@@ -212,6 +214,7 @@ def _apply_order_filters(
         status: Status string to filter by (or None for all).
         customer: Customer name/phone substring to filter by.
         product: Product name substring to filter by.
+        meal_type: Meal type string to filter by.
     """
     if status:
         normalized = status.strip().lower()
@@ -226,6 +229,15 @@ def _apply_order_filters(
         term = f"%{product.strip()}%"
         base_where.append("i.name LIKE %s")
         params.append(term)
+    if meal_type:
+        normalized_meal = (meal_type or "").strip().lower()
+        if normalized_meal and normalized_meal != "all":
+            try:
+                canonical_meal = normalize_meal_type(meal_type)
+            except ValueError:
+                canonical_meal = meal_type.strip()
+            base_where.append("LOWER(COALESCE(oi.meal_type, '')) = %s")
+            params.append(canonical_meal.lower())
 
 
 # ---------------------------------------------------------------------------
@@ -373,6 +385,7 @@ def admin_order_history(
     status: Optional[str] = None,
     customer: Optional[str] = None,
     product: Optional[str] = None,
+    meal_type: Optional[str] = None,
     city_code: Optional[str] = Query(None, alias="city_code"),
     limit: int = Query(10, ge=1, le=200),
     offset: int = Query(0, ge=0),
@@ -387,6 +400,7 @@ def admin_order_history(
         status: Filter by order status string.
         customer: Filter by customer name or phone substring.
         product: Filter by product name substring.
+        meal_type: Filter by meal type (Breakfast/Lunch/Dinner/Condiments).
         city_code: City to filter orders for.
         limit: Page size (max 200).
         offset: Pagination offset.
@@ -418,7 +432,7 @@ def admin_order_history(
 
         where_clauses.append("a.city_code = %s")
         params.append(resolved_city)
-        _apply_order_filters(where_clauses, params, status, customer, product)
+        _apply_order_filters(where_clauses, params, status, customer, product, meal_type)
         where_sql = " AND ".join(where_clauses)
         where_fragment = f"WHERE {where_sql}" if where_sql else ""
 

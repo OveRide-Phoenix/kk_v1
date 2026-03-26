@@ -6,7 +6,6 @@ import { AdminLayout } from "@/components/admin-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DatePickerWithPresets } from "@/components/ui/date-picker";
-import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -26,7 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { http } from "@/lib/http";
-import { normalizeOrderStatusKey, orderStatusLabel, paymentStatusLabel } from "@/lib/order-status";
+import { normalizeOrderStatusKey, paymentStatusLabel } from "@/lib/order-status";
 import { useAuthStore } from "@/store/store";
 import { getSupportedMeals } from "@/config/cities";
 import {
@@ -38,6 +37,7 @@ import {
 } from "@/components/ui/select";
 import { AlertTriangle, Info, Loader2, MapPin, Plus, Route, Truck, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { OrderStatusPill } from "@/components/order-status-pill";
 
 type MealName = "Breakfast" | "Lunch" | "Dinner" | "Condiments";
 
@@ -125,26 +125,20 @@ const formatCurrency = (value: number) =>
     maximumFractionDigits: 0,
   }).format(value);
 
-const statusBadgeClass = (status: string) => {
-  const normalized = normalizeOrderStatusKey(status);
-  if (normalized === "confirmed") return "bg-sky-50 text-sky-700 border border-sky-100";
-  if (normalized === "dispatched") return "bg-indigo-50 text-indigo-700 border border-indigo-100";
-  if (normalized === "delivered") return "bg-emerald-50 text-emerald-700 border border-emerald-100";
-  if (normalized === "cancelled" || normalized === "canceled")
-    return "bg-rose-50 text-rose-700 border border-rose-100";
-  return "bg-slate-50 text-slate-700 border border-slate-100";
-};
-
 export default function TripSheetPage() {
   const adminCity = useAuthStore((state) => state.adminCity || state.user?.city_code || "MYS");
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [selectedMeal, setSelectedMeal] = useState<MealName>("Breakfast");
   // Per-meal generated sheet data
-  const [mealSheets, setMealSheets] = useState<Partial<Record<MealName, TripSheetResponse>>>({});
+  const [mealSheets, setMealSheets] = useState<Partial<Record<MealName, TripSheetResponse | null>>>(
+    {},
+  );
+  const [sheetLoading, setSheetLoading] = useState(false);
   // Per-meal unassigned customers
   const [unassigned, setUnassigned] = useState<Partial<Record<MealName, UnassignedResponse>>>({});
   const [unassignedLoading, setUnassignedLoading] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [markingDelivered, setMarkingDelivered] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [routePlannerOpen, setRoutePlannerOpen] = useState(false);
   const [routePlannerLoading, setRoutePlannerLoading] = useState(false);
@@ -207,6 +201,43 @@ export default function TripSheetPage() {
     void loadUnassigned(selectedMeal);
   }, [selectedMeal, loadUnassigned]);
 
+  const loadSavedSheet = useCallback(
+    async (meal: MealName) => {
+      setSheetLoading(true);
+      try {
+        const params = new URLSearchParams({
+          date: isoDate,
+          city_code: adminCity,
+          meal_type: meal,
+        });
+        const res = await http.get(`/api/logistics/trip-sheet?${params}`);
+        if (res.status === 404) {
+          setMealSheets((prev) => ({ ...prev, [meal]: null }));
+          return;
+        }
+        const data = (await res.json()) as TripSheetResponse | { detail?: string };
+        if (!res.ok) {
+          throw new Error(
+            "detail" in data && data.detail ? data.detail : "Failed to load trip sheet",
+          );
+        }
+        setMealSheets((prev) => ({ ...prev, [meal]: data as TripSheetResponse }));
+      } catch (err) {
+        setMealSheets((prev) => ({ ...prev, [meal]: null }));
+        setError(err instanceof Error ? err.message : "Unable to load trip sheet");
+      } finally {
+        setSheetLoading(false);
+      }
+    },
+    [isoDate, adminCity],
+  );
+
+  useEffect(() => {
+    if (mealSheets[selectedMeal] !== undefined) return;
+    setError(null);
+    void loadSavedSheet(selectedMeal);
+  }, [selectedMeal, mealSheets, loadSavedSheet]);
+
   const handleGenerate = async () => {
     setLoading(true);
     setError(null);
@@ -239,6 +270,55 @@ export default function TripSheetPage() {
       setError(err instanceof Error ? err.message : "Unable to generate trip sheet");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleMarkAllDelivered = async () => {
+    setMarkingDelivered(true);
+    setError(null);
+    try {
+      const res = await http.post("/api/logistics/trip-sheet/mark-delivered", {
+        date: isoDate,
+        city_code: adminCity,
+        meal_type: selectedMeal,
+      });
+      const data = (await res.json()) as { updated_orders?: number; detail?: string };
+      if (!res.ok) {
+        throw new Error(data.detail || "Failed to mark orders as delivered");
+      }
+
+      setMealSheets((prev) => {
+        const next: Partial<Record<MealName, TripSheetResponse | null>> = { ...prev };
+        const sheet = next[selectedMeal];
+        if (sheet) {
+          next[selectedMeal] = {
+            ...sheet,
+            routes: sheet.routes.map((route) => ({
+              ...route,
+              orders: route.orders.map((order) => ({
+                ...order,
+                status:
+                  normalizeOrderStatusKey(order.status) === "cancelled"
+                    ? order.status
+                    : "Delivered",
+              })),
+            })),
+          };
+        }
+        return next;
+      });
+
+      toast({
+        title: `${selectedMeal} orders marked as delivered`,
+        description:
+          (data.updated_orders ?? 0) > 0
+            ? `${data.updated_orders} ${selectedMeal.toLowerCase()} orders updated for ${dateLabel}.`
+            : `No active ${selectedMeal.toLowerCase()} orders needed updating for ${dateLabel}.`,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to mark orders as delivered");
+    } finally {
+      setMarkingDelivered(false);
     }
   };
 
@@ -390,7 +470,7 @@ export default function TripSheetPage() {
       <div className="mb-6 space-y-1">
         <h1 className="text-2xl font-serif font-semibold text-foreground">Trip Sheet Generation</h1>
         <p className="text-sm text-muted-foreground">
-          Generate delivery manifests per meal, grouped by route. Orders advance to{" "}
+          Generate and save delivery manifests per meal, grouped by route. Orders advance to{" "}
           &quot;Dispatched&quot; on generation.
         </p>
       </div>
@@ -513,6 +593,15 @@ export default function TripSheetPage() {
             `Generate ${selectedMeal} Trip Sheet`
           )}
         </Button>
+        <Button variant="outline" onClick={handleMarkAllDelivered} disabled={markingDelivered}>
+          {markingDelivered ? (
+            <span className="flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" /> Marking delivered…
+            </span>
+          ) : (
+            `Mark ${selectedMeal} Orders Delivered`
+          )}
+        </Button>
         {hasUnassigned && (
           <p className="text-xs text-muted-foreground">
             Fix route assignments above to enable generation.
@@ -530,15 +619,31 @@ export default function TripSheetPage() {
       {!currentSheet ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center gap-2 py-12 text-center text-sm text-muted-foreground">
-            <Route className="h-6 w-6 text-muted-foreground" />
-            <p>
-              Generate the <strong>{selectedMeal}</strong> trip sheet to see delivery routes for{" "}
-              {dateLabel}.
-            </p>
+            {sheetLoading ? (
+              <>
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <p>
+                  Loading saved {selectedMeal.toLowerCase()} trip sheet for {dateLabel}…
+                </p>
+              </>
+            ) : (
+              <>
+                <Route className="h-6 w-6 text-muted-foreground" />
+                <p>
+                  Generate the <strong>{selectedMeal}</strong> trip sheet to save and view delivery
+                  routes for {dateLabel}.
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-6">
+          <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+            Saved trip sheet loaded for {dateLabel}. Last generated on{" "}
+            {format(new Date(currentSheet.generated_at), "PPP p")}.
+          </div>
+
           {currentSheet.status_updates > 0 && (
             <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
               {currentSheet.status_updates} orders updated to <strong>Dispatched</strong>.
@@ -630,9 +735,7 @@ export default function TripSheetPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge className={cn("text-xs", statusBadgeClass(order.status))}>
-                            {orderStatusLabel(order.status)}
-                          </Badge>
+                          <OrderStatusPill status={order.status} className="text-xs" />
                         </TableCell>
                       </TableRow>
                     ))}

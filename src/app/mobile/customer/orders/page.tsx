@@ -5,7 +5,6 @@ import { useEffect, useMemo, useState } from "react";
 import { format as formatDate, isSameDay, isSameMonth, subDays } from "date-fns";
 import {
   ArrowLeft,
-  CheckCircle2,
   ChevronRight,
   FileText,
   Filter,
@@ -18,7 +17,8 @@ import { mobilePalette, outfit, playfairMobile } from "@/components/mobile/custo
 import { useHydrateAuthUser } from "@/hooks/useHydrateAuthUser";
 import { useAuthStore } from "@/store/store";
 import { http } from "@/lib/http";
-import { normalizeOrderStatusKey, orderStatusLabel } from "@/lib/order-status";
+import { orderStatusLabel } from "@/lib/order-status";
+import { OrderStatusPill } from "@/components/order-status-pill";
 
 type OrderItem = {
   item_name: string;
@@ -448,11 +448,6 @@ export default function MobileCustomerOrdersPage() {
                   .slice(0, 2)
                   .map((item) => `${item.item_name} ×${item.quantity}`)
                   .join(" • ");
-                const statusKey = normalizeOrderStatusKey(order.status);
-                const delivered = statusKey.includes("deliver");
-                const dispatched = statusKey === "dispatched";
-                const confirmed = statusKey === "confirmed";
-
                 return (
                   <article
                     key={order.order_id}
@@ -465,20 +460,7 @@ export default function MobileCustomerOrdersPage() {
                         </span>
                         <h3 className="text-lg font-bold text-[#8D4925]">#{order.order_id}</h3>
                       </div>
-                      <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold ${
-                          delivered
-                            ? "bg-[#1B4332] text-white"
-                            : dispatched
-                              ? "bg-[#1B4332]/10 text-[#1B4332]"
-                              : confirmed
-                                ? "bg-[#8D4925]/10 text-[#8D4925]"
-                                : "bg-[#8D4925]/10 text-[#8D4925]"
-                        }`}
-                      >
-                        {delivered ? <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> : null}
-                        {orderStatusLabel(order.status)}
-                      </span>
+                      <OrderStatusPill status={order.status} />
                     </div>
                     <div className="mb-4 space-y-2">
                       <p className="text-sm font-medium text-[#64748b]">
@@ -690,9 +672,7 @@ export default function MobileCustomerOrdersPage() {
                   #{selectedOrder.order_id}
                 </h3>
               </div>
-              <span className="rounded-full bg-[#8D4925]/10 px-2.5 py-1 text-xs font-bold text-[#8D4925]">
-                {orderStatusLabel(selectedOrder.status)}
-              </span>
+              <OrderStatusPill status={selectedOrder.status} />
             </div>
 
             <div className="space-y-3 rounded-xl border border-[#8D4925]/10 bg-white p-4">

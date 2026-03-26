@@ -21,8 +21,8 @@ import { useAuthStore } from "@/store/store";
 import { AdminLayout } from "@/components/admin-layout";
 import { getDashboardMetrics } from "@/lib/api";
 import { getCityLabel } from "@/config/cities";
-import { normalizeOrderStatusKey, orderStatusLabel, paymentStatusLabel } from "@/lib/order-status";
-import { cn } from "@/lib/utils";
+import { normalizeOrderStatusKey, orderStatusLabel } from "@/lib/order-status";
+import { OrderStatusPill } from "@/components/order-status-pill";
 
 // Define types for the metrics
 type Order = {
@@ -115,28 +115,12 @@ const normalizeStatus = (status?: string | null) => {
 
 const normalizeStatusKey = (status: string) => normalizeOrderStatusKey(status);
 
-const statusBadgeClass = (status: string) => {
-  const key = normalizeStatusKey(status);
-  if (key === "confirmed") return "bg-sky-100 text-sky-800";
-  if (key === "dispatched") return "bg-indigo-100 text-indigo-800";
-  if (key === "delivered" || key === "done") return "bg-green-100 text-green-800";
-  if (key === "cancelled") return "bg-red-100 text-red-800";
-  return "bg-slate-100 text-slate-800";
-};
-
 const statusPriority = (status: string) => {
   const key = normalizeStatusKey(status);
   if (key === "confirmed") return 0;
   if (key === "dispatched") return 1;
   if (key === "delivered" || key === "completed" || key === "done") return 4;
   return 5;
-};
-
-const adminStatusPillLabel = (status: string, paid: boolean) => {
-  const label = orderStatusLabel(status);
-  return normalizeStatusKey(status) === "confirmed"
-    ? `${label} - ${paymentStatusLabel(paid)}`
-    : label;
 };
 
 const checklistBadgeClass = (item: ChecklistItem) => {
@@ -434,15 +418,11 @@ export function Dashboard() {
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-medium leading-none">{order.id}</p>
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            "px-2.5 py-1 text-xs font-medium rounded-full",
-                            statusBadgeClass(order.status),
-                          )}
-                        >
-                          {adminStatusPillLabel(order.status, order.paid)}
-                        </Badge>
+                        <OrderStatusPill
+                          status={order.status}
+                          paid={order.paid}
+                          showPaymentForConfirmed
+                        />
                       </div>
                       <p className="text-sm text-muted-foreground">
                         {order.customer} • {pluralizeItems(order.items)}
