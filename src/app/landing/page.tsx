@@ -23,6 +23,7 @@ const plusJakarta = Plus_Jakarta_Sans({
 const services = [
   {
     icon: "lunch_dining",
+    image: "/images/menu/idli-sambar.jpg",
     title: "Daily Fresh Orders",
     description:
       "Order wholesome, home-cooked meals for today or plan ahead for the week. Every dish is prepared fresh the same morning it's delivered.",
@@ -30,6 +31,7 @@ const services = [
   },
   {
     icon: "calendar_month",
+    image: "/images/hero/thali.png",
     title: "Meal Subscriptions",
     description:
       "Lock in your weekly or monthly meal plan and never worry about what's for lunch again. Flexible, affordable, and delicious every day.",
@@ -37,6 +39,7 @@ const services = [
   },
   {
     icon: "celebration",
+    image: "/images/menu/new/south-festival.png",
     title: "Festival & Event Specials",
     description:
       "Celebrate festivals and occasions with curated traditional spreads — from Onam Sadhya to festive combos — crafted exactly like home.",
@@ -548,41 +551,6 @@ export default function LandingPage() {
           overflow: "hidden",
         }}
       >
-        {/* Decorative circles */}
-        <div
-          style={{
-            position: "absolute",
-            top: "10%",
-            right: "-5%",
-            width: 400,
-            height: 400,
-            borderRadius: "50%",
-            background: "rgba(255,255,255,0.04)",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            bottom: "-10%",
-            left: "-8%",
-            width: 500,
-            height: 500,
-            borderRadius: "50%",
-            background: "rgba(255,255,255,0.03)",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            top: "40%",
-            right: "15%",
-            width: 180,
-            height: 180,
-            borderRadius: "50%",
-            background: "rgba(255,200,100,0.06)",
-          }}
-        />
-
         {/* Dot grid pattern */}
         <div
           style={{
@@ -908,36 +876,6 @@ export default function LandingPage() {
                 </div>
                 <div style={{ color: "rgba(253,250,241,0.5)", fontSize: 10 }}>Daily</div>
               </div>
-
-              {/* Floating rating */}
-              <div
-                style={{
-                  position: "absolute",
-                  bottom: -18,
-                  left: -18,
-                  background: "#fdfaf1",
-                  borderRadius: 12,
-                  padding: "10px 14px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
-                }}
-              >
-                <div style={{ display: "flex", gap: 2 }}>
-                  {[...Array(5)].map((_, i) => (
-                    <span
-                      key={i}
-                      className="material-symbols-outlined"
-                      style={{ fontSize: 14, color: "#f59e0b" }}
-                    >
-                      star
-                    </span>
-                  ))}
-                </div>
-                <span style={{ fontSize: 13, fontWeight: 700, color: "#3A2618" }}>4.9</span>
-                <span style={{ fontSize: 11, color: "#6B5344" }}>500+ reviews</span>
-              </div>
             </div>
           </div>
         </div>
@@ -1190,9 +1128,24 @@ export default function LandingPage() {
         id="services"
         data-animate
         className="section-pad"
-        style={{ background: "#fff8e7", padding: "100px 24px" }}
+        style={{
+          background: "linear-gradient(180deg, #8D4925 0%, #5c2d0e 100%)",
+          padding: "100px 24px",
+          position: "relative",
+          overflow: "hidden",
+        }}
       >
-        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+        {/* Pattern overlay */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px)",
+            backgroundSize: "28px 28px",
+          }}
+        />
+
+        <div style={{ maxWidth: 1200, margin: "0 auto", position: "relative", zIndex: 1 }}>
           {/* Header */}
           <div style={{ textAlign: "center", marginBottom: 64 }}>
             <div
@@ -1200,7 +1153,8 @@ export default function LandingPage() {
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 8,
-                background: "rgba(141,73,37,0.08)",
+                background: "rgba(255,255,255,0.1)",
+                border: "1px solid rgba(255,255,255,0.15)",
                 borderRadius: 100,
                 padding: "6px 16px",
                 marginBottom: 20,
@@ -1208,11 +1162,11 @@ export default function LandingPage() {
             >
               <span
                 className="material-symbols-outlined"
-                style={{ fontSize: 14, color: "#8D4925" }}
+                style={{ fontSize: 14, color: "#ffc06a" }}
               >
                 room_service
               </span>
-              <span style={{ color: "#8D4925", fontSize: 12, fontWeight: 600, letterSpacing: 1 }}>
+              <span style={{ color: "#ffc06a", fontSize: 12, fontWeight: 600, letterSpacing: 1 }}>
                 WHAT WE DO
               </span>
             </div>
@@ -1221,8 +1175,7 @@ export default function LandingPage() {
                 fontFamily: "var(--font-v2-playfair), serif",
                 fontWeight: 700,
                 fontSize: "clamp(28px, 3.5vw, 44px)",
-                color: "#3A2618",
-                lineHeight: 1.2,
+                color: "#fdfaf1",
                 marginBottom: 16,
               }}
             >
@@ -1230,7 +1183,7 @@ export default function LandingPage() {
             </h2>
             <p
               style={{
-                color: "#6B5344",
+                color: "rgba(253,250,241,0.7)",
                 fontSize: 16,
                 maxWidth: 520,
                 margin: "0 auto",
@@ -1254,77 +1207,82 @@ export default function LandingPage() {
             {services.map((service, i) => (
               <div
                 key={service.title}
+                data-reveal
+                data-reveal-delay={String(i + 1)}
                 style={{
-                  background: "#fdfaf1",
+                  background: "rgba(255,255,255,0.08)",
+                  backdropFilter: "blur(10px)",
+                  border: "1px solid rgba(255,255,255,0.12)",
                   borderRadius: 20,
-                  padding: 32,
-                  border: "1px solid rgba(141,73,37,0.1)",
+                  overflow: "hidden",
                   transition: "all 0.3s ease",
                   cursor: "default",
                 }}
-                data-reveal
-                data-reveal-delay={String(i + 1)}
                 onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "rgba(255,255,255,0.14)";
                   e.currentTarget.style.transform = "translateY(-6px)";
-                  e.currentTarget.style.boxShadow = "0 20px 48px rgba(141,73,37,0.12)";
-                  e.currentTarget.style.borderColor = service.color;
+                  e.currentTarget.style.borderColor = "rgba(255,192,106,0.4)";
+                  e.currentTarget.style.boxShadow = "0 20px 48px rgba(0,0,0,0.2)";
                 }}
                 onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "rgba(255,255,255,0.08)";
                   e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)";
                   e.currentTarget.style.boxShadow = "none";
-                  e.currentTarget.style.borderColor = "rgba(141,73,37,0.1)";
                 }}
               >
-                <div
-                  style={{
-                    width: 56,
-                    height: 56,
-                    borderRadius: 14,
-                    background: service.color,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    marginBottom: 24,
-                  }}
-                >
-                  <span
-                    className="material-symbols-outlined"
-                    style={{ fontSize: 28, color: "#fdfaf1" }}
-                  >
-                    {service.icon}
-                  </span>
+                {/* Image */}
+                <div style={{ position: "relative", height: 160, width: "100%" }}>
+                  <Image
+                    src={service.image}
+                    alt={service.title}
+                    fill
+                    style={{ objectFit: "cover" }}
+                  />
+                  <div
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      background: "linear-gradient(to top, rgba(58,26,8,0.5) 0%, transparent 60%)",
+                    }}
+                  />
                 </div>
-                <h3
-                  style={{
-                    fontFamily: "var(--font-v2-playfair), serif",
-                    fontWeight: 700,
-                    fontSize: 22,
-                    color: "#3A2618",
-                    marginBottom: 12,
-                  }}
-                >
-                  {service.title}
-                </h3>
-                <p style={{ color: "#6B5344", fontSize: 14, lineHeight: 1.75 }}>
-                  {service.description}
-                </p>
-                <div
-                  style={{
-                    marginTop: 24,
-                    paddingTop: 20,
-                    borderTop: "1px solid rgba(141,73,37,0.08)",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    color: service.color,
-                    fontSize: 13,
-                    fontWeight: 600,
-                  }}
-                >
-                  Learn more
-                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-                    chevron_right
-                  </span>
+                {/* Text */}
+                <div style={{ padding: 28 }}>
+                  <div
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 12,
+                      background: "rgba(255,192,106,0.15)",
+                      border: "1px solid rgba(255,192,106,0.3)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginBottom: 20,
+                    }}
+                  >
+                    <span
+                      className="material-symbols-outlined"
+                      style={{ fontSize: 22, color: "#ffc06a" }}
+                    >
+                      {service.icon}
+                    </span>
+                  </div>
+                  <h3
+                    style={{
+                      fontFamily: "var(--font-v2-playfair), serif",
+                      fontWeight: 700,
+                      fontSize: 22,
+                      color: "#fdfaf1",
+                      marginBottom: 12,
+                    }}
+                  >
+                    {service.title}
+                  </h3>
+                  <p style={{ color: "rgba(253,250,241,0.65)", fontSize: 14, lineHeight: 1.75 }}>
+                    {service.description}
+                  </p>
                 </div>
               </div>
             ))}
