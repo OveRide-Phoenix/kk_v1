@@ -52,7 +52,7 @@ const testimonials = [
   },
   {
     name: "Rajan Menon",
-    city: "Kochi",
+    city: "Mysuru",
     rating: 5,
     text: "I've tried multiple tiffin services but Kuteera Kitchen is on another level. Authentic, consistent, and always on time.",
   },
@@ -70,7 +70,7 @@ const testimonials = [
   },
   {
     name: "Deepa Varma",
-    city: "Kochi",
+    city: "Bengaluru",
     rating: 5,
     text: "Ordered for our office team and everyone loved it. The festival special was a huge hit. Will order again!",
   },
@@ -112,7 +112,7 @@ const products = [
 ];
 
 const stats = [
-  { value: "3+", label: "Cities Served" },
+  { value: "2", label: "Cities Served" },
   { value: "500+", label: "Happy Customers" },
   { value: "10K+", label: "Meals Delivered" },
   { value: "100%", label: "Home-style Recipes" },
@@ -123,8 +123,11 @@ const stats = [
 export default function LandingPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const [visibleSections, setVisibleSections] = useState<Set<string>>(new Set());
+  const [statValues, setStatValues] = useState([0, 0, 0, 0]);
+  const [activeProduct, setActiveProduct] = useState(0);
+  const [productAnimating, setProductAnimating] = useState(false);
   const observerRef = useRef<IntersectionObserver | null>(null);
+  const statsAnimatedRef = useRef(false);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -132,22 +135,65 @@ export default function LandingPage() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // Scroll-reveal: add .revealed to [data-animate] sections and [data-reveal] elements
   useEffect(() => {
-    observerRef.current = new IntersectionObserver(
+    const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
-          if (entry.isIntersecting && entry.target.id) {
-            setVisibleSections((prev) => new Set([...prev, entry.target.id]));
+          if (entry.isIntersecting) {
+            entry.target.classList.add("revealed");
+            observer.unobserve(entry.target);
           }
         });
       },
-      { threshold: 0.1 },
+      { threshold: 0.08 },
     );
+    document
+      .querySelectorAll("[data-animate], [data-reveal]")
+      .forEach((el) => observer.observe(el));
+    observerRef.current = observer;
+    return () => observer.disconnect();
+  }, []);
 
-    const sections = document.querySelectorAll("[data-animate]");
-    sections.forEach((el) => observerRef.current?.observe(el));
+  // Stat counter animation
+  useEffect(() => {
+    const targets = [2, 500, 10, 100];
+    const heroStats = document.getElementById("hero-stats");
+    if (!heroStats) return;
+    const statsObserver = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !statsAnimatedRef.current) {
+          statsAnimatedRef.current = true;
+          const duration = 1800;
+          const startTime = performance.now();
+          const tick = (now: number) => {
+            const elapsed = now - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const eased = 1 - Math.pow(1 - progress, 3);
+            setStatValues(targets.map((t) => Math.floor(t * eased)));
+            if (progress < 1) requestAnimationFrame(tick);
+            else setStatValues(targets);
+          };
+          requestAnimationFrame(tick);
+          statsObserver.disconnect();
+        }
+      },
+      { threshold: 0.5 },
+    );
+    statsObserver.observe(heroStats);
+    return () => statsObserver.disconnect();
+  }, []);
 
-    return () => observerRef.current?.disconnect();
+  // Auto-scroll product carousel every 3s
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setProductAnimating(true);
+      setTimeout(() => {
+        setActiveProduct((p) => (p + 1) % products.length);
+        setProductAnimating(false);
+      }, 250);
+    }, 3000);
+    return () => clearInterval(timer);
   }, []);
 
   const navLinks = [
@@ -223,10 +269,7 @@ export default function LandingPage() {
           </div>
 
           {/* Desktop Nav */}
-          <nav
-            style={{ display: "flex", alignItems: "center", gap: 32 }}
-            className="hidden md:flex"
-          >
+          <nav style={{ alignItems: "center", gap: 32 }} className="nav-desktop">
             {navLinks.map((link) => (
               <a
                 key={link.href}
@@ -247,10 +290,7 @@ export default function LandingPage() {
           </nav>
 
           {/* CTA Buttons */}
-          <div
-            style={{ display: "flex", alignItems: "center", gap: 12 }}
-            className="hidden md:flex"
-          >
+          <div style={{ alignItems: "center", gap: 12 }} className="nav-desktop">
             <Link
               href="/customer-v2/home"
               style={{
@@ -302,7 +342,7 @@ export default function LandingPage() {
 
           {/* Mobile Hamburger */}
           <button
-            className="md:hidden"
+            className="nav-mobile"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             style={{
               background: "none",
@@ -451,7 +491,7 @@ export default function LandingPage() {
             position: "relative",
             zIndex: 1,
           }}
-          className="hero-grid"
+          className="hero-grid hero-content-pad"
         >
           {/* Left: Text */}
           <div className="animate-fade-in">
@@ -508,7 +548,7 @@ export default function LandingPage() {
               authentic, home-style Indian cooking — prepared with care and delivered to your door.
             </p>
 
-            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }} className="hero-ctas">
               <Link
                 href="/customer-v2/new-order"
                 style={{
@@ -571,6 +611,8 @@ export default function LandingPage() {
 
             {/* Quick stats */}
             <div
+              id="hero-stats"
+              className="hero-stats-row"
               style={{
                 display: "flex",
                 gap: 32,
@@ -580,23 +622,27 @@ export default function LandingPage() {
                 flexWrap: "wrap",
               }}
             >
-              {stats.map((s) => (
-                <div key={s.label}>
-                  <div
-                    style={{
-                      fontFamily: "var(--font-v2-playfair), serif",
-                      fontWeight: 700,
-                      fontSize: 28,
-                      color: "#ffc06a",
-                    }}
-                  >
-                    {s.value}
+              {stats.map((s, i) => {
+                const suffixes = ["", "+", "K+", "%"];
+                return (
+                  <div key={s.label}>
+                    <div
+                      style={{
+                        fontFamily: "var(--font-v2-playfair), serif",
+                        fontWeight: 700,
+                        fontSize: 28,
+                        color: "#ffc06a",
+                      }}
+                    >
+                      {statValues[i]}
+                      {suffixes[i]}
+                    </div>
+                    <div style={{ color: "rgba(253,250,241,0.6)", fontSize: 12, marginTop: 2 }}>
+                      {s.label}
+                    </div>
                   </div>
-                  <div style={{ color: "rgba(253,250,241,0.6)", fontSize: 12, marginTop: 2 }}>
-                    {s.label}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -605,7 +651,13 @@ export default function LandingPage() {
             className="animate-slide-in-right hidden md:flex"
             style={{ justifyContent: "center" }}
           >
-            <div style={{ position: "relative", width: 380 }}>
+            <div
+              style={{
+                position: "relative",
+                width: 380,
+                animation: "float 5s ease-in-out infinite",
+              }}
+            >
               {/* Main card */}
               <div
                 style={{
@@ -804,7 +856,12 @@ export default function LandingPage() {
       </section>
 
       {/* ── About Us ───────────────────────────────────────────────────────── */}
-      <section id="about" data-animate style={{ background: "#fdfaf1", padding: "100px 24px" }}>
+      <section
+        id="about"
+        data-animate
+        className="section-pad"
+        style={{ background: "#fdfaf1", padding: "100px 24px" }}
+      >
         <div
           style={{
             maxWidth: 1200,
@@ -817,10 +874,7 @@ export default function LandingPage() {
           className="about-grid"
         >
           {/* Left: Visual */}
-          <div
-            style={{ position: "relative" }}
-            className={visibleSections.has("about") ? "animate-slide-in-left" : ""}
-          >
+          <div style={{ position: "relative" }} data-reveal>
             <div
               style={{
                 background: "linear-gradient(135deg, #8D4925 0%, #5c2d0e 100%)",
@@ -937,7 +991,7 @@ export default function LandingPage() {
           </div>
 
           {/* Right: Text */}
-          <div className={visibleSections.has("about") ? "animate-slide-in-right" : ""}>
+          <div data-reveal data-reveal-delay="2">
             <div
               style={{
                 display: "inline-flex",
@@ -980,9 +1034,9 @@ export default function LandingPage() {
                 real, nourishing, everyday Indian food.
               </p>
               <p style={{ color: "#6B5344", fontSize: 16, lineHeight: 1.75 }}>
-                We started in Bengaluru with a small team of home cooks, a handful of loyal
-                customers, and one mission: to make the comfort of a home-cooked meal accessible to
-                everyone, every single day.
+                We started in Mysuru with a small team of home cooks, a handful of loyal customers,
+                and one mission: to make the comfort of a home-cooked meal accessible to everyone,
+                every single day.
               </p>
               <p style={{ color: "#6B5344", fontSize: 16, lineHeight: 1.75 }}>
                 Today we serve thousands of meals across multiple cities, but our philosophy remains
@@ -1018,7 +1072,12 @@ export default function LandingPage() {
       </section>
 
       {/* ── Services ───────────────────────────────────────────────────────── */}
-      <section id="services" data-animate style={{ background: "#fff8e7", padding: "100px 24px" }}>
+      <section
+        id="services"
+        data-animate
+        className="section-pad"
+        style={{ background: "#fff8e7", padding: "100px 24px" }}
+      >
         <div style={{ maxWidth: 1200, margin: "0 auto" }}>
           {/* Header */}
           <div style={{ textAlign: "center", marginBottom: 64 }}>
@@ -1071,6 +1130,7 @@ export default function LandingPage() {
 
           {/* Cards */}
           <div
+            className="services-grid"
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
@@ -1087,9 +1147,9 @@ export default function LandingPage() {
                   border: "1px solid rgba(141,73,37,0.1)",
                   transition: "all 0.3s ease",
                   cursor: "default",
-                  animationDelay: `${i * 0.1}s`,
                 }}
-                className={visibleSections.has("services") ? "animate-slide-up" : ""}
+                data-reveal
+                data-reveal-delay={String(i + 1)}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.transform = "translateY(-6px)";
                   e.currentTarget.style.boxShadow = "0 20px 48px rgba(141,73,37,0.12)";
@@ -1158,17 +1218,10 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Food Gallery Strip ─────────────────────────────────────────────── */}
+      {/* ── Food Gallery Strip (marquee) ───────────────────────────────────── */}
       <div style={{ background: "#3A1A08", padding: "40px 0", overflow: "hidden" }}>
-        <div
-          style={{
-            display: "flex",
-            gap: 16,
-            overflowX: "auto",
-            paddingInline: 24,
-          }}
-          className="scrollbar-hide"
-        >
+        {/* Track duplicated for seamless loop */}
+        <div className="marquee-track">
           {[
             { src: "/images/menu/idli-sambar.jpg", label: "Idli Sambar" },
             { src: "/images/menu/masala-dosa.jpg", label: "Masala Dosa" },
@@ -1179,45 +1232,25 @@ export default function LandingPage() {
             { src: "/images/menu/upma.jpg", label: "Upma" },
             { src: "/images/menu/vada-sambar.jpg", label: "Vada Sambar" },
             { src: "/images/menu/new/idly.png", label: "Idly" },
+            // duplicate for seamless loop
+            { src: "/images/menu/idli-sambar.jpg", label: "Idli Sambar 2" },
+            { src: "/images/menu/masala-dosa.jpg", label: "Masala Dosa 2" },
+            { src: "/images/menu/new/pongal.png", label: "Pongal 2" },
+            { src: "/images/menu/poori.jpg", label: "Poori 2" },
+            { src: "/images/menu/rava-dosa.jpg", label: "Rava Dosa 2" },
+            { src: "/images/menu/new/chapathi.png", label: "Chapathi 2" },
+            { src: "/images/menu/upma.jpg", label: "Upma 2" },
+            { src: "/images/menu/vada-sambar.jpg", label: "Vada Sambar 2" },
+            { src: "/images/menu/new/idly.png", label: "Idly 2" },
           ].map((item) => (
-            <div
-              key={item.label}
-              style={{
-                flexShrink: 0,
-                width: 180,
-                height: 220,
-                borderRadius: 16,
-                overflow: "hidden",
-                position: "relative",
-              }}
-            >
+            <div key={item.label} className="marquee-card">
               <Image
                 src={item.src}
-                alt={item.label}
+                alt={item.label.replace(" 2", "")}
                 fill
-                style={{ objectFit: "cover", transition: "transform 0.4s ease" }}
-                onMouseEnter={(e) =>
-                  ((e.currentTarget as HTMLImageElement).style.transform = "scale(1.08)")
-                }
-                onMouseLeave={(e) =>
-                  ((e.currentTarget as HTMLImageElement).style.transform = "scale(1)")
-                }
+                style={{ objectFit: "cover" }}
               />
-              <div
-                style={{
-                  position: "absolute",
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  padding: "32px 14px 14px",
-                  background: "linear-gradient(to top, rgba(58,26,8,0.85) 0%, transparent 100%)",
-                  color: "#fdfaf1",
-                  fontSize: 13,
-                  fontWeight: 600,
-                }}
-              >
-                {item.label}
-              </div>
+              <div className="marquee-label">{item.label.replace(" 2", "")}</div>
             </div>
           ))}
         </div>
@@ -1227,6 +1260,7 @@ export default function LandingPage() {
       <section
         id="testimonials"
         data-animate
+        className="section-pad"
         style={{ background: "#fdfaf1", padding: "100px 24px" }}
       >
         <div style={{ maxWidth: 1200, margin: "0 auto" }}>
@@ -1384,6 +1418,7 @@ export default function LandingPage() {
       <section
         id="products"
         data-animate
+        className="section-pad"
         style={{
           background: "linear-gradient(180deg, #8D4925 0%, #5c2d0e 100%)",
           padding: "100px 24px",
@@ -1451,15 +1486,16 @@ export default function LandingPage() {
             </p>
           </div>
 
-          {/* Product Cards */}
+          {/* Desktop: 4-card grid */}
           <div
+            className="products-grid"
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
               gap: 20,
             }}
           >
-            {products.map((product, i) => (
+            {products.map((product) => (
               <div
                 key={product.name}
                 style={{
@@ -1507,7 +1543,6 @@ export default function LandingPage() {
                     }}
                   />
                 </div>
-
                 <div
                   style={{
                     background: "rgba(255,192,106,0.15)",
@@ -1523,7 +1558,6 @@ export default function LandingPage() {
                 >
                   {product.tag}
                 </div>
-
                 <h3
                   style={{
                     fontFamily: "var(--font-v2-playfair), serif",
@@ -1540,6 +1574,100 @@ export default function LandingPage() {
                 </p>
               </div>
             ))}
+          </div>
+
+          {/* Mobile: single-card auto carousel */}
+          <div className="products-carousel" style={{ position: "relative" }}>
+            <div
+              style={{
+                background: "rgba(255,255,255,0.08)",
+                backdropFilter: "blur(12px)",
+                border: "1px solid rgba(255,255,255,0.14)",
+                borderRadius: 20,
+                overflow: "hidden",
+                opacity: productAnimating ? 0 : 1,
+                transform: productAnimating ? "scale(0.97)" : "scale(1)",
+                transition: "opacity 0.25s ease, transform 0.25s ease",
+              }}
+            >
+              {/* Image */}
+              <div style={{ position: "relative", height: 220, width: "100%" }}>
+                <Image
+                  src={products[activeProduct].image}
+                  alt={products[activeProduct].name}
+                  fill
+                  style={{ objectFit: "cover" }}
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    background: "linear-gradient(to top, rgba(58,26,8,0.75) 0%, transparent 55%)",
+                  }}
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 14,
+                    left: 16,
+                    background: "rgba(255,192,106,0.18)",
+                    backdropFilter: "blur(8px)",
+                    border: "1px solid rgba(255,192,106,0.35)",
+                    color: "#ffc06a",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: 1.2,
+                    padding: "3px 12px",
+                    borderRadius: 100,
+                  }}
+                >
+                  {products[activeProduct].tag}
+                </div>
+              </div>
+              {/* Text */}
+              <div style={{ padding: "24px 22px 28px" }}>
+                <h3
+                  style={{
+                    fontFamily: "var(--font-v2-playfair), serif",
+                    fontWeight: 700,
+                    fontSize: 22,
+                    color: "#fdfaf1",
+                    marginBottom: 10,
+                  }}
+                >
+                  {products[activeProduct].name}
+                </h3>
+                <p style={{ color: "rgba(253,250,241,0.7)", fontSize: 14, lineHeight: 1.75 }}>
+                  {products[activeProduct].description}
+                </p>
+                {/* Dots */}
+                <div style={{ display: "flex", gap: 8, marginTop: 22 }}>
+                  {products.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        if (i === activeProduct) return;
+                        setProductAnimating(true);
+                        setTimeout(() => {
+                          setActiveProduct(i);
+                          setProductAnimating(false);
+                        }, 250);
+                      }}
+                      style={{
+                        width: i === activeProduct ? 24 : 8,
+                        height: 8,
+                        borderRadius: 100,
+                        background: i === activeProduct ? "#ffc06a" : "rgba(255,255,255,0.3)",
+                        border: "none",
+                        cursor: "pointer",
+                        padding: 0,
+                        transition: "all 0.3s ease",
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* CTA */}
@@ -1579,7 +1707,12 @@ export default function LandingPage() {
       </section>
 
       {/* ── Contact ────────────────────────────────────────────────────────── */}
-      <section id="contact" data-animate style={{ background: "#fdfaf1", padding: "100px 24px" }}>
+      <section
+        id="contact"
+        data-animate
+        className="section-pad"
+        style={{ background: "#fdfaf1", padding: "100px 24px" }}
+      >
         <div style={{ maxWidth: 1200, margin: "0 auto" }}>
           {/* Header */}
           <div style={{ textAlign: "center", marginBottom: 64 }}>
@@ -1636,7 +1769,7 @@ export default function LandingPage() {
                 {
                   icon: "location_on",
                   title: "Cities We Serve",
-                  content: "Bengaluru · Kochi · Mysuru",
+                  content: "Bengaluru · Mysuru",
                   color: "#8D4925",
                 },
                 {
@@ -1827,7 +1960,6 @@ export default function LandingPage() {
                   >
                     <option value="">Select your city</option>
                     <option value="bengaluru">Bengaluru</option>
-                    <option value="kochi">Kochi</option>
                     <option value="mysuru">Mysuru</option>
                   </select>
                 </div>
@@ -1905,7 +2037,10 @@ export default function LandingPage() {
       </section>
 
       {/* ── Footer ─────────────────────────────────────────────────────────── */}
-      <footer style={{ background: "#3A1A08", padding: "64px 24px 32px" }}>
+      <footer
+        className="landing-footer"
+        style={{ background: "#3A1A08", padding: "64px 24px 32px" }}
+      >
         <div style={{ maxWidth: 1200, margin: "0 auto" }}>
           <div
             style={{
@@ -1960,9 +2095,52 @@ export default function LandingPage() {
                 Because good food shouldn&apos;t be complicated.
               </p>
               <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-                {["instagram", "facebook", "chat"].map((icon) => (
+                {[
+                  {
+                    label: "Instagram",
+                    svg: (
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="rgba(253,250,241,0.6)"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+                        <circle cx="12" cy="12" r="4" />
+                        <circle
+                          cx="17.5"
+                          cy="6.5"
+                          r="0.5"
+                          fill="rgba(253,250,241,0.6)"
+                          stroke="none"
+                        />
+                      </svg>
+                    ),
+                  },
+                  {
+                    label: "WhatsApp",
+                    svg: (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="rgba(253,250,241,0.6)">
+                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z" />
+                      </svg>
+                    ),
+                  },
+                  {
+                    label: "Facebook",
+                    svg: (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="rgba(253,250,241,0.6)">
+                        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                      </svg>
+                    ),
+                  },
+                ].map(({ label, svg }) => (
                   <div
-                    key={icon}
+                    key={label}
+                    title={label}
                     style={{
                       width: 36,
                       height: 36,
@@ -1982,12 +2160,7 @@ export default function LandingPage() {
                       ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.08)")
                     }
                   >
-                    <span
-                      className="material-symbols-outlined"
-                      style={{ fontSize: 16, color: "rgba(253,250,241,0.6)" }}
-                    >
-                      {icon}
-                    </span>
+                    {svg}
                   </div>
                 ))}
               </div>
@@ -2040,7 +2213,7 @@ export default function LandingPage() {
               >
                 Cities
               </h4>
-              {["Bengaluru", "Kochi", "Mysuru", "Coming Soon…"].map((city, i) => (
+              {["Bengaluru", "Mysuru", "Coming Soon…"].map((city, i) => (
                 <div key={city} style={{ marginBottom: 12 }}>
                   <span
                     style={{
@@ -2147,15 +2320,114 @@ export default function LandingPage() {
           -webkit-font-smoothing: antialiased;
           font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
         }
+        /* ── Navbar responsive ───────────────────────────────── */
+        .nav-desktop { display: flex; }
+        .nav-mobile  { display: none; }
+        @media (max-width: 767px) {
+          .nav-desktop { display: none !important; }
+          .nav-mobile  { display: block !important; }
+        }
+
+        /* ── Scroll reveal ───────────────────────────────────── */
+        [data-animate], [data-reveal] {
+          opacity: 0;
+          transform: translateY(28px);
+          transition: opacity 0.75s cubic-bezier(0.22,1,0.36,1),
+                      transform 0.75s cubic-bezier(0.22,1,0.36,1);
+        }
+        [data-animate].revealed, [data-reveal].revealed {
+          opacity: 1;
+          transform: translateY(0);
+        }
+        [data-reveal-delay="1"] { transition-delay: 0.12s; }
+        [data-reveal-delay="2"] { transition-delay: 0.22s; }
+        [data-reveal-delay="3"] { transition-delay: 0.34s; }
+        [data-reveal-delay="4"] { transition-delay: 0.46s; }
+
+        /* ── Float (hero card) ───────────────────────────────── */
+        @keyframes float {
+          0%, 100% { transform: translateY(0px); }
+          50%       { transform: translateY(-14px); }
+        }
+
+        /* ── Marquee gallery ─────────────────────────────────── */
+        .marquee-track {
+          display: flex;
+          gap: 16px;
+          width: max-content;
+          animation: marquee 30s linear infinite;
+        }
+        .marquee-track:hover { animation-play-state: paused; }
+        .marquee-card {
+          flex-shrink: 0;
+          width: 180px;
+          height: 220px;
+          border-radius: 16px;
+          overflow: hidden;
+          position: relative;
+          transition: transform 0.35s ease, box-shadow 0.35s ease;
+          cursor: pointer;
+        }
+        .marquee-card:hover {
+          transform: scale(1.05) translateY(-4px);
+          box-shadow: 0 16px 40px rgba(0,0,0,0.45);
+        }
+        .marquee-label {
+          position: absolute;
+          bottom: 0; left: 0; right: 0;
+          padding: 32px 14px 14px;
+          background: linear-gradient(to top, rgba(58,26,8,0.85) 0%, transparent 100%);
+          color: #fdfaf1;
+          font-size: 13px;
+          font-weight: 600;
+          transition: padding 0.3s ease;
+        }
+        .marquee-card:hover .marquee-label { padding-bottom: 20px; }
+        @keyframes marquee {
+          0%   { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+
+        /* Products: grid on desktop, carousel on mobile */
+        .products-grid     { display: grid; }
+        .products-carousel { display: none; }
+        @media (max-width: 767px) {
+          .products-grid     { display: none !important; }
+          .products-carousel { display: block !important; }
+        }
+
+        /* ── Responsive ──────────────────────────────────────── */
+
+        /* Tablet (≤ 768px) */
         @media (max-width: 768px) {
-          .hero-grid { grid-template-columns: 1fr !important; gap: 40px !important; }
-          .about-grid { grid-template-columns: 1fr !important; gap: 40px !important; }
-          .contact-grid { grid-template-columns: 1fr !important; gap: 32px !important; }
-          .footer-grid { grid-template-columns: 1fr 1fr !important; gap: 32px !important; }
+          .hero-grid    { grid-template-columns: 1fr !important; gap: 32px !important; }
+          .about-grid   { grid-template-columns: 1fr !important; gap: 32px !important; }
+          .contact-grid { grid-template-columns: 1fr !important; gap: 28px !important; }
+          .footer-grid  { grid-template-columns: 1fr 1fr !important; gap: 32px !important; }
+          .section-pad  { padding-top: 72px !important; padding-bottom: 72px !important; }
+          .hero-content-pad { padding-top: 100px !important; padding-bottom: 60px !important; }
+          .services-grid { grid-template-columns: 1fr !important; }
+          .marquee-card  { width: 150px !important; height: 190px !important; }
         }
+
+        /* Mobile (≤ 480px) */
         @media (max-width: 480px) {
-          .footer-grid { grid-template-columns: 1fr !important; }
+          .section-pad  { padding-top: 56px !important; padding-bottom: 56px !important; }
+          .hero-content-pad { padding-top: 88px !important; padding-bottom: 48px !important; }
+          .footer-grid  { grid-template-columns: 1fr !important; }
+          .hero-ctas    { flex-direction: column !important; }
+          .hero-ctas a  { text-align: center !important; justify-content: center !important; }
+          .hero-stats-row { gap: 20px !important; margin-top: 36px !important; padding-top: 24px !important; }
+          .marquee-card  { width: 140px !important; height: 175px !important; }
+          .landing-footer { padding: 48px 20px 28px !important; }
         }
+
+        /* Small mobile (≤ 360px) */
+        @media (max-width: 360px) {
+          .section-pad  { padding-top: 48px !important; padding-bottom: 48px !important; }
+          .hero-content-pad { padding-top: 80px !important; }
+        }
+
         @keyframes bounce {
           0%, 100% { transform: translateX(-50%) translateY(0); }
           50% { transform: translateX(-50%) translateY(8px); }
