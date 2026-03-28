@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useState, useEffect, useRef } from "react";
 import { Playfair_Display, Plus_Jakarta_Sans } from "next/font/google";
+import { useAuthStore } from "@/store/store";
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -121,6 +122,17 @@ const stats = [
 /* ─── Component ─────────────────────────────────────────────────────────── */
 
 export default function LandingPage() {
+  const user = useAuthStore((state) => state.user);
+  const firstName = user?.name?.trim().split(" ")[0] ?? null;
+  const initials =
+    user?.name
+      ?.trim()
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() ?? "";
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [statValues, setStatValues] = useState([0, 0, 0, 0]);
@@ -236,37 +248,31 @@ export default function LandingPage() {
           }}
         >
           {/* Logo */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div
-              style={{
-                width: 38,
-                height: 38,
-                background: "#8D4925",
-                borderRadius: "50%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <span
-                className="material-symbols-outlined"
-                style={{ color: "#fdfaf1", fontSize: 20 }}
-              >
-                restaurant
-              </span>
-            </div>
+          <Link
+            href="/"
+            style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}
+          >
+            <Image
+              src={scrolled ? "/images/logo/kk-brown.svg" : "/images/logo/kk-white.svg"}
+              alt="Kuteera Kitchen"
+              width={36}
+              height={36}
+              style={{ height: 36, width: "auto", transition: "opacity 0.3s ease" }}
+              priority
+            />
             <span
               style={{
                 fontFamily: "var(--font-v2-playfair), serif",
                 fontWeight: 700,
                 fontSize: 20,
-                color: "#3A2618",
+                color: scrolled ? "#3A2618" : "#fdfaf1",
                 letterSpacing: "-0.3px",
+                transition: "color 0.3s ease",
               }}
             >
               Kuteera Kitchen
             </span>
-          </div>
+          </Link>
 
           {/* Desktop Nav */}
           <nav style={{ alignItems: "center", gap: 32 }} className="nav-desktop">
@@ -275,14 +281,18 @@ export default function LandingPage() {
                 key={link.href}
                 href={link.href}
                 style={{
-                  color: "#6B5344",
+                  color: scrolled ? "#6B5344" : "rgba(253,250,241,0.85)",
                   fontSize: 14,
                   fontWeight: 500,
                   textDecoration: "none",
                   transition: "color 0.2s",
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = "#8D4925")}
-                onMouseLeave={(e) => (e.currentTarget.style.color = "#6B5344")}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.color = scrolled ? "#8D4925" : "#ffffff")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.color = scrolled ? "#6B5344" : "rgba(253,250,241,0.85)")
+                }
               >
                 {link.label}
               </a>
@@ -291,29 +301,91 @@ export default function LandingPage() {
 
           {/* CTA Buttons */}
           <div style={{ alignItems: "center", gap: 12 }} className="nav-desktop">
-            <Link
-              href="/customer-v2/home"
-              style={{
-                color: "#8D4925",
-                fontSize: 14,
-                fontWeight: 600,
-                textDecoration: "none",
-                padding: "8px 16px",
-                borderRadius: 8,
-                border: "1.5px solid #8D4925",
-                transition: "all 0.2s",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#8D4925";
-                e.currentTarget.style.color = "#fdfaf1";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "transparent";
-                e.currentTarget.style.color = "#8D4925";
-              }}
-            >
-              Sign In
-            </Link>
+            {firstName ? (
+              <Link
+                href="/customer-v2/home"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  textDecoration: "none",
+                  padding: "5px 14px 5px 5px",
+                  borderRadius: 100,
+                  border: scrolled
+                    ? "1.5px solid rgba(141,73,37,0.25)"
+                    : "1.5px solid rgba(255,255,255,0.4)",
+                  background: scrolled ? "rgba(141,73,37,0.06)" : "rgba(255,255,255,0.1)",
+                  transition: "all 0.2s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = scrolled
+                    ? "rgba(141,73,37,0.12)"
+                    : "rgba(255,255,255,0.2)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = scrolled
+                    ? "rgba(141,73,37,0.06)"
+                    : "rgba(255,255,255,0.1)";
+                }}
+              >
+                <div
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: "50%",
+                    background: "#8D4925",
+                    color: "#fdfaf1",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {initials}
+                </div>
+                <span
+                  style={{
+                    color: scrolled ? "#8D4925" : "#fdfaf1",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    transition: "color 0.3s",
+                  }}
+                >
+                  {firstName}
+                </span>
+              </Link>
+            ) : (
+              <Link
+                href="/login"
+                style={{
+                  fontSize: 14,
+                  fontWeight: 600,
+                  textDecoration: "none",
+                  padding: "0 16px",
+                  height: 36,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  borderRadius: 8,
+                  transition: "all 0.3s",
+                  boxSizing: "border-box",
+                  color: scrolled ? "#8D4925" : "#fdfaf1",
+                  border: scrolled ? "1.5px solid #8D4925" : "1.5px solid rgba(255,255,255,0.6)",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = scrolled
+                    ? "#8D4925"
+                    : "rgba(255,255,255,0.15)";
+                  e.currentTarget.style.color = "#fdfaf1";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "transparent";
+                  e.currentTarget.style.color = scrolled ? "#8D4925" : "#fdfaf1";
+                }}
+              >
+                Login
+              </Link>
+            )}
             <Link
               href="/customer-v2/new-order"
               style={{
@@ -322,9 +394,13 @@ export default function LandingPage() {
                 fontSize: 14,
                 fontWeight: 600,
                 textDecoration: "none",
-                padding: "8px 20px",
+                padding: "0 20px",
+                height: 36,
+                display: "inline-flex",
+                alignItems: "center",
                 borderRadius: 8,
                 transition: "all 0.2s",
+                boxSizing: "border-box",
                 boxShadow: "0 2px 8px rgba(141,73,37,0.3)",
               }}
               onMouseEnter={(e) => {
@@ -349,7 +425,8 @@ export default function LandingPage() {
               border: "none",
               cursor: "pointer",
               padding: 8,
-              color: "#3A2618",
+              color: scrolled ? "#3A2618" : "#fdfaf1",
+              transition: "color 0.3s",
             }}
           >
             <span className="material-symbols-outlined" style={{ fontSize: 28 }}>
@@ -387,21 +464,58 @@ export default function LandingPage() {
               </a>
             ))}
             <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 20 }}>
-              <Link
-                href="/customer-v2/home"
-                style={{
-                  textAlign: "center",
-                  color: "#8D4925",
-                  fontSize: 15,
-                  fontWeight: 600,
-                  textDecoration: "none",
-                  padding: "10px 16px",
-                  borderRadius: 8,
-                  border: "1.5px solid #8D4925",
-                }}
-              >
-                Sign In
-              </Link>
+              {firstName ? (
+                <Link
+                  href="/customer-v2/home"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    textDecoration: "none",
+                    padding: "8px 12px",
+                    borderRadius: 10,
+                    border: "1.5px solid rgba(141,73,37,0.2)",
+                    background: "rgba(141,73,37,0.05)",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: "50%",
+                      background: "#8D4925",
+                      color: "#fdfaf1",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {initials}
+                  </div>
+                  <span style={{ color: "#8D4925", fontSize: 15, fontWeight: 600 }}>
+                    {firstName}
+                  </span>
+                </Link>
+              ) : (
+                <Link
+                  href="/login"
+                  style={{
+                    textAlign: "center",
+                    color: "#8D4925",
+                    fontSize: 15,
+                    fontWeight: 600,
+                    textDecoration: "none",
+                    padding: "10px 16px",
+                    borderRadius: 8,
+                    border: "1.5px solid #8D4925",
+                  }}
+                >
+                  Login
+                </Link>
+              )}
               <Link
                 href="/customer-v2/new-order"
                 style={{
