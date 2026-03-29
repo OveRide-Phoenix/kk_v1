@@ -24,7 +24,7 @@ export default function CustomerGuard({ children }: { children: React.ReactNode 
   const redirectToLogin = useCallback(async () => {
     await logout();
     const next = encodeURIComponent(pathname || "/customer-v2/home");
-    router.replace(`/login?next=${next}`);
+    router.replace(`/login-v2?next=${next}`);
   }, [logout, pathname, router]);
 
   const { isHydrating } = useHydrateAuthUser({

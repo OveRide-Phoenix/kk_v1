@@ -1,142 +1,149 @@
-"use client"
+"use client";
 
-import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
-import { Playfair_Display, Plus_Jakarta_Sans } from "next/font/google"
-import { useEffect, useRef, useState } from "react"
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { Playfair_Display, Plus_Jakarta_Sans } from "next/font/google";
+import { useEffect, useRef, useState } from "react";
 
-import { useAuthStore } from "@/store/store"
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { useAuthStore } from "@/store/store";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
   weight: ["600", "700"],
   variable: "--font-v2-playfair",
-})
+});
 
 const plusJakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
   variable: "--font-v2-plus-jakarta",
-})
+});
 
-const CART_STORAGE_KEY = "customer_cart_items"
-const CART_CONTEXT_KEY = "customer_cart_context"
+const CART_STORAGE_KEY = "customer_cart_items";
+const CART_CONTEXT_KEY = "customer_cart_context";
 
 export default function CustomerV2Shell({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname()
-  const router = useRouter()
-  const logout = useAuthStore((state) => state.logout)
-  const [cartCount, setCartCount] = useState(0)
-  const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false)
-  const [pendingDestination, setPendingDestination] = useState<string | null>(null)
-  const lastCartRawRef = useRef<string>("")
+  const pathname = usePathname();
+  const router = useRouter();
+  const logout = useAuthStore((state) => state.logout);
+  const [cartCount, setCartCount] = useState(0);
+  const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
+  const [pendingDestination, setPendingDestination] = useState<string | null>(null);
+  const lastCartRawRef = useRef<string>("");
 
   useEffect(() => {
     const readCartCount = () => {
-      if (typeof window === "undefined") return
-      const raw = localStorage.getItem(CART_STORAGE_KEY) || ""
-      if (raw === lastCartRawRef.current) return
-      lastCartRawRef.current = raw
+      if (typeof window === "undefined") return;
+      const raw = localStorage.getItem(CART_STORAGE_KEY) || "";
+      if (raw === lastCartRawRef.current) return;
+      lastCartRawRef.current = raw;
       if (!raw) {
-        setCartCount(0)
-        return
+        setCartCount(0);
+        return;
       }
       try {
-        const items = JSON.parse(raw) as Array<{ quantity?: number }>
+        const items = JSON.parse(raw) as Array<{ quantity?: number }>;
         const total = Array.isArray(items)
           ? items.reduce((sum, line) => sum + (Number(line.quantity) || 0), 0)
-          : 0
-        setCartCount(total)
+          : 0;
+        setCartCount(total);
       } catch {
-        setCartCount(0)
+        setCartCount(0);
       }
-    }
+    };
 
-    readCartCount()
-    const interval = window.setInterval(readCartCount, 500)
-    const onStorage = () => readCartCount()
-    window.addEventListener("storage", onStorage)
+    readCartCount();
+    const interval = window.setInterval(readCartCount, 500);
+    const onStorage = () => readCartCount();
+    window.addEventListener("storage", onStorage);
     return () => {
-      window.clearInterval(interval)
-      window.removeEventListener("storage", onStorage)
-    }
-  }, [])
+      window.clearInterval(interval);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") return
+    if (typeof window === "undefined") return;
 
-    const currentPath = pathname ?? ""
+    const currentPath = pathname ?? "";
     const onProtectedPage =
-      currentPath.startsWith("/customer-v2/new-order") || currentPath.startsWith("/customer-v2/cart")
-    if (!onProtectedPage || cartCount <= 0) return
+      currentPath.startsWith("/customer-v2/new-order") ||
+      currentPath.startsWith("/customer-v2/cart");
+    if (!onProtectedPage || cartCount <= 0) return;
 
-    const normalizePath = (value: string) => (value.length > 1 ? value.replace(/\/+$/, "") : value)
+    const normalizePath = (value: string) => (value.length > 1 ? value.replace(/\/+$/, "") : value);
 
     const handleNavigationAttempt = (event: MouseEvent) => {
-      const target = event.target as HTMLElement
-      const anchor = target?.closest<HTMLAnchorElement>("a")
-      if (!anchor) return
-      if (anchor.target === "_blank" || anchor.hasAttribute("download")) return
+      const target = event.target as HTMLElement;
+      const anchor = target?.closest<HTMLAnchorElement>("a");
+      if (!anchor) return;
+      if (anchor.target === "_blank" || anchor.hasAttribute("download")) return;
 
-      const href = anchor.getAttribute("href")
-      if (!href || href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:")) return
+      const href = anchor.getAttribute("href");
+      if (!href || href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:"))
+        return;
 
-      let destination: URL
+      let destination: URL;
       try {
-        destination = new URL(href, window.location.href)
+        destination = new URL(href, window.location.href);
       } catch {
-        return
+        return;
       }
 
-      if (destination.origin !== window.location.origin) return
-      const nextPath = normalizePath(destination.pathname)
-      const current = normalizePath(currentPath)
-      if (nextPath === current) return
+      if (destination.origin !== window.location.origin) return;
+      const nextPath = normalizePath(destination.pathname);
+      const current = normalizePath(currentPath);
+      if (nextPath === current) return;
 
       const isStayingInOrderFlow =
-        nextPath.startsWith("/customer-v2/new-order") || nextPath.startsWith("/customer-v2/cart")
-      if (isStayingInOrderFlow) return
+        nextPath.startsWith("/customer-v2/new-order") || nextPath.startsWith("/customer-v2/cart");
+      if (isStayingInOrderFlow) return;
 
-      event.preventDefault()
-      event.stopPropagation()
+      event.preventDefault();
+      event.stopPropagation();
 
-      setPendingDestination(`${destination.pathname}${destination.search}${destination.hash}`)
-      setConfirmLeaveOpen(true)
-    }
+      setPendingDestination(`${destination.pathname}${destination.search}${destination.hash}`);
+      setConfirmLeaveOpen(true);
+    };
 
-    document.addEventListener("click", handleNavigationAttempt, true)
+    document.addEventListener("click", handleNavigationAttempt, true);
     return () => {
-      document.removeEventListener("click", handleNavigationAttempt, true)
-    }
-  }, [cartCount, pathname])
+      document.removeEventListener("click", handleNavigationAttempt, true);
+    };
+  }, [cartCount, pathname]);
 
   const confirmLeaveAndNavigate = () => {
     if (typeof window !== "undefined") {
-      localStorage.removeItem(CART_STORAGE_KEY)
-      localStorage.removeItem(CART_CONTEXT_KEY)
+      localStorage.removeItem(CART_STORAGE_KEY);
+      localStorage.removeItem(CART_CONTEXT_KEY);
     }
-    setCartCount(0)
-    const next = pendingDestination
-    setPendingDestination(null)
-    setConfirmLeaveOpen(false)
+    setCartCount(0);
+    const next = pendingDestination;
+    setPendingDestination(null);
+    setConfirmLeaveOpen(false);
     if (next) {
-      router.push(next)
+      router.push(next);
     }
-  }
+  };
 
   const linkClass = (href: string) => {
-    const current = pathname ?? ""
-    const normalizedCurrent = current.length > 1 ? current.replace(/\/+$/, "") : current
-    const normalizedHref = href.length > 1 ? href.replace(/\/+$/, "") : href
+    const current = pathname ?? "";
+    const normalizedCurrent = current.length > 1 ? current.replace(/\/+$/, "") : current;
+    const normalizedHref = href.length > 1 ? href.replace(/\/+$/, "") : href;
     const isActive =
-      normalizedCurrent === normalizedHref ||
-      normalizedCurrent.startsWith(`${normalizedHref}/`)
+      normalizedCurrent === normalizedHref || normalizedCurrent.startsWith(`${normalizedHref}/`);
 
     return isActive
       ? "border-b-2 border-[#8D4925] pb-1 font-bold text-[#8D4925]"
-      : "font-medium text-gray-600 transition-colors hover:text-[#8D4925]"
-  }
+      : "font-medium text-gray-600 transition-colors hover:text-[#8D4925]";
+  };
 
   return (
     <div
@@ -188,7 +195,10 @@ export default function CustomerV2Shell({ children }: { children: React.ReactNod
               <Link className={linkClass("/customer-v2/new-order")} href="/customer-v2/new-order">
                 Order
               </Link>
-              <Link className={linkClass("/customer-v2/subscription")} href="/customer-v2/subscription">
+              <Link
+                className={linkClass("/customer-v2/subscription")}
+                href="/customer-v2/subscription"
+              >
                 Subscription
               </Link>
               <Link
@@ -207,7 +217,10 @@ export default function CustomerV2Shell({ children }: { children: React.ReactNod
                 ) : null}
               </Link>
               <div className="flex items-center gap-3 border-l border-orange-100 pl-4">
-                <a className="flex items-center gap-1 font-medium text-gray-600 transition-colors hover:text-[#8D4925]" href="#">
+                <a
+                  className="flex items-center gap-1 font-medium text-gray-600 transition-colors hover:text-[#8D4925]"
+                  href="#"
+                >
                   <span className="material-symbols-outlined relative text-2xl">
                     notifications
                     <span className="absolute right-0 top-0 h-2 w-2 rounded-full border-2 border-[#fdfaf1] bg-red-500"></span>
@@ -223,7 +236,9 @@ export default function CustomerV2Shell({ children }: { children: React.ReactNod
                   </div>
                   <span
                     className={`text-sm font-bold transition-colors group-hover:text-[#8D4925] ${
-                      (pathname ?? "").startsWith("/customer-v2/account") ? "text-[#8D4925]" : "text-gray-700"
+                      (pathname ?? "").startsWith("/customer-v2/account")
+                        ? "text-[#8D4925]"
+                        : "text-gray-700"
                     }`}
                   >
                     Profile
@@ -231,8 +246,8 @@ export default function CustomerV2Shell({ children }: { children: React.ReactNod
                 </Link>
                 <button
                   onClick={async () => {
-                    await logout()
-                    router.replace("/login")
+                    await logout();
+                    router.replace("/login-v2");
                   }}
                   className="inline-flex items-center justify-center text-gray-600 transition-colors hover:text-[#8D4925]"
                   aria-label="Logout"
@@ -256,25 +271,37 @@ export default function CustomerV2Shell({ children }: { children: React.ReactNod
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#8D4925] text-white shadow-md">
                 <span className="material-symbols-outlined text-xl text-white">restaurant</span>
               </div>
-              <span className="text-2xl font-bold text-[#8D4925]" style={{ fontFamily: "var(--font-v2-playfair)" }}>
+              <span
+                className="text-2xl font-bold text-[#8D4925]"
+                style={{ fontFamily: "var(--font-v2-playfair)" }}
+              >
                 Kuteera Kitchen
               </span>
             </div>
             <p className="mb-8 text-base leading-relaxed text-gray-600">
-              Bringing the authentic taste of South Indian kitchens to your home, one meal at a time. Healthy, fresh, and soulful.
+              Bringing the authentic taste of South Indian kitchens to your home, one meal at a
+              time. Healthy, fresh, and soulful.
             </p>
             <div className="flex flex-wrap items-center gap-4">
               <div className="flex items-center gap-2 rounded-lg border border-orange-100 bg-white px-3 py-1.5 shadow-sm">
-                <span className="material-symbols-outlined text-xl text-[#114232]">verified_user</span>
+                <span className="material-symbols-outlined text-xl text-[#114232]">
+                  verified_user
+                </span>
                 <div>
-                  <p className="mb-0.5 text-[10px] font-bold uppercase leading-none text-gray-400">Safety Assured</p>
+                  <p className="mb-0.5 text-[10px] font-bold uppercase leading-none text-gray-400">
+                    Safety Assured
+                  </p>
                   <p className="text-xs font-bold text-gray-700">Hygienic Kitchen</p>
                 </div>
               </div>
               <div className="flex items-center gap-2 rounded-lg border border-orange-100 bg-white px-3 py-1.5 shadow-sm">
-                <span className="material-symbols-outlined text-xl text-[#8D4925]">workspace_premium</span>
+                <span className="material-symbols-outlined text-xl text-[#8D4925]">
+                  workspace_premium
+                </span>
                 <div>
-                  <p className="mb-0.5 text-[10px] font-bold uppercase leading-none text-gray-400">Certified by</p>
+                  <p className="mb-0.5 text-[10px] font-bold uppercase leading-none text-gray-400">
+                    Certified by
+                  </p>
                   <p className="text-xs font-bold uppercase text-gray-700">FSSAI</p>
                 </div>
               </div>
@@ -282,40 +309,96 @@ export default function CustomerV2Shell({ children }: { children: React.ReactNod
           </div>
 
           <div className="col-span-1 md:col-span-2">
-            <h5 className="mb-6 text-sm font-bold uppercase tracking-wider text-gray-900">Quick Links</h5>
+            <h5 className="mb-6 text-sm font-bold uppercase tracking-wider text-gray-900">
+              Quick Links
+            </h5>
             <ul className="space-y-4 text-sm text-gray-600">
-              <li><a className="flex items-center gap-2 transition-colors hover:text-[#8D4925]" href="#"><span className="h-1.5 w-1.5 rounded-full bg-orange-200"></span> How it Works</a></li>
-              <li><a className="flex items-center gap-2 transition-colors hover:text-[#8D4925]" href="#"><span className="h-1.5 w-1.5 rounded-full bg-orange-200"></span> Pricing Plans</a></li>
-              <li><a className="flex items-center gap-2 transition-colors hover:text-[#8D4925]" href="#"><span className="h-1.5 w-1.5 rounded-full bg-orange-200"></span> Daily Menu</a></li>
-              <li><a className="flex items-center gap-2 transition-colors hover:text-[#8D4925]" href="#"><span className="h-1.5 w-1.5 rounded-full bg-orange-200"></span> Corporate Gifting</a></li>
+              <li>
+                <a
+                  className="flex items-center gap-2 transition-colors hover:text-[#8D4925]"
+                  href="#"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-orange-200"></span> How it Works
+                </a>
+              </li>
+              <li>
+                <a
+                  className="flex items-center gap-2 transition-colors hover:text-[#8D4925]"
+                  href="#"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-orange-200"></span> Pricing Plans
+                </a>
+              </li>
+              <li>
+                <a
+                  className="flex items-center gap-2 transition-colors hover:text-[#8D4925]"
+                  href="#"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-orange-200"></span> Daily Menu
+                </a>
+              </li>
+              <li>
+                <a
+                  className="flex items-center gap-2 transition-colors hover:text-[#8D4925]"
+                  href="#"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-orange-200"></span> Corporate Gifting
+                </a>
+              </li>
             </ul>
           </div>
 
           <div className="col-span-1 md:col-span-2">
-            <h5 className="mb-6 text-sm font-bold uppercase tracking-wider text-gray-900">Support</h5>
+            <h5 className="mb-6 text-sm font-bold uppercase tracking-wider text-gray-900">
+              Support
+            </h5>
             <ul className="space-y-4 text-sm text-gray-600">
-              <li><a className="transition-colors hover:text-[#8D4925]" href="#">Help Center</a></li>
-              <li><a className="transition-colors hover:text-[#8D4925]" href="#">Contact Us</a></li>
-              <li><a className="transition-colors hover:text-[#8D4925]" href="#">Privacy Policy</a></li>
-              <li><a className="transition-colors hover:text-[#8D4925]" href="#">Terms of Service</a></li>
+              <li>
+                <a className="transition-colors hover:text-[#8D4925]" href="#">
+                  Help Center
+                </a>
+              </li>
+              <li>
+                <a className="transition-colors hover:text-[#8D4925]" href="#">
+                  Contact Us
+                </a>
+              </li>
+              <li>
+                <a className="transition-colors hover:text-[#8D4925]" href="#">
+                  Privacy Policy
+                </a>
+              </li>
+              <li>
+                <a className="transition-colors hover:text-[#8D4925]" href="#">
+                  Terms of Service
+                </a>
+              </li>
             </ul>
           </div>
 
           <div className="col-span-1 md:col-span-4">
-            <h5 className="mb-6 text-sm font-bold uppercase tracking-wider text-gray-900">Download Our App</h5>
-            <p className="mb-6 text-sm text-gray-500">Order faster and track your subscription on the go.</p>
+            <h5 className="mb-6 text-sm font-bold uppercase tracking-wider text-gray-900">
+              Download Our App
+            </h5>
+            <p className="mb-6 text-sm text-gray-500">
+              Order faster and track your subscription on the go.
+            </p>
             <div className="flex flex-col gap-4 sm:flex-row">
               <button className="flex items-center gap-3 rounded-xl border border-gray-700 bg-gray-900 px-5 py-2.5 text-white shadow-lg transition-all hover:bg-gray-800">
                 <span className="material-symbols-outlined text-2xl">smartphone</span>
                 <div className="text-left">
-                  <p className="text-[9px] font-bold uppercase leading-none text-gray-400">Download on</p>
+                  <p className="text-[9px] font-bold uppercase leading-none text-gray-400">
+                    Download on
+                  </p>
                   <p className="text-sm font-bold leading-tight">App Store</p>
                 </div>
               </button>
               <button className="flex items-center gap-3 rounded-xl border border-gray-700 bg-gray-900 px-5 py-2.5 text-white shadow-lg transition-all hover:bg-gray-800">
                 <span className="material-symbols-outlined text-2xl">shop</span>
                 <div className="text-left">
-                  <p className="text-[9px] font-bold uppercase leading-none text-gray-400">Get it on</p>
+                  <p className="text-[9px] font-bold uppercase leading-none text-gray-400">
+                    Get it on
+                  </p>
                   <p className="text-sm font-bold leading-tight">Google Play</p>
                 </div>
               </button>
@@ -331,9 +414,15 @@ export default function CustomerV2Shell({ children }: { children: React.ReactNod
             <p>Designed with ❤️ for authentic home-cooked meals</p>
           </div>
           <div className="flex justify-center gap-6 md:justify-end">
-            <a className="transition-colors hover:text-[#8D4925]" href="#">Facebook</a>
-            <a className="transition-colors hover:text-[#8D4925]" href="#">Instagram</a>
-            <a className="transition-colors hover:text-[#8D4925]" href="#">Twitter</a>
+            <a className="transition-colors hover:text-[#8D4925]" href="#">
+              Facebook
+            </a>
+            <a className="transition-colors hover:text-[#8D4925]" href="#">
+              Instagram
+            </a>
+            <a className="transition-colors hover:text-[#8D4925]" href="#">
+              Twitter
+            </a>
           </div>
         </div>
       </footer>
@@ -342,8 +431,8 @@ export default function CustomerV2Shell({ children }: { children: React.ReactNod
         open={confirmLeaveOpen}
         onOpenChange={(open) => {
           if (!open) {
-            setConfirmLeaveOpen(false)
-            setPendingDestination(null)
+            setConfirmLeaveOpen(false);
+            setPendingDestination(null);
           }
         }}
       >
@@ -357,8 +446,8 @@ export default function CustomerV2Shell({ children }: { children: React.ReactNod
           <DialogFooter className="mt-4">
             <button
               onClick={() => {
-                setConfirmLeaveOpen(false)
-                setPendingDestination(null)
+                setConfirmLeaveOpen(false);
+                setPendingDestination(null);
               }}
               className="rounded-md border border-[#8D4925]/20 px-4 py-2 text-sm font-semibold text-[#8D4925] transition-colors hover:bg-orange-50"
             >
@@ -374,5 +463,5 @@ export default function CustomerV2Shell({ children }: { children: React.ReactNod
         </DialogContent>
       </Dialog>
     </div>
-  )
+  );
 }

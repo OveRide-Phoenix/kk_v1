@@ -360,7 +360,7 @@ export default function LandingPage() {
               </Link>
             ) : (
               <Link
-                href="/login"
+                href="/login-v2"
                 style={{
                   fontSize: 14,
                   fontWeight: 600,
@@ -504,7 +504,7 @@ export default function LandingPage() {
                 </Link>
               ) : (
                 <Link
-                  href="/login"
+                  href="/login-v2"
                   style={{
                     textAlign: "center",
                     color: "#8D4925",

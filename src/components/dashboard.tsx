@@ -230,7 +230,7 @@ export function Dashboard() {
           /* ignore storage errors */
         }
       }
-      router.push("/login");
+      router.push("/login-v2");
       return;
     }
 
