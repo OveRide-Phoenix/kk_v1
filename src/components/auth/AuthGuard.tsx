@@ -79,7 +79,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
         if (!cancelled) setChecking(false);
       } catch {
         if (!cancelled) {
-          router.replace(`/login?next=${encodeURIComponent(pathname ?? "/admin")}`);
+          router.replace(`/login-v2?next=${encodeURIComponent(pathname ?? "/admin")}`);
         }
       }
     })();

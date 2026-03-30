@@ -12,7 +12,7 @@ export async function middleware(req: NextRequest) {
   const token = req.cookies.get("access_token")?.value;
 
   if (!token) {
-    const loginUrl = new URL("/login", req.url);
+    const loginUrl = new URL("/login-v2", req.url);
     loginUrl.searchParams.set("next", pathname);
     return NextResponse.redirect(loginUrl);
   }
@@ -26,7 +26,7 @@ export async function middleware(req: NextRequest) {
     }
   } catch {
     // expired or invalid token — redirect to login
-    const loginUrl = new URL("/login", req.url);
+    const loginUrl = new URL("/login-v2", req.url);
     loginUrl.searchParams.set("next", pathname);
     return NextResponse.redirect(loginUrl);
   }

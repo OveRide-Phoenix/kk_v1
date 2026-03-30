@@ -722,7 +722,7 @@ export default function CustomerHomePage() {
                     <Link href="/register">Register</Link>
                   </Button>
                   <Button variant="outline" asChild>
-                    <Link href="/login">Sign in</Link>
+                    <Link href="/login-v2">Sign in</Link>
                   </Button>
                 </>
               )}
@@ -1059,7 +1059,7 @@ export default function CustomerHomePage() {
                     <Link href="/register">Register</Link>
                   </Button>
                   <Button asChild size="sm" variant="outline">
-                    <Link href="/login">Sign in</Link>
+                    <Link href="/login-v2">Sign in</Link>
                   </Button>
                 </div>
               )}
@@ -1088,7 +1088,7 @@ export default function CustomerHomePage() {
                   <Info className="h-3.5 w-3.5 shrink-0" />
                   <span>
                     <Link
-                      href="/login"
+                      href="/login-v2"
                       className="inline-flex items-center text-primary underline underline-offset-4 transition-colors hover:text-primary/80"
                     >
                       Log in

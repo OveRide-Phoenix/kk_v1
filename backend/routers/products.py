@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any, Dict, Iterable, List, Optional, Set
 
 import mysql.connector
@@ -588,6 +589,65 @@ def update_item(
         set_item_blds(cursor, item_id, normalized_bld_ids)
         if "bld_ids" not in updated_fields:
             updated_fields.append("bld_ids")
+
+        # --- price history ---------------------------------------------------
+        _PRICE_FIELDS = {
+            "breakfast_price",
+            "lunch_price",
+            "dinner_price",
+            "condiments_price",
+            "festival_price",
+            "cgst",
+            "sgst",
+            "igst",
+            "net_price",
+        }
+        if _PRICE_FIELDS & set(cleaned.keys()):
+            today = date.today()
+            yesterday = date.fromordinal(today.toordinal() - 1)
+
+            # Fetch current master prices to build the new history row
+            cursor.execute(
+                "SELECT breakfast_price, lunch_price, dinner_price, condiments_price, "
+                "festival_price, cgst, sgst, igst, net_price "
+                "FROM items WHERE item_id = %s",
+                (item_id,),
+            )
+            current_prices = cursor.fetchone() or {}
+
+            # Close the open history row for this item (if any)
+            cursor.execute(
+                "UPDATE item_price_history SET to_date = %s "
+                "WHERE item_id = %s AND to_date IS NULL",
+                (yesterday, item_id),
+            )
+
+            # New prices = current master prices overridden by the incoming changes
+            new_prices = {
+                **current_prices,
+                **{k: cleaned[k] for k in _PRICE_FIELDS if k in cleaned},
+            }
+
+            cursor.execute(
+                "INSERT INTO item_price_history "
+                "(item_id, from_date, to_date, breakfast_price, lunch_price, dinner_price, "
+                "condiments_price, festival_price, cgst, sgst, igst, net_price) "
+                "VALUES (%s, %s, NULL, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                (
+                    item_id,
+                    today,
+                    new_prices.get("breakfast_price"),
+                    new_prices.get("lunch_price"),
+                    new_prices.get("dinner_price"),
+                    new_prices.get("condiments_price"),
+                    new_prices.get("festival_price"),
+                    new_prices.get("cgst"),
+                    new_prices.get("sgst"),
+                    new_prices.get("igst"),
+                    new_prices.get("net_price"),
+                ),
+            )
+        # ---------------------------------------------------------------------
 
         db.commit()
 
@@ -1670,6 +1730,200 @@ def delete_component_type(
             description=f"Deleted component type {component_type_id}",
         )
         return {"status": "deleted", "component_type_id": component_type_id}
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# Item discount rules endpoints
+# ---------------------------------------------------------------------------
+
+
+class ItemDiscountPayload(BaseModel):
+    """Payload for creating or updating an item discount rule."""
+
+    item_id: int
+    city_code: str
+    from_date: str
+    to_date: Optional[str] = None
+    discount_pct: float
+
+
+@router.get("/api/products/discounts")
+def list_item_discounts(
+    item_id: Optional[int] = Query(None),
+    city_code: Optional[str] = Query(None),
+    active_only: bool = Query(False),
+    user: Dict[str, Any] = Depends(admin_required),
+) -> List[Dict[str, Any]]:
+    """List item discount rules, optionally filtered by item, city, or active status.
+
+    Args:
+        item_id: Filter by item ID.
+        city_code: Filter by city code.
+        active_only: If true, return only rules where today falls within from_date/to_date.
+        user: Current admin user (injected).
+
+    Returns:
+        List of discount rule dicts.
+    """
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        conditions = []
+        params: List[Any] = []
+        if item_id is not None:
+            conditions.append("d.item_id = %s")
+            params.append(item_id)
+        if city_code is not None:
+            conditions.append("d.city_code = %s")
+            params.append(city_code)
+        if active_only:
+            conditions.append(
+                "d.from_date <= CURDATE() AND (d.to_date IS NULL OR d.to_date >= CURDATE())"
+            )
+
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        cursor.execute(
+            f"SELECT d.*, i.name AS item_name FROM item_discounts d "
+            f"JOIN items i ON i.item_id = d.item_id "
+            f"{where} ORDER BY d.from_date DESC",
+            tuple(params),
+        )
+        return cursor.fetchall() or []
+    finally:
+        cursor.close()
+        db.close()
+
+
+@router.post("/api/products/discounts")
+def create_item_discount(
+    payload: ItemDiscountPayload,
+    user: Dict[str, Any] = Depends(admin_required),
+) -> Dict[str, Any]:
+    """Create a new item discount rule.
+
+    Args:
+        payload: Discount rule details — item, city, date range, and percentage.
+        user: Current admin user (injected).
+
+    Returns:
+        Newly created discount rule dict.
+    """
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT 1 FROM items WHERE item_id = %s", (payload.item_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Item not found")
+
+        cursor.execute(
+            "INSERT INTO item_discounts (item_id, city_code, from_date, to_date, discount_pct) "
+            "VALUES (%s, %s, %s, %s, %s)",
+            (
+                payload.item_id,
+                payload.city_code,
+                payload.from_date,
+                payload.to_date,
+                payload.discount_pct,
+            ),
+        )
+        discount_id = cursor.lastrowid
+        db.commit()
+
+        cursor.execute(
+            "SELECT d.*, i.name AS item_name FROM item_discounts d "
+            "JOIN items i ON i.item_id = d.item_id WHERE d.discount_id = %s",
+            (discount_id,),
+        )
+        return cursor.fetchone()
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@router.put("/api/products/discounts/{discount_id}")
+def update_item_discount(
+    discount_id: int,
+    payload: ItemDiscountPayload,
+    user: Dict[str, Any] = Depends(admin_required),
+) -> Dict[str, Any]:
+    """Update an existing item discount rule.
+
+    Args:
+        discount_id: ID of the discount rule to update.
+        payload: Updated discount rule fields.
+        user: Current admin user (injected).
+
+    Returns:
+        Updated discount rule dict.
+    """
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT 1 FROM item_discounts WHERE discount_id = %s", (discount_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Discount rule not found")
+
+        cursor.execute(
+            "UPDATE item_discounts SET item_id = %s, city_code = %s, from_date = %s, "
+            "to_date = %s, discount_pct = %s WHERE discount_id = %s",
+            (
+                payload.item_id,
+                payload.city_code,
+                payload.from_date,
+                payload.to_date,
+                payload.discount_pct,
+                discount_id,
+            ),
+        )
+        db.commit()
+
+        cursor.execute(
+            "SELECT d.*, i.name AS item_name FROM item_discounts d "
+            "JOIN items i ON i.item_id = d.item_id WHERE d.discount_id = %s",
+            (discount_id,),
+        )
+        return cursor.fetchone()
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@router.delete("/api/products/discounts/{discount_id}")
+def delete_item_discount(
+    discount_id: int,
+    user: Dict[str, Any] = Depends(admin_required),
+) -> Dict[str, Any]:
+    """Delete an item discount rule.
+
+    Args:
+        discount_id: ID of the discount rule to delete.
+        user: Current admin user (injected).
+
+    Returns:
+        Confirmation dict with deleted discount_id.
+    """
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT 1 FROM item_discounts WHERE discount_id = %s", (discount_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Discount rule not found")
+
+        cursor.execute("DELETE FROM item_discounts WHERE discount_id = %s", (discount_id,))
+        db.commit()
+        return {"status": "deleted", "discount_id": discount_id}
     except mysql.connector.Error as err:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(err))

@@ -14,20 +14,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Search,
-  Plus,
-  Calendar as CalendarIcon,
-  Eye,
-  Pencil,
-  Trash2,
-  Check,
-} from "lucide-react";
-import {
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-} from "@/components/ui/popover";
+import { Search, Plus, Calendar as CalendarIcon, Eye, Pencil, Trash2, Check } from "lucide-react";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { DatePickerWithPresets } from "@/components/ui/date-picker";
 import { format as formatDate } from "date-fns";
@@ -45,7 +33,12 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { useAuthStore } from "@/store/store";
 import { http } from "@/lib/http";
-import { citySupportsFood, citySupportsCondiments, getSupportedMeals, getCityLabel } from "@/config/cities";
+import {
+  citySupportsFood,
+  citySupportsCondiments,
+  getSupportedMeals,
+  getCityLabel,
+} from "@/config/cities";
 
 interface MenuItem {
   menu_item_id?: number;
@@ -61,12 +54,13 @@ interface MenuItem {
   max_qty: number;
   available_qty: number;
   rate: number;
+  discount_pct: number | null;
   is_default: boolean;
   sort_order: number;
   item_max_qty?: number | null;
 }
 
-type MealSection = "breakfast" | "lunch" | "dinner" | "condiments"
+type MealSection = "breakfast" | "lunch" | "dinner" | "condiments";
 
 const SECTION_TO_BLD_ID: Record<MealSection, number> = {
   breakfast: 1,
@@ -153,9 +147,7 @@ export function DailyMenuSetup() {
   );
 
   // Edit / view states
-  const [editIndexByMeal, setEditIndexByMeal] = useState<
-    Record<MealSection, number | null>
-  >({
+  const [editIndexByMeal, setEditIndexByMeal] = useState<Record<MealSection, number | null>>({
     breakfast: null,
     lunch: null,
     dinner: null,
@@ -170,17 +162,13 @@ export function DailyMenuSetup() {
   const [togglingRelease, setTogglingRelease] = useState(false);
 
   // Menu metadata
-  const [menuIdByMeal, setMenuIdByMeal] = useState<
-    Record<MealSection, number | null>
-  >({
+  const [menuIdByMeal, setMenuIdByMeal] = useState<Record<MealSection, number | null>>({
     breakfast: null,
     lunch: null,
     dinner: null,
     condiments: null,
   });
-  const [isReleasedByMeal, setIsReleasedByMeal] = useState<
-    Record<MealSection, boolean>
-  >({
+  const [isReleasedByMeal, setIsReleasedByMeal] = useState<Record<MealSection, boolean>>({
     breakfast: false,
     lunch: false,
     dinner: false,
@@ -192,8 +180,7 @@ export function DailyMenuSetup() {
   const visibleMeals = getSupportedMeals(adminCity);
   const adminCityLabel = getCityLabel(adminCity);
 
-  const mealLabel = (meal: MealSection) =>
-    meal.charAt(0).toUpperCase() + meal.slice(1);
+  const mealLabel = (meal: MealSection) => meal.charAt(0).toUpperCase() + meal.slice(1);
 
   const ensureDefaultSelection = (meal: MealSection) => {
     if (!MEALS_REQUIRING_DEFAULT.has(meal)) {
@@ -207,9 +194,7 @@ export function DailyMenuSetup() {
 
     toast({
       title: "Select a default item",
-      description: `Please mark one ${mealLabel(
-        meal
-      )} item as default before continuing.`,
+      description: `Please mark one ${mealLabel(meal)} item as default before continuing.`,
       variant: "destructive",
     });
     return false;
@@ -224,8 +209,7 @@ export function DailyMenuSetup() {
     return normalized;
   };
 
-  const formatISODate = (d: Date) =>
-    formatDate(normalizeToMidnight(d), "yyyy-MM-dd");
+  const formatISODate = (d: Date) => formatDate(normalizeToMidnight(d), "yyyy-MM-dd");
 
   const parseMaxField = (value: unknown): number | null => {
     if (value === null || value === undefined) return null;
@@ -360,6 +344,7 @@ export function DailyMenuSetup() {
             max_qty: resolvedMax,
             available_qty: Number.isFinite(availableQty) ? availableQty : resolvedMax,
             rate: Number(it.rate ?? 0),
+            discount_pct: it.discount_pct != null ? Number(it.discount_pct) : null,
             is_default: Boolean(it.is_default),
             sort_order: it.sort_order,
             item_max_qty: catalogMax,
@@ -432,7 +417,8 @@ export function DailyMenuSetup() {
           if (currentSection === "condiments") {
             toast({
               title: "No condiments available",
-              description: "Please create condiment items in Product Management before adding them here.",
+              description:
+                "Please create condiment items in Product Management before adding them here.",
             });
           }
           return;
@@ -474,9 +460,7 @@ export function DailyMenuSetup() {
   // 3) Add selected items into the correct section
   // ───────────────────────────────────────────────────────────────────────
   const handleItemSelection = () => {
-    const existingIds = new Set(
-      itemsByMeal[currentSection].map((row) => buildMenuEntryKey(row))
-    );
+    const existingIds = new Set(itemsByMeal[currentSection].map((row) => buildMenuEntryKey(row)));
 
     const uniqueSelections = selectedItems.filter((id) => !existingIds.has(id));
     const duplicates = selectedItems.length - uniqueSelections.length;
@@ -543,6 +527,7 @@ export function DailyMenuSetup() {
         max_qty: resolvedMax,
         available_qty: resolvedMax,
         rate: resolvedRate,
+        discount_pct: null,
         is_default: false,
         sort_order: itemsByMeal[currentSection].length + index + 1,
         item_max_qty: catalogMax ?? null,
@@ -574,7 +559,7 @@ export function DailyMenuSetup() {
     meal: string,
     index: number,
     field: keyof MenuItem,
-    value: string | number
+    value: string | number,
   ) => {
     setItemsByMeal((prev) => {
       const copy = [...prev[meal]];
@@ -666,6 +651,7 @@ export function DailyMenuSetup() {
           max_qty: resolvedMax,
           available_qty: Number.isFinite(availableQty) ? availableQty : resolvedMax,
           rate: Number(it.rate ?? 0),
+          discount_pct: it.discount_pct != null ? Number(it.discount_pct) : null,
           is_default: Boolean(it.is_default),
           sort_order: it.sort_order,
           item_max_qty: catalogMax,
@@ -720,17 +706,12 @@ export function DailyMenuSetup() {
   const filteredItemsByQuery = (arr: typeof availableItems) => {
     const mealId = SECTION_TO_BLD_ID[currentSection] ?? null;
     const byMeal = mealId
-      ? arr.filter(
-          (item) =>
-            Array.isArray(item.bld_ids) && item.bld_ids.includes(mealId)
-        )
+      ? arr.filter((item) => Array.isArray(item.bld_ids) && item.bld_ids.includes(mealId))
       : arr;
     return byMeal.filter(
       (it) =>
         it.name.toLowerCase().includes(itemSearchQuery.toLowerCase()) ||
-        (it.description || "")
-          .toLowerCase()
-          .includes(itemSearchQuery.toLowerCase())
+        (it.description || "").toLowerCase().includes(itemSearchQuery.toLowerCase()),
     );
   };
 
@@ -748,8 +729,7 @@ export function DailyMenuSetup() {
   const selectedTimestamp = confirmedDate ? confirmedDate.getTime() : null;
   const isTodaySelected = selectedTimestamp === todayTimestamp;
   const isTomorrowSelected = selectedTimestamp === tomorrowTimestamp;
-  const isReadOnlyMode =
-    selectedTimestamp !== null && selectedTimestamp < todayTimestamp;
+  const isReadOnlyMode = selectedTimestamp !== null && selectedTimestamp < todayTimestamp;
 
   // ───────────────────────────────────────────────────────────────────────
   // JSX
@@ -802,16 +782,11 @@ export function DailyMenuSetup() {
                     className="w-[220px] justify-start text-left font-normal"
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {displayDate
-                      ? formatDate(displayDate, "PPP")
-                      : "Pick custom date"}
+                    {displayDate ? formatDate(displayDate, "PPP") : "Pick custom date"}
                   </Button>
                 </PopoverTrigger>
 
-                <PopoverContent
-                  className="w-auto p-0 overflow-hidden"
-                  align="start"
-                >
+                <PopoverContent className="w-auto p-0 overflow-hidden" align="start">
                   <div className="flex flex-col">
                     {/* Calendar area with small top/side padding */}
                     <div className="px-3 pt-3">
@@ -915,15 +890,11 @@ export function DailyMenuSetup() {
                           const isRowEditing = canEditRow && editIndexByMeal[meal] === index;
                           return (
                             <TableRow key={index}>
-                              <TableCell className="text-center">
-                                {index + 1}
-                              </TableCell>
+                              <TableCell className="text-center">{index + 1}</TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-2">
                                   <span>{row.item_name}</span>
-                                  {row.is_plated ? (
-                                    <Badge variant="secondary">Plated</Badge>
-                                  ) : null}
+                                  {row.is_plated ? <Badge variant="secondary">Plated</Badge> : null}
                                   {row.component_type_name ? (
                                     <Badge variant="outline">{row.component_type_name}</Badge>
                                   ) : null}
@@ -966,14 +937,21 @@ export function DailyMenuSetup() {
                                     type="number"
                                     value={row.rate}
                                     onChange={(e) =>
-                                      handleSave(
-                                        meal,
-                                        index,
-                                        "rate",
-                                        Number(e.target.value)
-                                      )
+                                      handleSave(meal, index, "rate", Number(e.target.value))
                                     }
                                   />
+                                ) : row.discount_pct ? (
+                                  <span className="flex flex-col gap-0.5">
+                                    <span className="line-through text-muted-foreground text-xs">
+                                      ₹{row.rate}
+                                    </span>
+                                    <span className="font-medium">
+                                      ₹{(row.rate * (1 - row.discount_pct / 100)).toFixed(2)}
+                                    </span>
+                                    <Badge variant="secondary" className="w-fit text-xs">
+                                      {row.discount_pct}% off
+                                    </Badge>
+                                  </span>
                                 ) : (
                                   `₹${row.rate}`
                                 )}
@@ -985,12 +963,7 @@ export function DailyMenuSetup() {
                                     <Checkbox
                                       checked={row.is_default}
                                       onCheckedChange={(checked) =>
-                                        handleSave(
-                                          meal,
-                                          index,
-                                          "is_default",
-                                          checked ? 1 : 0
-                                        )
+                                        handleSave(meal, index, "is_default", checked ? 1 : 0)
                                       }
                                     />
                                   ) : row.is_default ? (
@@ -1098,8 +1071,7 @@ export function DailyMenuSetup() {
             <DialogContent className="w-[95vw] sm:max-w-[1100px] max-h-[85vh] overflow-y-auto p-6">
               <DialogHeader>
                 <DialogTitle>
-                  Select Menu Items for{" "}
-                  <span className="capitalize">{currentSection}</span>
+                  Select Menu Items for <span className="capitalize">{currentSection}</span>
                 </DialogTitle>
 
                 {/* Search */}
@@ -1137,14 +1109,10 @@ export function DailyMenuSetup() {
                         onCheckedChange={(isChecked) => {
                           if (isChecked) {
                             setSelectedItems((prev) =>
-                              prev.includes(entryKey)
-                                ? prev
-                                : [...prev, entryKey]
+                              prev.includes(entryKey) ? prev : [...prev, entryKey],
                             );
                           } else {
-                            setSelectedItems((prev) =>
-                              prev.filter((id) => id !== entryKey)
-                            );
+                            setSelectedItems((prev) => prev.filter((id) => id !== entryKey));
                           }
                         }}
                         className="shrink-0"
@@ -1152,9 +1120,7 @@ export function DailyMenuSetup() {
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <div className="font-medium truncate">{it.name}</div>
-                          {it.is_plated ? (
-                            <Badge variant="secondary">Plated</Badge>
-                          ) : null}
+                          {it.is_plated ? <Badge variant="secondary">Plated</Badge> : null}
                           {it.component_type_name ? (
                             <Badge variant="outline">{it.component_type_name}</Badge>
                           ) : null}

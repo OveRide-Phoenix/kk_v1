@@ -1,112 +1,109 @@
-"use client"
+"use client";
 
-import { useEffect, useMemo, useState, type ComponentProps } from "react"
-import Link from "next/link"
-import { useRouter, usePathname } from "next/navigation"
-import { Crown, LogOut, User } from "lucide-react"
-import { useHydrateAuthUser } from "@/hooks/useHydrateAuthUser"
-import { Button } from "@/components/ui/button"
-import { useAuthStore } from "@/store/store"
+import { useEffect, useMemo, useState, type ComponentProps } from "react";
+import Link from "next/link";
+import { useRouter, usePathname } from "next/navigation";
+import { Crown, LogOut, User } from "lucide-react";
+import { useHydrateAuthUser } from "@/hooks/useHydrateAuthUser";
+import { Button } from "@/components/ui/button";
+import { useAuthStore } from "@/store/store";
 
-type ButtonVariant = ComponentProps<typeof Button>["variant"]
+type ButtonVariant = ComponentProps<typeof Button>["variant"];
 
 type CustomerNavBarProps = {
   unauthLinks?: Array<{
-    href: string
-    label: string
-    variant?: ButtonVariant
-  }>
-}
+    href: string;
+    label: string;
+    variant?: ButtonVariant;
+  }>;
+};
 
 export default function CustomerNavBar({ unauthLinks }: CustomerNavBarProps = {}) {
-  const [isScrolled, setIsScrolled] = useState(false)
-  const [hydrated, setHydrated] = useState(false)
-  const user = useAuthStore((state) => state.user)
-  const logout = useAuthStore((state) => state.logout)
-  const router = useRouter()
-  const pathname = usePathname()
-  const userRecord = user as Record<string, unknown> | null
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
+  const router = useRouter();
+  const pathname = usePathname();
+  const userRecord = user as Record<string, unknown> | null;
 
   const navLinkClass = (href: string, options?: { disabled?: boolean }) => {
-    const disabled = options?.disabled
-    let isActive = false
-    const normalize = (value: string) => (value.length > 1 ? value.replace(/\/+$/, "") : value)
+    const disabled = options?.disabled;
+    let isActive = false;
+    const normalize = (value: string) => (value.length > 1 ? value.replace(/\/+$/, "") : value);
     if (href === "/customer/home") {
-      const homeVariants = ["/customer", "/customer/", "/customer/home"]
-      isActive = homeVariants.includes(pathname)
+      const homeVariants = ["/customer", "/customer/", "/customer/home"];
+      isActive = homeVariants.includes(pathname);
     } else {
-      const current = normalize(pathname)
-      const target = normalize(href)
-      isActive = current === target || current.startsWith(`${target}/`)
+      const current = normalize(pathname);
+      const target = normalize(href);
+      isActive = current === target || current.startsWith(`${target}/`);
     }
 
-    const base = "relative px-3 py-2 text-sm font-medium transition-all duration-200"
+    const base = "relative px-3 py-2 text-sm font-medium transition-all duration-200";
     if (disabled) {
-      return `${base} text-[#8d6e63] opacity-60 cursor-not-allowed`
+      return `${base} text-[#8d6e63] opacity-60 cursor-not-allowed`;
     }
-    return `${base} ${isActive ? "text-primary" : "text-[#463028] hover:text-primary"}`
-  }
+    return `${base} ${isActive ? "text-primary" : "text-[#463028] hover:text-primary"}`;
+  };
 
   useEffect(() => {
-    const handleScroll = () => setIsScrolled(window.scrollY > 50)
-    window.addEventListener("scroll", handleScroll)
-    return () => window.removeEventListener("scroll", handleScroll)
-  }, [])
+    const handleScroll = () => setIsScrolled(window.scrollY > 50);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   useEffect(() => {
-    setHydrated(true)
-  }, [])
+    setHydrated(true);
+  }, []);
 
-  useHydrateAuthUser({ enabled: hydrated })
+  useHydrateAuthUser({ enabled: hydrated });
 
   const derivedRoleCodes = useMemo(() => {
-    const codes = new Set<string>()
+    const codes = new Set<string>();
 
     const addCodes = (source: unknown) => {
-      if (!source) return
+      if (!source) return;
       if (Array.isArray(source)) {
         for (const entry of source) {
           if (typeof entry === "string") {
-            const trimmed = entry.trim()
+            const trimmed = entry.trim();
             if (trimmed) {
-              codes.add(trimmed.toLowerCase())
+              codes.add(trimmed.toLowerCase());
             }
           } else if (entry && typeof entry === "object" && "code" in entry) {
-            const value = (entry as { code?: unknown }).code
+            const value = (entry as { code?: unknown }).code;
             if (typeof value === "string") {
-              const trimmed = value.trim()
+              const trimmed = value.trim();
               if (trimmed) {
-                codes.add(trimmed.toLowerCase())
+                codes.add(trimmed.toLowerCase());
               }
             }
           }
         }
       }
-    }
+    };
 
-    addCodes(userRecord?.["role_codes"])
-    addCodes(userRecord?.["roleCodes"])
-    addCodes(userRecord?.["role_details"])
-    addCodes(userRecord?.["roleDetails"])
+    addCodes(userRecord?.["role_codes"]);
+    addCodes(userRecord?.["roleCodes"]);
+    addCodes(userRecord?.["role_details"]);
+    addCodes(userRecord?.["roleDetails"]);
 
-    return codes
-  }, [userRecord])
+    return codes;
+  }, [userRecord]);
 
-  const isAdmin =
-    Boolean(
-      hydrated &&
-        user &&
-        (derivedRoleCodes.has("admin") || Boolean(userRecord?.["is_admin"]))
-    )
+  const isAdmin = Boolean(
+    hydrated && user && (derivedRoleCodes.has("admin") || Boolean(userRecord?.["is_admin"])),
+  );
 
-  const hasUser = hydrated && Boolean(user)
+  const hasUser = hydrated && Boolean(user);
   const displayName =
     (typeof user?.name === "string" && user.name.trim()) ||
     (typeof user?.phone === "string" && user.phone.trim()) ||
-    "Customer"
+    "Customer";
 
   if (pathname?.startsWith("/customer-v2")) {
-    return null
+    return null;
   }
 
   return (
@@ -126,7 +123,9 @@ export default function CustomerNavBar({ unauthLinks }: CustomerNavBarProps = {}
 
           <div className="hidden md:flex items-center gap-6">
             <div className="relative group">
-              <Link href="/customer/home" className={navLinkClass("/customer/home")}>Home</Link>
+              <Link href="/customer/home" className={navLinkClass("/customer/home")}>
+                Home
+              </Link>
             </div>
             <div className="relative group">
               <Link href="/customer/new-order" className={navLinkClass("/customer/new-order")}>
@@ -134,7 +133,9 @@ export default function CustomerNavBar({ unauthLinks }: CustomerNavBarProps = {}
               </Link>
             </div>
             <div className="relative group">
-              <span className={navLinkClass("/customer/subscription", { disabled: true })}>Subscription</span>
+              <span className={navLinkClass("/customer/subscription", { disabled: true })}>
+                Subscription
+              </span>
             </div>
             <div className="pl-6 text-sm text-[#463028]">
               {hasUser ? (
@@ -151,8 +152,8 @@ export default function CustomerNavBar({ unauthLinks }: CustomerNavBarProps = {}
                     variant="ghost"
                     size="icon"
                     onClick={() => {
-                      logout()
-                      router.push("/")
+                      logout();
+                      router.push("/");
                     }}
                   >
                     <LogOut className="h-4 w-4" />
@@ -160,10 +161,17 @@ export default function CustomerNavBar({ unauthLinks }: CustomerNavBarProps = {}
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  {(unauthLinks?.length ? unauthLinks : [
-                    { href: "/register", label: "Register" },
-                    { href: "/login", label: "Sign in", variant: "outline" as ButtonVariant },
-                  ]).map(({ href, label, variant }) => (
+                  {(unauthLinks?.length
+                    ? unauthLinks
+                    : [
+                        { href: "/register", label: "Register" },
+                        {
+                          href: "/login-v2",
+                          label: "Sign in",
+                          variant: "outline" as ButtonVariant,
+                        },
+                      ]
+                  ).map(({ href, label, variant }) => (
                     <Button key={href} asChild variant={variant ?? "default"} size="sm">
                       <Link href={href}>{label}</Link>
                     </Button>
@@ -175,5 +183,5 @@ export default function CustomerNavBar({ unauthLinks }: CustomerNavBarProps = {}
         </div>
       </div>
     </nav>
-  )
+  );
 }

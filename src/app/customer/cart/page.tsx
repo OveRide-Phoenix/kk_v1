@@ -81,6 +81,7 @@ type OrderResponse = {
   discount: number;
   cgst: number;
   sgst: number;
+  delivery_charge: number;
   coupon_codes?: string[];
   status: string;
 };
@@ -90,6 +91,7 @@ type OrderQuoteResponse = {
   discount: number;
   cgst: number;
   sgst: number;
+  delivery_charge: number;
   total_price: number;
   coupon_codes?: string[];
 };
@@ -506,7 +508,9 @@ export default function CartPage() {
                 </div>
                 <div className="flex justify-between">
                   <span>Delivery</span>
-                  <span>Free</span>
+                  <span>
+                    {(quote?.delivery_charge ?? 0) > 0 ? currency(quote!.delivery_charge) : "Free"}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span>CGST</span>

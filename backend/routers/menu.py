@@ -165,6 +165,7 @@ def _get_daily_menu_internal(
                 mi.buffer_qty,
                 mi.final_qty,
                 mi.rate,
+                mi.discount_pct,
                 mi.is_default,
                 mi.sort_order,
                 i.max_qty_breakfast,
@@ -629,6 +630,20 @@ def upsert_daily_menu(payload: DailyMenuPayload) -> Dict[str, Any]:
                     raise HTTPException(status_code=400, detail=f"Unknown combo_id: {mi.combo_id}")
                 resolved_category_id = mi.category_id if mi.category_id is not None else row[0]
 
+            # Look up active discount rule for this item+city+date (items only, not combos)
+            resolved_discount_pct: Optional[float] = None
+            if has_item and menu_date:
+                cursor.execute(
+                    "SELECT discount_pct FROM item_discounts "
+                    "WHERE item_id = %s AND city_code = %s "
+                    "AND from_date <= %s AND (to_date IS NULL OR to_date >= %s) "
+                    "ORDER BY discount_id DESC LIMIT 1",
+                    (mi.item_id, city_code, menu_date, menu_date),
+                )
+                discount_row = cursor.fetchone()
+                if discount_row:
+                    resolved_discount_pct = float(discount_row[0])
+
             normalized_menu_items.append(
                 {
                     "item_id": mi.item_id,
@@ -637,6 +652,7 @@ def upsert_daily_menu(payload: DailyMenuPayload) -> Dict[str, Any]:
                     "max_qty": mi.max_qty if mi.max_qty is not None else None,
                     "available_qty": mi.available_qty if mi.available_qty is not None else None,
                     "rate": float(mi.rate),
+                    "discount_pct": resolved_discount_pct,
                     "is_default": bool(mi.is_default),
                     "sort_order": mi.sort_order or idx,
                     "key": payload_key,
@@ -682,6 +698,7 @@ def upsert_daily_menu(payload: DailyMenuPayload) -> Dict[str, Any]:
             max_qty_value = entry["max_qty"]
             available_qty_value = entry["available_qty"]
             rate_value = entry["rate"]
+            discount_pct_value = entry["discount_pct"]
             is_default = entry["is_default"]
             sort_order = entry["sort_order"]
             payload_key = entry["key"]
@@ -699,6 +716,7 @@ def upsert_daily_menu(payload: DailyMenuPayload) -> Dict[str, Any]:
                         max_qty = %s,
                         available_qty = %s,
                         rate = %s,
+                        discount_pct = %s,
                         is_default = %s,
                         sort_order = %s
                     WHERE menu_item_id = %s
@@ -708,6 +726,7 @@ def upsert_daily_menu(payload: DailyMenuPayload) -> Dict[str, Any]:
                         max_qty_value,
                         effective_available_qty,
                         rate_value,
+                        discount_pct_value,
                         int(is_default),
                         sort_order,
                         existing_row["menu_item_id"],
@@ -718,8 +737,8 @@ def upsert_daily_menu(payload: DailyMenuPayload) -> Dict[str, Any]:
             cursor.execute(
                 """
                 INSERT INTO menu_items
-                    (menu_id, item_id, combo_id, category_id, max_qty, available_qty, rate, is_default, sort_order)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    (menu_id, item_id, combo_id, category_id, max_qty, available_qty, rate, discount_pct, is_default, sort_order)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     menu_id,
@@ -729,6 +748,7 @@ def upsert_daily_menu(payload: DailyMenuPayload) -> Dict[str, Any]:
                     max_qty_value,
                     effective_available_qty,
                     rate_value,
+                    discount_pct_value,
                     int(is_default),
                     sort_order,
                 ),

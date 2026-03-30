@@ -199,7 +199,7 @@ export default function RegistrationPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <CustomerNavBar unauthLinks={[{ href: "/login", label: "Sign in" }]} />
+      <CustomerNavBar unauthLinks={[{ href: "/login-v2", label: "Sign in" }]} />
 
       {/* Registration Form */}
       <main className="container mx-auto flex-1 px-4 pb-12 pt-24">
@@ -477,7 +477,7 @@ export default function RegistrationPage() {
                     <Button
                       type="button"
                       className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white"
-                      onClick={() => router.push("/login")}
+                      onClick={() => router.push("/login-v2")}
                     >
                       Go to Login
                     </Button>
