@@ -52,6 +52,7 @@ type OrderResponse = {
   discount: number;
   cgst: number;
   sgst: number;
+  delivery_charge: number;
   coupon_codes?: string[];
   status: string;
 };
@@ -61,6 +62,7 @@ type OrderQuoteResponse = {
   discount: number;
   cgst: number;
   sgst: number;
+  delivery_charge: number;
   total_price: number;
   coupon_codes?: string[];
 };
@@ -615,7 +617,9 @@ export default function CustomerV2CartPage() {
                 </div>
                 <div className="flex justify-between text-gray-600">
                   <span>Delivery Fee</span>
-                  <span className="font-bold text-[#1b4332]">FREE</span>
+                  <span className="font-bold text-[#1b4332]">
+                    {(quote?.delivery_charge ?? 0) > 0 ? currency(quote!.delivery_charge) : "FREE"}
+                  </span>
                 </div>
                 <div className="flex justify-between text-gray-600">
                   <span>Taxes & Charges</span>

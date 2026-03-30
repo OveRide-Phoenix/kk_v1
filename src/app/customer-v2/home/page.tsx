@@ -6,8 +6,14 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useHydrateAuthUser } from "@/hooks/useHydrateAuthUser";
 import { Skeleton } from "@/components/ui/skeleton";
+import { OrderStatusPill } from "@/components/order-status-pill";
 import { useAuthStore } from "@/store/store";
 import { http } from "@/lib/http";
+
+const normalizeType = (value: string | null | undefined): "subscription" | "one_time" => {
+  const normalized = (value ?? "one_time").toLowerCase().replace("-", "_");
+  return normalized === "subscription" ? "subscription" : "one_time";
+};
 
 type MealType = "breakfast" | "lunch" | "dinner" | "condiments";
 
@@ -111,6 +117,7 @@ export default function CustomerHomeV2Page() {
     condiments: null,
   });
   const [orders, setOrders] = useState<OrderSummary[]>([]);
+  const [selectedOrder, setSelectedOrder] = useState<OrderSummary | null>(null);
 
   const todayISO = useMemo(() => formatDate(new Date(), "yyyy-MM-dd"), []);
   const customerId = hydrated ? user?.customer_id : undefined;
@@ -444,7 +451,13 @@ export default function CustomerHomeV2Page() {
                         ) : null}
                       </div>
                       <button
-                        onClick={() => router.push("/customer-v2/account?section=orders")}
+                        onClick={() => {
+                          if (hasMultipleTodayOrders) {
+                            router.push("/customer-v2/account?section=orders");
+                          } else if (todaysBooking) {
+                            setSelectedOrder(todaysBooking);
+                          }
+                        }}
                         className={`rounded-xl bg-white ${showBothTopCards ? "px-6 py-2.5 text-sm" : "px-8 py-3"} font-bold text-[#8D4925] shadow-lg transition-all active:scale-95 hover:bg-orange-50`}
                       >
                         {hasMultipleTodayOrders ? "Manage Orders" : "View Order"}
@@ -674,6 +687,107 @@ export default function CustomerHomeV2Page() {
           )}
         </section>
       </main>
+
+      {selectedOrder ? (
+        <>
+          <button
+            className="fixed inset-0 z-40 bg-black/35"
+            type="button"
+            aria-label="Close details"
+            onClick={() => setSelectedOrder(null)}
+          />
+          <section className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-[#FDFAF1] px-5 pb-8 pt-6 shadow-2xl">
+            <div />
+            <div className="mb-4 flex items-start justify-between gap-2">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-[#8D4925]/60">
+                  Order ID
+                </p>
+                <h3 className="text-xl font-bold text-[#8D4925]">#{selectedOrder.order_id}</h3>
+              </div>
+              <OrderStatusPill status={selectedOrder.status} />
+            </div>
+
+            <div className="space-y-3 rounded-xl border border-[#8D4925]/10 bg-white p-4">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-[#64748b]">Date</span>
+                <span className="font-semibold text-[#1e293b]">
+                  {selectedOrder.created_at
+                    ? formatDate(new Date(selectedOrder.created_at), "dd MMM yyyy • hh:mm a")
+                    : "Scheduled"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-[#64748b]">Order type</span>
+                <span className="font-semibold text-[#1e293b]">
+                  {normalizeType(selectedOrder.order_type) === "subscription"
+                    ? "Subscription"
+                    : "One-time"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-[#64748b]">Payment</span>
+                <span className="font-semibold text-[#1e293b]">{selectedOrder.payment_method}</span>
+              </div>
+              <div className="text-sm">
+                <p className="text-[#64748b]">Delivery address</p>
+                <p className="mt-1 font-semibold text-[#1e293b]">
+                  {selectedOrder.address
+                    ? [
+                        selectedOrder.address.line,
+                        selectedOrder.address.city,
+                        selectedOrder.address.pin_code,
+                      ]
+                        .filter(Boolean)
+                        .join(", ")
+                    : "Address details unavailable"}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-[#8D4925]/10 bg-white p-4">
+              <p className="mb-3 text-xs font-bold uppercase tracking-wider text-[#8D4925]/70">
+                Items
+              </p>
+              <div className="space-y-2">
+                {selectedOrder.items.length ? (
+                  selectedOrder.items.map((item, index) => (
+                    <div
+                      key={`${selectedOrder.order_id}-${item.item_name}-${index}`}
+                      className="flex items-center justify-between text-sm"
+                    >
+                      <span className="text-[#1e293b]">
+                        {item.item_name} × {item.quantity}
+                      </span>
+                      <span className="font-semibold text-[#1e293b]">
+                        {currency(item.price * item.quantity)}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-[#64748b]">No line items available.</p>
+                )}
+              </div>
+              <div className="mt-3 border-t border-slate-100 pt-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-[#64748b]">Total</span>
+                  <span className="text-lg font-bold text-[#0f172a]">
+                    {currency(selectedOrder.total_price)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setSelectedOrder(null)}
+              className="mt-4 w-full rounded-xl bg-[#1B4332] py-3 text-sm font-bold text-white"
+            >
+              Close
+            </button>
+          </section>
+        </>
+      ) : null}
     </>
   );
 }

@@ -162,6 +162,32 @@ def _load_tax_amounts(cursor, discounted_subtotal: float) -> tuple[float, float]
     return cgst_amount, sgst_amount
 
 
+def _resolve_effective_price(cursor, item: "OrderItemPayload") -> float:
+    """Resolve the authoritative unit price for an order item.
+
+    When a menu_item_id is provided, fetch rate and discount_pct from menu_items
+    and compute the discounted price. Otherwise fall back to the client-supplied price.
+
+    Args:
+        cursor: DB cursor.
+        item: Order item payload.
+
+    Returns:
+        Effective unit price after any item-level discount applied.
+    """
+    if item.menu_item_id is not None:
+        cursor.execute(
+            "SELECT rate, discount_pct FROM menu_items WHERE menu_item_id = %s",
+            (item.menu_item_id,),
+        )
+        row = cursor.fetchone()
+        if row:
+            rate = float(row[0])
+            discount_pct = float(row[1]) if row[1] is not None else 0.0
+            return round(rate * (1 - discount_pct / 100), 2)
+    return item.price
+
+
 def _compute_order_totals(
     cursor, items: List[OrderItemPayload], coupon_codes: Optional[List[str]]
 ) -> Dict[str, Any]:
@@ -173,7 +199,8 @@ def _compute_order_totals(
         coupon_codes: Optional list of coupon codes to apply.
 
     Returns:
-        Dict with subtotal, discount, cgst, sgst, total_price, and coupon_codes.
+        Dict with subtotal, discount, cgst, sgst, total_price, coupon_codes,
+        and resolved_prices (list of effective unit prices per item).
     """
     for index, item in enumerate(items):
         has_item = item.item_id is not None
@@ -183,18 +210,22 @@ def _compute_order_totals(
                 status_code=400,
                 detail=f"items[{index}] must include exactly one of item_id or combo_id",
             )
-    subtotal = sum(item.price * item.quantity for item in items)
+    resolved_prices = [_resolve_effective_price(cursor, item) for item in items]
+    subtotal = sum(price * item.quantity for price, item in zip(resolved_prices, items))
     discount_amount, applied_coupons = _load_coupon_discount(cursor, coupon_codes, subtotal)
     discounted_subtotal = max(subtotal - discount_amount, 0.0)
     cgst_amount, sgst_amount = _load_tax_amounts(cursor, discounted_subtotal)
-    total_price = discounted_subtotal + cgst_amount + sgst_amount
+    delivery_charge = 0.0  # free for now; set via config/rules when charging begins
+    total_price = discounted_subtotal + cgst_amount + sgst_amount + delivery_charge
     return {
         "subtotal": round(subtotal, 2),
         "discount": round(discount_amount, 2),
         "cgst": round(cgst_amount, 2),
         "sgst": round(sgst_amount, 2),
+        "delivery_charge": round(delivery_charge, 2),
         "total_price": round(total_price, 2),
         "coupon_codes": applied_coupons,
+        "resolved_prices": resolved_prices,
     }
 
 
@@ -312,8 +343,8 @@ def create_order(payload: CreateOrderPayload) -> Dict[str, Any]:
 
         cursor.execute(
             """
-            INSERT INTO orders (customer_id, address_id, total_price, payment_method, order_date, status, order_type, paid, discount, cgst, sgst)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO orders (customer_id, address_id, total_price, payment_method, order_date, status, order_type, paid, discount, cgst, sgst, delivery_charge)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 payload.customer_id,
@@ -327,10 +358,12 @@ def create_order(payload: CreateOrderPayload) -> Dict[str, Any]:
                 float(totals["discount"]),
                 float(totals["cgst"]),
                 float(totals["sgst"]),
+                float(totals["delivery_charge"]),
             ),
         )
         order_id = cursor.lastrowid
 
+        resolved_prices = totals["resolved_prices"]
         cursor.executemany(
             """
             INSERT INTO order_items (order_id, item_id, combo_id, menu_item_id, meal_type, quantity, price)
@@ -344,9 +377,9 @@ def create_order(payload: CreateOrderPayload) -> Dict[str, Any]:
                     item.menu_item_id,
                     item.meal_type,
                     item.quantity,
-                    float(item.price),
+                    resolved_prices[i],
                 )
-                for item in payload.items
+                for i, item in enumerate(payload.items)
             ],
         )
 
@@ -367,6 +400,7 @@ def create_order(payload: CreateOrderPayload) -> Dict[str, Any]:
             "discount": float(totals["discount"]),
             "cgst": float(totals["cgst"]),
             "sgst": float(totals["sgst"]),
+            "delivery_charge": float(totals["delivery_charge"]),
             "coupon_codes": totals["coupon_codes"],
             "status": initial_status,
         }

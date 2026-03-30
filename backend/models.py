@@ -263,7 +263,8 @@ class ItemPriceHistory(Base):
 
     history_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     item_id = Column(Integer, ForeignKey("items.item_id"), nullable=False)
-    effect_date = Column(Date, nullable=False)
+    from_date = Column(Date, nullable=False)
+    to_date = Column(Date, nullable=True)
     breakfast_price = Column(DECIMAL(10, 2), nullable=True)
     lunch_price = Column(DECIMAL(10, 2), nullable=True)
     dinner_price = Column(DECIMAL(10, 2), nullable=True)
@@ -333,6 +334,7 @@ class Order(Base):
     discount = Column(DECIMAL(10, 2), nullable=True, default=0.00)
     cgst = Column(DECIMAL(10, 2), nullable=True, default=0.00)
     sgst = Column(DECIMAL(10, 2), nullable=True, default=0.00)
+    delivery_charge = Column(DECIMAL(10, 2), nullable=False, default=0.00)
     created_at = Column(TIMESTAMP, nullable=True)
     order_type = Column(String(50), nullable=True, default="one_time")
     paid = Column(Boolean, nullable=True)
@@ -352,6 +354,7 @@ class MenuItem(Base):
     category_id = Column(Integer, ForeignKey("categories.category_id"), nullable=True)
     max_qty = Column(Integer, nullable=True)
     rate = Column(DECIMAL(10, 2), nullable=False)
+    discount_pct = Column(DECIMAL(5, 2), nullable=True)
     is_default = Column(Boolean, nullable=False, default=False)
     sort_order = Column(Integer, nullable=True)
     available_qty = Column(Integer, nullable=False, default=0)
@@ -439,3 +442,17 @@ class AdminLog(Base):
     timestamp = Column(TIMESTAMP, nullable=True)
 
     admin = relationship("Customer", back_populates="admin_logs")
+
+
+class ItemDiscount(Base):
+    __tablename__ = "item_discounts"
+
+    discount_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    item_id = Column(Integer, ForeignKey("items.item_id"), nullable=False)
+    city_code = Column(String(20), nullable=False)
+    from_date = Column(Date, nullable=False)
+    to_date = Column(Date, nullable=True)
+    discount_pct = Column(DECIMAL(5, 2), nullable=False)
+    created_at = Column(TIMESTAMP, nullable=True)
+
+    item = relationship("Item")

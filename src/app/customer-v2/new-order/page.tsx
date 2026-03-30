@@ -18,6 +18,7 @@ type MenuApiItem = {
   item_name?: string;
   name?: string;
   rate?: number;
+  discount_pct?: number | null;
   price?: number;
   description?: string;
   picture_url?: string | null;
@@ -37,6 +38,7 @@ type MenuItem = {
   item_name: string;
   meal: MealType;
   rate: number;
+  discount_pct: number | null;
   available_qty: number;
   description: string;
   picture_url: string | null;
@@ -180,6 +182,7 @@ export default function CustomerV2OrderPage() {
                   item_name: item.item_name ?? item.name ?? "Item",
                   meal,
                   rate: item.rate ?? item.price ?? 0,
+                  discount_pct: item.discount_pct ?? null,
                   available_qty: normalizeQty(item.available_qty),
                   description: item.description ?? "",
                   picture_url: item.picture_url ?? null,
@@ -519,7 +522,25 @@ export default function CustomerV2OrderPage() {
                     </div>
                   </div>
                   <div className="flex items-center justify-between border-t border-orange-50 pt-3">
-                    <span className="text-lg font-bold text-[#8D4925]">{currency(item.rate)}</span>
+                    <span className="flex flex-col">
+                      {item.discount_pct ? (
+                        <>
+                          <span className="text-xs line-through text-gray-400">
+                            {currency(item.rate)}
+                          </span>
+                          <span className="text-lg font-bold text-[#8D4925]">
+                            {currency(item.rate * (1 - item.discount_pct / 100))}
+                          </span>
+                          <span className="text-xs font-semibold text-green-600">
+                            {item.discount_pct}% off
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-lg font-bold text-[#8D4925]">
+                          {currency(item.rate)}
+                        </span>
+                      )}
+                    </span>
                     <div className="ml-auto">
                       {soldOut ? (
                         <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-600">
@@ -610,8 +631,24 @@ export default function CustomerV2OrderPage() {
                     </div>
                   </div>
                   <div className="flex items-center justify-between border-t border-orange-50 pt-3">
-                    <span className="whitespace-nowrap text-lg font-bold text-[#8D4925]">
-                      {currency(item.rate)}
+                    <span className="flex flex-col">
+                      {item.discount_pct ? (
+                        <>
+                          <span className="text-xs line-through text-gray-400">
+                            {currency(item.rate)}
+                          </span>
+                          <span className="whitespace-nowrap text-lg font-bold text-[#8D4925]">
+                            {currency(item.rate * (1 - item.discount_pct / 100))}
+                          </span>
+                          <span className="text-xs font-semibold text-green-600">
+                            {item.discount_pct}% off
+                          </span>
+                        </>
+                      ) : (
+                        <span className="whitespace-nowrap text-lg font-bold text-[#8D4925]">
+                          {currency(item.rate)}
+                        </span>
+                      )}
                     </span>
                     <div className="ml-auto">
                       {soldOut ? (

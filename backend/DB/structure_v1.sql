@@ -202,7 +202,8 @@ CREATE TABLE `item_add_ons` (
 CREATE TABLE `item_price_history` (
   `history_id` int NOT NULL AUTO_INCREMENT,
   `item_id` int NOT NULL,
-  `effect_date` date NOT NULL,
+  `from_date` date NOT NULL,
+  `to_date` date DEFAULT NULL,
   `breakfast_price` decimal(10,2) DEFAULT NULL,
   `lunch_price` decimal(10,2) DEFAULT NULL,
   `dinner_price` decimal(10,2) DEFAULT NULL,
@@ -215,6 +216,20 @@ CREATE TABLE `item_price_history` (
   PRIMARY KEY (`history_id`),
   KEY `item_id` (`item_id`),
   CONSTRAINT `item_price_history_ibfk_1` FOREIGN KEY (`item_id`) REFERENCES `items` (`item_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- TABLE: item_discounts
+CREATE TABLE `item_discounts` (
+  `discount_id` int NOT NULL AUTO_INCREMENT,
+  `item_id` int NOT NULL,
+  `city_code` varchar(20) NOT NULL,
+  `from_date` date NOT NULL,
+  `to_date` date DEFAULT NULL,
+  `discount_pct` decimal(5,2) NOT NULL,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`discount_id`),
+  KEY `idx_item_discounts_lookup` (`item_id`,`city_code`,`from_date`),
+  CONSTRAINT `fk_item_discounts_item` FOREIGN KEY (`item_id`) REFERENCES `items` (`item_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- TABLE: item_bld_map
@@ -274,6 +289,7 @@ CREATE TABLE `orders` (
   `discount` decimal(10,2) DEFAULT '0.00',
   `cgst` decimal(10,2) DEFAULT '0.00',
   `sgst` decimal(10,2) DEFAULT '0.00',
+  `delivery_charge` decimal(10,2) NOT NULL DEFAULT '0.00',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `order_type` varchar(50) DEFAULT 'one_time',
   `paid` tinyint(1) DEFAULT NULL,
@@ -294,6 +310,7 @@ CREATE TABLE `menu_items` (
   `category_id` int DEFAULT NULL,
   `max_qty` int DEFAULT NULL,
   `rate` decimal(10,2) NOT NULL,
+  `discount_pct` decimal(5,2) DEFAULT NULL,
   `is_default` tinyint(1) NOT NULL DEFAULT '0',
   `sort_order` int DEFAULT NULL,
   `available_qty` int NOT NULL DEFAULT '0',

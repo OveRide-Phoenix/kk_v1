@@ -18,6 +18,7 @@ import {
   ShieldCheck,
   Truck,
   BookOpenText,
+  Tag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
@@ -41,6 +42,7 @@ const primaryNavigationItems = [
   { name: "Packing Plan", icon: Package, href: "/admin/packing", id: "packing" },
   { name: "Trip Sheets", icon: Truck, href: "/admin/trip-sheet", id: "trip-sheet" },
   { name: "Order History", icon: ShoppingCart, href: "/admin/order-history", id: "orders" },
+  { name: "Discounts", icon: Tag, href: "/admin/discounts", id: "discounts" },
   { name: "Access Control", icon: ShieldCheck, href: "/admin/team-members", id: "team-members" },
   { name: "Logs & Audit", icon: FileText, href: "/admin/logs", id: "logs" },
   { name: "Reports & Analytics", icon: BarChart3, href: "/admin/reports", id: "reports" },

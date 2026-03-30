@@ -136,6 +136,7 @@ export default function LandingPage() {
       .slice(0, 2)
       .toUpperCase() ?? "";
 
+  const [mounted, setMounted] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [statValues, setStatValues] = useState([0, 0, 0, 0]);
@@ -143,6 +144,10 @@ export default function LandingPage() {
   const [productAnimating, setProductAnimating] = useState(false);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const statsAnimatedRef = useRef(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -304,7 +309,66 @@ export default function LandingPage() {
 
           {/* CTA Buttons */}
           <div style={{ alignItems: "center", gap: 12 }} className="nav-desktop">
-            {firstName ? (
+            <Link
+              href="/customer-v2/new-order"
+              style={{
+                background: "#8D4925",
+                color: "#fdfaf1",
+                fontSize: 14,
+                fontWeight: 600,
+                textDecoration: "none",
+                padding: "0 20px",
+                height: 36,
+                display: "inline-flex",
+                alignItems: "center",
+                borderRadius: 8,
+                transition: "all 0.2s",
+                boxSizing: "border-box",
+                boxShadow: "0 2px 8px rgba(141,73,37,0.3)",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "#7a3d1f";
+                e.currentTarget.style.transform = "translateY(-1px)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "#8D4925";
+                e.currentTarget.style.transform = "translateY(0)";
+              }}
+            >
+              Order Now
+            </Link>
+            {mounted && !firstName && (
+              <Link
+                href="/login-v2"
+                style={{
+                  fontSize: 14,
+                  fontWeight: 600,
+                  textDecoration: "none",
+                  padding: "0 16px",
+                  height: 36,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  borderRadius: 8,
+                  transition: "all 0.3s",
+                  boxSizing: "border-box",
+                  color: scrolled ? "#8D4925" : "#fdfaf1",
+                  border: scrolled ? "1.5px solid #8D4925" : "1.5px solid rgba(255,255,255,0.6)",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = scrolled
+                    ? "#8D4925"
+                    : "rgba(255,255,255,0.15)";
+                  e.currentTarget.style.color = "#fdfaf1";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "transparent";
+                  e.currentTarget.style.color = scrolled ? "#8D4925" : "#fdfaf1";
+                }}
+              >
+                Login
+              </Link>
+            )}
+            {mounted && firstName && (
               <Link
                 href="/customer-v2/home"
                 style={{
@@ -358,65 +422,7 @@ export default function LandingPage() {
                   {firstName}
                 </span>
               </Link>
-            ) : (
-              <Link
-                href="/login-v2"
-                style={{
-                  fontSize: 14,
-                  fontWeight: 600,
-                  textDecoration: "none",
-                  padding: "0 16px",
-                  height: 36,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  borderRadius: 8,
-                  transition: "all 0.3s",
-                  boxSizing: "border-box",
-                  color: scrolled ? "#8D4925" : "#fdfaf1",
-                  border: scrolled ? "1.5px solid #8D4925" : "1.5px solid rgba(255,255,255,0.6)",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = scrolled
-                    ? "#8D4925"
-                    : "rgba(255,255,255,0.15)";
-                  e.currentTarget.style.color = "#fdfaf1";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "transparent";
-                  e.currentTarget.style.color = scrolled ? "#8D4925" : "#fdfaf1";
-                }}
-              >
-                Login
-              </Link>
             )}
-            <Link
-              href="/customer-v2/new-order"
-              style={{
-                background: "#8D4925",
-                color: "#fdfaf1",
-                fontSize: 14,
-                fontWeight: 600,
-                textDecoration: "none",
-                padding: "0 20px",
-                height: 36,
-                display: "inline-flex",
-                alignItems: "center",
-                borderRadius: 8,
-                transition: "all 0.2s",
-                boxSizing: "border-box",
-                boxShadow: "0 2px 8px rgba(141,73,37,0.3)",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#7a3d1f";
-                e.currentTarget.style.transform = "translateY(-1px)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "#8D4925";
-                e.currentTarget.style.transform = "translateY(0)";
-              }}
-            >
-              Order Now
-            </Link>
           </div>
 
           {/* Mobile Hamburger */}
@@ -467,7 +473,7 @@ export default function LandingPage() {
               </a>
             ))}
             <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 20 }}>
-              {firstName ? (
+              {mounted && firstName ? (
                 <Link
                   href="/customer-v2/home"
                   style={{
@@ -502,7 +508,23 @@ export default function LandingPage() {
                     {firstName}
                   </span>
                 </Link>
-              ) : (
+              ) : null}
+              <Link
+                href="/customer-v2/new-order"
+                style={{
+                  textAlign: "center",
+                  background: "#8D4925",
+                  color: "#fdfaf1",
+                  fontSize: 15,
+                  fontWeight: 600,
+                  textDecoration: "none",
+                  padding: "10px 16px",
+                  borderRadius: 8,
+                }}
+              >
+                Order Now
+              </Link>
+              {mounted && !firstName && (
                 <Link
                   href="/login-v2"
                   style={{
@@ -519,21 +541,6 @@ export default function LandingPage() {
                   Login
                 </Link>
               )}
-              <Link
-                href="/customer-v2/new-order"
-                style={{
-                  textAlign: "center",
-                  background: "#8D4925",
-                  color: "#fdfaf1",
-                  fontSize: 15,
-                  fontWeight: 600,
-                  textDecoration: "none",
-                  padding: "10px 16px",
-                  borderRadius: 8,
-                }}
-              >
-                Order Now
-              </Link>
             </div>
           </div>
         )}
@@ -880,31 +887,33 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* Scroll indicator */}
-        <div
-          style={{
-            position: "absolute",
-            bottom: 32,
-            left: "50%",
-            transform: "translateX(-50%)",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 6,
-            animation: "bounce 2s infinite",
-            zIndex: 1,
-          }}
-        >
-          <div style={{ color: "rgba(253,250,241,0.4)", fontSize: 11, letterSpacing: 1.5 }}>
-            SCROLL
-          </div>
-          <span
-            className="material-symbols-outlined"
-            style={{ color: "rgba(253,250,241,0.4)", fontSize: 20 }}
+        {/* Scroll indicator — hidden once user scrolls */}
+        {!scrolled && (
+          <div
+            style={{
+              position: "absolute",
+              bottom: 32,
+              left: "50%",
+              transform: "translateX(-50%)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 6,
+              animation: "bounce 2s infinite",
+              zIndex: 1,
+            }}
           >
-            keyboard_arrow_down
-          </span>
-        </div>
+            <div style={{ color: "rgba(253,250,241,0.4)", fontSize: 11, letterSpacing: 1.5 }}>
+              SCROLL
+            </div>
+            <span
+              className="material-symbols-outlined"
+              style={{ color: "rgba(253,250,241,0.4)", fontSize: 20 }}
+            >
+              keyboard_arrow_down
+            </span>
+          </div>
+        )}
       </section>
 
       {/* ── About Us ───────────────────────────────────────────────────────── */}
@@ -930,7 +939,7 @@ export default function LandingPage() {
             <div
               style={{
                 background: "linear-gradient(135deg, #8D4925 0%, #5c2d0e 100%)",
-                borderRadius: 24,
+                borderRadius: 12,
                 padding: 40,
                 position: "relative",
                 overflow: "hidden",
@@ -2348,6 +2357,9 @@ export default function LandingPage() {
           >
             <span style={{ color: "rgba(253,250,241,0.35)", fontSize: 13 }}>
               © 2026 Kuteera Kitchen. All rights reserved.
+            </span>
+            <span style={{ color: "rgba(253,250,241,0.35)", fontSize: 13 }}>
+              Designed with ❤️ for authentic home-cooked meals
             </span>
             <div style={{ display: "flex", gap: 24 }}>
               {["Privacy Policy", "Terms of Service"].map((link) => (

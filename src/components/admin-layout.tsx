@@ -468,6 +468,8 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
         return "Developer · Auto Menu";
       case "dev-api-docs":
         return "Developer · API Docs";
+      case "discounts":
+        return "Item Discount Rules";
       case "account":
         return "My Account";
       default:
