@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChangeEvent, useEffect, useState } from "react";
-import { Eye, EyeOff, ShieldCheck } from "lucide-react";
+import { ChevronDown, Eye, EyeOff, ShieldCheck } from "lucide-react";
 import { Playfair_Display, Plus_Jakarta_Sans } from "next/font/google";
 import { getCityLabel, normalizeCityCode, type CityCode } from "@/config/cities";
 import { useAuthStore } from "@/store/store";
@@ -38,6 +38,7 @@ export default function LoginV2Page() {
   const [isLoading, setIsLoading] = useState(false);
   const [loginAttempt, setLoginAttempt] = useState<"customer" | "admin" | null>(null);
   const [showRegisterHighlight, setShowRegisterHighlight] = useState(false);
+  const [cityDropdownOpen, setCityDropdownOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
   const handlePhoneChange = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -462,32 +463,100 @@ export default function LoginV2Page() {
               City
             </label>
             {cityOptions.length > 1 ? (
-              <select
-                value={cityCode || cityOptions[0] || ""}
-                onChange={(e) => {
-                  const val = e.target.value as CityCode;
-                  setCityCode(val);
-                  setCity(getCityLabel(val));
-                }}
-                style={{
-                  width: "100%",
-                  height: 48,
-                  borderRadius: 12,
-                  border: "1.5px solid rgba(141,73,37,0.25)",
-                  padding: "0 14px",
-                  fontSize: 15,
-                  color: "#3A2618",
-                  background: "#fff",
-                  outline: "none",
-                  boxSizing: "border-box",
-                }}
-              >
-                {cityOptions.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {getCityLabel(opt)}
-                  </option>
-                ))}
-              </select>
+              <div style={{ position: "relative" }}>
+                <button
+                  type="button"
+                  onClick={() => setCityDropdownOpen((o) => !o)}
+                  style={{
+                    width: "100%",
+                    height: 48,
+                    borderRadius: 12,
+                    border: `1.5px solid ${cityDropdownOpen ? "#8D4925" : "rgba(141,73,37,0.25)"}`,
+                    padding: "0 40px 0 14px",
+                    fontSize: 15,
+                    color: "#3A2618",
+                    background: "#fff",
+                    outline: "none",
+                    boxSizing: "border-box",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    position: "relative",
+                    transition: "border-color 0.15s",
+                  }}
+                >
+                  {getCityLabel((cityCode || cityOptions[0] || "") as CityCode)}
+                  <ChevronDown
+                    size={16}
+                    color="#8D4925"
+                    style={{
+                      position: "absolute",
+                      right: 14,
+                      top: "50%",
+                      transform: `translateY(-50%) rotate(${cityDropdownOpen ? 180 : 0}deg)`,
+                      transition: "transform 0.2s",
+                      flexShrink: 0,
+                    }}
+                  />
+                </button>
+
+                {cityDropdownOpen && (
+                  <>
+                    <div
+                      style={{ position: "fixed", inset: 0, zIndex: 10 }}
+                      onClick={() => setCityDropdownOpen(false)}
+                    />
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "calc(100% + 4px)",
+                        left: 0,
+                        right: 0,
+                        background: "#fff",
+                        borderRadius: 12,
+                        border: "1.5px solid rgba(141,73,37,0.25)",
+                        overflow: "hidden",
+                        zIndex: 20,
+                        boxShadow: "0 8px 24px rgba(141,73,37,0.12)",
+                      }}
+                    >
+                      {cityOptions.map((opt) => (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => {
+                            setCityCode(opt);
+                            setCity(getCityLabel(opt));
+                            setCityDropdownOpen(false);
+                          }}
+                          style={{
+                            width: "100%",
+                            padding: "13px 14px",
+                            textAlign: "left",
+                            fontSize: 15,
+                            color: cityCode === opt ? "#8D4925" : "#3A2618",
+                            background: cityCode === opt ? "rgba(141,73,37,0.06)" : "transparent",
+                            border: "none",
+                            borderBottom: "1px solid rgba(141,73,37,0.08)",
+                            cursor: "pointer",
+                            fontWeight: cityCode === opt ? 600 : 400,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            boxSizing: "border-box",
+                          }}
+                        >
+                          <span style={{ width: 16, flexShrink: 0, color: "#8D4925" }}>
+                            {cityCode === opt ? "✓" : ""}
+                          </span>
+                          {getCityLabel(opt)}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             ) : (
               <input
                 type="text"

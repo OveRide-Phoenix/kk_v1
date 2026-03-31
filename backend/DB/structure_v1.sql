@@ -160,9 +160,11 @@ CREATE TABLE `addresses` (
   `address_type` varchar(50) DEFAULT NULL,
   `route_id` int DEFAULT NULL,
   `is_default` tinyint(1) NOT NULL DEFAULT '0',
+  `is_active` tinyint(1) NOT NULL DEFAULT '1' COMMENT 'FALSE = deprecated/soft-deleted; never hard-delete a row that has orders referencing it',
   PRIMARY KEY (`address_id`),
   KEY `customer_id` (`customer_id`),
   KEY `fk_addresses_route_id` (`route_id`),
+  KEY `idx_addresses_customer_active` (`customer_id`,`is_active`,`is_default`),
   CONSTRAINT `addresses_ibfk_1` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`customer_id`),
   CONSTRAINT `fk_addresses_route_id` FOREIGN KEY (`route_id`) REFERENCES `delivery_routes` (`route_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -389,6 +391,6 @@ CREATE TABLE `admin_logs` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- VIEW: customer_orders_view
-CREATE VIEW `customer_orders_view` AS select `c`.`customer_id` AS `customer_id`,`c`.`name` AS `customer_name`,`c`.`primary_mobile` AS `customer_phone`,`c`.`email` AS `customer_email`,`a`.`written_address` AS `address`,count(`o`.`order_id`) AS `no_of_orders` from ((`customers` `c` left join `addresses` `a` on(((`c`.`customer_id` = `a`.`customer_id`) and (`a`.`is_default` = true)))) left join `orders` `o` on((`c`.`customer_id` = `o`.`customer_id`))) group by `c`.`customer_id`,`c`.`name`,`c`.`primary_mobile`,`c`.`email`,`a`.`written_address`;
+CREATE VIEW `customer_orders_view` AS select `c`.`customer_id` AS `customer_id`,`c`.`name` AS `customer_name`,`c`.`primary_mobile` AS `customer_phone`,`c`.`email` AS `customer_email`,`a`.`written_address` AS `address`,count(`o`.`order_id`) AS `no_of_orders` from ((`customers` `c` left join `addresses` `a` on(((`c`.`customer_id` = `a`.`customer_id`) and (`a`.`is_default` = true) and (`a`.`is_active` = true)))) left join `orders` `o` on((`c`.`customer_id` = `o`.`customer_id`))) group by `c`.`customer_id`,`c`.`name`,`c`.`primary_mobile`,`c`.`email`,`a`.`written_address`;
 
 SET FOREIGN_KEY_CHECKS=1;

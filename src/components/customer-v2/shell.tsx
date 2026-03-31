@@ -34,6 +34,7 @@ export default function CustomerV2Shell({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const router = useRouter();
   const logout = useAuthStore((state) => state.logout);
+  const userName = useAuthStore((state) => (state.user as { name?: string } | null)?.name ?? "");
   const [cartCount, setCartCount] = useState(0);
   const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
   const [pendingDestination, setPendingDestination] = useState<string | null>(null);
@@ -238,12 +239,17 @@ export default function CustomerV2Shell({ children }: { children: React.ReactNod
                   </span>
                 </a>
                 <Link className="group flex items-center gap-2" href="/customer-v2/account">
-                  <div className="h-9 w-9 overflow-hidden rounded-full border-2 border-[#8D4925]/20 bg-orange-100 p-0.5">
-                    <img
-                      alt="User Profile"
-                      className="h-full w-full rounded-full object-cover"
-                      src="https://lh3.googleusercontent.com/aida-public/AB6AXuAoLZbX-XKgbESxdE3pDbYuatyFyTcmtUV3S_652YJvY3nb7-tg5aYqrtYBI54YguxqGJJ7JoR6S6QwNqGEOTrzPKrYmkRTY18fjM9o2ldrCX__h7OPCbM62C6l5gHRgVRNNzsBpRVSgTwLvf265AYvDmDLlJFgqlg20srdDTFORam8PkOzqk8X6B0BW_YW9DtCWbk0ExPGClctG-ULqvlGqy4rsQZUYDpwI9i4pQsfWlSwokrfq_acZjz9PgglFealBobkrrnxwFs3"
-                    />
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-[#8D4925]/20 bg-[#8D4925]/10">
+                    <span className="text-sm font-bold leading-none text-[#8D4925]">
+                      {userName
+                        ? userName
+                            .trim()
+                            .split(/\s+/)
+                            .slice(0, 2)
+                            .map((w) => w[0].toUpperCase())
+                            .join("")
+                        : "?"}
+                    </span>
                   </div>
                   <span
                     className={`text-sm font-bold transition-colors group-hover:text-[#8D4925] ${
@@ -252,13 +258,13 @@ export default function CustomerV2Shell({ children }: { children: React.ReactNod
                         : "text-gray-700"
                     }`}
                   >
-                    Profile
+                    {userName || "Profile"}
                   </span>
                 </Link>
                 <button
                   onClick={async () => {
                     await logout();
-                    router.replace("/login-v2");
+                    router.replace("/");
                   }}
                   className="inline-flex items-center justify-center text-gray-600 transition-colors hover:text-[#8D4925]"
                   aria-label="Logout"

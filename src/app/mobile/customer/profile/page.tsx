@@ -85,7 +85,7 @@ export default function MobileCustomerProfilePage() {
     if (typeof window === "undefined") return;
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
-    window.location.href = "/mobile/customer/login";
+    window.location.href = "/";
   };
 
   return (

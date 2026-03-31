@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
 
 import mysql.connector
@@ -613,13 +614,14 @@ def upsert_daily_menu(payload: DailyMenuPayload) -> Dict[str, Any]:
             seen_payload_keys.add(payload_key)
             if has_item:
                 cursor.execute(
-                    "SELECT category_id FROM items WHERE item_id = %s LIMIT 1",
+                    "SELECT category_id, component_type_id FROM items WHERE item_id = %s LIMIT 1",
                     (mi.item_id,),
                 )
                 row = cursor.fetchone()
                 if row is None:
                     raise HTTPException(status_code=400, detail=f"Unknown item_id: {mi.item_id}")
                 resolved_category_id = mi.category_id if mi.category_id is not None else row[0]
+                resolved_component_type_id = row[1]
             else:
                 cursor.execute(
                     "SELECT category_id FROM combos WHERE combo_id = %s LIMIT 1",
@@ -629,6 +631,7 @@ def upsert_daily_menu(payload: DailyMenuPayload) -> Dict[str, Any]:
                 if row is None:
                     raise HTTPException(status_code=400, detail=f"Unknown combo_id: {mi.combo_id}")
                 resolved_category_id = mi.category_id if mi.category_id is not None else row[0]
+                resolved_component_type_id = None
 
             # Look up active discount rule for this item+city+date (items only, not combos)
             resolved_discount_pct: Optional[float] = None
@@ -649,6 +652,7 @@ def upsert_daily_menu(payload: DailyMenuPayload) -> Dict[str, Any]:
                     "item_id": mi.item_id,
                     "combo_id": mi.combo_id,
                     "category_id": resolved_category_id,
+                    "component_type_id": resolved_component_type_id,
                     "max_qty": mi.max_qty if mi.max_qty is not None else None,
                     "available_qty": mi.available_qty if mi.available_qty is not None else None,
                     "rate": float(mi.rate),
@@ -658,6 +662,17 @@ def upsert_daily_menu(payload: DailyMenuPayload) -> Dict[str, Any]:
                     "key": payload_key,
                 }
             )
+
+        # Auto-default: for each component_type, if exactly one menu item has that type,
+        # force is_default=True. If more than one, leave is_default as explicitly set.
+        type_indices: Dict[int, List[int]] = defaultdict(list)
+        for i, entry in enumerate(normalized_menu_items):
+            ct_id = entry.get("component_type_id")
+            if ct_id is not None:
+                type_indices[ct_id].append(i)
+        for ct_id, indices in type_indices.items():
+            if len(indices) == 1:
+                normalized_menu_items[indices[0]]["is_default"] = True
 
         cursor.execute(
             """

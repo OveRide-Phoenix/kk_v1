@@ -74,21 +74,24 @@ export default function MobileCustomerLoginPage() {
       }
 
       const normalizedDefault = normalizeCityCode(data.city_code);
-      const eligible = Array.isArray(data.eligible_city_codes) && data.eligible_city_codes.length
-        ? data.eligible_city_codes
-        : [normalizedDefault];
+      const eligible =
+        Array.isArray(data.eligible_city_codes) && data.eligible_city_codes.length
+          ? data.eligible_city_codes
+          : [normalizedDefault];
 
       const normalizedEligible = Array.from(
         new Set(
           eligible
-            .filter((code: unknown): code is string => typeof code === "string" && code.trim().length > 0)
+            .filter(
+              (code: unknown): code is string => typeof code === "string" && code.trim().length > 0,
+            )
             .map((code: string) => normalizeCityCode(code)),
         ),
       );
 
       const preferredCity = normalizedEligible.includes(normalizedDefault)
         ? normalizedDefault
-        : normalizedEligible[0] ?? normalizedDefault;
+        : (normalizedEligible[0] ?? normalizedDefault);
 
       setCityOptions(normalizedEligible);
       setCityCode(preferredCity);
@@ -214,8 +217,13 @@ export default function MobileCustomerLoginPage() {
         | null;
 
       const rawRoles = (baseUser?.roles ?? []) as Array<number | string>;
-      const rawRoleCodes = (baseUser?.role_codes ?? data.role_codes ?? []) as Array<string | number>;
-      const rawRoleDetails = (baseUser?.role_details ?? data.role_details ?? []) as Array<{ role_id: number; code: string }>;
+      const rawRoleCodes = (baseUser?.role_codes ?? data.role_codes ?? []) as Array<
+        string | number
+      >;
+      const rawRoleDetails = (baseUser?.role_details ?? data.role_details ?? []) as Array<{
+        role_id: number;
+        code: string;
+      }>;
 
       const adminRoleIds = rawRoleDetails
         .filter((detail) => detail.code === "admin")
@@ -233,8 +241,12 @@ export default function MobileCustomerLoginPage() {
 
       const allRoleIds = normalizeIds(rawRoles);
       const allRoleCodes = normalizeCodes(rawRoleCodes);
-      const filteredRoleIds = isAdminAttempt ? allRoleIds : allRoleIds.filter((id) => !adminRoleIds.includes(id));
-      const filteredRoleCodes = isAdminAttempt ? allRoleCodes : allRoleCodes.filter((code) => code !== "admin");
+      const filteredRoleIds = isAdminAttempt
+        ? allRoleIds
+        : allRoleIds.filter((id) => !adminRoleIds.includes(id));
+      const filteredRoleCodes = isAdminAttempt
+        ? allRoleCodes
+        : allRoleCodes.filter((code) => code !== "admin");
 
       if (baseUser) {
         const adjustedUser = {
@@ -249,8 +261,12 @@ export default function MobileCustomerLoginPage() {
 
       if (isAdminAttempt) {
         const responseCityCode =
-          (resolvedUser && typeof resolvedUser.city_code === "string" ? resolvedUser.city_code : undefined) ||
-          (data?.user && typeof data.user.city_code === "string" ? data.user.city_code : undefined) ||
+          (resolvedUser && typeof resolvedUser.city_code === "string"
+            ? resolvedUser.city_code
+            : undefined) ||
+          (data?.user && typeof data.user.city_code === "string"
+            ? data.user.city_code
+            : undefined) ||
           (typeof data?.city_code === "string" ? data.city_code : undefined);
         const selectedCity = normalizeCityCode(cityCode || responseCityCode);
         setAdminCity(selectedCity);
@@ -262,7 +278,9 @@ export default function MobileCustomerLoginPage() {
       toast({
         variant: "destructive",
         title: "Login error",
-        description: !navigator.onLine ? "No internet connection." : "Something went wrong. Please try again.",
+        description: !navigator.onLine
+          ? "No internet connection."
+          : "Something went wrong. Please try again.",
       });
     } finally {
       setIsLoading(false);
@@ -273,20 +291,30 @@ export default function MobileCustomerLoginPage() {
   return (
     <main
       className={`${workSans.variable} ${playfairMobile.variable} min-h-dvh w-full overflow-y-auto [-webkit-overflow-scrolling:touch]`}
-      style={{ backgroundColor: mobilePalette.background, fontFamily: "var(--font-mobile-work-sans), sans-serif" }}
+      style={{
+        backgroundColor: mobilePalette.background,
+        fontFamily: "var(--font-mobile-work-sans), sans-serif",
+      }}
     >
       <div className="mx-auto flex min-h-dvh w-full max-w-[448px] flex-col px-6 pb-10 pt-12">
         <header className="flex flex-col items-center pb-6">
           <div className="rounded-full bg-[#8D4A25]/10 p-3">
             <ShieldCheck size={34} color="#8D4A25" />
           </div>
-          <h1 className="mt-2 text-4xl font-bold text-[#8D4A25]" style={{ fontFamily: "var(--font-mobile-playfair), serif" }}>Kuteera Kitchen</h1>
+          <h1
+            className="mt-2 text-4xl font-bold text-[#8D4A25]"
+            style={{ fontFamily: "var(--font-mobile-playfair), serif" }}
+          >
+            Kuteera Kitchen
+          </h1>
         </header>
 
         <section className="mb-8 flex flex-1 flex-col justify-center">
           <div className="mx-auto w-full max-w-[360px] space-y-3">
             <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.8px] text-[#8D4A25]">Phone Number</label>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.8px] text-[#8D4A25]">
+                Phone Number
+              </label>
               <input
                 type="tel"
                 placeholder="+91"
@@ -297,7 +325,9 @@ export default function MobileCustomerLoginPage() {
             </div>
 
             <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.8px] text-[#8D4A25]">City</label>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.8px] text-[#8D4A25]">
+                City
+              </label>
               {cityOptions.length > 1 ? (
                 <select
                   value={cityCode || cityOptions[0] || ""}
@@ -306,7 +336,7 @@ export default function MobileCustomerLoginPage() {
                     setCityCode(value);
                     setCity(getCityLabel(value));
                   }}
-                  className="h-12 w-full rounded-xl border border-[#8D4A25]/30 bg-white px-3 text-[#0F172A] outline-none"
+                  className="h-12 w-full rounded-xl border border-[#8D4A25]/30 bg-white px-3 text-[#3A2618] outline-none"
                 >
                   {cityOptions.map((option) => (
                     <option key={option} value={option}>
@@ -315,13 +345,21 @@ export default function MobileCustomerLoginPage() {
                   ))}
                 </select>
               ) : (
-                <input type="text" readOnly value={city} placeholder="Auto-filled after phone" className="h-12 w-full rounded-xl border border-[#8D4A25]/30 bg-white px-3 text-[#0F172A] outline-none" />
+                <input
+                  type="text"
+                  readOnly
+                  value={city}
+                  placeholder="Auto-filled after phone"
+                  className="h-12 w-full rounded-xl border border-[#8D4A25]/30 bg-[#f9f6ef] px-3 text-[#3A2618] outline-none"
+                />
               )}
             </div>
 
             {canLoginAsAdmin ? (
               <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.8px] text-[#8D4A25]">Admin Password</label>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.8px] text-[#8D4A25]">
+                  Admin Password
+                </label>
                 <div className="relative">
                   <input
                     type={showPassword ? "text" : "password"}
@@ -330,7 +368,11 @@ export default function MobileCustomerLoginPage() {
                     onChange={(e) => setAdminPassword(e.target.value)}
                     className="h-12 w-full rounded-xl border border-[#8D4A25]/30 bg-white px-3 pr-10 text-[#0F172A] outline-none"
                   />
-                  <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8D4A25]" onClick={() => setShowPassword((prev) => !prev)}>
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8D4A25]"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                  >
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
@@ -347,7 +389,9 @@ export default function MobileCustomerLoginPage() {
               Remember me
             </label>
 
-            <div className={`grid gap-2 ${canLoginAsAdmin ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"}`}>
+            <div
+              className={`grid gap-2 ${canLoginAsAdmin ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"}`}
+            >
               <button
                 type="button"
                 onClick={() => handleLogin("customer")}
@@ -389,10 +433,14 @@ export default function MobileCustomerLoginPage() {
             <div className="rounded-full bg-[#1B4332]/10 p-1.5">
               <ShieldCheck size={18} color="#1B4332" />
             </div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-[#1B4332]">FSSAI Certified & Hygienic</p>
+            <p className="text-sm font-semibold uppercase tracking-wide text-[#1B4332]">
+              FSSAI Certified & Hygienic
+            </p>
             <div className="h-2 w-2 rounded-full bg-[#1B4332]" />
           </div>
-          <p className="text-center text-xs text-[#94A3B8]">By continuing, you agree to our Terms & Privacy Policy</p>
+          <p className="text-center text-xs text-[#94A3B8]">
+            By continuing, you agree to our Terms & Privacy Policy
+          </p>
         </footer>
       </div>
     </main>
