@@ -105,7 +105,7 @@ def get_customer_by_id(db, customer_id):
         FROM customers c
         INNER JOIN addresses a ON c.customer_id = a.customer_id
         LEFT JOIN delivery_routes dr ON dr.route_id = a.route_id
-        WHERE c.customer_id = %s AND a.is_default = 1
+        WHERE c.customer_id = %s AND a.is_default = 1 AND a.is_active = 1
         """
         cursor.execute(query, (customer_id,))
         result = cursor.fetchone()
@@ -170,7 +170,7 @@ def get_all_customers(
                                ORDER BY addr.is_default DESC, addr.address_id DESC
                            ) AS rn
                       FROM addresses addr
-                     WHERE addr.city_code = %s
+                     WHERE addr.city_code = %s AND addr.is_active = 1
                 ) ranked_addr
                WHERE ranked_addr.rn = 1
             ) a ON c.customer_id = a.customer_id
@@ -211,7 +211,7 @@ def get_all_customers(
                 WHERE status IN ('Confirmed', 'Dispatched')
                 GROUP BY customer_id
             ) p ON p.customer_id = c.customer_id
-            WHERE a.is_default = 1
+            WHERE a.is_default = 1 AND a.is_active = 1
             """
             base_params = []
 
@@ -248,22 +248,14 @@ def get_all_customers(
 
 
 def update_customer(db, customer_id, customer_data):
-    # THIS IS NOT WORKING, PLEASE FIX ME
     try:
         cursor = db.cursor()
 
-        cursor.execute(
-            "SELECT address_id FROM addresses WHERE customer_id=%s AND is_default=TRUE LIMIT 1",
-            (customer_id,),
-        )
-        if cursor.fetchone() is None:
-            raise HTTPException(status_code=404, detail="Customer or default address not found")
-
         # Update customer information
         customer_query = """
-        UPDATE customers 
-        SET referred_by=%s, primary_mobile=%s, alternative_mobile=%s, name=%s, recipient_name=%s, 
-            payment_frequency=%s, email=%s 
+        UPDATE customers
+        SET referred_by=%s, primary_mobile=%s, alternative_mobile=%s, name=%s, recipient_name=%s,
+            payment_frequency=%s, email=%s
         WHERE customer_id=%s
         """
         customer_values = (
@@ -276,31 +268,64 @@ def update_customer(db, customer_id, customer_data):
             customer_data.email,
             customer_id,
         )
-
         cursor.execute(customer_query, customer_values)
 
-        # Update address information
-        address_query = """
-        UPDATE addresses 
-        SET house_apartment_no=%s, written_address=%s, city=%s, pin_code=%s,
-            latitude=%s, longitude=%s, address_type=%s, route_id=%s
-        WHERE customer_id=%s AND is_default=TRUE
-        """
-        address_values = (
+        # Check whether the incoming address actually differs from the current active default.
+        cursor.execute(
+            """
+            SELECT address_id, house_apartment_no, written_address, city, pin_code,
+                   latitude, longitude, address_type, route_id
+            FROM addresses
+            WHERE customer_id=%s AND is_default=TRUE AND is_active=TRUE
+            LIMIT 1
+            """,
+            (customer_id,),
+        )
+        current = cursor.fetchone()
+
+        new_vals = (
             customer_data.house_apartment_no,
             customer_data.written_address,
             customer_data.city,
             customer_data.pin_code,
-            customer_data.latitude,
-            customer_data.longitude,
+            float(customer_data.latitude),
+            float(customer_data.longitude),
             customer_data.address_type,
             customer_data.route_id,
-            customer_id,
         )
 
-        cursor.execute(address_query, address_values)
-        db.commit()
+        if current is not None:
+            cur_vals = (
+                current[1],  # house_apartment_no
+                current[2],  # written_address
+                current[3],  # city
+                current[4],  # pin_code
+                float(current[5]),  # latitude
+                float(current[6]),  # longitude
+                current[7],  # address_type
+                current[8],  # route_id
+            )
+            address_changed = cur_vals != new_vals
+        else:
+            address_changed = True
 
+        if address_changed:
+            # Soft-deprecate all existing active addresses for this customer
+            cursor.execute(
+                "UPDATE addresses SET is_active=FALSE, is_default=FALSE WHERE customer_id=%s AND is_active=TRUE",
+                (customer_id,),
+            )
+            # Insert the new address as the active default
+            cursor.execute(
+                """
+                INSERT INTO addresses (customer_id, house_apartment_no, written_address, city, pin_code,
+                                       latitude, longitude, address_type, route_id, is_default, is_active)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, TRUE)
+                """,
+                (customer_id,) + new_vals,
+            )
+
+        db.commit()
         return {"message": "Customer and address updated successfully"}
 
     except mysql.connector.Error as err:
@@ -314,8 +339,11 @@ def delete_customer(db, customer_id):
     try:
         cursor = db.cursor()
 
-        # First delete all addresses for this customer
-        cursor.execute("DELETE FROM addresses WHERE customer_id = %s", (customer_id,))
+        # Soft-delete all active addresses so order history is preserved
+        cursor.execute(
+            "UPDATE addresses SET is_active=FALSE, is_default=FALSE WHERE customer_id=%s AND is_active=TRUE",
+            (customer_id,),
+        )
 
         # Then delete the customer
         cursor.execute("DELETE FROM customers WHERE customer_id = %s", (customer_id,))

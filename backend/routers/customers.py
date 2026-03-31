@@ -101,7 +101,7 @@ def _resolve_coordinates(
         """
         SELECT latitude, longitude
           FROM addresses
-         WHERE customer_id=%s AND is_default=1
+         WHERE customer_id=%s AND is_default=1 AND is_active=1
          LIMIT 1
         """,
         (customer_id,),
@@ -264,7 +264,7 @@ def get_customer_addresses(customer_id: int):
                 dr.route_name
             FROM addresses a
             LEFT JOIN delivery_routes dr ON dr.route_id = a.route_id
-            WHERE a.customer_id = %s
+            WHERE a.customer_id = %s AND a.is_active = 1
             ORDER BY a.is_default DESC, a.address_id ASC
             """,
             (customer_id,),
@@ -321,7 +321,10 @@ def create_customer_address(customer_id: int, payload: AddressPayload):
         lat, lng = _resolve_coordinates(cursor, customer_id, payload.latitude, payload.longitude)
 
         if payload.is_default:
-            cursor.execute("UPDATE addresses SET is_default=0 WHERE customer_id=%s", (customer_id,))
+            cursor.execute(
+                "UPDATE addresses SET is_default=0 WHERE customer_id=%s AND is_active=1",
+                (customer_id,),
+            )
 
         cursor.execute(
             """
@@ -381,7 +384,7 @@ def update_customer_address(customer_id: int, address_id: int, payload: AddressP
     cursor = db.cursor(dictionary=True)
     try:
         cursor.execute(
-            "SELECT latitude, longitude FROM addresses WHERE address_id=%s AND customer_id=%s LIMIT 1",
+            "SELECT latitude, longitude, route_id FROM addresses WHERE address_id=%s AND customer_id=%s AND is_active=1 LIMIT 1",
             (address_id, customer_id),
         )
         existing = cursor.fetchone()
@@ -396,28 +399,31 @@ def update_customer_address(customer_id: int, address_id: int, payload: AddressP
         )
         lat, lng = _resolve_coordinates(cursor, customer_id, lat_input, lng_input)
 
+        # Soft-deprecate the old address row so order history remains intact
+        cursor.execute(
+            "UPDATE addresses SET is_active=0, is_default=0 WHERE address_id=%s AND customer_id=%s",
+            (address_id, customer_id),
+        )
+
+        # Clear is_default on other active addresses if the new one will be the default
         if payload.is_default:
             cursor.execute(
-                "UPDATE addresses SET is_default=0 WHERE customer_id=%s AND address_id<>%s",
-                (customer_id, address_id),
+                "UPDATE addresses SET is_default=0 WHERE customer_id=%s AND is_active=1",
+                (customer_id,),
             )
+
+        # Preserve route_id from old row if not supplied in payload
+        route_id = payload.route_id if payload.route_id is not None else existing.get("route_id")
 
         cursor.execute(
             """
-            UPDATE addresses
-               SET house_apartment_no=%s,
-                   written_address=%s,
-                   city=%s,
-                   city_code=%s,
-                   pin_code=%s,
-                   latitude=%s,
-                   longitude=%s,
-                   address_type=%s,
-                   route_id=%s,
-                   is_default=%s
-             WHERE address_id=%s AND customer_id=%s
+            INSERT INTO addresses (
+                customer_id, house_apartment_no, written_address, city, city_code,
+                pin_code, latitude, longitude, address_type, route_id, is_default, is_active
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1)
             """,
             (
+                customer_id,
                 payload.house_apartment_no,
                 payload.written_address.strip(),
                 city_label,
@@ -426,17 +432,13 @@ def update_customer_address(customer_id: int, address_id: int, payload: AddressP
                 lat,
                 lng,
                 payload.address_type.strip() if payload.address_type else "Address",
-                payload.route_id,
+                route_id,
                 1 if payload.is_default else 0,
-                address_id,
-                customer_id,
             ),
         )
-        if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Address not found")
-
+        new_address_id = cursor.lastrowid
         db.commit()
-        return {"message": "Address updated successfully"}
+        return {"address_id": new_address_id, "message": "Address updated successfully"}
     except mysql.connector.Error as err:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(err)}")
@@ -467,7 +469,7 @@ def assign_address_route(
     cursor = db.cursor()
     try:
         cursor.execute(
-            "SELECT address_id FROM addresses WHERE address_id=%s AND customer_id=%s LIMIT 1",
+            "SELECT address_id FROM addresses WHERE address_id=%s AND customer_id=%s AND is_active=1 LIMIT 1",
             (address_id, customer_id),
         )
         if cursor.fetchone() is None:
@@ -501,15 +503,18 @@ def set_default_customer_address(customer_id: int, address_id: int):
     cursor = db.cursor()
     try:
         cursor.execute(
-            "SELECT address_id FROM addresses WHERE address_id=%s AND customer_id=%s LIMIT 1",
+            "SELECT address_id FROM addresses WHERE address_id=%s AND customer_id=%s AND is_active=1 LIMIT 1",
             (address_id, customer_id),
         )
         if cursor.fetchone() is None:
             raise HTTPException(status_code=404, detail="Address not found")
 
-        cursor.execute("UPDATE addresses SET is_default=0 WHERE customer_id=%s", (customer_id,))
         cursor.execute(
-            "UPDATE addresses SET is_default=1 WHERE address_id=%s AND customer_id=%s",
+            "UPDATE addresses SET is_default=0 WHERE customer_id=%s AND is_active=1",
+            (customer_id,),
+        )
+        cursor.execute(
+            "UPDATE addresses SET is_default=1 WHERE address_id=%s AND customer_id=%s AND is_active=1",
             (address_id, customer_id),
         )
         db.commit()

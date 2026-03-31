@@ -1,13 +1,14 @@
 "use client";
 
 import { format as formatDate } from "date-fns";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useHydrateAuthUser } from "@/hooks/useHydrateAuthUser";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/store/store";
 import { http } from "@/lib/http";
+import { getDeliveryText } from "@/config/delivery-times";
 
 type MealType = "breakfast" | "lunch" | "dinner" | "condiments";
 
@@ -65,13 +66,6 @@ const MEAL_LABELS: Record<MealType, string> = {
   condiments: "Condiments",
 };
 
-const MEAL_META: Record<MealType, { calories: string; tag: string; rating: string }> = {
-  breakfast: { calories: "320 kcal", tag: "High Protein", rating: "4.9" },
-  lunch: { calories: "280 kcal", tag: "Light", rating: "4.7" },
-  dinner: { calories: "350 kcal", tag: "Filling", rating: "4.8" },
-  condiments: { calories: "120 kcal", tag: "Side", rating: "4.6" },
-};
-
 const PLACEHOLDER_IMAGE = "/images/menu/idli-sambar.jpg";
 const CART_STORAGE_KEY = "customer_cart_items";
 const CART_CONTEXT_KEY = "customer_cart_context";
@@ -103,6 +97,7 @@ const createMenuItemMap = (menuByMeal: Record<MealType, MenuItem[]>): Record<num
 
 export default function CustomerV2OrderPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const user = useAuthStore((state) => state.user);
 
   const [hydrated, setHydrated] = useState(false);
@@ -120,7 +115,11 @@ export default function CustomerV2OrderPage() {
     dinner: null,
     condiments: null,
   });
-  const [activeMeal, setActiveMeal] = useState<MealType>("breakfast");
+  const mealParam = searchParams.get("meal") as MealType | null;
+  const validMeals: MealType[] = ["breakfast", "lunch", "dinner", "condiments"];
+  const [activeMeal, setActiveMeal] = useState<MealType>(
+    mealParam && validMeals.includes(mealParam) ? mealParam : "breakfast",
+  );
   const [menuView, setMenuView] = useState<"grid" | "list">("grid");
   const [quantities, setQuantities] = useState<Record<number, number>>({});
   const [cartRestored, setCartRestored] = useState(false);
@@ -206,9 +205,11 @@ export default function CustomerV2OrderPage() {
           condiments: nextDeliversBy.condiments ?? null,
         });
 
-        const firstNonEmpty = MEAL_ORDER.find((meal) => normalizedMenu[meal].length > 0);
-        if (firstNonEmpty) {
-          setActiveMeal(firstNonEmpty);
+        if (!mealParam || !validMeals.includes(mealParam)) {
+          const firstNonEmpty = MEAL_ORDER.find((meal) => normalizedMenu[meal].length > 0);
+          if (firstNonEmpty) {
+            setActiveMeal(firstNonEmpty);
+          }
         }
       } catch {
         if (cancelled) return;
@@ -254,12 +255,10 @@ export default function CustomerV2OrderPage() {
   };
 
   const activeMealItems = menuByMeal[activeMeal] ?? [];
-  const activeMealDeliveryText = useMemo(() => {
-    const deliveredBy = deliversByMeal[activeMeal];
-    if (deliveredBy) return `Delivers by ${deliveredBy}`;
-    if (activeMeal === "condiments") return "Delivery time varies";
-    return "Delivers by schedule";
-  }, [activeMeal, deliversByMeal]);
+  const activeMealDeliveryText = useMemo(
+    () => getDeliveryText(activeMeal, deliversByMeal[activeMeal]),
+    [activeMeal, deliversByMeal],
+  );
 
   const cartSelection = useMemo<CartLine[]>(() => {
     const lines: CartLine[] = [];
@@ -478,7 +477,6 @@ export default function CustomerV2OrderPage() {
           {activeMealItems.map((item) => {
             const qty = quantities[item.menu_item_id] ?? 0;
             const soldOut = item.available_qty <= 0;
-            const meta = MEAL_META[item.meal];
             return (
               <div
                 key={item.menu_item_id}
@@ -492,35 +490,17 @@ export default function CustomerV2OrderPage() {
                   />
                 </div>
                 <div className="p-4">
-                  <div className="mb-2 flex items-start justify-between gap-2">
+                  <div className="mb-2">
                     <h3
-                      className="text-base font-bold transition-colors group-hover:text-[#8D4925]"
+                      className="text-base font-bold text-gray-900 transition-colors group-hover:text-[#8D4925]"
                       style={{ fontFamily: "var(--font-v2-playfair)" }}
                     >
                       {item.item_name}
                     </h3>
-                    <div className="flex items-center gap-1 text-orange-400">
-                      <span className="material-symbols-outlined text-sm">star</span>
-                      <span className="text-xs font-bold text-gray-600">{meta.rating}</span>
-                    </div>
                   </div>
                   <p className="mb-3 line-clamp-2 text-xs text-gray-500">
                     {item.description || "Freshly prepared kitchen special."}
                   </p>
-                  <div className="mb-4 flex items-center gap-3">
-                    <div className="flex items-center gap-1.5">
-                      <span className="material-symbols-outlined text-sm text-[#8D4925]">
-                        local_fire_department
-                      </span>
-                      <span className="text-xs font-medium text-gray-600">{meta.calories}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="material-symbols-outlined text-sm text-[#8D4925]">
-                        fiber_manual_record
-                      </span>
-                      <span className="text-xs font-medium text-gray-600">{meta.tag}</span>
-                    </div>
-                  </div>
                   <div className="flex items-center justify-between border-t border-orange-50 pt-3">
                     <span className="flex flex-col">
                       {item.discount_pct ? (
@@ -587,7 +567,6 @@ export default function CustomerV2OrderPage() {
           {activeMealItems.map((item) => {
             const qty = quantities[item.menu_item_id] ?? 0;
             const soldOut = item.available_qty <= 0;
-            const meta = MEAL_META[item.meal];
             return (
               <div
                 key={item.menu_item_id}
@@ -600,40 +579,15 @@ export default function CustomerV2OrderPage() {
                 />
                 <div className="flex flex-1 flex-col justify-between gap-3">
                   <div>
-                    <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-baseline justify-between gap-2">
                       <h3
-                        className="text-lg font-bold text-[#8D4925]"
+                        className="text-lg font-bold text-gray-900"
                         style={{ fontFamily: "var(--font-v2-playfair)" }}
                       >
                         {item.item_name}
                       </h3>
-                      <div className="flex items-center gap-1 text-orange-400">
-                        <span className="material-symbols-outlined text-sm">star</span>
-                        <span className="text-xs font-bold text-gray-600">{meta.rating}</span>
-                      </div>
-                    </div>
-                    <p className="line-clamp-2 text-sm text-gray-500">
-                      {item.description || "Freshly prepared kitchen special."}
-                    </p>
-                    <div className="mt-2 flex items-center gap-4">
-                      <div className="flex items-center gap-1.5">
-                        <span className="material-symbols-outlined text-sm text-[#8D4925]">
-                          local_fire_department
-                        </span>
-                        <span className="text-xs font-medium text-gray-600">{meta.calories}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="material-symbols-outlined text-sm text-[#8D4925]">
-                          fiber_manual_record
-                        </span>
-                        <span className="text-xs font-medium text-gray-600">{meta.tag}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between border-t border-orange-50 pt-3">
-                    <span className="flex flex-col">
                       {item.discount_pct ? (
-                        <>
+                        <span className="flex shrink-0 items-baseline gap-1.5">
                           <span className="text-xs line-through text-gray-400">
                             {currency(item.rate)}
                           </span>
@@ -643,14 +597,19 @@ export default function CustomerV2OrderPage() {
                           <span className="text-xs font-semibold text-green-600">
                             {item.discount_pct}% off
                           </span>
-                        </>
+                        </span>
                       ) : (
-                        <span className="whitespace-nowrap text-lg font-bold text-[#8D4925]">
+                        <span className="shrink-0 whitespace-nowrap text-lg font-bold text-[#8D4925]">
                           {currency(item.rate)}
                         </span>
                       )}
-                    </span>
-                    <div className="ml-auto">
+                    </div>
+                    <p className="line-clamp-2 text-sm text-gray-500">
+                      {item.description || "Freshly prepared kitchen special."}
+                    </p>
+                  </div>
+                  <div className="flex justify-end border-t border-orange-50 pt-3">
+                    <div>
                       {soldOut ? (
                         <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-600">
                           Sold out

@@ -427,7 +427,7 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
         description: "You can return to the admin panel from the customer navigation.",
       });
 
-      router.push("/customer/home");
+      router.push("/customer-v2/home");
     } catch (error) {
       if (typeof window !== "undefined") {
         try {

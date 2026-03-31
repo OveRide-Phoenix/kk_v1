@@ -9,13 +9,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { OrderStatusPill } from "@/components/order-status-pill";
 import { useAuthStore } from "@/store/store";
 import { http } from "@/lib/http";
+import { getCurrentMeal } from "@/lib/meal-time";
+import type { MealType } from "@/config/meal-types";
+import { getDeliveryText } from "@/config/delivery-times";
 
 const normalizeType = (value: string | null | undefined): "subscription" | "one_time" => {
   const normalized = (value ?? "one_time").toLowerCase().replace("-", "_");
   return normalized === "subscription" ? "subscription" : "one_time";
 };
-
-type MealType = "breakfast" | "lunch" | "dinner" | "condiments";
 
 type MenuApiItem = {
   menu_item_id?: number;
@@ -310,41 +311,21 @@ export default function CustomerHomeV2Page() {
     }).length;
   }, [orders]);
 
-  const todayMenuItems = useMemo(() => {
-    const pools: Record<Exclude<MealType, "condiments">, MenuItem[]> = {
-      breakfast: [...menuByMeal.breakfast],
-      lunch: [...menuByMeal.lunch],
-      dinner: [...menuByMeal.dinner],
-    };
-    const sequence: Exclude<MealType, "condiments">[] = ["breakfast", "lunch", "dinner"];
-    const picked: MenuItem[] = [];
-
-    while (picked.length < 6) {
-      let progressed = false;
-      for (const meal of sequence) {
-        const nextItem = pools[meal].shift();
-        if (!nextItem) continue;
-        picked.push(nextItem);
-        progressed = true;
-        if (picked.length >= 6) break;
-      }
-      if (!progressed) break;
-    }
-
-    return picked;
-  }, [menuByMeal]);
+  const currentMeal = useMemo(() => getCurrentMeal(), []);
+  const todayMenuItems = useMemo(
+    () => menuByMeal[currentMeal].slice(0, 8),
+    [menuByMeal, currentMeal],
+  );
 
   const condimentItems = useMemo(() => menuByMeal.condiments.slice(0, 4), [menuByMeal.condiments]);
-  const mealDeliverySummary = useMemo(() => {
-    const segments = MEAL_ORDER.filter((meal) => meal !== "condiments")
-      .map((meal) => {
-        const deliveredBy = deliversByMeal[meal];
-        if (!deliveredBy) return null;
-        return `${MEAL_LABELS[meal]} by ${deliveredBy}`;
-      })
-      .filter((segment): segment is string => Boolean(segment));
-    return segments.join(" • ");
-  }, [deliversByMeal]);
+  const mealDeliveryText = useMemo(
+    () => getDeliveryText(currentMeal, deliversByMeal[currentMeal]),
+    [currentMeal, deliversByMeal],
+  );
+  const mealSectionTitle = useMemo(
+    () => `Today's ${MEAL_LABELS[currentMeal] ?? "Menu"} Menu`,
+    [currentMeal],
+  );
   const showTopBookingCard = ordersLoading || Boolean(todaysBooking);
   const showTopSubscriptionCard = Boolean(currentSubscription);
   const showAnyTopHeroCard = showTopBookingCard || showTopSubscriptionCard;
@@ -551,12 +532,12 @@ export default function CustomerHomeV2Page() {
                 className="text-3xl font-bold text-[#8D4925]"
                 style={{ fontFamily: "var(--font-v2-playfair)" }}
               >
-                Today&apos;s Menu
+                {mealSectionTitle}
               </h2>
-              <p className="text-gray-500">{mealDeliverySummary || "Timings unavailable"}</p>
+              <p className="mt-1.5 text-gray-500">{mealDeliveryText || "Timings unavailable"}</p>
             </div>
             <button
-              onClick={() => router.push("/customer-v2/new-order")}
+              onClick={() => router.push(`/customer-v2/new-order?meal=${currentMeal}`)}
               className="group flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-[#1b4332] transition-colors hover:text-[#0d3327]"
             >
               View Today&apos;s Menu{" "}
@@ -604,20 +585,8 @@ export default function CustomerHomeV2Page() {
                       className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                       src={item.picture_url || PLACEHOLDER_IMAGE}
                     />
-                    <div className="absolute right-4 top-4 flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1 shadow-sm backdrop-blur-sm">
-                      <span className="material-symbols-outlined text-sm text-orange-500">
-                        bolt
-                      </span>
-                      <span className="text-xs font-bold text-gray-700">{currency(item.rate)}</span>
-                    </div>
                   </div>
                   <div className="p-4">
-                    <div className="mb-2 flex items-center gap-2">
-                      <span className="material-symbols-outlined text-sm text-[#1b4332]">eco</span>
-                      <span className="text-xs font-bold uppercase tracking-widest text-[#1b4332]">
-                        {MEAL_LABELS[item.meal]}
-                      </span>
-                    </div>
                     <h3
                       className="mb-1 text-base font-bold text-gray-800"
                       style={{ fontFamily: "var(--font-v2-playfair)" }}
@@ -635,24 +604,35 @@ export default function CustomerHomeV2Page() {
         </section>
 
         <section className="mb-12">
-          <h2
-            className="mb-6 text-3xl font-bold text-[#8D4925]"
-            style={{ fontFamily: "var(--font-v2-playfair)" }}
-          >
-            Condiments
-          </h2>
+          <div className="mb-6 flex items-center justify-between">
+            <h2
+              className="text-3xl font-bold text-[#8D4925]"
+              style={{ fontFamily: "var(--font-v2-playfair)" }}
+            >
+              Condiments
+            </h2>
+            <button
+              onClick={() => router.push("/customer-v2/new-order?meal=condiments")}
+              className="group flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-[#1b4332] transition-colors hover:text-[#0d3327]"
+            >
+              View All{" "}
+              <span className="material-symbols-outlined text-lg transition-transform duration-200 group-hover:translate-x-0.5">
+                arrow_forward
+              </span>
+            </button>
+          </div>
           {menuLoading ? (
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
               {Array.from({ length: 4 }).map((_, index) => (
                 <div
                   key={`condiment-skeleton-${index}`}
-                  className="rounded-2xl border border-orange-50 bg-white p-6 shadow-sm"
+                  className="overflow-hidden rounded-2xl border border-orange-50 bg-white shadow-sm"
                 >
-                  <Skeleton className="mb-4 h-4 w-20" />
-                  <Skeleton className="mb-4 h-32 w-full rounded-xl" />
-                  <Skeleton className="h-5 w-3/4" />
-                  <Skeleton className="mt-2 h-4 w-1/3" />
-                  <Skeleton className="mt-5 h-10 w-full rounded-xl" />
+                  <Skeleton className="h-44 w-full rounded-none" />
+                  <div className="space-y-3 p-4">
+                    <Skeleton className="h-5 w-3/4" />
+                    <Skeleton className="h-4 w-full" />
+                  </div>
                 </div>
               ))}
             </div>
@@ -665,21 +645,25 @@ export default function CustomerHomeV2Page() {
               {condimentItems.map((item) => (
                 <div
                   key={`condiment-${item.menu_item_id}`}
-                  className="group relative rounded-2xl border border-orange-50 bg-white p-6 shadow-sm"
+                  className="group overflow-hidden rounded-2xl border border-orange-50 bg-white shadow-sm transition-shadow hover:shadow-md"
                 >
-                  <span className="absolute left-4 top-4 rounded bg-[#1b4332] px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-white">
-                    Condiment
-                  </span>
-                  <div className="mb-4 mt-4 flex h-32 items-center justify-center overflow-hidden rounded-xl bg-orange-50/40">
+                  <div className="relative h-44 overflow-hidden">
                     <img
                       alt={item.item_name}
-                      className="h-full w-full object-cover"
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                       src={item.picture_url || PLACEHOLDER_IMAGE}
                     />
                   </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-gray-800">{item.item_name}</h4>
-                    <p className="mt-1 text-sm font-bold text-[#8D4925]">{currency(item.rate)}</p>
+                  <div className="p-4">
+                    <h3
+                      className="mb-1 text-base font-bold text-gray-800"
+                      style={{ fontFamily: "var(--font-v2-playfair)" }}
+                    >
+                      {item.item_name}
+                    </h3>
+                    <p className="line-clamp-2 text-xs text-gray-500">
+                      {item.description || "A perfect accompaniment to your meal."}
+                    </p>
                   </div>
                 </div>
               ))}

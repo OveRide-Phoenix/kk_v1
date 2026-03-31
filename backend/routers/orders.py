@@ -321,12 +321,12 @@ def create_order(payload: CreateOrderPayload) -> Dict[str, Any]:
     try:
         address_id = payload.address_id if payload.address_id is not None else 0
         cursor.execute(
-            "SELECT address_id FROM addresses WHERE address_id=%s AND customer_id=%s LIMIT 1",
+            "SELECT address_id FROM addresses WHERE address_id=%s AND customer_id=%s AND is_active=1 LIMIT 1",
             (address_id, payload.customer_id),
         )
         if cursor.fetchone() is None:
             cursor.execute(
-                "SELECT address_id FROM addresses WHERE customer_id=%s AND is_default=1 LIMIT 1",
+                "SELECT address_id FROM addresses WHERE customer_id=%s AND is_default=1 AND is_active=1 LIMIT 1",
                 (payload.customer_id,),
             )
             fallback = cursor.fetchone()

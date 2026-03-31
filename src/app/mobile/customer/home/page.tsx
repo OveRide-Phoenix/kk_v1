@@ -6,8 +6,6 @@ import {
   ArrowRight,
   Bell,
   CalendarDays,
-  ChevronDown,
-  ChevronUp,
   LayoutGrid,
   List,
   Loader2,
@@ -22,6 +20,7 @@ import { MobileCustomerBottomNav } from "@/components/mobile/customer/bottom-nav
 import { LeaveCartDialog } from "@/components/mobile/customer/leave-cart-dialog";
 import { mobilePalette, outfit, playfairMobile } from "@/components/mobile/customer/theme";
 import { getSupportedMeals } from "@/config/cities";
+import { getCurrentMeal } from "@/lib/meal-time";
 import { useHydrateAuthUser } from "@/hooks/useHydrateAuthUser";
 import { useAuthStore } from "@/store/store";
 import { http } from "@/lib/http";
@@ -137,12 +136,6 @@ export default function MobileCustomerHomePage() {
   const [ordersError, setOrdersError] = useState<string | null>(null);
   const [quantities, setQuantities] = useState<Record<number, number>>({});
   const [cartInitialized, setCartInitialized] = useState(false);
-  const [collapsedMeals, setCollapsedMeals] = useState<Record<MealType, boolean>>({
-    breakfast: false,
-    lunch: true,
-    dinner: true,
-    condiments: true,
-  });
   const [menuView, setMenuView] = useState<"grid" | "list">("grid");
   const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
   const [pendingLeavePath, setPendingLeavePath] = useState<string | null>(null);
@@ -397,10 +390,6 @@ export default function MobileCustomerHomePage() {
     setQuantityForItem(menuItem, current - 1);
   };
 
-  const toggleMeal = (meal: MealType) => {
-    setCollapsedMeals((prev) => ({ ...prev, [meal]: !prev[meal] }));
-  };
-
   const requestLeave = (targetPath: string) => {
     if (targetPath === "/mobile/customer/cart") return true;
     if (targetPath === "/mobile/customer/home") return true;
@@ -494,6 +483,10 @@ export default function MobileCustomerHomePage() {
     });
     return subscriptions[0];
   }, [orders]);
+
+  const currentMeal = useMemo(() => getCurrentMeal(), []);
+  const currentMealLabel = MEAL_LABELS[currentMeal];
+  const currentMealItems = menuByMeal[currentMeal];
 
   const showTodaysBookingCard = ordersLoading || Boolean(ordersError) || todaysBookings.length > 0;
   const showSubscriptionCardAboveMenu =
@@ -650,12 +643,14 @@ export default function MobileCustomerHomePage() {
 
         <section className="px-6 pb-4">
           <div className="flex items-center justify-between gap-3">
-            <h3
-              className="text-xl font-bold text-[#8D4925]"
-              style={{ fontFamily: "var(--font-mobile-playfair), serif" }}
-            >
-              Today&apos;s Menu
-            </h3>
+            <div>
+              <h3
+                className="text-xl font-bold text-[#8D4925]"
+                style={{ fontFamily: "var(--font-mobile-playfair), serif" }}
+              >
+                Today&apos;s {currentMealLabel} Menu
+              </h3>
+            </div>
             <div className="inline-flex items-center gap-1 rounded-xl border border-[#8D4925]/15 bg-white p-1">
               <button
                 type="button"
@@ -675,147 +670,129 @@ export default function MobileCustomerHomePage() {
               </button>
             </div>
           </div>
-          <p className="text-[11px] text-[rgba(141,73,37,0.6)]">
-            Breakfast, Lunch, Dinner, and Condiments
-          </p>
         </section>
 
-        {MEAL_ORDER.map((meal) => (
-          <section key={meal} className="px-6 pb-5">
-            <button
-              type="button"
-              className="mb-3 flex w-full items-center justify-between text-left"
-              onClick={() => toggleMeal(meal)}
-            >
-              <h4 className="text-base font-bold text-[#8D4925]">{MEAL_LABELS[meal]}</h4>
-              {collapsedMeals[meal] ? (
-                <ChevronDown size={18} color="#8D4925" />
-              ) : (
-                <ChevronUp size={18} color="#8D4925" />
-              )}
-            </button>
-
-            {menuLoading ? (
-              <div className="grid grid-cols-2 gap-4">
-                <div className="h-36 animate-pulse rounded-2xl bg-white/70" />
-                <div className="h-36 animate-pulse rounded-2xl bg-white/70" />
-              </div>
-            ) : menuError ? (
-              <p className="text-sm text-red-600">{menuError}</p>
-            ) : collapsedMeals[meal] ? null : menuByMeal[meal].length === 0 ? (
-              <p className="rounded-xl border border-[rgba(141,73,37,0.08)] bg-white px-4 py-3 text-sm text-[#475569]">
-                No items available right now.
-              </p>
-            ) : menuView === "list" ? (
-              <div className="space-y-3">
-                {menuByMeal[meal].map((item) => (
+        <section className="px-6 pb-5">
+          {menuLoading ? (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="h-36 animate-pulse rounded-2xl bg-white/70" />
+              <div className="h-36 animate-pulse rounded-2xl bg-white/70" />
+              <div className="h-36 animate-pulse rounded-2xl bg-white/70" />
+              <div className="h-36 animate-pulse rounded-2xl bg-white/70" />
+            </div>
+          ) : menuError ? (
+            <p className="text-sm text-red-600">{menuError}</p>
+          ) : currentMealItems.length === 0 ? (
+            <p className="rounded-xl border border-[rgba(141,73,37,0.08)] bg-white px-4 py-3 text-sm text-[#475569]">
+              No items available right now.
+            </p>
+          ) : menuView === "list" ? (
+            <div className="space-y-3">
+              {currentMealItems.map((item) => {
+                const qty = Math.max(0, Number(quantities[item.menu_item_id] ?? 0));
+                return (
                   <article
-                    key={`${meal}-${item.menu_item_id}`}
+                    key={`${currentMeal}-${item.menu_item_id}`}
                     className="rounded-xl border border-[rgba(141,73,37,0.08)] bg-white px-3 py-3 shadow-[0px_4px_12px_-1px_rgba(141,73,37,0.08)]"
                   >
-                    {(() => {
-                      const qty = Math.max(0, Number(quantities[item.menu_item_id] ?? 0));
-                      return (
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="min-w-0 pr-2">
-                            <h5 className="truncate text-[13px] font-bold text-[#8D4925]">
-                              {item.item_name}
-                            </h5>
-                            <p className="text-sm font-bold text-[#1B4332]">
-                              ₹{Math.round(item.rate || 0)}
-                            </p>
-                          </div>
-                          {qty > 0 ? (
-                            <div className="flex items-center gap-1 rounded-lg bg-[#8D4925] px-1 py-1 text-[#FDFAF1]">
-                              <button
-                                type="button"
-                                className="flex h-6 w-6 items-center justify-center rounded-md bg-white/15 disabled:opacity-40"
-                                onClick={() => decrementItem(item)}
-                                disabled={qty <= 0}
-                              >
-                                <Minus size={13} />
-                              </button>
-                              <span className="min-w-6 text-center text-xs font-bold">{qty}</span>
-                              <button
-                                type="button"
-                                className="flex h-6 w-6 items-center justify-center rounded-md bg-white/15 disabled:opacity-40"
-                                onClick={() => incrementItem(item)}
-                                disabled={qty >= item.available_qty}
-                              >
-                                <Plus size={13} />
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#8D4925] text-[#FDFAF1]"
-                              onClick={() => incrementItem(item)}
-                              disabled={item.available_qty <= 0}
-                            >
-                              <Plus size={16} />
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-4">
-                {menuByMeal[meal].map((item) => (
-                  <article
-                    key={`${meal}-${item.menu_item_id}`}
-                    className="overflow-hidden rounded-2xl border border-[rgba(141,73,37,0.05)] bg-white shadow-[0px_4px_12px_-1px_rgba(141,73,37,0.08)]"
-                  >
-                    <div className="relative">
-                      <Image
-                        src={item.picture_url || PLACEHOLDER_IMAGE}
-                        alt={item.item_name}
-                        width={180}
-                        height={112}
-                        className="h-28 w-full object-cover"
-                        unoptimized={Boolean(item.picture_url)}
-                      />
-                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-black/5 to-transparent" />
-                      <div className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full border border-white/40 bg-white/85 px-1.5 py-1 shadow-md backdrop-blur-[2px]">
-                        <button
-                          type="button"
-                          className="flex h-6 w-6 items-center justify-center rounded-full border border-[#8D4925]/30 bg-white text-[#8D4925] disabled:opacity-40"
-                          onClick={() => decrementItem(item)}
-                          disabled={(quantities[item.menu_item_id] ?? 0) <= 0}
-                        >
-                          <Minus size={12} />
-                        </button>
-                        <span className="min-w-5 text-center text-[11px] font-semibold text-[#8D4925]">
-                          {quantities[item.menu_item_id] ?? 0}
-                        </span>
-                        <button
-                          type="button"
-                          className="flex h-6 w-6 items-center justify-center rounded-full bg-[#8D4925] text-white disabled:opacity-40"
-                          onClick={() => incrementItem(item)}
-                          disabled={(quantities[item.menu_item_id] ?? 0) >= item.available_qty}
-                        >
-                          <Plus size={12} />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <h5 className="text-[13px] font-bold text-[#8D4925] leading-tight">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0 pr-2">
+                        <h5 className="truncate text-[13px] font-bold text-[#8D4925]">
                           {item.item_name}
                         </h5>
-                        <p className="shrink-0 text-sm font-bold text-[#1B4332]">
+                        <p className="text-sm font-bold text-[#1B4332]">
                           ₹{Math.round(item.rate || 0)}
                         </p>
                       </div>
+                      {qty > 0 ? (
+                        <div className="flex items-center gap-1 rounded-lg bg-[#8D4925] px-1 py-1 text-[#FDFAF1]">
+                          <button
+                            type="button"
+                            className="flex h-6 w-6 items-center justify-center rounded-md bg-white/15 disabled:opacity-40"
+                            onClick={() => decrementItem(item)}
+                            disabled={qty <= 0}
+                          >
+                            <Minus size={13} />
+                          </button>
+                          <span className="min-w-6 text-center text-xs font-bold">{qty}</span>
+                          <button
+                            type="button"
+                            className="flex h-6 w-6 items-center justify-center rounded-md bg-white/15 disabled:opacity-40"
+                            onClick={() => incrementItem(item)}
+                            disabled={qty >= item.available_qty}
+                          >
+                            <Plus size={13} />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#8D4925] text-[#FDFAF1]"
+                          onClick={() => incrementItem(item)}
+                          disabled={item.available_qty <= 0}
+                        >
+                          <Plus size={16} />
+                        </button>
+                      )}
                     </div>
                   </article>
-                ))}
-              </div>
-            )}
-          </section>
-        ))}
+                );
+              })}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              {currentMealItems.map((item) => (
+                <article
+                  key={`${currentMeal}-${item.menu_item_id}`}
+                  className="overflow-hidden rounded-2xl border border-[rgba(141,73,37,0.05)] bg-white shadow-[0px_4px_12px_-1px_rgba(141,73,37,0.08)]"
+                >
+                  <div className="relative">
+                    <Image
+                      src={item.picture_url || PLACEHOLDER_IMAGE}
+                      alt={item.item_name}
+                      width={180}
+                      height={112}
+                      className="h-28 w-full object-cover"
+                      unoptimized={Boolean(item.picture_url)}
+                    />
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-black/5 to-transparent" />
+                    <div className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full border border-white/40 bg-white/85 px-1.5 py-1 shadow-md backdrop-blur-[2px]">
+                      <button
+                        type="button"
+                        className="flex h-6 w-6 items-center justify-center rounded-full border border-[#8D4925]/30 bg-white text-[#8D4925] disabled:opacity-40"
+                        onClick={() => decrementItem(item)}
+                        disabled={(quantities[item.menu_item_id] ?? 0) <= 0}
+                      >
+                        <Minus size={12} />
+                      </button>
+                      <span className="min-w-5 text-center text-[11px] font-semibold text-[#8D4925]">
+                        {quantities[item.menu_item_id] ?? 0}
+                      </span>
+                      <button
+                        type="button"
+                        className="flex h-6 w-6 items-center justify-center rounded-full bg-[#8D4925] text-white disabled:opacity-40"
+                        onClick={() => incrementItem(item)}
+                        disabled={(quantities[item.menu_item_id] ?? 0) >= item.available_qty}
+                      >
+                        <Plus size={12} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <h5 className="text-[13px] font-bold leading-tight text-[#8D4925]">
+                        {item.item_name}
+                      </h5>
+                      <p className="shrink-0 text-sm font-bold text-[#1B4332]">
+                        ₹{Math.round(item.rate || 0)}
+                      </p>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
 
         {!ordersLoading && !ordersError && !currentSubscription ? (
           <section className="px-6 pb-4">
@@ -865,7 +842,7 @@ export default function MobileCustomerHomePage() {
                   </p>
                 </div>
               </div>
-              <span className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#1B4332] px-5 text-xs font-bold text-white">
+              <span className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#FDFAF1] px-5 text-xs font-bold text-[#8D4925]">
                 View Cart
                 <ArrowRight size={14} />
               </span>

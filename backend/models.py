@@ -56,6 +56,7 @@ class Address(Base):
     address_type = Column(String(50), nullable=True)
     route_id = Column(Integer, ForeignKey("delivery_routes.route_id"), nullable=True)
     is_default = Column(Boolean, nullable=False, default=False)
+    is_active = Column(Boolean, nullable=False, default=True)
 
     customer = relationship("Customer", back_populates="addresses")
     orders = relationship("Order", back_populates="address")

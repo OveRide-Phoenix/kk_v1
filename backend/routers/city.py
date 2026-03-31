@@ -39,6 +39,7 @@ def get_city(phone: str):
         INNER JOIN addresses a ON c.customer_id = a.customer_id
         WHERE c.primary_mobile = %s
           AND a.is_default = 1
+          AND a.is_active = 1
         LIMIT 1;
         """
         cursor.execute(query, (phone,))
@@ -50,7 +51,7 @@ def get_city(phone: str):
         _, role_codes, role_details = build_role_context(db, roles)
         is_admin = ADMIN_ROLE_CODE in role_codes
         cursor.execute(
-            "SELECT DISTINCT city_code FROM addresses WHERE customer_id=%s",
+            "SELECT DISTINCT city_code FROM addresses WHERE customer_id=%s AND is_active=1",
             (result["customer_id"],),
         )
         eligible_rows = cursor.fetchall() or []
