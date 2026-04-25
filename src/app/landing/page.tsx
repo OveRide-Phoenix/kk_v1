@@ -3,13 +3,18 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState, useEffect, useRef } from "react";
-import { Playfair_Display, Plus_Jakarta_Sans } from "next/font/google";
-import { useAuthStore } from "@/store/store";
+import { League_Spartan, Playfair_Display, Plus_Jakarta_Sans } from "next/font/google";
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
   weight: ["600", "700"],
   variable: "--font-v2-playfair",
+});
+
+const leagueSpartan = League_Spartan({
+  subsets: ["latin"],
+  weight: ["600", "700"],
+  variable: "--font-v2-league-spartan",
 });
 
 const plusJakarta = Plus_Jakarta_Sans({
@@ -22,27 +27,27 @@ const plusJakarta = Plus_Jakarta_Sans({
 
 const services = [
   {
-    icon: "lunch_dining",
-    image: "/images/menu/idli-sambar.jpg",
-    title: "Daily Fresh Orders",
+    icon: "local_shipping",
+    image: "/images/hero/dosa.png",
+    title: "Home Delivery",
     description:
-      "Order wholesome, home-cooked meals for today or plan ahead for the week. Every dish is prepared fresh the same morning it's delivered.",
+      "Get wholesome, home-style meals delivered straight to your doorstep, whether you need lunch for today or dinner for the family.",
     color: "#8D4925",
   },
   {
-    icon: "calendar_month",
-    image: "/images/hero/thali.png",
-    title: "Meal Subscriptions",
+    icon: "groups",
+    image: "/images/menu/new/rice.png",
+    title: "Corporate Orders",
     description:
-      "Lock in your weekly or monthly meal plan and never worry about what's for lunch again. Flexible, affordable, and delicious every day.",
+      "Plan reliable office lunches and team meals with comforting Indian food that scales well for workplaces, meetings, and recurring staff orders.",
     color: "#1b4332",
   },
   {
     icon: "celebration",
-    image: "/images/menu/new/south-festival.png",
-    title: "Festival & Event Specials",
+    image: "/images/hero/thalidosa.png",
+    title: "Party Orders",
     description:
-      "Celebrate festivals and occasions with curated traditional spreads — from Onam Sadhya to festive combos — crafted exactly like home.",
+      "Serve generous spreads for house parties, celebrations, and special gatherings with crowd-pleasing menus made in our signature home-style way.",
     color: "#7c3d12",
   },
 ];
@@ -84,31 +89,67 @@ const products = [
   {
     icon: "set_meal",
     image: "/images/menu/new/rice.png",
-    name: "A La Carte Items",
+    name: "Breakfast",
     description:
       "Individual dishes — rice, curries, sabzi, dal — priced by meal type. Mix and match to build your plate.",
     tag: "Flexible",
+    badgeText: "Only for Mysuru",
   },
   {
     icon: "local_dining",
     image: "/images/hero/thalidosa.png",
-    name: "Combo Packs",
+    name: "Lunch",
     description:
       "Curated bundles that pair well together. A full meal sorted in one click — great value, zero guesswork.",
     tag: "Best Value",
+    badgeText: "Only for Mysuru",
   },
   {
     icon: "restaurant",
     image: "/images/hero/thali.png",
-    name: "Plated Specials",
+    name: "Dinner",
     description:
       "Pre-assembled complete meals with all components included. A balanced plate, ready to eat.",
     tag: "Complete Meal",
+    badgeText: "Only for Mysuru",
   },
   {
     icon: "cake",
     image: "/images/menu/new/south-festival.png",
-    name: "Festival Spreads",
+    name: "Condiments",
+    description:
+      "Seasonal and festive offerings — Onam Sadhya, Ugadi specials, and more. Limited, authentic, and made to order.",
+    tag: "Seasonal",
+  },
+  {
+    icon: "cake",
+    image: "/images/menu/new/south-festival.png",
+    name: "Savouries",
+    description:
+      "Seasonal and festive offerings — Onam Sadhya, Ugadi specials, and more. Limited, authentic, and made to order.",
+    tag: "Seasonal",
+  },
+
+  {
+    icon: "cake",
+    image: "/images/menu/new/south-festival.png",
+    name: "Sweets",
+    description:
+      "Seasonal and festive offerings — Onam Sadhya, Ugadi specials, and more. Limited, authentic, and made to order.",
+    tag: "Seasonal",
+  },
+  {
+    icon: "cake",
+    image: "/images/menu/new/south-festival.png",
+    name: "Weekend/Festival Specials",
+    description:
+      "Seasonal and festive offerings — Onam Sadhya, Ugadi specials, and more. Limited, authentic, and made to order.",
+    tag: "Seasonal",
+  },
+  {
+    icon: "cake",
+    image: "/images/menu/new/south-festival.png",
+    name: "Event Specials",
     description:
       "Seasonal and festive offerings — Onam Sadhya, Ugadi specials, and more. Limited, authentic, and made to order.",
     tag: "Seasonal",
@@ -125,18 +166,6 @@ const stats = [
 /* ─── Component ─────────────────────────────────────────────────────────── */
 
 export default function LandingPage() {
-  const user = useAuthStore((state) => state.user);
-  const firstName = user?.name?.trim().split(" ")[0] ?? null;
-  const initials =
-    user?.name
-      ?.trim()
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase() ?? "";
-
-  const [mounted, setMounted] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [statValues, setStatValues] = useState([0, 0, 0, 0]);
@@ -144,10 +173,6 @@ export default function LandingPage() {
   const [productAnimating, setProductAnimating] = useState(false);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const statsAnimatedRef = useRef(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -219,14 +244,13 @@ export default function LandingPage() {
   const navLinks = [
     { label: "Home", href: "#hero" },
     { label: "About", href: "#about" },
-    { label: "Services", href: "#services" },
-    { label: "Products", href: "#products" },
+    { label: "Offerings", href: "#services" },
     { label: "Contact", href: "#contact" },
   ];
 
   return (
     <div
-      className={`${playfair.variable} ${plusJakarta.variable}`}
+      className={`${playfair.variable} ${leagueSpartan.variable} ${plusJakarta.variable}`}
       style={{ fontFamily: "var(--font-v2-plus-jakarta), sans-serif", overflowX: "hidden" }}
     >
       {/* ── Navbar ─────────────────────────────────────────────────────────── */}
@@ -237,11 +261,11 @@ export default function LandingPage() {
           left: 0,
           right: 0,
           zIndex: 50,
-          background: scrolled ? "rgba(253,250,241,0.96)" : "transparent",
-          backdropFilter: scrolled ? "blur(12px)" : "none",
-          boxShadow: scrolled ? "0 1px 24px rgba(141,73,37,0.08)" : "none",
+          background: "rgba(253,250,241,0.96)",
+          backdropFilter: "blur(12px)",
+          boxShadow: "0 1px 24px rgba(141,73,37,0.08)",
           transition: "all 0.3s ease",
-          borderBottom: scrolled ? "1px solid rgba(141,73,37,0.1)" : "none",
+          borderBottom: "1px solid rgba(141,73,37,0.1)",
         }}
       >
         <div
@@ -258,28 +282,44 @@ export default function LandingPage() {
           {/* Logo */}
           <Link
             href="/"
-            style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}
+            style={{ display: "flex", alignItems: "flex-start", gap: 10, textDecoration: "none" }}
           >
             <Image
-              src={scrolled ? "/images/logo/kk-brown.svg" : "/images/logo/kk-white.svg"}
+              src="/images/logo/kk-brown.svg"
               alt="Kuteera Kitchen"
               width={36}
               height={36}
               style={{ height: 36, width: "auto", transition: "opacity 0.3s ease" }}
               priority
             />
-            <span
-              style={{
-                fontFamily: "var(--font-v2-playfair), serif",
-                fontWeight: 700,
-                fontSize: 20,
-                color: scrolled ? "#3A2618" : "#fdfaf1",
-                letterSpacing: "-0.3px",
-                transition: "color 0.3s ease",
-              }}
-            >
-              Kuteera Kitchen
-            </span>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3, paddingTop: 1 }}>
+              <span
+                style={{
+                  fontFamily: "var(--font-v2-league-spartan), sans-serif",
+                  fontWeight: 700,
+                  fontSize: 20,
+                  color: "#3A2618",
+                  letterSpacing: "0",
+                  lineHeight: 1.05,
+                  transition: "color 0.3s ease",
+                }}
+              >
+                Kuteera Kitchen
+              </span>
+              <span
+                style={{
+                  fontFamily: '"Lucida Handwriting", "Lucida Calligraphy", cursive',
+                  fontWeight: 400,
+                  fontSize: 14,
+                  letterSpacing: "0.01em",
+                  color: "rgba(58,26,8,0.72)",
+                  lineHeight: 1.1,
+                  transition: "color 0.3s ease",
+                }}
+              >
+                Homely, Tasty, Healthy
+              </span>
+            </div>
           </Link>
 
           {/* Desktop Nav */}
@@ -289,18 +329,14 @@ export default function LandingPage() {
                 key={link.href}
                 href={link.href}
                 style={{
-                  color: scrolled ? "#6B5344" : "rgba(253,250,241,0.85)",
+                  color: "#6B5344",
                   fontSize: 14,
                   fontWeight: 500,
                   textDecoration: "none",
                   transition: "color 0.2s",
                 }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.color = scrolled ? "#8D4925" : "#ffffff")
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.color = scrolled ? "#6B5344" : "rgba(253,250,241,0.85)")
-                }
+                onMouseEnter={(e) => (e.currentTarget.style.color = "#8D4925")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "#6B5344")}
               >
                 {link.label}
               </a>
@@ -337,92 +373,6 @@ export default function LandingPage() {
             >
               Order Now
             </Link>
-            {mounted && !firstName && (
-              <Link
-                href="/login-v2"
-                style={{
-                  fontSize: 14,
-                  fontWeight: 600,
-                  textDecoration: "none",
-                  padding: "0 16px",
-                  height: 36,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  borderRadius: 8,
-                  transition: "all 0.3s",
-                  boxSizing: "border-box",
-                  color: scrolled ? "#8D4925" : "#fdfaf1",
-                  border: scrolled ? "1.5px solid #8D4925" : "1.5px solid rgba(255,255,255,0.6)",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = scrolled
-                    ? "#8D4925"
-                    : "rgba(255,255,255,0.15)";
-                  e.currentTarget.style.color = "#fdfaf1";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "transparent";
-                  e.currentTarget.style.color = scrolled ? "#8D4925" : "#fdfaf1";
-                }}
-              >
-                Login
-              </Link>
-            )}
-            {mounted && firstName && (
-              <Link
-                href="/customer-v2/home"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  textDecoration: "none",
-                  padding: "5px 14px 5px 5px",
-                  borderRadius: 100,
-                  border: scrolled
-                    ? "1.5px solid rgba(141,73,37,0.25)"
-                    : "1.5px solid rgba(255,255,255,0.4)",
-                  background: scrolled ? "rgba(141,73,37,0.06)" : "rgba(255,255,255,0.1)",
-                  transition: "all 0.2s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = scrolled
-                    ? "rgba(141,73,37,0.12)"
-                    : "rgba(255,255,255,0.2)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = scrolled
-                    ? "rgba(141,73,37,0.06)"
-                    : "rgba(255,255,255,0.1)";
-                }}
-              >
-                <div
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: "50%",
-                    background: "#8D4925",
-                    color: "#fdfaf1",
-                    fontSize: 11,
-                    fontWeight: 700,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  {initials}
-                </div>
-                <span
-                  style={{
-                    color: scrolled ? "#8D4925" : "#fdfaf1",
-                    fontSize: 14,
-                    fontWeight: 600,
-                    transition: "color 0.3s",
-                  }}
-                >
-                  {firstName}
-                </span>
-              </Link>
-            )}
           </div>
 
           {/* Mobile Hamburger */}
@@ -434,7 +384,7 @@ export default function LandingPage() {
               border: "none",
               cursor: "pointer",
               padding: 8,
-              color: scrolled ? "#3A2618" : "#fdfaf1",
+              color: "#3A2618",
               transition: "color 0.3s",
             }}
           >
@@ -473,42 +423,6 @@ export default function LandingPage() {
               </a>
             ))}
             <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 20 }}>
-              {mounted && firstName ? (
-                <Link
-                  href="/customer-v2/home"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    textDecoration: "none",
-                    padding: "8px 12px",
-                    borderRadius: 10,
-                    border: "1.5px solid rgba(141,73,37,0.2)",
-                    background: "rgba(141,73,37,0.05)",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: "50%",
-                      background: "#8D4925",
-                      color: "#fdfaf1",
-                      fontSize: 12,
-                      fontWeight: 700,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
-                  >
-                    {initials}
-                  </div>
-                  <span style={{ color: "#8D4925", fontSize: 15, fontWeight: 600 }}>
-                    {firstName}
-                  </span>
-                </Link>
-              ) : null}
               <Link
                 href="/customer-v2/new-order"
                 style={{
@@ -524,23 +438,6 @@ export default function LandingPage() {
               >
                 Order Now
               </Link>
-              {mounted && !firstName && (
-                <Link
-                  href="/login-v2"
-                  style={{
-                    textAlign: "center",
-                    color: "#8D4925",
-                    fontSize: 15,
-                    fontWeight: 600,
-                    textDecoration: "none",
-                    padding: "10px 16px",
-                    borderRadius: 8,
-                    border: "1.5px solid #8D4925",
-                  }}
-                >
-                  Login
-                </Link>
-              )}
             </div>
           </div>
         )}
@@ -584,29 +481,6 @@ export default function LandingPage() {
         >
           {/* Left: Text */}
           <div className="animate-fade-in">
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 8,
-                background: "rgba(255,255,255,0.1)",
-                border: "1px solid rgba(255,255,255,0.15)",
-                borderRadius: 100,
-                padding: "6px 16px",
-                marginBottom: 28,
-              }}
-            >
-              <span
-                className="material-symbols-outlined"
-                style={{ fontSize: 14, color: "#ffc06a" }}
-              >
-                local_fire_department
-              </span>
-              <span style={{ color: "#ffc06a", fontSize: 12, fontWeight: 600, letterSpacing: 1 }}>
-                FRESHLY PREPARED EVERY DAY
-              </span>
-            </div>
-
             <h1
               style={{
                 fontFamily: "var(--font-v2-playfair), serif",
@@ -742,146 +616,61 @@ export default function LandingPage() {
           >
             <div
               style={{
-                position: "relative",
-                width: 380,
+                width: 420,
                 animation: "float 5s ease-in-out infinite",
               }}
             >
-              {/* Main card */}
               <div
                 style={{
-                  background: "rgba(255,255,255,0.1)",
-                  backdropFilter: "blur(20px)",
-                  border: "1px solid rgba(255,255,255,0.15)",
-                  borderRadius: 24,
-                  padding: 32,
+                  display: "grid",
+                  gridTemplateColumns: "1.08fr 0.92fr",
+                  gap: 14,
+                  height: 420,
                 }}
               >
                 <div
                   style={{
-                    borderRadius: 16,
-                    marginBottom: 20,
-                    overflow: "hidden",
-                    height: 200,
                     position: "relative",
+                    borderRadius: 26,
+                    overflow: "hidden",
+                    height: "100%",
+                    boxShadow: "0 28px 60px rgba(0,0,0,0.22)",
                   }}
                 >
                   <Image
                     src="/images/hero/thali.png"
-                    alt="South Indian Thali"
+                    alt="South Indian thali"
                     fill
-                    style={{ objectFit: "cover", borderRadius: 16 }}
+                    style={{ objectFit: "cover" }}
                   />
-                </div>
-
-                <div style={{ marginBottom: 16 }}>
-                  <div
-                    style={{
-                      color: "rgba(253,250,241,0.5)",
-                      fontSize: 11,
-                      fontWeight: 600,
-                      letterSpacing: 1.5,
-                      textTransform: "uppercase",
-                      marginBottom: 6,
-                    }}
-                  >
-                    Today&apos;s Special
-                  </div>
-                  <div
-                    style={{
-                      fontFamily: "var(--font-v2-playfair), serif",
-                      fontWeight: 700,
-                      fontSize: 22,
-                      color: "#fdfaf1",
-                    }}
-                  >
-                    South Indian Thali
-                  </div>
-                  <div style={{ color: "rgba(253,250,241,0.65)", fontSize: 13, marginTop: 6 }}>
-                    Rice · Sambhar · Rasam · Poriyal · Papad · Pickle
-                  </div>
-                </div>
-
-                <div
-                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}
-                >
-                  <div>
-                    <span
-                      style={{
-                        fontFamily: "var(--font-v2-playfair), serif",
-                        fontWeight: 700,
-                        fontSize: 26,
-                        color: "#ffc06a",
-                      }}
-                    >
-                      ₹120
-                    </span>
-                    <span style={{ color: "rgba(253,250,241,0.5)", fontSize: 12, marginLeft: 8 }}>
-                      / person
-                    </span>
-                  </div>
-                  <div
-                    style={{
-                      background: "#ffc06a",
-                      color: "#3A1A08",
-                      fontSize: 12,
-                      fontWeight: 700,
-                      padding: "6px 16px",
-                      borderRadius: 100,
-                    }}
-                  >
-                    ORDER NOW
-                  </div>
-                </div>
-
-                {/* Tags */}
-                <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
-                  {["Fresh", "Vegetarian", "Home-style"].map((tag) => (
-                    <span
-                      key={tag}
-                      style={{
-                        background: "rgba(255,255,255,0.08)",
-                        border: "1px solid rgba(255,255,255,0.15)",
-                        color: "rgba(253,250,241,0.7)",
-                        fontSize: 11,
-                        fontWeight: 500,
-                        padding: "4px 10px",
-                        borderRadius: 100,
-                      }}
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              {/* Floating badge */}
-              <div
-                style={{
-                  position: "absolute",
-                  top: -20,
-                  right: -20,
-                  background: "#1b4332",
-                  border: "3px solid rgba(253,250,241,0.15)",
-                  borderRadius: 16,
-                  padding: "12px 16px",
-                  textAlign: "center",
-                }}
-              >
-                <div style={{ color: "#4ade80", fontSize: 10, fontWeight: 600, letterSpacing: 1 }}>
-                  DELIVERS
                 </div>
                 <div
                   style={{
-                    fontFamily: "var(--font-v2-playfair), serif",
-                    color: "#fdfaf1",
-                    fontSize: 18,
-                    fontWeight: 700,
+                    display: "grid",
+                    gridTemplateRows: "1.02fr 1.18fr 0.8fr",
+                    gap: 14,
+                    height: "100%",
                   }}
                 >
-                  7am
+                  {[
+                    { src: "/images/menu/idli-sambar.jpg", alt: "Idli and sambar" },
+                    { src: "/images/menu/masala-dosa.jpg", alt: "Masala dosa" },
+                    { src: "/images/menu/new/chapathi.png", alt: "Chapathi meal" },
+                  ].map((photo) => (
+                    <div
+                      key={photo.src}
+                      style={{
+                        position: "relative",
+                        borderRadius: 22,
+                        overflow: "hidden",
+                        height: "100%",
+                        boxShadow: "0 18px 40px rgba(0,0,0,0.18)",
+                      }}
+                    >
+                      <Image src={photo.src} alt={photo.alt} fill style={{ objectFit: "cover" }} />
+                    </div>
+                  ))}
                 </div>
-                <div style={{ color: "rgba(253,250,241,0.5)", fontSize: 10 }}>Daily</div>
               </div>
             </div>
           </div>
@@ -1071,7 +860,7 @@ export default function LandingPage() {
                 auto_stories
               </span>
               <span style={{ color: "#8D4925", fontSize: 12, fontWeight: 600, letterSpacing: 1 }}>
-                OUR STORY
+                ABOUT US
               </span>
             </div>
 
@@ -1085,7 +874,7 @@ export default function LandingPage() {
                 marginBottom: 24,
               }}
             >
-              A Kitchen Built on the <span style={{ color: "#8D4925" }}>Love of Home Cooking</span>
+              A Kitchen Built on the <span style={{ color: "#8D4925" }}>Love for Home Cooking</span>
             </h2>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -1104,30 +893,6 @@ export default function LandingPage() {
                 unchanged — cook it like you&apos;d cook it at home, and deliver it like you care.
               </p>
             </div>
-
-            <a
-              href="#services"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 8,
-                marginTop: 32,
-                color: "#8D4925",
-                fontSize: 15,
-                fontWeight: 600,
-                textDecoration: "none",
-                borderBottom: "2px solid #8D4925",
-                paddingBottom: 2,
-                transition: "gap 0.2s",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.gap = "14px")}
-              onMouseLeave={(e) => (e.currentTarget.style.gap = "8px")}
-            >
-              What We Offer
-              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
-                arrow_forward
-              </span>
-            </a>
           </div>
         </div>
       </section>
@@ -1580,11 +1345,13 @@ export default function LandingPage() {
               <div
                 key={product.name}
                 style={{
+                  position: "relative",
                   background: "rgba(255,255,255,0.08)",
                   backdropFilter: "blur(10px)",
                   border: "1px solid rgba(255,255,255,0.12)",
                   borderRadius: 20,
                   padding: 28,
+                  overflow: "visible",
                   transition: "all 0.3s ease",
                   cursor: "default",
                 }}
@@ -1601,6 +1368,35 @@ export default function LandingPage() {
                   e.currentTarget.style.boxShadow = "none";
                 }}
               >
+                {product.badgeText ? (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: -12,
+                      right: -12,
+                      zIndex: 2,
+                      background: "#fff6e8",
+                      border: "3px solid rgba(141,73,37,0.12)",
+                      borderRadius: 14,
+                      padding: "8px 12px",
+                      textAlign: "center",
+                      boxShadow: "0 10px 24px rgba(58,26,8,0.16)",
+                      minWidth: 96,
+                    }}
+                  >
+                    <div
+                      style={{
+                        color: "#8D4925",
+                        fontSize: 10,
+                        fontWeight: 700,
+                        letterSpacing: 0.2,
+                        lineHeight: 1.2,
+                      }}
+                    >
+                      {product.badgeText}
+                    </div>
+                  </div>
+                ) : null}
                 <div
                   style={{
                     borderRadius: 14,
@@ -1661,16 +1457,46 @@ export default function LandingPage() {
           <div className="products-carousel" style={{ position: "relative" }}>
             <div
               style={{
+                position: "relative",
                 background: "rgba(255,255,255,0.08)",
                 backdropFilter: "blur(12px)",
                 border: "1px solid rgba(255,255,255,0.14)",
                 borderRadius: 20,
-                overflow: "hidden",
+                overflow: "visible",
                 opacity: productAnimating ? 0 : 1,
                 transform: productAnimating ? "scale(0.97)" : "scale(1)",
                 transition: "opacity 0.25s ease, transform 0.25s ease",
               }}
             >
+              {products[activeProduct].badgeText ? (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: -12,
+                    right: -12,
+                    zIndex: 2,
+                    background: "#fff6e8",
+                    border: "3px solid rgba(141,73,37,0.12)",
+                    borderRadius: 14,
+                    padding: "8px 12px",
+                    textAlign: "center",
+                    boxShadow: "0 10px 24px rgba(58,26,8,0.16)",
+                    minWidth: 96,
+                  }}
+                >
+                  <div
+                    style={{
+                      color: "#8D4925",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      letterSpacing: 0.2,
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    {products[activeProduct].badgeText}
+                  </div>
+                </div>
+              ) : null}
               {/* Image */}
               <div style={{ position: "relative", height: 220, width: "100%" }}>
                 <Image

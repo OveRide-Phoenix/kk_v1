@@ -138,7 +138,9 @@ def register_customer(data: CustomerCreate):
         normalized_city_code = _resolve_city_code(data.city, data.city_code)
         city_label = _normalize_city_label(data.city, normalized_city_code)
 
-        cursor.execute("SELECT customer_id FROM customers WHERE primary_mobile = %s", (data.primary_mobile,))
+        cursor.execute(
+            "SELECT customer_id FROM customers WHERE primary_mobile = %s", (data.primary_mobile,)
+        )
         existing_customer = cursor.fetchone()
         if existing_customer:
             raise HTTPException(
@@ -299,7 +301,7 @@ def login(data: LoginRequest, response: Response):
             "city_code": requested_city_code,
             "eligible_city_codes": eligible_codes or [requested_city_code],
         }
-        if has_admin_role:
+        if admin_login:
             base_payload["admin_id"] = result["customer_id"]
             base_payload["role"] = ADMIN_ROLE_CODE
         else:
