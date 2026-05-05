@@ -1,0 +1,1 @@
+ALTER TABLE menu ADD COLUMN buffer_override_pct DECIMAL(5,2) DEFAULT NULL;

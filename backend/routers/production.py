@@ -61,6 +61,7 @@ class ProductionPlanFinalizeRequest(ProductionPlanResetRequest):
     """Payload to finalize a production plan, optionally with updated plan items."""
 
     plans: Optional[List[ProductionPlanItem]] = None
+    buffer_override_pct: Optional[float] = None
 
 
 class MaxQtyUpdate(BaseModel):
@@ -190,6 +191,7 @@ def _fetch_production_menu_rows(
             m.menu_id,
             m.is_released,
             m.is_production_generated,
+            m.buffer_override_pct,
             b.bld_type AS meal,
             mi.menu_item_id,
             mi.item_id,
@@ -357,7 +359,8 @@ def _fetch_item_unit_details(cursor, item_ids: Iterable[int]) -> Dict[int, Dict[
             unit_packing,
             uom_packing,
             uom_production,
-            packing_to_production_rate
+            packing_to_production_rate,
+            buffer_percentage
         FROM items
         WHERE item_id IN ({placeholders})
         """,
@@ -383,6 +386,11 @@ def _fetch_item_unit_details(cursor, item_ids: Iterable[int]) -> Dict[int, Dict[
                 if row.get("packing_to_production_rate") is not None
                 else None
             ),
+            "buffer_percentage": (
+                float(row["buffer_percentage"])
+                if row.get("buffer_percentage") is not None
+                else 0.0
+            ),
         }
     return details
 
@@ -407,6 +415,37 @@ def _fetch_plated_parent_item_ids(cursor, item_ids: Iterable[int]) -> set[int]:
     )
     rows = cursor.fetchall() or []
     return {int(row["item_id"]) for row in rows if row.get("item_id") is not None}
+
+
+def _fetch_stored_item_buffers(cursor, menu_id: int) -> Dict[int, Dict[str, float]]:
+    """Fetch stored buffer_qty and final_qty from menu_items for a given menu.
+
+    Args:
+        cursor: Database cursor.
+        menu_id: Menu ID to look up stored buffer values for.
+
+    Returns:
+        Dict mapping item_id to dict with buffer_qty and final_qty keys.
+    """
+    cursor.execute(
+        """
+        SELECT mi.item_id, mi.buffer_qty, mi.final_qty
+          FROM menu_items mi
+         WHERE mi.menu_id = %s
+           AND mi.item_id IS NOT NULL
+           AND (mi.buffer_qty > 0 OR mi.final_qty > 0)
+        """,
+        (menu_id,),
+    )
+    rows = cursor.fetchall() or []
+    return {
+        int(row["item_id"]): {
+            "buffer_qty": float(row.get("buffer_qty") or 0),
+            "final_qty": float(row.get("final_qty") or 0),
+        }
+        for row in rows
+        if row.get("item_id") is not None
+    }
 
 
 def _fetch_plated_components_by_parent_item(
@@ -664,6 +703,7 @@ def _accumulate_production_item(
             "uom_production": uom_production,
             "packing_to_production_rate": float(conversion_rate),
             "production_quantity": 0.0,
+            "buffer_percentage": float(detail.get("buffer_percentage") or 0.0),
         },
     )
     bucket["order_units"] = float(bucket["order_units"]) + float(demand_units)
@@ -831,8 +871,8 @@ def finalize_production_plan(payload: ProductionPlanFinalizeRequest) -> Dict[str
         _persist_plan_items(cursor, menu_id, payload.plans)
 
         cursor.execute(
-            "UPDATE menu SET is_production_generated = 1 WHERE menu_id = %s",
-            (menu_id,),
+            "UPDATE menu SET is_production_generated = 1, buffer_override_pct = %s WHERE menu_id = %s",
+            (payload.buffer_override_pct, menu_id),
         )
 
         db.commit()
@@ -1055,8 +1095,14 @@ def get_daily_production_plan(
         item_details = _fetch_item_unit_details(cursor, concrete_item_ids)
 
         rows_by_meal: Dict[str, List[Dict[str, Any]]] = {meal: [] for meal in meals}
-        meal_status: Dict[str, Dict[str, bool]] = {
-            meal: {"is_released": False, "is_production_generated": False} for meal in meals
+        meal_status: Dict[str, Dict[str, Any]] = {
+            meal: {
+                "is_released": False,
+                "is_production_generated": False,
+                "buffer_override_pct": None,
+                "menu_id": None,
+            }
+            for meal in meals
         }
         for row in menu_rows:
             meal = row.get("meal")
@@ -1066,6 +1112,12 @@ def get_daily_production_plan(
             meal_status[meal] = {
                 "is_released": bool(row.get("is_released")),
                 "is_production_generated": bool(row.get("is_production_generated")),
+                "buffer_override_pct": (
+                    float(row["buffer_override_pct"])
+                    if row.get("buffer_override_pct") is not None
+                    else None
+                ),
+                "menu_id": row.get("menu_id"),
             }
 
         response_meals: List[Dict[str, Any]] = []
@@ -1186,15 +1238,41 @@ def get_daily_production_plan(
                     demand_units=ordered_units,
                 )
 
+            is_exported = meal_status[meal]["is_production_generated"]
+            meal_buffer_override = meal_status[meal].get("buffer_override_pct")
+            stored_item_buffers = (
+                _fetch_stored_item_buffers(cursor, int(meal_status[meal]["menu_id"]))
+                if is_exported and meal_status[meal].get("menu_id") is not None
+                else {}
+            )
+
+            def _build_item(value: Dict[str, Any]) -> Dict[str, Any]:
+                item_id = int(value["item_id"])
+                prod_qty = float(value["production_quantity"])
+                buffer_pct = float(value.get("buffer_percentage") or 0.0)
+                stored_buffer = stored_item_buffers.get(item_id)
+                if is_exported and stored_buffer and stored_buffer["final_qty"] > 0:
+                    buffer_qty = stored_buffer["buffer_qty"]
+                    final_qty = stored_buffer["final_qty"]
+                else:
+                    effective_pct = (
+                        meal_buffer_override
+                        if is_exported and meal_buffer_override is not None
+                        else buffer_pct
+                    )
+                    buffer_qty = prod_qty * effective_pct / 100
+                    final_qty = prod_qty + buffer_qty
+                return {
+                    **value,
+                    "order_units": round(float(value["order_units"]), 3),
+                    "production_quantity": round(prod_qty, 3),
+                    "buffer_percentage": round(buffer_pct, 2),
+                    "buffer_quantity": round(buffer_qty, 3),
+                    "with_buffer_quantity": round(final_qty, 3),
+                }
+
             meal_items = sorted(
-                (
-                    {
-                        **value,
-                        "order_units": round(float(value["order_units"]), 3),
-                        "production_quantity": round(float(value["production_quantity"]), 3),
-                    }
-                    for value in aggregate.values()
-                ),
+                (_build_item(value) for value in aggregate.values()),
                 key=lambda item: (item.get("item_name") or "").lower(),
             )
             response_meals.append(
@@ -1202,6 +1280,7 @@ def get_daily_production_plan(
                     "meal": meal,
                     "is_released": meal_status[meal]["is_released"],
                     "is_production_generated": meal_status[meal]["is_production_generated"],
+                    "buffer_override_pct": meal_status[meal]["buffer_override_pct"],
                     "items": meal_items,
                     "issues": issues,
                 }

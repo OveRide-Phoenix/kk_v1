@@ -121,7 +121,7 @@ const buildPrintMarkup = (
               <tr>
                 <th>Item</th>
                 <th>Order Units</th>
-                <th>Pack Size</th>
+                <th>Each Pack Size</th>
                 <th>No. of Packs</th>
               </tr>
             </thead>
@@ -235,7 +235,10 @@ function PackingPlanPageContent() {
           issueCount: mealData?.issues.length ?? 0,
           isReleased: Boolean(mealData?.is_released),
           isProductionExported: Boolean(mealData?.is_production_generated),
-          totalPackingQty: (mealData?.items ?? []).reduce((sum, item) => sum + getPackingTotal(item), 0),
+          totalPackingQty: (mealData?.items ?? []).reduce(
+            (sum, item) => sum + getPackingTotal(item),
+            0,
+          ),
         };
       }),
     [plan?.meals, visibleMeals],
@@ -297,7 +300,9 @@ function PackingPlanPageContent() {
             }}
             className={[
               "cursor-pointer border shadow-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
-              card.meal === selectedMeal ? "border-primary bg-primary/5" : "border-border hover:border-primary/50",
+              card.meal === selectedMeal
+                ? "border-primary bg-primary/5"
+                : "border-border hover:border-primary/50",
               !card.isProductionExported ? "opacity-70" : "",
             ].join(" ")}
           >
@@ -345,7 +350,9 @@ function PackingPlanPageContent() {
           </div>
           <div className="flex items-center gap-2">
             <Badge variant={selectedMealData?.is_production_generated ? "default" : "secondary"}>
-              {selectedMealData?.is_production_generated ? "Production Exported" : "Production Pending"}
+              {selectedMealData?.is_production_generated
+                ? "Production Exported"
+                : "Production Pending"}
             </Badge>
           </div>
         </CardHeader>
@@ -356,13 +363,12 @@ function PackingPlanPageContent() {
                 Packing is locked until production is exported.
               </p>
               <p className="mt-1 text-sm text-amber-900">
-                Export the {selectedMeal} production plan for {selectedDateISO} first, then packing will be enabled for this day.
+                Export the {selectedMeal} production plan for {selectedDateISO} first, then packing
+                will be enabled for this day.
               </p>
             </div>
           ) : selectedMealData.items.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No packing quantity yet for this meal.
-            </p>
+            <p className="text-sm text-muted-foreground">No packing quantity yet for this meal.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[780px] border-collapse text-sm">
@@ -370,7 +376,7 @@ function PackingPlanPageContent() {
                   <tr className="border-b text-left">
                     <th className="py-3 pr-4 font-medium text-muted-foreground">Item</th>
                     <th className="py-3 pr-4 font-medium text-muted-foreground">Order Units</th>
-                    <th className="py-3 pr-4 font-medium text-muted-foreground">Pack Size</th>
+                    <th className="py-3 pr-4 font-medium text-muted-foreground">Each Pack Size</th>
                     <th className="py-3 pr-4 font-medium text-muted-foreground">No. of Packs</th>
                   </tr>
                 </thead>

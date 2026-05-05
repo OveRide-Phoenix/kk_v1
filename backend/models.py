@@ -237,6 +237,7 @@ class Menu(Base):
     city_code = Column(String(3), nullable=False, default=DEFAULT_CITY)
     bld_id = Column(Integer, ForeignKey("bld.bld_id"), nullable=False)
     is_production_generated = Column(Boolean, nullable=True, default=False)
+    buffer_override_pct = Column(DECIMAL(5, 2), nullable=True)
     menu_type = Column(String(20), nullable=False, default="ONE_DAY")
     delivers_by = Column(String(20), nullable=True)
 

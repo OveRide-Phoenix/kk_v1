@@ -1,13 +1,26 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AlertCircle, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 
 import { AdminLayout } from "@/components/admin-layout";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { DatePickerWithPresets } from "@/components/ui/date-picker";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { http } from "@/lib/http";
 import { useAuthStore } from "@/store/store";
 import { getCityLabel, getSupportedMeals } from "@/config/cities";
@@ -21,6 +34,9 @@ type ProductionItem = {
   uom_customer?: string | null;
   uom_production?: string | null;
   production_quantity: number;
+  buffer_percentage: number;
+  buffer_quantity: number;
+  with_buffer_quantity: number;
 };
 
 type ProductionIssue = {
@@ -36,6 +52,7 @@ type ProductionMeal = {
   meal: MealName;
   is_released: boolean;
   is_production_generated: boolean;
+  buffer_override_pct: number | null;
   items: ProductionItem[];
   issues: ProductionIssue[];
 };
@@ -47,9 +64,31 @@ type ProductionPlanResponse = {
   meals: ProductionMeal[];
 };
 
-const formatQuantity = (value: number) => {
+// Only these UOMs are treated as whole-unit (pieces) and get ceiling rounding
+const PIECE_UNITS = new Set(["pcs", "pc", "piece", "pieces", "no", "nos", "unit", "units"]);
+
+const isPieceUnit = (uom: string | null | undefined): boolean => {
+  if (!uom) return false;
+  return PIECE_UNITS.has(uom.toLowerCase().trim());
+};
+
+const formatQuantity = (value: number, uom?: string | null) => {
   if (!Number.isFinite(value)) return "0";
-  return Number.isInteger(value) ? String(value) : value.toFixed(3).replace(/\.?0+$/, "");
+  if (isPieceUnit(uom)) return String(Math.ceil(value));
+  const ceiled2dp = Math.ceil(value * 100) / 100;
+  return Number.isInteger(ceiled2dp) ? String(ceiled2dp) : ceiled2dp.toFixed(2).replace(/0+$/, "");
+};
+
+// Same rounding logic as formatQuantity but returns a number for storage
+const roundedQty = (value: number, uom: string | null | undefined): number => {
+  if (!Number.isFinite(value)) return 0;
+  if (isPieceUnit(uom)) return Math.ceil(value);
+  return Math.ceil(value * 100) / 100;
+};
+
+const parseBufferInput = (raw: string): number | null => {
+  const parsed = parseFloat(raw);
+  return Number.isFinite(parsed) && raw.trim() !== "" ? Math.max(0, parsed) : null;
 };
 
 const normalizeDate = (date: Date) => {
@@ -69,98 +108,20 @@ const describeIssue = (issue: ProductionIssue) => {
   return issue.detail || `Production could not calculate ${issue.parent_name}.`;
 };
 
-const buildPrintMarkup = (
-  plan: ProductionPlanResponse | null,
-  visibleMeals: MealName[],
-  cityLabel: string,
-) => {
-  const sections =
-    plan?.meals
-      .filter((meal) => visibleMeals.includes(meal.meal))
-      .map((meal) => {
-        const rows =
-          meal.items.length > 0
-            ? meal.items
-                .map(
-                  (item) => `
-            <tr>
-              <td>${item.item_name}</td>
-              <td>${formatQuantity(item.order_units)} ${item.uom_customer ?? ""}</td>
-              <td>${formatQuantity(item.production_quantity)} ${item.uom_production ?? ""}</td>
-            </tr>
-          `,
-                )
-                .join("")
-            : `<tr><td colspan="3">No production quantity for this meal.</td></tr>`;
-
-        const issues =
-          meal.issues.length > 0
-            ? `
-          <div class="issues">
-            <h4>Issues</h4>
-            <ul>
-              ${meal.issues
-                .map(
-                  (issue) =>
-                    `<li>${describeIssue(issue)}</li>`,
-                )
-                .join("")}
-            </ul>
-          </div>
-        `
-            : "";
-
-        return `
-        <section class="meal">
-          <div class="meal-header">
-            <h2>${meal.meal}</h2>
-            <span>${meal.is_production_generated ? "Exported" : "Pending"}</span>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>Item</th>
-                <th>Order Units</th>
-                <th>Production Qty</th>
-              </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-          </table>
-          ${issues}
-        </section>
-      `;
-      })
-      .join("") ?? "";
-
-  return `<!DOCTYPE html>
-  <html lang="en">
-    <head>
-      <meta charset="utf-8" />
-      <title>Kitchen Production · ${plan?.date ?? ""}</title>
-      <style>
-        body { font-family: Inter, Arial, sans-serif; padding: 24px; color: #1f2937; }
-        h1 { margin: 0 0 8px; }
-        .meta { color: #6b7280; margin-bottom: 24px; }
-        .meal { margin-bottom: 32px; page-break-inside: avoid; }
-        .meal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { border: 1px solid #e5e7eb; padding: 10px; text-align: left; }
-        th { background: #f9fafb; }
-        .issues { margin-top: 12px; }
-        .issues h4 { margin: 0 0 8px; font-size: 14px; }
-        .issues ul { margin: 0; padding-left: 18px; color: #92400e; }
-      </style>
-    </head>
-    <body>
-      <h1>Kitchen Production Plan</h1>
-      <div class="meta">${cityLabel} · ${plan?.date ?? ""}</div>
-      ${sections || "<p>No production items found.</p>"}
-      <script>
-        window.addEventListener("load", () => setTimeout(() => window.print(), 150));
-      </script>
-    </body>
-  </html>`;
-};
+// Compute effective buffer % and derived quantities for an item given a global override
+function applyBuffer(
+  item: ProductionItem,
+  globalBufferPct: number | null,
+): { effectivePct: number; bufferQty: number; finalQty: number } {
+  const effectivePct = globalBufferPct !== null ? globalBufferPct : item.buffer_percentage;
+  const bufferQty = item.production_quantity * (effectivePct / 100);
+  const finalQty = item.production_quantity + bufferQty;
+  return {
+    effectivePct,
+    bufferQty,
+    finalQty,
+  };
+}
 
 function KitchenProductionPageContent() {
   const adminCity = useAuthStore((state) => state.adminCity || state.user?.city_code || "MYS");
@@ -171,6 +132,21 @@ function KitchenProductionPageContent() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionPending, setActionPending] = useState<"finalize" | "reopen" | null>(null);
   const [selectedMeal, setSelectedMeal] = useState<MealName>("Breakfast");
+  const [bufferInputs, setBufferInputs] = useState<Record<MealName, string>>({
+    Breakfast: "",
+    Lunch: "",
+    Dinner: "",
+  });
+  const printTargetRef = useRef<HTMLDivElement>(null);
+  const hasUnsavedBufferRef = useRef(false);
+
+  const bufferPctByMeal = useMemo<Record<MealName, number | null>>(() => {
+    const result = {} as Record<MealName, number | null>;
+    for (const meal of ["Breakfast", "Lunch", "Dinner"] as MealName[]) {
+      result[meal] = parseBufferInput(bufferInputs[meal] ?? "");
+    }
+    return result;
+  }, [bufferInputs]);
 
   const cityLabel = getCityLabel(adminCity);
   const selectedDateISO = useMemo(() => format(selectedDate, "yyyy-MM-dd"), [selectedDate]);
@@ -217,14 +193,36 @@ function KitchenProductionPageContent() {
     void loadPlan();
   }, [loadPlan]);
 
+  // Sync buffer inputs from saved DB values whenever the plan loads
+  useEffect(() => {
+    if (!plan) return;
+    setBufferInputs((prev) => {
+      const next = { ...prev };
+      for (const mealData of plan.meals) {
+        const meal = mealData.meal as MealName;
+        next[meal] =
+          mealData.buffer_override_pct !== null && mealData.buffer_override_pct !== undefined
+            ? String(mealData.buffer_override_pct)
+            : "";
+      }
+      return next;
+    });
+  }, [plan]);
+
   const handlePrint = useCallback(() => {
-    if (typeof window === "undefined") return;
-    const nextWindow = window.open("", "_blank", "noopener=yes,width=1024,height=768");
-    if (!nextWindow) return;
-    nextWindow.document.write(buildPrintMarkup(plan, [selectedMeal], cityLabel));
-    nextWindow.document.close();
-    nextWindow.focus();
-  }, [plan, selectedMeal, cityLabel]);
+    if (typeof window === "undefined" || !printTargetRef.current) return;
+    const style = document.createElement("style");
+    style.textContent = `
+      @media print {
+        body * { visibility: hidden !important; }
+        [data-print-target], [data-print-target] * { visibility: visible !important; }
+        [data-print-target] { position: fixed !important; inset: 0 !important; padding: 24px !important; overflow: visible !important; }
+      }
+    `;
+    document.head.appendChild(style);
+    window.addEventListener("afterprint", () => document.head.removeChild(style), { once: true });
+    window.print();
+  }, []);
 
   const goToDailyMenu = useCallback(
     (meal: MealName) => {
@@ -252,11 +250,32 @@ function KitchenProductionPageContent() {
         }
         const endpoint =
           kind === "finalize" ? "/api/production/finalize" : "/api/production/reopen";
-        const response = await http.post(endpoint, {
+
+        const body: Record<string, unknown> = {
           date: selectedDateISO,
           menu_type: selectedMeal,
           city_code: adminCity,
-        });
+        };
+
+        if (kind === "finalize" && targetMeal.items.length > 0) {
+          const mealBufferPct = bufferPctByMeal[selectedMeal];
+          body.buffer_override_pct = mealBufferPct;
+          body.plans = targetMeal.items.map((item) => {
+            const { bufferQty } = applyBuffer(item, mealBufferPct);
+            const base = roundedQty(item.production_quantity, item.uom_production);
+            const buffer = roundedQty(bufferQty, item.uom_production);
+            const final = roundedQty(base + buffer, item.uom_production);
+            return {
+              item_name: item.item_name,
+              planned_quantity: base,
+              buffer_quantity: buffer,
+              final_quantity: final,
+              available_quantity: final,
+            };
+          });
+        }
+
+        const response = await http.post(endpoint, body);
         if (!response.ok) {
           throw new Error(await response.text());
         }
@@ -272,65 +291,145 @@ function KitchenProductionPageContent() {
         setActionPending(null);
       }
     },
-    [adminCity, loadPlan, plan?.meals, selectedDateISO, selectedMeal],
+    [adminCity, bufferPctByMeal, loadPlan, plan?.meals, selectedDateISO, selectedMeal],
   );
 
   const summaryCards = useMemo(
     () =>
       visibleMeals.map((meal) => {
         const mealData = plan?.meals.find((entry) => entry.meal === meal) ?? null;
+        const storedBuffer = mealData?.buffer_override_pct ?? null;
+        const currentBuffer = bufferPctByMeal[meal];
+        const isBufferDirty = storedBuffer !== currentBuffer;
         return {
           meal,
           itemCount: mealData?.items.length ?? 0,
           issueCount: mealData?.issues.length ?? 0,
           isReleased: Boolean(mealData?.is_released),
           isExported: Boolean(mealData?.is_production_generated),
+          isBufferDirty,
         };
       }),
+    [plan?.meals, visibleMeals, bufferPctByMeal],
+  );
+
+  const hasUnsavedBuffer = useMemo(
+    () => summaryCards.some((card) => card.isBufferDirty),
+    [summaryCards],
+  );
+
+  const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+
+  useEffect(() => {
+    hasUnsavedBufferRef.current = hasUnsavedBuffer;
+  }, [hasUnsavedBuffer]);
+
+  const handleBufferInputChange = useCallback(
+    (meal: MealName, value: string) => {
+      setBufferInputs((prev) => {
+        const next = { ...prev, [meal]: value };
+        hasUnsavedBufferRef.current = visibleMeals.some((visibleMeal) => {
+          const mealData = plan?.meals.find((entry) => entry.meal === visibleMeal) ?? null;
+          const storedBuffer = mealData?.buffer_override_pct ?? null;
+          return storedBuffer !== parseBufferInput(next[visibleMeal] ?? "");
+        });
+        return next;
+      });
+    },
     [plan?.meals, visibleMeals],
   );
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (!hasUnsavedBufferRef.current) return;
+      const anchor = (e.target as HTMLElement).closest("a");
+      if (!anchor) return;
+      const href = anchor.getAttribute("href");
+      if (!href || href.startsWith("#") || href === window.location.pathname) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setPendingHref(href);
+      setLeaveDialogOpen(true);
+    };
+
+    // Catch keyboard reload shortcuts (F5, Ctrl+R, Cmd+R)
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!hasUnsavedBufferRef.current) return;
+      const isReload = e.key === "F5" || (e.key === "r" && (e.ctrlKey || e.metaKey));
+      if (!isReload) return;
+      e.preventDefault();
+      setPendingHref(null); // null = reload, not navigate
+      setLeaveDialogOpen(true);
+    };
+
+    // Use window (above document) in capture so we fire before Next.js's router handler
+    window.addEventListener("click", handleClick, true);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("click", handleClick, true);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
   const selectedMealData = useMemo(
     () => plan?.meals.find((entry) => entry.meal === selectedMeal) ?? null,
     [plan?.meals, selectedMeal],
   );
 
   return (
-    <div className="flex flex-col gap-6">
+    <div ref={printTargetRef} data-print-target className="flex flex-col gap-6">
       <Card className="border border-border shadow-sm">
-        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <CardHeader className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
             <CardTitle>Kitchen Production Plan</CardTitle>
             <p className="mt-2 text-sm text-muted-foreground">
-              Derived from actual orders and converted to production UOM using
-              `orders × unit_packing × packing_to_production_rate`.
-              Final display is in production UOM only.
+              Base production quantity ={" "}
+              <code>orders × unit_packing × packing_to_production_rate</code>. Buffer is applied on
+              top of the base quantity. Final Qty = Base + Buffer.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <DatePickerWithPresets
-              selectedDate={selectedDate}
-              onSelectDate={(date) => setSelectedDate(normalizeDate(date))}
-              showQuickSelect={false}
-            />
-            <Button variant="outline" onClick={() => void loadPlan()} disabled={loading}>
-              {loading ? "Refreshing…" : "Refresh"}
-            </Button>
-            <Button variant="outline" onClick={handlePrint} disabled={!selectedMealData}>
-              Print
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => void callMealAction("reopen")}
-              disabled={actionPending !== null || !selectedMealData?.is_released}
-            >
-              {actionPending === "reopen" ? "Reopening…" : `Reopen ${selectedMeal}`}
-            </Button>
-            <Button
-              onClick={() => void callMealAction("finalize")}
-              disabled={actionPending !== null || !selectedMealData?.is_released}
-            >
-              {actionPending === "finalize" ? "Marking…" : `Export ${selectedMeal}`}
-            </Button>
+          <div className="flex flex-col items-end gap-2">
+            <div className="flex items-center gap-2">
+              <DatePickerWithPresets
+                selectedDate={selectedDate}
+                onSelectDate={(date) => setSelectedDate(normalizeDate(date))}
+                showQuickSelect={false}
+              />
+              <Button variant="outline" onClick={() => void loadPlan()} disabled={loading}>
+                {loading ? "Refreshing…" : "Refresh"}
+              </Button>
+              <Button variant="outline" onClick={handlePrint} disabled={!plan}>
+                Print
+              </Button>
+            </div>
+            <div className="flex flex-col items-end gap-1">
+              {selectedMealData?.is_production_generated ? (
+                <Button
+                  variant="outline"
+                  onClick={() => void callMealAction("reopen")}
+                  disabled={actionPending !== null}
+                >
+                  {actionPending === "reopen" ? "Reopening…" : `Reopen ${selectedMeal}`}
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    onClick={() => void callMealAction("finalize")}
+                    disabled={
+                      actionPending !== null ||
+                      !selectedMealData?.is_released ||
+                      (selectedMealData?.issues?.length ?? 0) > 0
+                    }
+                  >
+                    {actionPending === "finalize" ? "Marking…" : `Export ${selectedMeal}`}
+                  </Button>
+                  {(selectedMealData?.issues?.length ?? 0) > 0 && (
+                    <p className="text-xs text-amber-600">Resolve all issues before exporting</p>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent className="pt-0">
@@ -357,12 +456,17 @@ function KitchenProductionPageContent() {
             }}
             className={[
               "cursor-pointer border shadow-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
-              card.meal === selectedMeal ? "border-primary bg-primary/5" : "border-border hover:border-primary/50",
+              card.meal === selectedMeal
+                ? "border-primary bg-primary/5"
+                : "border-border hover:border-primary/50",
               !card.isExported ? "border-2 border-dashed" : "",
             ].join(" ")}
           >
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">{card.meal}</CardTitle>
+              <CardTitle className="flex items-center gap-1.5 text-base">
+                {card.meal}
+                {card.issueCount > 0 && <AlertTriangle className="h-4 w-4 text-amber-500" />}
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm text-muted-foreground">
               <div className="flex items-center justify-between">
@@ -385,6 +489,38 @@ function KitchenProductionPageContent() {
                 <span>Issues</span>
                 <span className="font-medium text-foreground">{card.issueCount}</span>
               </div>
+              <div
+                className="flex items-center justify-between pt-1"
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center gap-1">
+                  <Label
+                    htmlFor={`buffer-${card.meal}`}
+                    className={[
+                      "text-sm cursor-default",
+                      card.isExported ? "text-muted-foreground/50" : "text-muted-foreground",
+                    ].join(" ")}
+                  >
+                    Buffer %
+                  </Label>
+                  {card.isBufferDirty && (
+                    <span title="Buffer changed — re-export to apply this value">
+                      <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
+                    </span>
+                  )}
+                </div>
+                <Input
+                  id={`buffer-${card.meal}`}
+                  type="text"
+                  inputMode="decimal"
+                  placeholder={card.isExported ? "Exported" : "Per-item"}
+                  value={bufferInputs[card.meal]}
+                  disabled={card.isExported}
+                  onChange={(e) => handleBufferInputChange(card.meal, e.target.value)}
+                  className="h-7 w-24 text-sm"
+                />
+              </div>
             </CardContent>
           </Card>
         ))}
@@ -402,7 +538,7 @@ function KitchenProductionPageContent() {
           <div>
             <CardTitle>{selectedMeal}</CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
-              Final quantity is shown in production UOM.
+              Final Qty = Base Production Qty + Buffer. Quantities in production UOM.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -425,26 +561,73 @@ function KitchenProductionPageContent() {
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] border-collapse text-sm">
+              <table className="w-full min-w-[900px] border-collapse text-sm">
                 <thead>
                   <tr className="border-b text-left">
                     <th className="py-3 pr-4 font-medium text-muted-foreground">Item</th>
                     <th className="py-3 pr-4 font-medium text-muted-foreground">Order Units</th>
-                        <th className="py-3 pr-4 font-medium text-muted-foreground">Production Qty</th>
+                    <th className="py-3 pr-4 font-medium text-muted-foreground">Base Prod Qty</th>
+                    <th className="py-3 pr-4 font-medium text-muted-foreground">Buffer %</th>
+                    <th className="py-3 pr-4 font-medium text-muted-foreground">Buffer Qty</th>
+                    <th className="py-3 pr-4 font-medium text-muted-foreground">Final Qty</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {selectedMealData.items.map((item) => (
-                    <tr key={`${selectedMeal}-${item.item_id}`} className="border-b last:border-0">
-                      <td className="py-3 pr-4 font-medium text-foreground">{item.item_name}</td>
-                      <td className="py-3 pr-4">
-                        {formatQuantity(item.order_units)} {item.uom_customer ?? ""}
-                      </td>
-                      <td className="py-3 pr-4 font-semibold text-foreground">
-                        {formatQuantity(item.production_quantity)} {item.uom_production ?? ""}
-                      </td>
-                    </tr>
-                  ))}
+                  {selectedMealData.items.map((item) => {
+                    const isExported = Boolean(selectedMealData.is_production_generated);
+                    const mealBufferPct = bufferPctByMeal[selectedMeal];
+                    // Exported: use values stored in DB; otherwise compute client-side
+                    const bufferQty = isExported
+                      ? item.buffer_quantity
+                      : applyBuffer(item, mealBufferPct).bufferQty;
+                    const finalQty = isExported
+                      ? item.with_buffer_quantity
+                      : applyBuffer(item, mealBufferPct).finalQty;
+                    // Effective % for display: stored override (exported) or active input
+                    const savedOverride = selectedMealData.buffer_override_pct;
+                    const effectivePct = isExported
+                      ? (savedOverride ?? item.buffer_percentage)
+                      : (mealBufferPct ?? item.buffer_percentage);
+                    const isOverridden = effectivePct !== item.buffer_percentage;
+                    return (
+                      <tr
+                        key={`${selectedMeal}-${item.item_id}`}
+                        className="border-b last:border-0"
+                      >
+                        <td className="py-3 pr-4 font-medium text-foreground">{item.item_name}</td>
+                        <td className="py-3 pr-4">
+                          {formatQuantity(item.order_units, item.uom_customer)}{" "}
+                          {item.uom_customer ?? ""}
+                        </td>
+                        <td className="py-3 pr-4 text-muted-foreground">
+                          {formatQuantity(item.production_quantity, item.uom_production)}{" "}
+                          {item.uom_production ?? ""}
+                        </td>
+                        <td className="py-3 pr-4">
+                          <span
+                            className={
+                              isOverridden ? "font-medium text-amber-700" : "text-muted-foreground"
+                            }
+                          >
+                            {effectivePct.toFixed(1)}%
+                          </span>
+                          {isOverridden && (
+                            <span className="ml-1 text-xs text-muted-foreground">
+                              (was {item.buffer_percentage.toFixed(1)}%)
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 pr-4 text-muted-foreground">
+                          {formatQuantity(bufferQty, item.uom_production)}{" "}
+                          {item.uom_production ?? ""}
+                        </td>
+                        <td className="py-3 pr-4 font-semibold text-foreground">
+                          {formatQuantity(finalQty, item.uom_production)}{" "}
+                          {item.uom_production ?? ""}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -486,6 +669,32 @@ function KitchenProductionPageContent() {
           ) : null}
         </CardContent>
       </Card>
+
+      <AlertDialog open={leaveDialogOpen} onOpenChange={setLeaveDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Buffer not applied</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have buffer changes that haven&apos;t been exported yet. If you leave now, those
+              changes will be lost. Are you sure you want to leave?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPendingHref(null)}>Stay</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingHref) {
+                  window.location.href = pendingHref;
+                } else {
+                  window.location.reload();
+                }
+              }}
+            >
+              Leave anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
