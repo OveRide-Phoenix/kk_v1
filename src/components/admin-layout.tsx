@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Bell, User, Menu, Search, LogOut, SwitchCamera, X, BellRing, Trash2 } from "lucide-react";
 import Sidebar from "@/components/sidebar";
-import { useAuthStore } from "@/store/store";
+import { useAuthStore, type RoleSummary } from "@/store/store";
 import {
   Dialog,
   DialogContent,
@@ -351,7 +351,7 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
       }
 
       const resolvedUser = data.user ?? null;
-      const roleDetails = Array.isArray(resolvedUser?.role_details)
+      const roleDetails: RoleSummary[] = Array.isArray(resolvedUser?.role_details)
         ? resolvedUser.role_details
         : Array.isArray(data.role_details)
           ? data.role_details

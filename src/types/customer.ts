@@ -1,4 +1,5 @@
 export interface Customer {
+  customer_id?: number
   name: string
   referredBy?: string
   primaryMobile: string

@@ -21,8 +21,14 @@ export default function ProductDetails({ product, open, onOpenChange }: ProductD
     3: "Dinner",
     4: "Condiments",
   }
+  const productDetails = product as Partial<Product & PlatedProduct> & { uom?: string | null }
 
-  const mealBadges = Array.from(new Set((product as any).bld_ids || [])).map((mealId) => (
+  const mealIds = Array.isArray((product as { bld_ids?: unknown }).bld_ids)
+    ? ((product as { bld_ids?: unknown[] }).bld_ids ?? [])
+        .map((mealId) => Number(mealId))
+        .filter((mealId) => Number.isInteger(mealId))
+    : []
+  const mealBadges = Array.from(new Set(mealIds)).map((mealId) => (
     <Badge key={`meal-${mealId}`} variant="outline">
       {MEAL_LABELS[mealId] ?? `BLD ${mealId}`}
     </Badge>
@@ -96,40 +102,40 @@ export default function ProductDetails({ product, open, onOpenChange }: ProductD
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <h3 className="text-sm font-medium text-gray-500">Customer UOM</h3>
-                  <p className="mt-1">{product.uom_customer ?? product.uom}</p>
+                  <p className="mt-1">{productDetails.uom_customer ?? productDetails.uom ?? "—"}</p>
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-gray-500">Unit Packing</h3>
-                  <p className="mt-1">{product.unit_packing ?? "—"}</p>
+                  <p className="mt-1">{productDetails.unit_packing ?? "—"}</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <h3 className="text-sm font-medium text-gray-500">Packing UOM</h3>
-                  <p className="mt-1">{product.uom_packing ?? "—"}</p>
+                  <p className="mt-1">{productDetails.uom_packing ?? "—"}</p>
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-gray-500">HSN Code</h3>
-                  <p className="mt-1">{product.hsn_code}</p>
+                  <p className="mt-1">{productDetails.hsn_code ?? "—"}</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <h3 className="text-sm font-medium text-gray-500">Production UOM</h3>
-                  <p className="mt-1">{product.uom_production ?? "—"}</p>
+                  <p className="mt-1">{productDetails.uom_production ?? "—"}</p>
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-gray-500">Conversion Rate</h3>
-                  <p className="mt-1">{product.packing_to_production_rate ?? "—"}</p>
+                  <p className="mt-1">{productDetails.packing_to_production_rate ?? "—"}</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <h3 className="text-sm font-medium text-gray-500">Buffer Percentage</h3>
-                  <p className="mt-1">{product.buffer_percentage}%</p>
+                  <p className="mt-1">{productDetails.buffer_percentage ?? "—"}%</p>
                 </div>
               </div>
 

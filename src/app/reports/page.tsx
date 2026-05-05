@@ -114,6 +114,21 @@ const currencyFormatter = new Intl.NumberFormat("en-IN", {
 
 const numberFormatter = new Intl.NumberFormat("en-IN");
 
+function toFiniteNumber(value: unknown): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatCurrencyTooltip(value: unknown): string {
+  const parsed = toFiniteNumber(value);
+  return parsed === null ? "—" : currencyFormatter.format(parsed);
+}
+
+function formatNumberTooltip(value: unknown): string {
+  const parsed = toFiniteNumber(value);
+  return parsed === null ? "—" : numberFormatter.format(parsed);
+}
+
 function formatAxisCurrency(value: number): string {
   if (value >= 10_000_000) {
     return `${(value / 10_000_000).toFixed(1)}Cr`;
@@ -862,11 +877,7 @@ export default function ReportsPage() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="dayLabel" />
                   <YAxis tickFormatter={(value: number) => formatAxisCurrency(value)} width={80} />
-                  <Tooltip
-                    formatter={(value: number | undefined) =>
-                      typeof value === "number" ? currencyFormatter.format(value) : "—"
-                    }
-                  />
+                  <Tooltip formatter={formatCurrencyTooltip} />
                   <Legend />
                   <Line
                     type="monotone"
@@ -900,11 +911,7 @@ export default function ReportsPage() {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="dayLabel" />
                     <YAxis tickFormatter={(value: number) => currencyFormatter.format(value)} width={80} />
-                    <Tooltip
-                      formatter={(value: number | undefined) =>
-                        typeof value === "number" ? currencyFormatter.format(value) : "—"
-                      }
-                    />
+                    <Tooltip formatter={formatCurrencyTooltip} />
                     <Legend />
                     <Line
                       type="monotone"
@@ -937,7 +944,7 @@ export default function ReportsPage() {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" />
                     <YAxis tickFormatter={(value: number) => formatAxisCurrency(value)} width={80} />
-                    <Tooltip formatter={(value: number) => currencyFormatter.format(value)} />
+                    <Tooltip formatter={formatCurrencyTooltip} />
                     <Legend />
                     <Bar dataKey="total_sales" name="Total Sales" fill="#0ea5e9" />
                   </BarChart>
@@ -953,7 +960,7 @@ export default function ReportsPage() {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" />
                     <YAxis tickFormatter={(value: number) => numberFormatter.format(value)} width={60} />
-                    <Tooltip formatter={(value: number) => numberFormatter.format(value)} />
+                    <Tooltip formatter={formatNumberTooltip} />
                     <Legend />
                     <Bar dataKey="total_orders" name="Total Orders" fill="#6366f1" />
                   </BarChart>
@@ -982,7 +989,7 @@ export default function ReportsPage() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="category" />
                   <YAxis tickFormatter={(value: number) => formatAxisCurrency(value)} width={80} />
-                  <Tooltip formatter={(value: number) => currencyFormatter.format(value)} />
+                  <Tooltip formatter={formatCurrencyTooltip} />
                   <Legend />
                   <Bar dataKey="currentRevenue" name={selectedMonth?.label ?? "Current"} fill="#0ea5e9" />
                   {comparisonReports?.category?.length ? (
@@ -1003,7 +1010,7 @@ export default function ReportsPage() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="category" />
                   <YAxis tickFormatter={(value: number) => numberFormatter.format(value)} width={60} />
-                  <Tooltip formatter={(value: number) => numberFormatter.format(value)} />
+                  <Tooltip formatter={formatNumberTooltip} />
                   <Legend />
                   <Bar dataKey="currentItems" name={selectedMonth?.label ?? "Current"} fill="#0ea5e9" />
                   {comparisonReports?.category?.length ? (
@@ -1038,7 +1045,7 @@ export default function ReportsPage() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="customer_name" />
                   <YAxis tickFormatter={(value: number) => formatAxisCurrency(value)} width={80} />
-                  <Tooltip formatter={(value: number) => currencyFormatter.format(value)} />
+                  <Tooltip formatter={formatCurrencyTooltip} />
                   <Legend />
                   <Bar dataKey="total_spent" name="Total Spend" fill="#0ea5e9" />
                 </BarChart>
@@ -1052,7 +1059,7 @@ export default function ReportsPage() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="customer_name" />
                   <YAxis tickFormatter={(value: number) => numberFormatter.format(value)} width={60} />
-                  <Tooltip formatter={(value: number) => numberFormatter.format(value)} />
+                  <Tooltip formatter={formatNumberTooltip} />
                   <Legend />
                   <Bar dataKey="total_orders" name="Total Orders" fill="#6366f1" />
                 </BarChart>
@@ -1064,7 +1071,7 @@ export default function ReportsPage() {
                 <p className="mb-2 text-sm font-medium text-muted-foreground">Customer loyalty breakdown</p>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Tooltip formatter={(value: number) => numberFormatter.format(value)} />
+                    <Tooltip formatter={formatNumberTooltip} />
                     <Legend />
                     <Pie data={loyaltySegments} dataKey="count" nameKey="segment" innerRadius={60} outerRadius={110}>
                       {loyaltySegments.map((entry, index) => (
@@ -1097,7 +1104,7 @@ export default function ReportsPage() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="plan" />
                   <YAxis tickFormatter={(value: number) => numberFormatter.format(value)} width={60} />
-                  <Tooltip formatter={(value: number) => numberFormatter.format(value)} />
+                  <Tooltip formatter={formatNumberTooltip} />
                   <Legend />
                   <Bar
                     dataKey="currentSubscriptions"
@@ -1122,7 +1129,7 @@ export default function ReportsPage() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="plan" />
                   <YAxis tickFormatter={(value: number) => formatAxisCurrency(value)} width={80} />
-                  <Tooltip formatter={(value: number) => currencyFormatter.format(value)} />
+                  <Tooltip formatter={formatCurrencyTooltip} />
                   <Legend />
                   <Bar dataKey="currentRevenue" name={selectedMonth?.label ?? "Current"} fill="#22c55e" />
                   {comparisonReports?.subscriptions?.length ? (

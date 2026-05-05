@@ -28,6 +28,15 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import CustomerNavBar from "@/components/customer-nav-bar"
 
+type MenuItem = {
+  id: number
+  name: string
+  description: string
+  price: number
+  image: string
+  category: string
+}
+
 export default function NewSubscription() {
   const [quantities, setQuantities] = useState<{ [key: number]: number }>({})
   const [popupQuantities, setPopupQuantities] = useState<{ [key: number]: number }>({});
@@ -35,7 +44,7 @@ export default function NewSubscription() {
   const [location, setLocation] = useState("WORK No. 3, St. Mark's Road, Bengaluru - 04......");
   const [selectedAddress, setSelectedAddress] = useState("work");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [quantityChanged, setQuantityChanged] = useState(false);
   const [addresses] = useState([
     { type: "HOME", address: "123 Home Street, Bengaluru - 01" },
@@ -59,6 +68,8 @@ export default function NewSubscription() {
   };
 
   const handleConfirm = () => {
+    if (!selectedItem) return;
+
     setQuantities(prev => ({
       ...prev,
       [selectedItem.id]: popupQuantities[selectedItem.id] || 0
@@ -75,7 +86,7 @@ export default function NewSubscription() {
     }
   };
 
-  const openPopup = (item) => {
+  const openPopup = (item: MenuItem) => {
     setSelectedItem(item);
     setPopupQuantities(prev => ({
       ...prev,
@@ -84,7 +95,7 @@ export default function NewSubscription() {
     setQuantityChanged(false);
   };
 
-  const menuItems = [
+  const menuItems: MenuItem[] = [
     // Sample items
     {
       id: 1,
@@ -128,8 +139,10 @@ export default function NewSubscription() {
                   onClick={() => {
                     setActiveCategory(activeCategory === category ? null : category);
                     const element = document.getElementById(category);
+                    if (!element) return;
+
                     const headerOffset = 160;
-                    const elementPosition = element?.getBoundingClientRect().top;
+                    const elementPosition = element.getBoundingClientRect().top;
                     const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
                     
                     window.scrollTo({
@@ -275,7 +288,7 @@ export default function NewSubscription() {
                   <Minus className="h-3 w-3" />
                 </Button>
                 <span className="text-sm text-primary font-medium min-w-[20px] text-center">
-                  {popupQuantities[selectedItem?.id] || quantities[selectedItem?.id] || 0}
+                  {selectedItem ? popupQuantities[selectedItem.id] || quantities[selectedItem.id] || 0 : 0}
                 </span>
                 <Button
                   variant="outline"

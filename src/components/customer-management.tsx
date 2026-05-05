@@ -71,6 +71,7 @@ const normaliseRoles = (value: unknown): number[] => {
 // Define customer types
 type CustomerType = "Regular" | "Reseller" | "Agent";
 type PaymentFrequency = "Daily" | "Weekly" | "Monthly";
+type AddressType = "Home" | "Work" | "Other";
 type CustomerStatus = "Active" | "Pending" | "Inactive";
 
 // Update the Customer interface to match the API response
@@ -102,6 +103,14 @@ interface Customer {
 }
 
 const PAGE_SIZE = 50;
+
+const normalizePaymentFrequency = (value: string | null): PaymentFrequency => {
+  return value === "Weekly" || value === "Monthly" ? value : "Daily";
+};
+
+const normalizeAddressType = (value: string | null): AddressType => {
+  return value === "Work" || value === "Other" ? value : "Home";
+};
 
 export default function CustomerManagement() {
   const { toast } = useToast();
@@ -331,13 +340,13 @@ export default function CustomerManagement() {
                         ? {
                             customer_id: editingCustomer.customer_id,
                             name: editingCustomer.name,
-                            referredBy: editingCustomer.referred_by,
+                            referredBy: editingCustomer.referred_by ?? "",
                             primaryMobile: editingCustomer.primary_mobile,
                             alternativeMobile: editingCustomer.alternative_mobile ?? "",
                             email: editingCustomer.email ?? "",
                             recipientName: editingCustomer.recipient_name,
-                            paymentFrequency: editingCustomer.payment_frequency ?? "Daily",
-                            addressType: editingCustomer.address_type ?? "Home",
+                            paymentFrequency: normalizePaymentFrequency(editingCustomer.payment_frequency),
+                            addressType: normalizeAddressType(editingCustomer.address_type),
                             houseApartmentNo: editingCustomer.house_apartment_no ?? "",
                             writtenAddress: editingCustomer.written_address,
                             city: editingCustomer.city,

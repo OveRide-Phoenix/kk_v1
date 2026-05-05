@@ -85,6 +85,7 @@ type OrderSummary = {
 type AddressSummary = {
   address_id: number;
   address_type: string;
+  house_apartment_no?: string | null;
   written_address: string;
   city: string;
   city_code?: string;

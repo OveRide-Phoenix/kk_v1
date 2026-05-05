@@ -277,9 +277,9 @@ export function DailyMenuSetup() {
 
       if (payload?.bld_type) {
         const normalizedMeal = payload.bld_type.toLowerCase();
-        const validMeals = ["breakfast", "lunch", "dinner", "condiments"];
-        if (validMeals.includes(normalizedMeal)) {
-          setCurrentSection(normalizedMeal);
+        const validMeals: MealSection[] = ["breakfast", "lunch", "dinner", "condiments"];
+        if ((validMeals as string[]).includes(normalizedMeal)) {
+          setCurrentSection(normalizedMeal as MealSection);
         }
       }
     } catch (error) {
@@ -545,10 +545,10 @@ export function DailyMenuSetup() {
   // ───────────────────────────────────────────────────────────────────────
   // 4) Edit / Delete / Save in a given section
   // ───────────────────────────────────────────────────────────────────────
-  const handleEdit = (meal: string, index: number) => {
+  const handleEdit = (meal: MealSection, index: number) => {
     setEditIndexByMeal((prev) => ({ ...prev, [meal]: index }));
   };
-  const handleDelete = (meal: string, index: number) => {
+  const handleDelete = (meal: MealSection, index: number) => {
     setItemsByMeal((prev) => {
       const copy = [...prev[meal]];
       copy.splice(index, 1);
@@ -556,7 +556,7 @@ export function DailyMenuSetup() {
     });
   };
   const handleSave = (
-    meal: string,
+    meal: MealSection,
     index: number,
     field: keyof MenuItem,
     value: string | number,
