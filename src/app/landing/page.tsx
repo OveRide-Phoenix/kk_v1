@@ -28,7 +28,7 @@ const plusJakarta = Plus_Jakarta_Sans({
 const services = [
   {
     icon: "local_shipping",
-    image: "/images/hero/dosa.png",
+    image: "/images/menu/placeholder_lunch.png",
     title: "Home Delivery",
     description:
       "Get wholesome, home-style meals delivered straight to your doorstep, whether you need lunch for today or dinner for the family.",
@@ -36,7 +36,7 @@ const services = [
   },
   {
     icon: "groups",
-    image: "/images/menu/new/rice.png",
+    image: "/images/menu/placeholder_event.png",
     title: "Corporate Orders",
     description:
       "Plan reliable office lunches and team meals with comforting Indian food that scales well for workplaces, meetings, and recurring staff orders.",
@@ -44,7 +44,7 @@ const services = [
   },
   {
     icon: "celebration",
-    image: "/images/hero/thalidosa.png",
+    image: "/images/menu/placeholder_weekend.png",
     title: "Party Orders",
     description:
       "Serve generous spreads for house parties, celebrations, and special gatherings with crowd-pleasing menus made in our signature home-style way.",
@@ -88,7 +88,7 @@ const testimonials = [
 const products = [
   {
     icon: "set_meal",
-    image: "/images/menu/new/rice.png",
+    image: "/images/menu/placeholder_breakfast.png",
     name: "Breakfast",
     description:
       "Individual dishes — rice, curries, sabzi, dal — priced by meal type. Mix and match to build your plate.",
@@ -97,7 +97,7 @@ const products = [
   },
   {
     icon: "local_dining",
-    image: "/images/hero/thalidosa.png",
+    image: "/images/menu/placeholder_lunch.png",
     name: "Lunch",
     description:
       "Curated bundles that pair well together. A full meal sorted in one click — great value, zero guesswork.",
@@ -106,7 +106,7 @@ const products = [
   },
   {
     icon: "restaurant",
-    image: "/images/hero/thali.png",
+    image: "/images/menu/placeholder_dinner.png",
     name: "Dinner",
     description:
       "Pre-assembled complete meals with all components included. A balanced plate, ready to eat.",
@@ -115,7 +115,7 @@ const products = [
   },
   {
     icon: "cake",
-    image: "/images/menu/new/south-festival.png",
+    image: "/images/menu/placeholder_condiments.png",
     name: "Condiments",
     description:
       "Seasonal and festive offerings — Onam Sadhya, Ugadi specials, and more. Limited, authentic, and made to order.",
@@ -123,7 +123,7 @@ const products = [
   },
   {
     icon: "cake",
-    image: "/images/menu/new/south-festival.png",
+    image: "/images/menu/placeholder_savouries.png",
     name: "Savouries",
     description:
       "Seasonal and festive offerings — Onam Sadhya, Ugadi specials, and more. Limited, authentic, and made to order.",
@@ -132,7 +132,7 @@ const products = [
 
   {
     icon: "cake",
-    image: "/images/menu/new/south-festival.png",
+    image: "/images/menu/placeholder_sweets.png",
     name: "Sweets",
     description:
       "Seasonal and festive offerings — Onam Sadhya, Ugadi specials, and more. Limited, authentic, and made to order.",
@@ -140,7 +140,7 @@ const products = [
   },
   {
     icon: "cake",
-    image: "/images/menu/new/south-festival.png",
+    image: "/images/menu/placeholder_weekend.png",
     name: "Weekend/Festival Specials",
     description:
       "Seasonal and festive offerings — Onam Sadhya, Ugadi specials, and more. Limited, authentic, and made to order.",
@@ -148,7 +148,7 @@ const products = [
   },
   {
     icon: "cake",
-    image: "/images/menu/new/south-festival.png",
+    image: "/images/menu/placeholder_event.png",
     name: "Event Specials",
     description:
       "Seasonal and festive offerings — Onam Sadhya, Ugadi specials, and more. Limited, authentic, and made to order.",
@@ -638,7 +638,7 @@ export default function LandingPage() {
                   }}
                 >
                   <Image
-                    src="/images/hero/thali.png"
+                    src="/images/menu/placeholder_lunch.png"
                     alt="South Indian thali"
                     fill
                     style={{ objectFit: "cover" }}
@@ -653,9 +653,9 @@ export default function LandingPage() {
                   }}
                 >
                   {[
-                    { src: "/images/menu/idli-sambar.jpg", alt: "Idli and sambar" },
-                    { src: "/images/menu/masala-dosa.jpg", alt: "Masala dosa" },
-                    { src: "/images/menu/new/chapathi.png", alt: "Chapathi meal" },
+                    { src: "/images/menu/placeholder_breakfast.png", alt: "Breakfast" },
+                    { src: "/images/menu/placeholder_dinner.png", alt: "Dinner" },
+                    { src: "/images/menu/placeholder_event.png", alt: "Event Spread" },
                   ].map((photo) => (
                     <div
                       key={photo.src}
@@ -756,7 +756,7 @@ export default function LandingPage() {
                   }}
                 >
                   <Image
-                    src="/images/menu/idli-sambar.jpg"
+                    src="/images/menu/placeholder_weekend.png"
                     alt="Home cooked meal"
                     fill
                     style={{ objectFit: "cover" }}
@@ -1069,25 +1069,25 @@ export default function LandingPage() {
         {/* Track duplicated for seamless loop */}
         <div className="marquee-track">
           {[
-            { src: "/images/menu/idli-sambar.jpg", label: "Idli Sambar" },
-            { src: "/images/menu/masala-dosa.jpg", label: "Masala Dosa" },
-            { src: "/images/menu/new/pongal.png", label: "Pongal" },
-            { src: "/images/menu/poori.jpg", label: "Poori" },
-            { src: "/images/menu/rava-dosa.jpg", label: "Rava Dosa" },
-            { src: "/images/menu/new/chapathi.png", label: "Chapathi" },
-            { src: "/images/menu/upma.jpg", label: "Upma" },
-            { src: "/images/menu/vada-sambar.jpg", label: "Vada Sambar" },
-            { src: "/images/menu/new/idly.png", label: "Idly" },
+            { src: "/images/menu/placeholder_breakfast.png", label: "Breakfast" },
+            { src: "/images/menu/placeholder_lunch.png", label: "Lunch" },
+            { src: "/images/menu/placeholder_dinner.png", label: "Dinner" },
+            { src: "/images/menu/placeholder_condiments.png", label: "Condiments" },
+            { src: "/images/menu/placeholder_savouries.png", label: "Savouries" },
+            { src: "/images/menu/placeholder_sweets.png", label: "Sweets" },
+            { src: "/images/menu/placeholder_weekend.png", label: "Specials" },
+            { src: "/images/menu/placeholder_event.png", label: "Events" },
+            { src: "/images/menu/placeholder_breakfast.png", label: "Breakfast 2" },
             // duplicate for seamless loop
-            { src: "/images/menu/idli-sambar.jpg", label: "Idli Sambar 2" },
-            { src: "/images/menu/masala-dosa.jpg", label: "Masala Dosa 2" },
-            { src: "/images/menu/new/pongal.png", label: "Pongal 2" },
-            { src: "/images/menu/poori.jpg", label: "Poori 2" },
-            { src: "/images/menu/rava-dosa.jpg", label: "Rava Dosa 2" },
-            { src: "/images/menu/new/chapathi.png", label: "Chapathi 2" },
-            { src: "/images/menu/upma.jpg", label: "Upma 2" },
-            { src: "/images/menu/vada-sambar.jpg", label: "Vada Sambar 2" },
-            { src: "/images/menu/new/idly.png", label: "Idly 2" },
+            { src: "/images/menu/placeholder_breakfast.png", label: "Breakfast 3" },
+            { src: "/images/menu/placeholder_lunch.png", label: "Lunch 2" },
+            { src: "/images/menu/placeholder_dinner.png", label: "Dinner 2" },
+            { src: "/images/menu/placeholder_condiments.png", label: "Condiments 2" },
+            { src: "/images/menu/placeholder_savouries.png", label: "Savouries 2" },
+            { src: "/images/menu/placeholder_sweets.png", label: "Sweets 2" },
+            { src: "/images/menu/placeholder_weekend.png", label: "Specials 2" },
+            { src: "/images/menu/placeholder_event.png", label: "Events 2" },
+            { src: "/images/menu/placeholder_breakfast.png", label: "Breakfast 4" },
           ].map((item) => (
             <div key={item.label} className="marquee-card">
               <Image
