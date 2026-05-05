@@ -42,6 +42,16 @@ type CartContext = {
   confirmedDateISO: string | null;
 };
 
+type CartLine = {
+  meal: MealType;
+  item_id?: number | null;
+  combo_id?: number | null;
+  menu_item_id?: number;
+  item_name: string;
+  qty: number;
+  rate: number;
+};
+
 type CustomerDailyMenuProps = {
   onCartChange?: (cart: CartLine[], context: CartContext) => void;
   refreshSignal?: number;
@@ -79,15 +89,6 @@ export default function CustomerDailyMenu({
   const [loading, setLoading] = useState(false);
 
   // Cart
-  type CartLine = {
-    meal: MealType;
-    item_id?: number | null;
-    combo_id?: number | null;
-    menu_item_id?: number;
-    item_name: string;
-    qty: number;
-    rate: number;
-  };
   const [cart, setCart] = useState<CartLine[]>([]);
   const subtotal = useMemo(() => cart.reduce((sum, l) => sum + l.qty * l.rate, 0), [cart]);
 

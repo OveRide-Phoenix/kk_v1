@@ -51,7 +51,7 @@ export default function CustomerV2LoginPage() {
             ? data.eligible_city_codes
             : [normalizedDefault]
 
-          const normalizedEligible = Array.from(
+          const normalizedEligible: CityCode[] = Array.from(
             new Set(
               eligible
                 .filter((code: unknown): code is string => typeof code === "string" && code.trim().length > 0)
@@ -171,13 +171,19 @@ export default function CustomerV2LoginPage() {
         | (Record<string, unknown> & {
             roles?: Array<number | string>
             role_codes?: Array<string | number>
-            role_details?: Array<{ role_id: number; code: string }>
+            role_details?: Array<{ role_id: number; code: string; name: string; description?: string | null; is_system?: boolean }>
           })
         | null
 
       const rawRoles = (baseUser?.roles ?? []) as Array<number | string>
       const rawRoleCodes = (baseUser?.role_codes ?? data.role_codes ?? []) as Array<string | number>
-      const rawRoleDetails = (baseUser?.role_details ?? data.role_details ?? []) as Array<{ role_id: number; code: string }>
+      const rawRoleDetails = (baseUser?.role_details ?? data.role_details ?? []) as Array<{
+        role_id: number
+        code: string
+        name: string
+        description?: string | null
+        is_system?: boolean
+      }>
 
       const adminRoleIds = rawRoleDetails
         .filter((detail) => detail.code === "admin")
@@ -203,13 +209,11 @@ export default function CustomerV2LoginPage() {
       }
 
       if (baseUser) {
-        const adjustedUser = isAdminLoginRequested
-          ? baseUser
-          : {
-              ...baseUser,
-              roles: filteredRoleIds,
-              role_codes: filteredRoleCodes,
-            }
+        const adjustedUser = {
+          ...baseUser,
+          roles: filteredRoleIds,
+          role_codes: filteredRoleCodes,
+        }
         setUser(adjustedUser)
       } else {
         setRoleState(filteredRoleIds, filteredRoleCodes)

@@ -418,23 +418,27 @@ export default function AddonForm({ onSave, onCancel, existingItems = [] }: Addo
 
                   {formData.itemDependencies.linkedToSpecificItems && (
                     <div className="space-y-2">
-                      {existingItems.map((item) => (
-                        <div key={item.id} className="flex items-center gap-2">
-                          <Checkbox
-                            checked={formData.itemDependencies.linkedItems.includes(item.id)}
-                            onCheckedChange={(checked) => {
-                              const newLinkedItems = checked
-                                ? [...formData.itemDependencies.linkedItems, item.id]
-                                : formData.itemDependencies.linkedItems.filter((id) => id !== item.id)
-                              handleChange("itemDependencies", {
-                                ...formData.itemDependencies,
-                                linkedItems: newLinkedItems,
-                              })
-                            }}
-                          />
-                          <Label>{item.name}</Label>
-                        </div>
-                      ))}
+                      {existingItems.map((item) => {
+                        const itemId = String(item.id)
+
+                        return (
+                          <div key={item.id} className="flex items-center gap-2">
+                            <Checkbox
+                              checked={formData.itemDependencies.linkedItems.includes(itemId)}
+                              onCheckedChange={(checked) => {
+                                const newLinkedItems = checked
+                                  ? [...formData.itemDependencies.linkedItems, itemId]
+                                  : formData.itemDependencies.linkedItems.filter((id) => id !== itemId)
+                                handleChange("itemDependencies", {
+                                  ...formData.itemDependencies,
+                                  linkedItems: newLinkedItems,
+                                })
+                              }}
+                            />
+                            <Label>{item.name}</Label>
+                          </div>
+                        )
+                      })}
                     </div>
                   )}
 

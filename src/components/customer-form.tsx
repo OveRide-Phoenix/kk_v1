@@ -83,10 +83,7 @@ export function CustomerForm({ customer, onSave, onCancel }: CustomerFormProps) 
     () => (
       <div className="col-span-2 space-y-2">
         <Label>Location</Label>
-        <GoogleMapPicker 
-          onLocationSelect={handleLocationSelect}
-          clearSearchOnSelect={true}
-        />
+        <GoogleMapPicker onLocationSelect={handleLocationSelect} />
         {formData.latitude && formData.longitude && (
           <p className="text-sm text-muted-foreground">
             Selected Location: {formData.latitude}, {formData.longitude}

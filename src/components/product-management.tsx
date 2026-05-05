@@ -637,8 +637,8 @@ export default function ProductManagement() {
 
     try {
       const response = await (isUpdating
-        ? http.put(path, payload as Record<string, unknown>)
-        : http.post(path, payload as Record<string, unknown>));
+        ? http.put(path, payload as unknown as Record<string, unknown>)
+        : http.post(path, payload as unknown as Record<string, unknown>));
 
       if (!response.ok) {
         let detail = isUpdating ? "Failed to update plated item" : "Failed to create plated item";

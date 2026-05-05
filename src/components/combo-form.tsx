@@ -122,7 +122,7 @@ export default function ComboForm({ onSave, onCancel, combo }: ComboFormProps) {
         setCategories(Array.isArray(categoriesData) ? categoriesData : []);
         setComponentTypes(Array.isArray(componentTypesData) ? componentTypesData : []);
       } catch (error) {
-        if (!controller.signal.aborted) {
+        if (isMounted) {
           setLoadError(
             error instanceof Error ? error.message : "Failed to load combo dependencies",
           );

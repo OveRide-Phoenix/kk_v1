@@ -89,7 +89,7 @@ export default function LoginV2Page() {
           ? data.eligible_city_codes
           : [normalizedDefault];
 
-      const normalizedEligible = Array.from(
+      const normalizedEligible: CityCode[] = Array.from(
         new Set(
           eligible
             .filter(
@@ -191,7 +191,13 @@ export default function LoginV2Page() {
         | (Record<string, unknown> & {
             roles?: Array<number | string>;
             role_codes?: Array<string | number>;
-            role_details?: Array<{ role_id: number; code: string }>;
+            role_details?: Array<{
+              role_id: number;
+              code: string;
+              name: string;
+              description?: string | null;
+              is_system?: boolean;
+            }>;
           })
         | null;
 
@@ -202,6 +208,9 @@ export default function LoginV2Page() {
       const rawRoleDetails = (baseUser?.role_details ?? data.role_details ?? []) as Array<{
         role_id: number;
         code: string;
+        name: string;
+        description?: string | null;
+        is_system?: boolean;
       }>;
 
       const adminRoleIds = rawRoleDetails
@@ -224,11 +233,7 @@ export default function LoginV2Page() {
         : allRoleCodes.filter((c) => c !== "admin");
 
       if (baseUser) {
-        setUser(
-          isAdminAttempt
-            ? baseUser
-            : { ...baseUser, roles: filteredRoleIds, role_codes: filteredRoleCodes },
-        );
+        setUser({ ...baseUser, roles: filteredRoleIds, role_codes: filteredRoleCodes });
       } else {
         setRoleState(filteredRoleIds, filteredRoleCodes);
       }
