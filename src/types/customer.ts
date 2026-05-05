@@ -17,4 +17,7 @@ export interface Customer {
   longitude: number | null
   
   routeAssignment?: string
+  routeId?: number | null
+  routeName?: string | null
+  routeCode?: string | null
 }

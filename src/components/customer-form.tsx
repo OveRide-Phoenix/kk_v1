@@ -11,16 +11,36 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import GoogleMapPicker from "@/components/gmap/GoogleMapPicker"
 import { Customer } from "@/types/customer"
-import { AlertCircle } from "lucide-react"
+import { AlertCircle, Route } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+
+interface DeliveryRouteOption {
+  route_id: number;
+  route_code: string;
+  route_name: string;
+  notes?: string | null;
+  is_active?: boolean;
+}
 
 interface CustomerFormProps {
   customer: Customer | null;
-  onSave: (customer: Customer) => void;
+  deliveryRoutes?: DeliveryRouteOption[];
+  routesLoading?: boolean;
+  adminCity?: string;
+  onSave: (customer: Customer) => void | Promise<unknown>;
   onCancel: () => void;
 }
 
-export function CustomerForm({ customer, onSave, onCancel }: CustomerFormProps) {
+const UNASSIGNED_ROUTE_VALUE = "__unassigned__";
+
+export function CustomerForm({
+  customer,
+  deliveryRoutes = [],
+  routesLoading = false,
+  adminCity,
+  onSave,
+  onCancel,
+}: CustomerFormProps) {
   const [formData, setFormData] = useState({
     name: customer?.name || "",
     referredBy: customer?.referredBy || "",
@@ -37,6 +57,7 @@ export function CustomerForm({ customer, onSave, onCancel }: CustomerFormProps) 
     latitude: customer?.latitude || null,
     longitude: customer?.longitude || null,
     routeAssignment: customer?.routeAssignment || "",
+    routeId: customer?.routeId ?? null,
   });
 
   const [errors, setErrors] = useState<string[]>([]);
@@ -68,6 +89,13 @@ export function CustomerForm({ customer, onSave, onCancel }: CustomerFormProps) 
 
   const handleSelectChange = (name: string, value: string) => {
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleRouteChange = (value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      routeId: value === UNASSIGNED_ROUTE_VALUE ? null : Number(value),
+    }));
   };
 
   const handleLocationSelect = (lat: number, lng: number, address?: string) => {
@@ -325,17 +353,49 @@ export function CustomerForm({ customer, onSave, onCancel }: CustomerFormProps) 
       </TabsContent>
 
       <TabsContent value="route" className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="routeAssignment">Route Assignment</Label>
-          <p className="text-sm text-muted-foreground mb-2">Route assignment functionality coming soon...</p>
-          <Input
-            id="routeAssignment"
-            name="routeAssignment"
-            value={formData.routeAssignment}
-            onChange={handleChange}
-            placeholder="Route assignment placeholder"
-            disabled
-          />
+        <div className="rounded-lg border bg-muted/40 p-4">
+          <div className="flex items-start gap-3">
+            <Route className="mt-0.5 h-5 w-5 text-muted-foreground" />
+            <div className="min-w-0 flex-1 space-y-4">
+              <div>
+                <Label htmlFor="routeAssignment">Delivery Route</Label>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Assign this customer's default delivery address to a route for trip sheets
+                  {adminCity ? ` in ${adminCity}` : ""}.
+                </p>
+              </div>
+              <Select
+                value={
+                  formData.routeId === null || formData.routeId === undefined
+                    ? UNASSIGNED_ROUTE_VALUE
+                    : String(formData.routeId)
+                }
+                onValueChange={handleRouteChange}
+                disabled={routesLoading}
+              >
+                <SelectTrigger id="routeAssignment">
+                  <SelectValue
+                    placeholder={routesLoading ? "Loading routes..." : "Select delivery route"}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={UNASSIGNED_ROUTE_VALUE}>No route assigned</SelectItem>
+                  {deliveryRoutes.map((route) => (
+                    <SelectItem key={route.route_id} value={String(route.route_id)}>
+                      {route.route_name}
+                      {route.notes ? ` - ${route.notes}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {!routesLoading && deliveryRoutes.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  No routes are configured for this city yet. Add routes from Trip Sheet route
+                  planning first.
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       </TabsContent>
 
