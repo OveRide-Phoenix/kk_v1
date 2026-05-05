@@ -179,6 +179,7 @@ CREATE TABLE `menu` (
   `city_code` varchar(3) NOT NULL DEFAULT 'MYS',
   `bld_id` int NOT NULL,
   `is_production_generated` tinyint(1) DEFAULT '0',
+  `buffer_override_pct` decimal(5,2) DEFAULT NULL,
   `menu_type` varchar(20) NOT NULL DEFAULT 'ONE_DAY',
   `delivers_by` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`menu_id`),
