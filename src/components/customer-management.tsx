@@ -92,6 +92,9 @@ interface Customer {
   longitude: number;
   address_type: string | null;
   route_assignment: string | null;
+  route_id: number | null;
+  route_name?: string | null;
+  route_code?: string | null;
   recipient_name: string;
   payment_frequency: string | null;
   completed_orders: number;
@@ -100,6 +103,15 @@ interface Customer {
   roles?: number[] | null;
   role_codes?: string[] | null;
   admin_is_active?: boolean;
+}
+
+interface DeliveryRouteOption {
+  route_id: number;
+  route_code: string;
+  route_name: string;
+  notes?: string | null;
+  is_active?: boolean;
+  sort_order?: number;
 }
 
 const PAGE_SIZE = 50;
@@ -133,6 +145,8 @@ export default function CustomerManagement() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [roleCatalog, setRoleCatalog] = useState<Record<number, string>>({});
   const [adminRoleId, setAdminRoleId] = useState<number | null>(null);
+  const [deliveryRoutes, setDeliveryRoutes] = useState<DeliveryRouteOption[]>([]);
+  const [routesLoading, setRoutesLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSearchChange = (value: string) => {
@@ -183,6 +197,40 @@ export default function CustomerManagement() {
   useEffect(() => {
     void refreshCustomers();
   }, [refreshCustomers]);
+
+  useEffect(() => {
+    const loadDeliveryRoutes = async () => {
+      setRoutesLoading(true);
+      try {
+        const params = new URLSearchParams({ city_code: adminCity });
+        const res = await http.get(`/api/logistics/routes?${params}`);
+        const payload = (await res.json()) as DeliveryRouteOption[] | { detail?: string };
+        if (!res.ok || !Array.isArray(payload)) {
+          setDeliveryRoutes([]);
+          return;
+        }
+        setDeliveryRoutes(
+          payload
+            .filter((route) => route.route_id !== null && route.route_id !== undefined)
+            .map((route) => ({
+              route_id: Number(route.route_id),
+              route_code: route.route_code ?? "",
+              route_name: route.route_name ?? "",
+              notes: route.notes ?? null,
+              is_active: route.is_active ?? true,
+              sort_order: route.sort_order ?? 0,
+            })),
+        );
+      } catch (error) {
+        console.error("Failed to load delivery routes", error);
+        setDeliveryRoutes([]);
+      } finally {
+        setRoutesLoading(false);
+      }
+    };
+
+    void loadDeliveryRoutes();
+  }, [adminCity]);
 
   useEffect(() => {
     const loadRoles = async () => {
@@ -354,9 +402,15 @@ export default function CustomerManagement() {
                             latitude: editingCustomer.latitude,
                             longitude: editingCustomer.longitude,
                             routeAssignment: editingCustomer.route_assignment ?? "",
+                            routeId: editingCustomer.route_id ?? null,
+                            routeName: editingCustomer.route_name ?? null,
+                            routeCode: editingCustomer.route_code ?? null,
                           }
                         : null
                     }
+                    deliveryRoutes={deliveryRoutes}
+                    routesLoading={routesLoading}
+                    adminCity={adminCity}
                     onSave={async (customerData) => {
                       try {
                         const formattedData = {
@@ -378,7 +432,7 @@ export default function CustomerManagement() {
                             ? parseFloat(String(customerData.longitude))
                             : 0,
                           address_type: customerData.addressType || "Home",
-                          route_assignment: customerData.routeAssignment || null,
+                          route_id: customerData.routeId ?? null,
                           is_default: true,
                         };
                         let response: Response;
