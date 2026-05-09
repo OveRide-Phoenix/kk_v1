@@ -60,6 +60,7 @@ CREATE TABLE `customers` (
   `alternative_mobile` varchar(15) DEFAULT NULL,
   `name` varchar(100) NOT NULL,
   `recipient_name` varchar(100) NOT NULL,
+  `date_of_birth` date DEFAULT NULL,
   `payment_frequency` varchar(50) DEFAULT 'Daily',
   `email` varchar(100) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,

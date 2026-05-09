@@ -5,6 +5,7 @@ export interface Customer {
   primaryMobile: string
   alternativeMobile?: string
   email?: string
+  dateOfBirth?: string
   recipientName: string
   paymentFrequency: "Daily" | "Weekly" | "Monthly"
   

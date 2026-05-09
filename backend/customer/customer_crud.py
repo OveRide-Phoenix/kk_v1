@@ -1,6 +1,6 @@
 import mysql.connector
 from fastapi import HTTPException
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 from pydantic import BaseModel
 
@@ -14,6 +14,7 @@ class CustomerUpdate(BaseModel):
     alternative_mobile: Optional[str] = None
     name: str
     recipient_name: str
+    date_of_birth: Optional[date] = None
     payment_frequency: Optional[str] = "Daily"
     email: Optional[str] = None
     # Address fields
@@ -42,9 +43,9 @@ def create_customer(db, customer_data):
 
         # Insert customer
         customer_query = """
-        INSERT INTO customers (referred_by, primary_mobile, alternative_mobile, name, recipient_name, 
-                           payment_frequency, email, created_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO customers (referred_by, primary_mobile, alternative_mobile, name, recipient_name,
+                           date_of_birth, payment_frequency, email, created_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         customer_values = (
             customer_data.referred_by,
@@ -52,6 +53,7 @@ def create_customer(db, customer_data):
             customer_data.alternative_mobile,
             customer_data.name,
             customer_data.recipient_name,
+            customer_data.date_of_birth,
             customer_data.payment_frequency,
             customer_data.email,
             datetime.utcnow(),
@@ -97,7 +99,7 @@ def get_customer_by_id(db, customer_id):
         query = """
         SELECT 
             c.customer_id, c.referred_by, c.primary_mobile, c.alternative_mobile, 
-            c.name, c.recipient_name, c.payment_frequency, c.email, c.created_at,
+            c.name, c.recipient_name, c.date_of_birth, c.payment_frequency, c.email, c.created_at,
             c.roles, c.admin_is_active,
             a.address_id, a.house_apartment_no, a.written_address, a.city, 
             a.pin_code, a.latitude, a.longitude, a.address_type, a.route_id,
@@ -222,7 +224,7 @@ def get_all_customers(
         data_query = f"""
             SELECT
                 c.customer_id, c.referred_by, c.primary_mobile, c.alternative_mobile,
-                c.name, c.recipient_name, c.payment_frequency, c.email, c.created_at,
+                c.name, c.recipient_name, c.date_of_birth, c.payment_frequency, c.email, c.created_at,
                 c.roles, c.admin_is_active,
                 a.address_id, a.house_apartment_no, a.written_address, a.city,
                 a.pin_code, a.latitude, a.longitude, a.address_type, a.route_id,
@@ -255,7 +257,7 @@ def update_customer(db, customer_id, customer_data):
         customer_query = """
         UPDATE customers
         SET referred_by=%s, primary_mobile=%s, alternative_mobile=%s, name=%s, recipient_name=%s,
-            payment_frequency=%s, email=%s
+            date_of_birth=%s, payment_frequency=%s, email=%s
         WHERE customer_id=%s
         """
         customer_values = (
@@ -264,6 +266,7 @@ def update_customer(db, customer_id, customer_data):
             customer_data.alternative_mobile,
             customer_data.name,
             customer_data.recipient_name,
+            customer_data.date_of_birth,
             customer_data.payment_frequency,
             customer_data.email,
             customer_id,

@@ -28,6 +28,7 @@ class Customer(Base):
     alternative_mobile = Column(String(15), nullable=True)
     name = Column(String(100), nullable=False)
     recipient_name = Column(String(100), nullable=False)
+    date_of_birth = Column(Date, nullable=True)
     payment_frequency = Column(String(50), nullable=True, default="Daily")
     email = Column(String(100), nullable=True)
     created_at = Column(TIMESTAMP, nullable=True)
