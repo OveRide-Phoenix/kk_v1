@@ -1,80 +1,142 @@
-# You can override the included template(s) by including variable overrides
-# SAST customization: https://docs.gitlab.com/ee/user/application_security/sast/#customizing-the-sast-settings
-# Secret Detection customization: https://docs.gitlab.com/ee/user/application_security/secret_detection/pipeline/#customization
-# Dependency Scanning customization: https://docs.gitlab.com/ee/user/application_security/dependency_scanning/#customizing-the-dependency-scanning-settings
-# Container Scanning customization: https://docs.gitlab.com/ee/user/application_security/container_scanning/#customizing-the-container-scanning-settings
-# Note that environment variables can be set in several places
-# See https://docs.gitlab.com/ee/ci/variables/#cicd-variable-precedence
+# ─── CI/CD Pipeline ────────────────────────────────────────────────────────────
+# Stages run in order; jobs within a stage run in parallel.
+# Deployment is handled separately — this pipeline covers quality, security, and build.
+
 stages:
-- test
-- sonarqube
+  - lint
+  - build
+  - test
+  - security
+  - sonarqube
+
+# ─── Cache ─────────────────────────────────────────────────────────────────────
+
+.npm_cache: &npm_cache
+  cache:
+    key:
+      files:
+        - package-lock.json
+    paths:
+      - node_modules/
+    policy: pull-push
+
+.pip_cache: &pip_cache
+  cache:
+    key:
+      files:
+        - backend/requirements.txt
+    paths:
+      - backend/.pip_cache/
+    policy: pull-push
+
+# ─── Lint ──────────────────────────────────────────────────────────────────────
+
+eslint:
+  stage: lint
+  image: node:20-alpine
+  <<: *npm_cache
+  before_script:
+    - npm ci --prefer-offline
+  script:
+    - npm run lint
+  allow_failure: false
+
+typescript:
+  stage: lint
+  image: node:20-alpine
+  <<: *npm_cache
+  before_script:
+    - npm ci --prefer-offline
+  script:
+    - npx tsc --noEmit
+  allow_failure: false
+
+black:
+  stage: lint
+  image: python:3.12-slim
+  <<: *pip_cache
+  before_script:
+    - pip install --cache-dir backend/.pip_cache black==24.10.0
+  script:
+    - black --check --line-length 100 backend/
+  allow_failure: false
+
+# ─── Build ─────────────────────────────────────────────────────────────────────
+
+nextjs_build:
+  stage: build
+  image: node:20-alpine
+  <<: *npm_cache
+  before_script:
+    - npm ci --prefer-offline
+  script:
+    - npm run build
+  artifacts:
+    paths:
+      - .next/
+    expire_in: 1 hour
+  allow_failure: false
+
+# ─── Tests ─────────────────────────────────────────────────────────────────────
+# Placeholder jobs — wire these up as tests are written.
+
+# backend_tests:
+#   stage: test
+#   image: python:3.12-slim
+#   <<: *pip_cache
+#   before_script:
+#     - pip install --cache-dir backend/.pip_cache -r backend/requirements.txt pytest pytest-asyncio httpx
+#   script:
+#     - pytest backend/ -v --tb=short
+#   allow_failure: false
+
+# frontend_tests:
+#   stage: test
+#   image: node:20-alpine
+#   <<: *npm_cache
+#   before_script:
+#     - npm ci --prefer-offline
+#   script:
+#     - npm test -- --watchAll=false
+#   allow_failure: false
+
+# ─── Security ──────────────────────────────────────────────────────────────────
+
+sast:
+  stage: security
+
+secret_detection:
+  stage: security
+
+dependency_scanning:
+  stage: security
+
 code_quality:
-  stage: test
+  stage: security
   image: registry.gitlab.com/gitlab-org/ci-cd/codequality:latest
   script:
-  - "/codequality"
+    - /codequality
   allow_failure: false
   artifacts:
     reports:
       codequality: gl-code-quality-report.json
+
+include:
+  - template: Security/SAST.gitlab-ci.yml
+  - template: Security/Secret-Detection.gitlab-ci.yml
+  - template: Security/Dependency-Scanning.gitlab-ci.yml
+
+# ─── SonarQube ─────────────────────────────────────────────────────────────────
+
 sonarqube:
   stage: sonarqube
   image: sonarsource/sonar-scanner-cli
-  before_script:
-  - curl -Lo jq https://github.com/stedolan/jq/releases/latest/download/jq-linux64
-  - chmod +x jq
-  - export PATH=$PWD:$PATH
   script:
-  - |
-    if [ -z "$CI_MERGE_REQUEST_ID" ]; then
-      echo "No merge request found. Skipping SonarQube analysis."
-      exit 0
-    fi
-  - sonar-scanner -Dsonar.token="$SONAR_TOKEN"
-  - |
-    RESPONSE=$(curl -s "https://sonarcloud.io/api/issues/search?componentKeys=OveRide-Phoenix_kk_v1")
-    echo "SonarQube Response: $RESPONSE"
-    SONAR_ISSUES=$(echo "$RESPONSE" | jq '.total')
-    echo "Total SonarQube Issues: $SONAR_ISSUES"
-
-    if [ "$SONAR_ISSUES" -gt 0 ]; then
-      # Fetch MR details
-      MR_RESPONSE=$(curl -s --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-        "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_ID")
-
-      echo "Merge Request Response: $MR_RESPONSE"
-
-      MR_AUTHOR=$(echo "$MR_RESPONSE" | jq -r '.author.username // empty')
-      SOURCE_BRANCH=$(echo "$MR_RESPONSE" | jq -r '.source_branch // empty')
-
-      if [ -z "$MR_AUTHOR" ] || [ -z "$SOURCE_BRANCH" ]; then
-        echo "Error: Could not fetch MR details"
-        exit 1
+    - |
+      if [ -z "$CI_MERGE_REQUEST_ID" ]; then
+        echo "Not a merge request pipeline — skipping SonarQube."
+        exit 0
       fi
-
-      echo "MR Author: $MR_AUTHOR"
-      echo "Source Branch: $SOURCE_BRANCH"
-
-      # Loop through all issues and create separate GitLab issues
-      echo "$RESPONSE" | jq -c '.issues[]' | while read issue; do
-        ISSUE_TITLE=$(echo "$issue" | jq -r '.message')
-        ISSUE_COMPONENT=$(echo "$issue" | jq -r '.component')
-        ISSUE_LINE=$(echo "$issue" | jq -r '.line // "unknown"')
-
-        curl --request POST --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-          --header "Content-Type: application/json" \
-          --data "{
-            \"title\": \"SonarQube Issue: $ISSUE_TITLE\",
-            \"description\": \"Issue in $ISSUE_COMPONENT at line $ISSUE_LINE.\n\nFix required by @$MR_AUTHOR in branch '$SOURCE_BRANCH'\",
-            \"assignee_ids\": [\"$MR_AUTHOR\"]
-          }" \
-          "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/issues"
-
-      done
-    fi
-  allow_failure: true
-sast:
-  stage: test
-include:
-- template: Security/SAST.gitlab-ci.yml
-- template: Security/Dependency-Scanning.gitlab-ci.yml
+    - sonar-scanner -Dsonar.token="$SONAR_TOKEN"
+  # sonar.qualitygate.wait=true in sonar-project.properties already gates on quality
+  allow_failure: false
