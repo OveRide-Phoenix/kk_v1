@@ -180,12 +180,14 @@ def _load_tax_amounts(cursor, discounted_subtotal: float) -> tuple[float, float]
     Returns:
         Tuple of (cgst_amount, sgst_amount).
     """
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT constant_code, constant_value
           FROM constants
          WHERE constant_type = 'tax'
            AND is_active = 1
-        """)
+        """
+    )
     cgst_percent = 0.0
     sgst_percent = 0.0
     for code, value in cursor.fetchall() or []:

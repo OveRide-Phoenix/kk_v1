@@ -79,7 +79,8 @@ def get_sales_report(
 ) -> List[Dict[str, Any]]:
     start_date, end_date = _validate_date_range(start_date, end_date)
     result = db.execute(
-        text("""
+        text(
+            """
             SELECT
                 DATE(o.created_at) AS report_date,
                 SUM(o.total_price) AS total_sales,
@@ -88,7 +89,8 @@ def get_sales_report(
             WHERE DATE(o.created_at) BETWEEN :start_date AND :end_date
             GROUP BY report_date
             ORDER BY report_date
-            """),
+            """
+        ),
         {"start_date": start_date, "end_date": end_date},
     )
 
@@ -105,7 +107,8 @@ def get_category_report(
 ) -> List[Dict[str, Any]]:
     start_date, end_date = _validate_date_range(start_date, end_date)
     result = db.execute(
-        text("""
+        text(
+            """
             SELECT
                 COALESCE(c.category_name, 'Uncategorized') AS category_name,
                 SUM(oi.quantity) AS total_items_sold,
@@ -117,7 +120,8 @@ def get_category_report(
             WHERE DATE(o.created_at) BETWEEN :start_date AND :end_date
             GROUP BY category_name
             ORDER BY total_revenue DESC
-            """),
+            """
+        ),
         {"start_date": start_date, "end_date": end_date},
     )
 
@@ -141,7 +145,8 @@ def get_top_customers_report(
 ) -> List[Dict[str, Any]]:
     start_date, end_date = _validate_date_range(start_date, end_date)
     result = db.execute(
-        text("""
+        text(
+            """
             SELECT
                 cu.name AS customer_name,
                 COUNT(DISTINCT o.order_id) AS total_orders,
@@ -153,7 +158,8 @@ def get_top_customers_report(
             GROUP BY cu.customer_id, cu.name
             ORDER BY total_spent DESC
             LIMIT 10
-            """),
+            """
+        ),
         {"start_date": start_date, "end_date": end_date},
     )
 
@@ -174,11 +180,13 @@ def get_top_customers_report(
 
 def _subscriptions_table_metadata(db: Session) -> Optional[Tuple[str, str, Optional[str]]]:
     exists = db.execute(
-        text("""
+        text(
+            """
             SELECT COUNT(*) AS total
             FROM information_schema.tables
             WHERE table_schema = DATABASE() AND table_name = :table_name
-            """),
+            """
+        ),
         {"table_name": "subscriptions"},
     ).scalar()
 
@@ -186,11 +194,13 @@ def _subscriptions_table_metadata(db: Session) -> Optional[Tuple[str, str, Optio
         return None
 
     column_rows = db.execute(
-        text("""
+        text(
+            """
             SELECT COLUMN_NAME
             FROM information_schema.columns
             WHERE table_schema = DATABASE() AND table_name = :table_name
-            """),
+            """
+        ),
         {"table_name": "subscriptions"},
     ).fetchall()
 
@@ -233,7 +243,8 @@ def get_subscription_report(
     if metadata:
         plan_column, date_column, revenue_column = metadata
         revenue_expression = f"SUM(COALESCE({revenue_column}, 0))" if revenue_column else "0"
-        query = text(f"""
+        query = text(
+            f"""
             SELECT
                 {plan_column} AS plan_type,
                 COUNT(*) AS total_subscriptions,
@@ -242,11 +253,13 @@ def get_subscription_report(
             WHERE DATE({date_column}) BETWEEN :start_date AND :end_date
             GROUP BY {plan_column}
             ORDER BY total_subscriptions DESC
-            """)
+            """
+        )
         result = db.execute(query, {"start_date": start_date, "end_date": end_date})
     else:
         result = db.execute(
-            text("""
+            text(
+                """
                 SELECT
                     COALESCE(o.order_type, 'subscription') AS plan_type,
                     COUNT(*) AS total_subscriptions,
@@ -256,7 +269,8 @@ def get_subscription_report(
                   AND DATE(o.created_at) BETWEEN :start_date AND :end_date
                 GROUP BY COALESCE(o.order_type, 'subscription')
                 ORDER BY total_subscriptions DESC
-                """),
+                """
+            ),
             {"start_date": start_date, "end_date": end_date},
         )
 

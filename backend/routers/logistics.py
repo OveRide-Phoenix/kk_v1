@@ -80,7 +80,8 @@ def _ensure_delivery_routes_table(db) -> None:
     """
     cursor = db.cursor()
     try:
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS delivery_routes (
                 route_id INT NOT NULL AUTO_INCREMENT,
                 city_code VARCHAR(10) NOT NULL,
@@ -94,7 +95,8 @@ def _ensure_delivery_routes_table(db) -> None:
                 PRIMARY KEY (route_id),
                 UNIQUE KEY uq_delivery_routes_city_route_code (city_code, route_code)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-            """)
+            """
+        )
         db.commit()
     finally:
         cursor.close()
@@ -108,7 +110,8 @@ def _ensure_trip_sheets_table(db) -> None:
     """
     cursor = db.cursor()
     try:
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS trip_sheets (
                 trip_sheet_id INT NOT NULL AUTO_INCREMENT,
                 service_date DATE NOT NULL,
@@ -120,7 +123,8 @@ def _ensure_trip_sheets_table(db) -> None:
                 PRIMARY KEY (trip_sheet_id),
                 UNIQUE KEY uq_trip_sheets_service_city_meal (service_date, city_code, meal_type)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-            """)
+            """
+        )
         db.commit()
     finally:
         cursor.close()

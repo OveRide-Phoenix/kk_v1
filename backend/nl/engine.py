@@ -864,12 +864,14 @@ def resolve_customer(db: Session, query_text: Optional[str]) -> Optional[Dict[st
         return None
     if query_text.isdigit():
         result = db.execute(
-            text("""
+            text(
+                """
                 SELECT customer_id, name, primary_mobile
                 FROM customers
                 WHERE primary_mobile = :phone
                 LIMIT 1
-                """),
+                """
+            ),
             {"phone": query_text},
         )
         row = result.mappings().first()
@@ -877,7 +879,8 @@ def resolve_customer(db: Session, query_text: Optional[str]) -> Optional[Dict[st
             return dict(row)
     like_value = f"%{query_text.strip()}%"
     result = db.execute(
-        text("""
+        text(
+            """
             SELECT customer_id, name, primary_mobile
             FROM customers
             WHERE name LIKE :name_like
@@ -885,7 +888,8 @@ def resolve_customer(db: Session, query_text: Optional[str]) -> Optional[Dict[st
                 CASE WHEN LOWER(name) = LOWER(:exact) THEN 0 ELSE 1 END,
                 name
             LIMIT 1
-            """),
+            """
+        ),
         {"name_like": like_value, "exact": query_text.strip()},
     )
     row = result.mappings().first()
@@ -944,11 +948,13 @@ def execute_set_buffer_by_name(match: IntentMatch, db: Session) -> Dict[str, Any
         }
     menu_item_id = rows[0]["menu_item_id"]
     db.execute(
-        text("""
+        text(
+            """
             UPDATE menu_items
             SET buffer_qty = :buffer_qty
             WHERE menu_item_id = :menu_item_id
-            """),
+            """
+        ),
         {"buffer_qty": buffer_qty, "menu_item_id": menu_item_id},
     )
     db.commit()
@@ -1010,7 +1016,8 @@ def find_menu_items_by_name(
 
 def fetch_menu_item(db: Session, menu_item_id: int) -> List[Dict[str, Any]]:
     result = db.execute(
-        text("""
+        text(
+            """
             SELECT
                 mi.menu_item_id,
                 m.date,
@@ -1026,7 +1033,8 @@ def fetch_menu_item(db: Session, menu_item_id: int) -> List[Dict[str, Any]]:
             JOIN bld b ON b.bld_id = m.bld_id
             JOIN items i ON i.item_id = mi.item_id
             WHERE mi.menu_item_id = :menu_item_id
-            """),
+            """
+        ),
         {"menu_item_id": menu_item_id},
     )
     return [dict(row) for row in result.mappings().all()]

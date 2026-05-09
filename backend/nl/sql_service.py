@@ -126,11 +126,13 @@ class SQLGenerationService:
         sql = prepared.sql
         try:
             result = db.execute(
-                text("""
+                text(
+                    """
                     UPDATE menu_items
                     SET buffer_qty = :buffer_qty
                     WHERE menu_item_id = :menu_item_id
-                    """),
+                    """
+                ),
                 {
                     "buffer_qty": prepared.buffer_qty,
                     "menu_item_id": prepared.menu_item_id,

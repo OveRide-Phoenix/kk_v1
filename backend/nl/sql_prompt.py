@@ -129,7 +129,8 @@ ALLOWED_UPDATE_RULES = {
             "is_default",
             "sort_order",
         ],
-        "identify_by": dedent("""
+        "identify_by": dedent(
+            """
             Identify the single row via the menu for a given date and meal, and the item by name (or alias):
               - Resolve bld_id from bld.bld_type ('Breakfast'/'Lunch'/'Dinner'/'Condiments').
               - Find menu.menu_id by m.date = <date> and m.bld_id = b.bld_id.
@@ -137,7 +138,8 @@ ALLOWED_UPDATE_RULES = {
               - Then pick the single menu_items row for that (menu_id, item_id).
             If multiple rows match (e.g., same item across meals), prefer exact name match; otherwise return a SELECT of candidates instead of updating.
             The WHERE must not depend on a literal menu_item_id from the user.
-            """).strip(),
+            """
+        ).strip(),
     },
     # Customer master updates, identified by phone (preferred) or exact name
     "customers": {
@@ -146,13 +148,15 @@ ALLOWED_UPDATE_RULES = {
             "primary_mobile",
             "email",
         ],
-        "identify_by": dedent("""
+        "identify_by": dedent(
+            """
             Identify the customer naturally:
               - Prefer customers.primary_mobile = '<phone>'
               - Else exact name: LOWER(customers.name) = LOWER('<name>')
             Do not require the user to provide customer_id.
             If multiple names match, return a SELECT of candidates instead of UPDATE.
-            """).strip(),
+            """
+        ).strip(),
     },
     # Menu-day flags, identified by (date, meal via bld_type)
     "menu": {
@@ -162,12 +166,14 @@ ALLOWED_UPDATE_RULES = {
             "period_type",
             "is_production_generated",
         ],
-        "identify_by": dedent("""
+        "identify_by": dedent(
+            """
             Identify the menu row for a specific day and meal:
               - Resolve bld_id from bld.bld_type
               - WHERE date = <date> AND bld_id = <resolved>
             Do not require the user to provide menu_id.
-            """).strip(),
+            """
+        ).strip(),
     },
     # Addresses updates, identified by customer phone/name + address fields (no address_id from user)
     "addresses": {
@@ -181,12 +187,14 @@ ALLOWED_UPDATE_RULES = {
             "route_id",
             "is_default",
         ],
-        "identify_by": dedent("""
+        "identify_by": dedent(
+            """
             Identify address belonging to a customer (by phone or exact name). Prefer a precise locator:
               - customer via customers.primary_mobile = '<phone>' OR exact name match
               - then a specific address match, e.g., LOWER(written_address) = LOWER('<text>')
             If ambiguous, return a SELECT of matching addresses for disambiguation.
-            """).strip(),
+            """
+        ).strip(),
     },
     # Item master updates by item name/alias (no item_id from user)
     "items": {
@@ -211,12 +219,14 @@ ALLOWED_UPDATE_RULES = {
             "picture_url",
             "hsn_code",
         ],
-        "identify_by": dedent("""
+        "identify_by": dedent(
+            """
             Identify items by LOWER(name) = LOWER('<name>') OR LOWER(alias) = LOWER('<name>').
             If updating category_id by category name, resolve it as:
               category_id = (SELECT category_id FROM categories WHERE LOWER(category_name)=LOWER('<cat>') LIMIT 1)
             If multiple items match the name, return a SELECT listing candidates instead of UPDATE.
-            """).strip(),
+            """
+        ).strip(),
     },
 }
 
@@ -225,11 +235,15 @@ def _format_update_policy() -> str:
     parts: list[str] = []
     for tbl, rule in ALLOWED_UPDATE_RULES.items():
         cols = ", ".join(rule["can_update"])
-        parts.append(dedent(f"""
+        parts.append(
+            dedent(
+                f"""
                 Table: {tbl}
                 - Allowed columns to UPDATE: {cols}
                 - Identification (no user-provided IDs): {rule["identify_by"]}
-                """).strip())
+                """
+            ).strip()
+        )
     return "\n\n".join(parts)
 
 
@@ -246,14 +260,16 @@ def build_system_prompt(*, today: str, allow_update: bool) -> str:
       - False -> enforce SELECT-only (no UPDATE at all)
     """
     if allow_update:
-        update_clause = dedent(f"""
+        update_clause = dedent(
+            f"""
             * You may return UPDATE statements ONLY if they comply with the Write Policy below.
               - NEVER require the user to provide any numeric ID in the prompt. Resolve rows via natural fields
                 (e.g., date + meal for a menu; item name; customer phone; etc.), using subqueries to derive IDs.
               - UPDATE must target exactly one row. If ambiguity exists, DO NOT UPDATE; instead return a SELECT that helps disambiguate.
               - No multiple statements. No semicolons. Only one SQL statement.
               - Allowed update targets and how to identify rows are described in the Write Policy section.
-            """).strip()
+            """
+        ).strip()
         write_policy = _format_update_policy()
     else:
         update_clause = "* Queries must be SELECT-only. Never propose UPDATE/DELETE/INSERT.\n"
@@ -263,7 +279,8 @@ def build_system_prompt(*, today: str, allow_update: bool) -> str:
         f"-- {table}({', '.join(columns)})" for table, columns in ALLOWED_TABLE_COLUMNS.items()
     )
 
-    examples = dedent(r"""
+    examples = dedent(
+        r"""
         Examples (patterns; adapt values as needed, never require user-provided IDs):
 
         1) Today's full menu:
@@ -399,7 +416,8 @@ def build_system_prompt(*, today: str, allow_update: bool) -> str:
         )
           AND LOWER(written_address) = LOWER('some address text')
         ```
-        """).strip()
+        """
+    ).strip()
 
     prompt = f"""
 You are a senior MySQL query builder.

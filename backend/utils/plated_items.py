@@ -231,7 +231,8 @@ def fetch_plated_item_detail(cursor, item_id: int) -> Optional[Dict[str, Any]]:
 
 
 def fetch_plated_items_with_components(cursor) -> List[Dict[str, Any]]:
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT pi.plated_item_id,
                pi.item_id,
                i.name,
@@ -267,7 +268,8 @@ def fetch_plated_items_with_components(cursor) -> List[Dict[str, Any]]:
           LEFT JOIN categories c ON i.category_id = c.category_id
           LEFT JOIN component_types ct ON i.component_type_id = ct.component_type_id
          ORDER BY i.name ASC
-        """)
+        """
+    )
     plated_items = cursor.fetchall() or []
     plated_ids = [
         int(row["plated_item_id"]) for row in plated_items if row.get("plated_item_id") is not None

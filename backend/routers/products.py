@@ -358,13 +358,15 @@ def get_all_items(
         ]
 
         select_sql = ",\n                    ".join(select_columns)
-        cursor.execute(f"""
+        cursor.execute(
+            f"""
                 SELECT
                     {select_sql}
                 FROM items i
                 LEFT JOIN categories c ON i.category_id = c.category_id
                 LEFT JOIN component_types ct ON i.component_type_id = ct.component_type_id
-            """)
+            """
+        )
         records = cursor.fetchall()
 
         attach_bld_ids(cursor, records)
@@ -1309,7 +1311,8 @@ def get_all_addons() -> List[Dict[str, Any]]:
     db = get_raw_db()
     cursor = db.cursor(dictionary=True)
     try:
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT
                 ia.add_on_id,
                 main_item.name AS main_item_name,
@@ -1319,7 +1322,8 @@ def get_all_addons() -> List[Dict[str, Any]]:
             FROM item_add_ons ia
             LEFT JOIN items main_item ON ia.main_item_id = main_item.item_id
             LEFT JOIN items add_on_item ON ia.add_on_item_id = add_on_item.item_id
-        """)
+        """
+        )
         return cursor.fetchall()
     except mysql.connector.Error as err:
         raise HTTPException(status_code=500, detail=str(err))
@@ -1515,12 +1519,14 @@ def get_all_component_types() -> List[Dict[str, Any]]:
     db = get_raw_db()
     cursor = db.cursor(dictionary=True)
     try:
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT component_type_id, name, description, is_active
               FROM component_types
              WHERE is_active = 1
              ORDER BY name ASC
-            """)
+            """
+        )
         rows = cursor.fetchall() or []
         for row in rows:
             row["is_active"] = bool(row.get("is_active", True))

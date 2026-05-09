@@ -186,7 +186,8 @@ def fetch_combo_detail(cursor, combo_id: int) -> Optional[Dict[str, Any]]:
 
 
 def fetch_combos_with_items(cursor) -> List[Dict[str, Any]]:
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT c.combo_id,
                c.combo_name,
                c.price,
@@ -195,7 +196,8 @@ def fetch_combos_with_items(cursor) -> List[Dict[str, Any]]:
           FROM combos c
           LEFT JOIN categories cat ON c.category_id = cat.category_id
          ORDER BY c.combo_id ASC
-        """)
+        """
+    )
     combos = cursor.fetchall() or []
     combo_ids = [combo["combo_id"] for combo in combos if combo.get("combo_id") is not None]
     combo_item_map = _fetch_combo_items(cursor, combo_ids)
