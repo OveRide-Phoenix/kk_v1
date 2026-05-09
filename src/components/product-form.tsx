@@ -458,7 +458,7 @@ export default function ProductForm({
                 </div>
                 {!isCondimentScope && (
                   <div className="space-y-2 sm:col-span-2">
-                    <Label>Meal Availability (BLD/C)</Label>
+                    <Label>Applies to BLD/C</Label>
                     <p className="text-xs text-muted-foreground">
                       Choose the meals where this catalog item should appear. Condiments operate
                       independently and cannot mix with breakfast/lunch/dinner.
