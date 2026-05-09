@@ -580,6 +580,7 @@ export default function CustomerHomeV2Page() {
                   className="group overflow-hidden rounded-2xl border border-orange-50 bg-white shadow-sm transition-shadow hover:shadow-md"
                 >
                   <div className="relative h-44 overflow-hidden">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       alt={item.item_name}
                       className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
@@ -648,6 +649,7 @@ export default function CustomerHomeV2Page() {
                   className="group overflow-hidden rounded-2xl border border-orange-50 bg-white shadow-sm transition-shadow hover:shadow-md"
                 >
                   <div className="relative h-44 overflow-hidden">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       alt={item.item_name}
                       className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"

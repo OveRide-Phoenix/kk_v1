@@ -366,6 +366,7 @@ export default function CustomerHomePage() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todayISO, availableMealsKey, cityCode]);
 
   useEffect(() => {
@@ -390,7 +391,7 @@ export default function CustomerHomePage() {
             })),
           );
         }
-      } catch (err) {
+      } catch {
         if (!cancelled) {
           setOrders([]);
           setOrdersError("We couldn\u2019t load your recent orders.");
@@ -1177,7 +1178,7 @@ export default function CustomerHomePage() {
                                   ? "pointer-events-none border-dashed border-[#d9c7be] bg-[#f1ebe6] text-[#9a857b]"
                                   : "border-brand-subtle bg-brand-shell shadow-brand-soft hover:shadow-md",
                               )}
-                              aria-disabled={showSoldOutState}
+                              data-sold-out={showSoldOutState}
                             >
                               <div
                                 className={cn(

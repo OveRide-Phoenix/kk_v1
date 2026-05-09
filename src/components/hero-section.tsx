@@ -1,18 +1,16 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useParallax } from "@/hooks/use-parallax"
-import { Button } from "@/components/ui/button"
-import { ArrowRight } from "lucide-react"
-import NavBar from "@/components/nav-bar"
-
+import { useParallax } from "@/hooks/use-parallax";
+import { Button } from "@/components/ui/button";
+import { ArrowRight } from "lucide-react";
 
 export default function HeroSection() {
   // Use parallax effect for background elements
-  const { ref: parallaxBg } = useParallax({ speed: 0.2 })
-  const { ref: parallaxImage1 } = useParallax({ speed: 0.3, direction: "down" })
-  const { ref: parallaxImage2 } = useParallax({ speed: 0.4 })
+  const { ref: parallaxBg } = useParallax({ speed: 0.2 });
+  const { ref: parallaxImage1 } = useParallax({ speed: 0.3, direction: "down" });
+  const { ref: parallaxImage2 } = useParallax({ speed: 0.4 });
 
   return (
     <>
@@ -59,6 +57,7 @@ export default function HeroSection() {
                 className="col-span-8 row-span-2 relative rounded-lg overflow-hidden shadow-xl animate-slide-in-right"
                 style={{ animationDelay: "300ms" }}
               >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src="/images/hero/thali.png"
                   alt="Delicious South Indian meal"
@@ -72,6 +71,7 @@ export default function HeroSection() {
                 className="col-span-4 relative rounded-lg overflow-hidden shadow-lg animate-slide-in-left"
                 style={{ animationDelay: "500ms" }}
               >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src="/images/hero/dosa.png"
                   alt="Crispy dosa"
@@ -84,6 +84,7 @@ export default function HeroSection() {
                 className="col-span-4 relative rounded-lg overflow-hidden shadow-lg animate-slide-in-left"
                 style={{ animationDelay: "700ms" }}
               >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src="/images/hero/idli.png"
                   alt="Soft idli with sambar"
@@ -101,6 +102,5 @@ export default function HeroSection() {
         ></div>
       </section>
     </>
-  )
+  );
 }
-

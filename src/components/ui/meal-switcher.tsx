@@ -1,17 +1,19 @@
-import { cn } from "@/lib/utils"
-
 export type MealSwitcherOption<T extends string> = {
-  value: T
-  label: string
-}
+  value: T;
+  label: string;
+};
 
 type MealSwitcherProps<T extends string> = {
-  options: MealSwitcherOption<T>[]
-  value: T
-  onValueChange?: (value: T) => void
-}
+  options: MealSwitcherOption<T>[];
+  value: T;
+  onValueChange?: (value: T) => void;
+};
 
-export function MealSwitcher<T extends string>({ options, value, onValueChange }: MealSwitcherProps<T>) {
+export function MealSwitcher<T extends string>({
+  options,
+  value,
+  onValueChange,
+}: MealSwitcherProps<T>) {
   return (
     <div className="flex flex-wrap items-center justify-center gap-3">
       {options.map((option) => {
@@ -25,10 +27,10 @@ export function MealSwitcher<T extends string>({ options, value, onValueChange }
           >
             {option.label}
           </button>
-        )
+        );
       })}
     </div>
-  )
+  );
 }
 
-export default MealSwitcher
+export default MealSwitcher;

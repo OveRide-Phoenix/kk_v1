@@ -223,6 +223,7 @@ export default function CustomerV2OrderPage() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todayISO, cityCode, userHasCityOverride]);
 
   const menuItemsMap = useMemo(() => createMenuItemMap(menuByMeal), [menuByMeal]);
@@ -483,6 +484,7 @@ export default function CustomerV2OrderPage() {
                 className="group overflow-hidden rounded-xl border border-orange-50 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
               >
                 <div className="relative h-44 overflow-hidden">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     alt={item.item_name}
                     className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
@@ -572,6 +574,7 @@ export default function CustomerV2OrderPage() {
                 key={item.menu_item_id}
                 className="flex gap-4 rounded-xl border border-orange-50 bg-white p-4 shadow-sm"
               >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   alt={item.item_name}
                   className="h-24 w-24 rounded-lg object-cover"
@@ -680,6 +683,7 @@ export default function CustomerV2OrderPage() {
                     className="flex items-center gap-3"
                   >
                     <div className="h-12 w-12 overflow-hidden rounded-lg bg-gray-100">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         alt={line.item_name}
                         className="h-full w-full object-cover"

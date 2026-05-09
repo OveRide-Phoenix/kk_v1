@@ -115,6 +115,7 @@ export default function MobileCustomerProfilePage() {
 
         <section className="mb-8 mt-6 flex flex-col items-center">
           <div className="h-28 w-28 overflow-hidden rounded-full border-4 border-white shadow-[0_4px_20px_rgba(141,73,37,0.08)]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/icons/contact-card.png"
               alt="profile"

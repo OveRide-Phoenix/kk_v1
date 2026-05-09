@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import Sidebar from "@/components/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { InputWithButton } from "@/components/ui/input-button";
 import { Button } from "@/components/ui/button";
@@ -17,7 +16,6 @@ import {
 import { Search, Plus, Calendar as CalendarIcon, Eye, Pencil, Trash2, Check } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { DatePickerWithPresets } from "@/components/ui/date-picker";
 import { format as formatDate } from "date-fns";
 import { AdminLayout } from "@/components/admin-layout";
 import {
@@ -28,7 +26,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { useAuthStore } from "@/store/store";
@@ -153,11 +150,11 @@ export function DailyMenuSetup() {
     dinner: null,
     condiments: null,
   });
-  const [viewItem, setViewItem] = useState<null | MenuItem>(null);
+  const [, setViewItem] = useState<null | MenuItem>(null);
 
   // Loading flags
   const [loadingItemsAPI, setLoadingItemsAPI] = useState(false);
-  const [loadingMenu, setLoadingMenu] = useState(false);
+  const [, setLoadingMenu] = useState(false);
   const [savingMenu, setSavingMenu] = useState(false);
   const [togglingRelease, setTogglingRelease] = useState(false);
 
@@ -360,6 +357,7 @@ export function DailyMenuSetup() {
         setLoadingMenu(false);
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [adminCity, confirmedDate],
   );
 

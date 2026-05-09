@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type React from "react";
 import { useRouter } from "next/navigation"; // Import useRouter
 import { Button } from "@/components/ui/button";
@@ -186,7 +186,7 @@ export default function RegistrationPage() {
           setErrorMessage(data.detail || "Something went wrong. Please try again.");
         }
       }
-    } catch (error) {
+    } catch {
       setIsSubmitting(false);
       setErrorMessage("Failed to send request. Please check your connection and try again.");
     }

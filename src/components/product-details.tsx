@@ -1,40 +1,40 @@
-"use client"
+"use client";
 
-import { X, Edit } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import type { ComboProduct, PlatedProduct, Product } from "@/types/product"
+import { X, Edit } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import type { ComboProduct, PlatedProduct, Product } from "@/types/product";
 
 interface ProductDetailsProps {
-  product: Product | PlatedProduct | ComboProduct | null
-  open: boolean
-  onOpenChange: (open: boolean) => void
+  product: Product | PlatedProduct | ComboProduct | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
 export default function ProductDetails({ product, open, onOpenChange }: ProductDetailsProps) {
-  if (!product || !open) return null
+  if (!product || !open) return null;
 
   const MEAL_LABELS: Record<number, string> = {
     1: "Breakfast",
     2: "Lunch",
     3: "Dinner",
     4: "Condiments",
-  }
-  const productDetails = product as Partial<Product & PlatedProduct> & { uom?: string | null }
+  };
+  const productDetails = product as Partial<Product & PlatedProduct> & { uom?: string | null };
 
   const mealIds = Array.isArray((product as { bld_ids?: unknown }).bld_ids)
     ? ((product as { bld_ids?: unknown[] }).bld_ids ?? [])
         .map((mealId) => Number(mealId))
         .filter((mealId) => Number.isInteger(mealId))
-    : []
+    : [];
   const mealBadges = Array.from(new Set(mealIds)).map((mealId) => (
     <Badge key={`meal-${mealId}`} variant="outline">
       {MEAL_LABELS[mealId] ?? `BLD ${mealId}`}
     </Badge>
-  ))
-  const isComboProduct = typeof (product as any).combo_id === "number"
-  const displayName = isComboProduct ? (product as any).combo_name : (product as any).name
+  ));
+  const isComboProduct = typeof (product as any).combo_id === "number";
+  const displayName = isComboProduct ? (product as any).combo_name : (product as any).name;
 
   return (
     <div
@@ -57,6 +57,7 @@ export default function ProductDetails({ product, open, onOpenChange }: ProductD
         <CardContent className="pt-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={(product as any).picture_url || "/placeholder.svg"}
                 alt={displayName}
@@ -74,7 +75,6 @@ export default function ProductDetails({ product, open, onOpenChange }: ProductD
                   {(product as any).is_condiment && <Badge variant="secondary">Condiment</Badge>}
                 </div>
               </div>
-              
 
               <div>
                 <h3 className="text-sm font-medium text-gray-500">Description</h3>
@@ -139,54 +139,69 @@ export default function ProductDetails({ product, open, onOpenChange }: ProductD
                 </div>
               </div>
 
-              {Array.isArray((product as any).platedComponents) && (product as any).platedComponents.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-medium text-gray-500">Plated Components</h3>
-                  <div className="mt-2 space-y-2">
-                    {(product as any).platedComponents.map((component: any) => (
-                      <div key={`component-${component.itemId}`} className="rounded-md border p-3">
-                        <p className="font-medium">{component.name ?? `Item #${component.itemId}`}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Qty: {component.quantity}
-                        </p>
-                        {component.kind === "type" && (
-                          <p className="text-xs text-muted-foreground">
-                            Resolves from component type: {component.componentTypeName ?? "Generic slot"}
+              {Array.isArray((product as any).platedComponents) &&
+                (product as any).platedComponents.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500">Plated Components</h3>
+                    <div className="mt-2 space-y-2">
+                      {(product as any).platedComponents.map((component: any) => (
+                        <div
+                          key={`component-${component.itemId}`}
+                          className="rounded-md border p-3"
+                        >
+                          <p className="font-medium">
+                            {component.name ?? `Item #${component.itemId}`}
                           </p>
-                        )}
-                        <p className="text-xs text-muted-foreground">
-                          {component.kind === "type"
-                            ? "Resolved to the item of the day"
-                            : component.unitPacking != null && component.uomPacking
-                            ? `1 qty = ${component.unitPacking} ${component.uomPacking}`
-                            : component.uomCustomer
-                              ? `1 qty = 1 ${component.uomCustomer}`
-                              : "1 qty"}
-                        </p>
-                      </div>
-                    ))}
+                          <p className="text-sm text-muted-foreground">Qty: {component.quantity}</p>
+                          {component.kind === "type" && (
+                            <p className="text-xs text-muted-foreground">
+                              Resolves from component type:{" "}
+                              {component.componentTypeName ?? "Generic slot"}
+                            </p>
+                          )}
+                          <p className="text-xs text-muted-foreground">
+                            {component.kind === "type"
+                              ? "Resolved to the item of the day"
+                              : component.unitPacking != null && component.uomPacking
+                                ? `1 qty = ${component.unitPacking} ${component.uomPacking}`
+                                : component.uomCustomer
+                                  ? `1 qty = 1 ${component.uomCustomer}`
+                                  : "1 qty"}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {Array.isArray((product as any).includedItems) && (product as any).includedItems.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-medium text-gray-500">Combo Components</h3>
-                  <div className="mt-2 space-y-2">
-                    {(product as any).includedItems.map((component: any, index: number) => (
-                      <div key={`combo-component-${component.itemId ?? component.componentTypeId ?? index}`} className="rounded-md border p-3">
-                        <p className="font-medium">{component.name ?? (component.kind === "type" ? "Generic Component" : `Item #${component.itemId}`)}</p>
-                        <p className="text-sm text-muted-foreground">Qty: {component.quantity}</p>
-                        {component.kind === "type" && (
-                          <p className="text-xs text-muted-foreground">
-                            Resolves from component type: {component.componentTypeName ?? "Generic slot"}
+              {Array.isArray((product as any).includedItems) &&
+                (product as any).includedItems.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500">Combo Components</h3>
+                    <div className="mt-2 space-y-2">
+                      {(product as any).includedItems.map((component: any, index: number) => (
+                        <div
+                          key={`combo-component-${component.itemId ?? component.componentTypeId ?? index}`}
+                          className="rounded-md border p-3"
+                        >
+                          <p className="font-medium">
+                            {component.name ??
+                              (component.kind === "type"
+                                ? "Generic Component"
+                                : `Item #${component.itemId}`)}
                           </p>
-                        )}
-                      </div>
-                    ))}
+                          <p className="text-sm text-muted-foreground">Qty: {component.quantity}</p>
+                          {component.kind === "type" && (
+                            <p className="text-xs text-muted-foreground">
+                              Resolves from component type:{" "}
+                              {component.componentTypeName ?? "Generic slot"}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
               {(product as any).is_condiment ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -196,7 +211,9 @@ export default function ProductDetails({ product, open, onOpenChange }: ProductD
                   </div>
                   <div>
                     <h3 className="text-sm font-medium text-gray-500">Net Price</h3>
-                    <p className="mt-1">{(product as any).net_price ?? (product as any).price ?? "—"}</p>
+                    <p className="mt-1">
+                      {(product as any).net_price ?? (product as any).price ?? "—"}
+                    </p>
                   </div>
                 </div>
               ) : (
@@ -218,8 +235,12 @@ export default function ProductDetails({ product, open, onOpenChange }: ProductD
                       <p className="mt-1">{(product as any).max_qty_dinner ?? "—"}</p>
                     </div>
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500">{isComboProduct ? "Price" : "Net Price"}</h3>
-                      <p className="mt-1">{(product as any).net_price ?? (product as any).price ?? "—"}</p>
+                      <h3 className="text-sm font-medium text-gray-500">
+                        {isComboProduct ? "Price" : "Net Price"}
+                      </h3>
+                      <p className="mt-1">
+                        {(product as any).net_price ?? (product as any).price ?? "—"}
+                      </p>
                     </div>
                   </div>
                 </>
@@ -238,5 +259,5 @@ export default function ProductDetails({ product, open, onOpenChange }: ProductD
         </CardFooter>
       </Card>
     </div>
-  )
+  );
 }

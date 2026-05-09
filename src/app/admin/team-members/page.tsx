@@ -219,7 +219,7 @@ export default function AccessControlPage() {
           name: customer.name ?? customer.primary_mobile ?? "Unknown",
         })),
       );
-    } catch (error) {
+    } catch {
       setCustomers([]);
     } finally {
       setCustomersLoading(false);

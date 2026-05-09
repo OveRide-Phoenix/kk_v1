@@ -137,7 +137,7 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
           setErrorMessage(data.detail || "Something went wrong. Please try again.");
         }
       }
-    } catch (error) {
+    } catch {
       setIsSubmitting(false);
       setErrorMessage("Failed to send request. Please check your connection.");
     }

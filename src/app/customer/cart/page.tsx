@@ -197,6 +197,7 @@ export default function CartPage() {
     } else {
       setSelectedAddressId(null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredAddresses, cartContext]);
 
   const totals = useMemo(() => {
@@ -304,6 +305,7 @@ export default function CartPage() {
 
   useEffect(() => {
     fetchQuote();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cartItems, appliedCoupons]);
 
   const handleApplyCoupon = async () => {
