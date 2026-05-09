@@ -183,9 +183,9 @@ export default function CustomerV2Shell({ children }: { children: React.ReactNod
               <Image
                 src="/images/logo/kk-brown.svg"
                 alt="Kuteera Kitchen"
-                width={36}
+                width={56}
                 height={36}
-                style={{ width: "auto" }}
+                className="h-9 w-auto shrink-0"
                 priority
               />
               <span

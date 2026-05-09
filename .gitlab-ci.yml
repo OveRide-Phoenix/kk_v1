@@ -9,6 +9,12 @@ stages:
   - security
   - sonarqube
 
+variables:
+  GENERATED_EXCLUDED_PATHS: ".next, .next/**, out, out/**, build, build/**, coverage, coverage/**, node_modules, node_modules/**, .gitlab-ci-local, .gitlab-ci-local/**"
+  SAST_EXCLUDED_PATHS: "spec, test, tests, tmp, .next, .next/**, out, out/**, build, build/**, coverage, coverage/**, node_modules, node_modules/**, .gitlab-ci-local, .gitlab-ci-local/**"
+  SECRET_DETECTION_EXCLUDED_PATHS: ".next, .next/**, out, out/**, build, build/**, coverage, coverage/**, node_modules, node_modules/**, .gitlab-ci-local, .gitlab-ci-local/**"
+  DS_EXCLUDED_PATHS: "spec, test, tests, tmp, .next, .next/**, out, out/**, build, build/**, coverage, coverage/**, node_modules, node_modules/**, .gitlab-ci-local, .gitlab-ci-local/**"
+
 # ─── Cache ─────────────────────────────────────────────────────────────────────
 
 .npm_cache: &npm_cache

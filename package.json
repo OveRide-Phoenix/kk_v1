@@ -7,7 +7,7 @@
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "eslint src",
-    "ci:local": "gitlab-ci-local",
+    "ci:local": "gitlab-ci-local --no-artifacts-to-source",
     "ci:local:lint": "gitlab-ci-local --stage lint",
     "ci:local:build": "gitlab-ci-local --stage build"
   },

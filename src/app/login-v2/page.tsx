@@ -292,9 +292,9 @@ export default function LoginV2Page() {
           <Image
             src="/images/logo/kk-white.svg"
             alt="KK"
-            width={56}
+            width={88}
             height={56}
-            style={{ height: "auto" }}
+            style={{ width: 88, height: "auto" }}
           />
           <span
             style={{
