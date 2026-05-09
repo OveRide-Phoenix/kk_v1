@@ -7,7 +7,7 @@
 # Skip entirely:            SKIP_HOOKS=1 git push
 # Do not auto-start Docker: NO_DOCKER_AUTOSTART=1 git push
 # Keep auto-started Docker: KEEP_DOCKER_RUNNING=1 git push
-# Run manually:             gitlab-ci-local
+# Run manually:             gitlab-ci-local --no-artifacts-to-source
 # Run one job manually:     gitlab-ci-local nextjs_build
 
 set -euo pipefail
@@ -81,10 +81,10 @@ if ! docker info >/dev/null 2>&1; then
   fi
 fi
 
-echo "Running: gitlab-ci-local"
+echo "Running: gitlab-ci-local --no-artifacts-to-source"
 echo "──────────────────────────────"
 
-if gitlab-ci-local; then
+if gitlab-ci-local --no-artifacts-to-source; then
   echo "──────────────────────────────"
   echo -e "${GREEN}Local GitLab pipeline passed — pushing.${RESET}\n"
   exit 0
@@ -92,6 +92,6 @@ fi
 
 echo "──────────────────────────────"
 echo -e "${RED}Push blocked — local GitLab pipeline failed.${RESET}"
-echo -e "Run again for details: ${YELLOW}gitlab-ci-local${RESET}"
+echo -e "Run again for details: ${YELLOW}gitlab-ci-local --no-artifacts-to-source${RESET}"
 echo -e "Skip hooks:            ${YELLOW}SKIP_HOOKS=1 git push${RESET}"
 exit 1

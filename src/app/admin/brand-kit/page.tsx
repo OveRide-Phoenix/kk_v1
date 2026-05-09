@@ -411,9 +411,9 @@ export default function BrandKitPage() {
             <Image
               src="/images/logo/kk-brown.svg"
               alt="Kuteera Kitchen"
-              width={28}
+              width={44}
               height={28}
-              style={{ height: 28, width: "auto" }}
+              style={{ width: 44, height: "auto" }}
             />
             <span
               style={{
@@ -505,7 +505,7 @@ export default function BrandKitPage() {
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           {/* Logo on light */}
           <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-[#8D4925]/10 bg-[#fdfaf1] p-10">
-            <Image src="/images/logo/kk-brown.svg" alt="Logo on light" width={96} height={96} />
+            <Image src="/images/logo/kk-brown.svg" alt="Logo on light" width={150} height={96} />
             <div className="text-center">
               <p className="text-[10px] font-bold uppercase tracking-widest text-[#8D4925]/40">
                 On Light
@@ -518,7 +518,7 @@ export default function BrandKitPage() {
             className="flex flex-col items-center justify-center gap-4 rounded-2xl p-10"
             style={{ background: "#3A2618" }}
           >
-            <Image src="/images/logo/kk-white.svg" alt="Logo on dark" width={96} height={96} />
+            <Image src="/images/logo/kk-white.svg" alt="Logo on dark" width={150} height={96} />
             <div className="text-center">
               <p className="text-[10px] font-bold uppercase tracking-widest text-white/30">
                 On Dark
@@ -1122,7 +1122,7 @@ export default function BrandKitPage() {
                 <nav className="border-b border-orange-100 bg-[#fdfaf1]/95">
                   <div className="flex h-20 items-center justify-between px-8">
                     <div className="flex items-center gap-2.5">
-                      <Image src="/images/logo/kk-brown.svg" alt="" width={28} height={28} />
+                      <Image src="/images/logo/kk-brown.svg" alt="" width={44} height={28} />
                       <span
                         style={{
                           fontFamily: "var(--font-v2-playfair), serif",
@@ -1839,9 +1839,9 @@ export default function BrandKitPage() {
                   <Image
                     src="/images/logo/kk-white.svg"
                     alt="Kuteera Kitchen"
-                    width={100}
+                    width={157}
                     height={100}
-                    style={{ opacity: 0.95 }}
+                    style={{ width: 157, height: "auto", opacity: 0.95 }}
                   />
                 </div>
                 <p
@@ -1943,7 +1943,7 @@ export default function BrandKitPage() {
                       padding: "52px 24px",
                     }}
                   >
-                    <Image src="/images/logo/kk-brown.svg" alt="" width={92} height={92} />
+                    <Image src="/images/logo/kk-brown.svg" alt="" width={144} height={92} />
                     <div style={{ textAlign: "center" }}>
                       <p
                         style={{
@@ -1981,7 +1981,7 @@ export default function BrandKitPage() {
                       padding: "52px 24px",
                     }}
                   >
-                    <Image src="/images/logo/kk-white.svg" alt="" width={92} height={92} />
+                    <Image src="/images/logo/kk-white.svg" alt="" width={144} height={92} />
                     <div style={{ textAlign: "center" }}>
                       <p
                         style={{
@@ -3125,9 +3125,9 @@ export default function BrandKitPage() {
                   <Image
                     src="/images/logo/kk-white.svg"
                     alt=""
-                    width={84}
+                    width={132}
                     height={84}
-                    style={{ opacity: 0.92 }}
+                    style={{ width: 132, height: "auto", opacity: 0.92 }}
                   />
                 </div>
                 <h1

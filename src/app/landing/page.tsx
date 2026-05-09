@@ -287,9 +287,9 @@ export default function LandingPage() {
             <Image
               src="/images/logo/kk-brown.svg"
               alt="Kuteera Kitchen"
-              width={36}
+              width={56}
               height={36}
-              style={{ width: "auto", transition: "opacity 0.3s ease" }}
+              style={{ width: 56, height: "auto", transition: "opacity 0.3s ease" }}
               priority
             />
             <div style={{ display: "flex", flexDirection: "column", gap: 3, paddingTop: 1 }}>
