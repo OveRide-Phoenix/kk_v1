@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import date
 from typing import Any, Dict, List, Optional
 
 import mysql.connector
@@ -51,6 +52,7 @@ class CustomerCreate(BaseModel):
     alternative_mobile: Optional[str] = None
     name: str
     recipient_name: str
+    date_of_birth: Optional[date] = None
     payment_frequency: Optional[str] = "Daily"
     email: Optional[str] = None
     house_apartment_no: Optional[str] = None
@@ -150,8 +152,11 @@ def register_customer(data: CustomerCreate):
 
         cursor.execute(
             """
-            INSERT INTO customers (referred_by, primary_mobile, alternative_mobile, name, recipient_name, payment_frequency, email)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO customers (
+                referred_by, primary_mobile, alternative_mobile, name, recipient_name,
+                date_of_birth, payment_frequency, email
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 data.referred_by,
@@ -159,6 +164,7 @@ def register_customer(data: CustomerCreate):
                 data.alternative_mobile,
                 data.name,
                 data.recipient_name,
+                data.date_of_birth,
                 data.payment_frequency,
                 data.email,
             ),

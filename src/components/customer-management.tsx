@@ -73,6 +73,7 @@ interface Customer {
   name: string;
   primary_mobile: string;
   email: string;
+  date_of_birth: string | null;
   written_address: string;
   // Add other fields from your API response
   address_id: number;
@@ -383,6 +384,7 @@ export default function CustomerManagement() {
                             primaryMobile: editingCustomer.primary_mobile,
                             alternativeMobile: editingCustomer.alternative_mobile ?? "",
                             email: editingCustomer.email ?? "",
+                            dateOfBirth: editingCustomer.date_of_birth ?? "",
                             recipientName: editingCustomer.recipient_name,
                             paymentFrequency: normalizePaymentFrequency(
                               editingCustomer.payment_frequency,
@@ -412,6 +414,7 @@ export default function CustomerManagement() {
                           alternative_mobile: customerData.alternativeMobile || null,
                           name: customerData.name?.trim(),
                           recipient_name: customerData.recipientName?.trim(),
+                          date_of_birth: customerData.dateOfBirth || null,
                           payment_frequency: customerData.paymentFrequency || "Daily",
                           email: customerData.email || null,
                           house_apartment_no: customerData.houseApartmentNo?.trim() || null,

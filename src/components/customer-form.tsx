@@ -38,6 +38,11 @@ interface CustomerFormProps {
 
 const UNASSIGNED_ROUTE_VALUE = "__unassigned__";
 
+const normalizeDateInput = (value?: string | null): string => {
+  if (!value) return "";
+  return value.split("T")[0];
+};
+
 export function CustomerForm({
   customer,
   deliveryRoutes = [],
@@ -52,6 +57,7 @@ export function CustomerForm({
     primaryMobile: customer?.primaryMobile || "",
     alternativeMobile: customer?.alternativeMobile || "",
     email: customer?.email || "",
+    dateOfBirth: normalizeDateInput(customer?.dateOfBirth),
     recipientName: customer?.recipientName || "",
     paymentFrequency: customer?.paymentFrequency || "Daily",
     addressType: customer?.addressType || "Home",
@@ -255,6 +261,17 @@ export function CustomerForm({
               type="email"
               value={formData.email}
               onChange={handleChange}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="dateOfBirth">Date of Birth</Label>
+            <Input
+              id="dateOfBirth"
+              name="dateOfBirth"
+              type="date"
+              value={formData.dateOfBirth}
+              onChange={handleChange}
+              max={new Date().toISOString().slice(0, 10)}
             />
           </div>
           <div className="space-y-2">

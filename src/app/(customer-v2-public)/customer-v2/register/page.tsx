@@ -26,6 +26,7 @@ export default function CustomerV2RegistrationPage() {
     primaryMobile: "",
     alternativeMobile: "",
     name: "",
+    dateOfBirth: "",
     recipientName: "",
     paymentFrequency: "Daily",
     email: "",
@@ -100,6 +101,7 @@ export default function CustomerV2RegistrationPage() {
       primary_mobile: formData.primaryMobile,
       alternative_mobile: formData.alternativeMobile || null,
       name: formData.name,
+      date_of_birth: formData.dateOfBirth || null,
       recipient_name: formData.recipientName,
       payment_frequency: formData.paymentFrequency || "Daily",
       email: formData.email || null,
@@ -233,6 +235,20 @@ export default function CustomerV2RegistrationPage() {
                         onChange={handleChange}
                       />
                     </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className={labelClass} htmlFor="dateOfBirth">
+                      Date of Birth (Optional)
+                    </label>
+                    <input
+                      className={inputClass}
+                      id="dateOfBirth"
+                      name="dateOfBirth"
+                      type="date"
+                      value={formData.dateOfBirth}
+                      onChange={handleChange}
+                      max={new Date().toISOString().slice(0, 10)}
+                    />
                   </div>
                 </div>
               </section>

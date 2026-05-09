@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, CircleUserRound, Mail, MapPin, Phone } from "lucide-react";
+import { ArrowLeft, CalendarDays, CircleUserRound, Mail, MapPin, Phone } from "lucide-react";
 import GoogleMapPicker from "@/components/gmap/GoogleMapPicker";
 import { mobilePalette, playfairMobile, workSans } from "@/components/mobile/customer/theme";
 import { useToast } from "@/hooks/use-toast";
@@ -43,6 +43,7 @@ export default function MobileCustomerRegisterPage() {
     primaryMobile: "",
     alternativeMobile: "",
     name: "",
+    dateOfBirth: "",
     recipientName: "",
     paymentFrequency: "Daily",
     email: "",
@@ -134,6 +135,7 @@ export default function MobileCustomerRegisterPage() {
       primary_mobile: form.primaryMobile,
       alternative_mobile: form.alternativeMobile || null,
       name: form.name,
+      date_of_birth: form.dateOfBirth || null,
       recipient_name: form.recipientName,
       payment_frequency: form.paymentFrequency || "Daily",
       email: form.email || null,
@@ -262,6 +264,16 @@ export default function MobileCustomerRegisterPage() {
             type="tel"
             value={form.alternativeMobile ? `+91 ${form.alternativeMobile}` : ""}
             placeholder="+91"
+            onChange={handleChange}
+          />
+
+          <InputField
+            icon={<CalendarDays size={18} color="#8D4A25" />}
+            label="Date of Birth"
+            name="dateOfBirth"
+            type="date"
+            value={form.dateOfBirth}
+            placeholder=""
             onChange={handleChange}
           />
 

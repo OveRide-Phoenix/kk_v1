@@ -45,6 +45,7 @@ export default function RegistrationPage() {
     primaryMobile: "", // Matches primary_mobile
     alternativeMobile: "", // Matches alternative_mobile
     name: "", // Matches name (customer's name)
+    dateOfBirth: "", // Matches date_of_birth
     recipientName: "", // Matches recipient_name
     paymentFrequency: "Daily", // Matches payment_frequency (default "Daily")
     email: "", // Matches email
@@ -153,6 +154,7 @@ export default function RegistrationPage() {
       primary_mobile: formData.primaryMobile,
       alternative_mobile: formData.alternativeMobile || null,
       name: formData.name,
+      date_of_birth: formData.dateOfBirth || null,
       recipient_name: formData.recipientName,
       payment_frequency: formData.paymentFrequency || "Daily",
       email: formData.email || null,
@@ -279,6 +281,19 @@ export default function RegistrationPage() {
                         onChange={handleChange}
                         placeholder="+91"
                         className=""
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="dateOfBirth" className="text-foreground/90">
+                        Date of Birth (Optional)
+                      </Label>
+                      <Input
+                        id="dateOfBirth"
+                        name="dateOfBirth"
+                        type="date"
+                        value={formData.dateOfBirth}
+                        onChange={handleChange}
+                        max={new Date().toISOString().slice(0, 10)}
                       />
                     </div>
                   </div>
