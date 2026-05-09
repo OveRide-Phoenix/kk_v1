@@ -256,7 +256,7 @@ export default function ProductManagement() {
       const arrayData = Array.isArray(data) ? data : [];
       setProducts(arrayData);
       setFilteredProducts(arrayData);
-    } catch (err) {
+    } catch {
       setProducts([]);
       setFilteredProducts([]);
     }

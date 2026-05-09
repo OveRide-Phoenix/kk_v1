@@ -185,7 +185,7 @@ export default function CustomerV2Shell({ children }: { children: React.ReactNod
                 alt="Kuteera Kitchen"
                 width={36}
                 height={36}
-                style={{ height: 36, width: "auto" }}
+                style={{ width: "auto" }}
                 priority
               />
               <span

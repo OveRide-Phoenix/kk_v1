@@ -1,20 +1,20 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import CustomerNavBar from "@/components/customer-nav-bar"
-import { Button } from "@/components/ui/button"
-import { Calendar } from "@/components/ui/calendar"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import CustomerNavBar from "@/components/customer-nav-bar";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 export default function ActiveSubscription() {
   return (
     <div className="min-h-screen bg-brand-shell">
       <CustomerNavBar />
-      
+
       <main className="container mx-auto px-4 pt-20">
         <div className="py-4">
-          <h1 className="text-center text-3xl font-bold text-[#463028] mb-8 font-serif">Active Subscriptions</h1>
-          
+          <h1 className="text-center text-3xl font-bold text-[#463028] mb-8 font-serif">
+            Active Subscriptions
+          </h1>
+
           {/* Subscription Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card className="border-2 border-brand-subtle">
@@ -36,8 +36,8 @@ export default function ActiveSubscription() {
                       <li>1x Mint Chutney</li>
                     </ul>
                   </div>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     className="w-full mt-4 border-[#463028] text-[#463028] hover:bg-[#463028] hover:text-white"
                   >
                     Modify Subscription
@@ -65,8 +65,8 @@ export default function ActiveSubscription() {
                       <li>1x Sweet (Chef's Special)</li>
                     </ul>
                   </div>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     className="w-full mt-4 border-[#463028] text-[#463028] hover:bg-[#463028] hover:text-white"
                   >
                     Modify Subscription
@@ -78,5 +78,5 @@ export default function ActiveSubscription() {
         </div>
       </main>
     </div>
-  )
+  );
 }

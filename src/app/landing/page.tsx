@@ -289,7 +289,7 @@ export default function LandingPage() {
               alt="Kuteera Kitchen"
               width={36}
               height={36}
-              style={{ height: 36, width: "auto", transition: "opacity 0.3s ease" }}
+              style={{ width: "auto", transition: "opacity 0.3s ease" }}
               priority
             />
             <div style={{ display: "flex", flexDirection: "column", gap: 3, paddingTop: 1 }}>
@@ -641,6 +641,7 @@ export default function LandingPage() {
                     src="/images/menu/placeholder_lunch.png"
                     alt="South Indian thali"
                     fill
+                    sizes="(max-width: 768px) 0px, 260px"
                     style={{ objectFit: "cover" }}
                   />
                 </div>
@@ -667,7 +668,13 @@ export default function LandingPage() {
                         boxShadow: "0 18px 40px rgba(0,0,0,0.18)",
                       }}
                     >
-                      <Image src={photo.src} alt={photo.alt} fill style={{ objectFit: "cover" }} />
+                      <Image
+                        src={photo.src}
+                        alt={photo.alt}
+                        fill
+                        sizes="(max-width: 768px) 0px, 160px"
+                        style={{ objectFit: "cover" }}
+                      />
                     </div>
                   ))}
                 </div>
@@ -759,6 +766,7 @@ export default function LandingPage() {
                     src="/images/menu/placeholder_weekend.png"
                     alt="Home cooked meal"
                     fill
+                    sizes="(max-width: 768px) calc(100vw - 48px), 50vw"
                     style={{ objectFit: "cover" }}
                   />
                   <div
@@ -1011,6 +1019,7 @@ export default function LandingPage() {
                     src={service.image}
                     alt={service.title}
                     fill
+                    sizes="(max-width: 768px) calc(100vw - 48px), 33vw"
                     style={{ objectFit: "cover" }}
                   />
                   <div
@@ -1094,6 +1103,7 @@ export default function LandingPage() {
                 src={item.src}
                 alt={item.label.replace(" 2", "")}
                 fill
+                sizes="180px"
                 style={{ objectFit: "cover" }}
               />
               <div className="marquee-label">{item.label.replace(" 2", "")}</div>
@@ -1410,6 +1420,7 @@ export default function LandingPage() {
                     src={product.image}
                     alt={product.name}
                     fill
+                    sizes="(max-width: 768px) 0px, (max-width: 1200px) 25vw, 300px"
                     style={{ objectFit: "cover" }}
                   />
                   <div
@@ -1503,6 +1514,7 @@ export default function LandingPage() {
                   src={products[activeProduct].image}
                   alt={products[activeProduct].name}
                   fill
+                  sizes="calc(100vw - 48px)"
                   style={{ objectFit: "cover" }}
                 />
                 <div

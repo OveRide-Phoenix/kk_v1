@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# Pre-push hook: run the GitLab CI pipeline locally before pushing.
+#
+# This intentionally mirrors .gitlab-ci.yml through gitlab-ci-local instead of
+# maintaining a separate hand-written approximation of the pipeline.
+#
+# Skip entirely:            SKIP_HOOKS=1 git push
+# Do not auto-start Docker: NO_DOCKER_AUTOSTART=1 git push
+# Keep auto-started Docker: KEEP_DOCKER_RUNNING=1 git push
+# Run manually:             gitlab-ci-local
+# Run one job manually:     gitlab-ci-local nextjs_build
+
+set -euo pipefail
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BOLD='\033[1m'
+RESET='\033[0m'
+
+if [ "${SKIP_HOOKS:-}" = "1" ]; then
+  echo -e "${YELLOW}Pre-push hooks skipped (SKIP_HOOKS=1)${RESET}"
+  exit 0
+fi
+
+echo -e "\n${BOLD}Pre-push GitLab pipeline mirror${RESET}"
+echo "──────────────────────────────"
+
+STARTED_DOCKER=0
+
+cleanup() {
+  if [ "$STARTED_DOCKER" -eq 1 ] && [ "${KEEP_DOCKER_RUNNING:-}" != "1" ]; then
+    echo "Stopping Docker Desktop..."
+    osascript -e 'quit app "Docker"' >/dev/null 2>&1 || true
+  fi
+}
+
+trap cleanup EXIT
+
+if ! command -v gitlab-ci-local >/dev/null 2>&1; then
+  echo -e "${RED}gitlab-ci-local is not installed.${RESET}"
+  echo -e "Install it, then push again:"
+  echo -e "  ${YELLOW}npm install -g gitlab-ci-local${RESET}"
+  echo -e "Skip hooks only if you intentionally want GitLab to be the first full check:"
+  echo -e "  ${YELLOW}SKIP_HOOKS=1 git push${RESET}"
+  exit 1
+fi
+
+if ! command -v docker >/dev/null 2>&1; then
+  echo -e "${RED}Docker is not installed or not on PATH.${RESET}"
+  echo "gitlab-ci-local needs Docker to run the same container images as GitLab."
+  exit 1
+fi
+
+if ! docker info >/dev/null 2>&1; then
+  if [ "${NO_DOCKER_AUTOSTART:-}" = "1" ]; then
+    echo -e "${RED}Docker is not running.${RESET}"
+    echo "Start Docker, then push again."
+    exit 1
+  fi
+
+  if [ "$(uname -s)" = "Darwin" ] && [ -d "/Applications/Docker.app" ]; then
+    echo "Docker is not running. Starting Docker Desktop..."
+    open -a Docker
+    STARTED_DOCKER=1
+
+    for _ in $(seq 1 60); do
+      if docker info >/dev/null 2>&1; then
+        echo -e "${GREEN}Docker is ready.${RESET}"
+        break
+      fi
+      sleep 2
+    done
+  fi
+
+  if ! docker info >/dev/null 2>&1; then
+    echo -e "${RED}Docker is not running.${RESET}"
+    echo "Start Docker, then push again."
+    echo -e "Disable auto-start: ${YELLOW}NO_DOCKER_AUTOSTART=1 git push${RESET}"
+    exit 1
+  fi
+fi
+
+echo "Running: gitlab-ci-local"
+echo "──────────────────────────────"
+
+if gitlab-ci-local; then
+  echo "──────────────────────────────"
+  echo -e "${GREEN}Local GitLab pipeline passed — pushing.${RESET}\n"
+  exit 0
+fi
+
+echo "──────────────────────────────"
+echo -e "${RED}Push blocked — local GitLab pipeline failed.${RESET}"
+echo -e "Run again for details: ${YELLOW}gitlab-ci-local${RESET}"
+echo -e "Skip hooks:            ${YELLOW}SKIP_HOOKS=1 git push${RESET}"
+exit 1

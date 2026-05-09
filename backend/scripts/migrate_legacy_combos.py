@@ -20,7 +20,6 @@ from typing import Any, Dict, List, Tuple
 import mysql.connector
 from mysql.connector import Error
 
-
 DB_CONFIG = {
     "host": os.getenv("DB_HOST", "localhost"),
     "user": os.getenv("DB_USER", "fastapi_user"),

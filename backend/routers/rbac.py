@@ -319,11 +319,13 @@ def list_roles(user: Dict[str, Any] = Depends(admin_required)):
     cursor = db.cursor(dictionary=True)
     try:
         ensure_default_roles(cursor)
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT role_id, code, name, description, is_system, created_at
             FROM roles
             ORDER BY name ASC
-            """)
+            """
+        )
         roles = cursor.fetchall()
         usage = role_usage_counts(db)
         for role in roles:
@@ -500,12 +502,14 @@ def list_team_members(user: Dict[str, Any] = Depends(admin_required)):
     db = get_raw_db()
     cursor = db.cursor(dictionary=True)
     try:
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT customer_id, name, primary_mobile, email, roles, admin_is_active, admin_password_hash, created_at
             FROM customers
             WHERE roles IS NOT NULL
             ORDER BY name ASC
-            """)
+            """
+        )
         rows = cursor.fetchall()
         members = hydrate_team_members(db, rows)
         return {"team_members": members}

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { http } from "@/lib/http";
-import { Pencil, Trash2, Plus, Search, Eye, ChevronUp, MoreHorizontal, Crown } from "lucide-react";
+import { Pencil, Trash2, Plus, Search, Eye, MoreHorizontal, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,7 +17,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -32,16 +31,11 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Textarea } from "@/components/ui/textarea";
-import RegisterForm from "@/components/registerform";
 import { AdminLayout } from "@/components/admin-layout";
 import { CustomerForm } from "./customer-form";
-import { toast, useToast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuthStore } from "@/store/store";
 import {
@@ -68,11 +62,8 @@ const normaliseRoles = (value: unknown): number[] => {
   return [];
 };
 
-// Define customer types
-type CustomerType = "Regular" | "Reseller" | "Agent";
 type PaymentFrequency = "Daily" | "Weekly" | "Monthly";
 type AddressType = "Home" | "Work" | "Other";
-type CustomerStatus = "Active" | "Pending" | "Inactive";
 
 // Update the Customer interface to match the API response
 interface Customer {
@@ -393,7 +384,9 @@ export default function CustomerManagement() {
                             alternativeMobile: editingCustomer.alternative_mobile ?? "",
                             email: editingCustomer.email ?? "",
                             recipientName: editingCustomer.recipient_name,
-                            paymentFrequency: normalizePaymentFrequency(editingCustomer.payment_frequency),
+                            paymentFrequency: normalizePaymentFrequency(
+                              editingCustomer.payment_frequency,
+                            ),
                             addressType: normalizeAddressType(editingCustomer.address_type),
                             houseApartmentNo: editingCustomer.house_apartment_no ?? "",
                             writtenAddress: editingCustomer.written_address,

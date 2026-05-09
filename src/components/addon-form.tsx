@@ -1,26 +1,38 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { Calendar } from "@/components/ui/calendar"
-import { Switch } from "@/components/ui/switch"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { type Product } from "@/types/product"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { format } from "date-fns"
-import { Calendar as CalendarIcon } from "lucide-react"
+import { useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Calendar } from "@/components/ui/calendar";
+import { Switch } from "@/components/ui/switch";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { type Product } from "@/types/product";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { format } from "date-fns";
+import { Calendar as CalendarIcon } from "lucide-react";
 
 interface AddonFormProps {
-  onSave: (addon: any) => void
-  onCancel: () => void
-  existingItems?: Product[]
+  onSave: (addon: any) => void;
+  onCancel: () => void;
+  existingItems?: Product[];
 }
 
 export default function AddonForm({ onSave, onCancel, existingItems = [] }: AddonFormProps) {
@@ -87,28 +99,28 @@ export default function AddonForm({ onSave, onCancel, existingItems = [] }: Addo
     isPriority: false,
     priorityLabel: "", // "Popular Add-on", "Recommended"
     status: "draft", // "draft", "published"
-  })
+  });
 
   const handleChange = (field: string, value: any) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
-  }
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    onSave(formData)
-  }
+    e.preventDefault();
+    onSave(formData);
+  };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+    const file = e.target.files?.[0];
     if (file) {
-      handleChange("image", file)
-      const reader = new FileReader()
+      handleChange("image", file);
+      const reader = new FileReader();
       reader.onloadend = () => {
-        handleChange("imagePreview", reader.result)
-      }
-      reader.readAsDataURL(file)
+        handleChange("imagePreview", reader.result);
+      };
+      reader.readAsDataURL(file);
     }
-  }
+  };
 
   return (
     <Dialog open={true} onOpenChange={() => onCancel()}>
@@ -116,7 +128,7 @@ export default function AddonForm({ onSave, onCancel, existingItems = [] }: Addo
         <DialogHeader>
           <DialogTitle>Create New Add-on</DialogTitle>
         </DialogHeader>
-        
+
         <form onSubmit={handleSubmit}>
           <Tabs defaultValue="basic" className="w-full">
             <TabsList className="grid w-full grid-cols-3 mb-4">
@@ -152,7 +164,10 @@ export default function AddonForm({ onSave, onCancel, existingItems = [] }: Addo
 
                 <div>
                   <Label htmlFor="category">Category *</Label>
-                  <Select value={formData.category} onValueChange={(value) => handleChange("category", value)}>
+                  <Select
+                    value={formData.category}
+                    onValueChange={(value) => handleChange("category", value)}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
@@ -177,6 +192,7 @@ export default function AddonForm({ onSave, onCancel, existingItems = [] }: Addo
                     className="mt-1"
                   />
                   {formData.imagePreview && (
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={formData.imagePreview}
                       alt="Preview"
@@ -209,7 +225,9 @@ export default function AddonForm({ onSave, onCancel, existingItems = [] }: Addo
                     <div className="flex items-center gap-2">
                       <Switch
                         checked={formData.allowQuantitySelection}
-                        onCheckedChange={(checked) => handleChange("allowQuantitySelection", checked)}
+                        onCheckedChange={(checked) =>
+                          handleChange("allowQuantitySelection", checked)
+                        }
                       />
                       <Label>Allow Quantity Selection</Label>
                     </div>
@@ -223,7 +241,9 @@ export default function AddonForm({ onSave, onCancel, existingItems = [] }: Addo
                             type="number"
                             min="1"
                             value={formData.minQuantity}
-                            onChange={(e) => handleChange("minQuantity", parseInt(e.target.value) || 1)}
+                            onChange={(e) =>
+                              handleChange("minQuantity", parseInt(e.target.value) || 1)
+                            }
                           />
                         </div>
                         <div>
@@ -233,7 +253,9 @@ export default function AddonForm({ onSave, onCancel, existingItems = [] }: Addo
                             type="number"
                             min="1"
                             value={formData.maxQuantity}
-                            onChange={(e) => handleChange("maxQuantity", parseInt(e.target.value) || 1)}
+                            onChange={(e) =>
+                              handleChange("maxQuantity", parseInt(e.target.value) || 1)
+                            }
                           />
                         </div>
                       </div>
@@ -276,7 +298,9 @@ export default function AddonForm({ onSave, onCancel, existingItems = [] }: Addo
                             min="0"
                             max={formData.discountType === "percentage" ? "100" : undefined}
                             value={formData.discountValue}
-                            onChange={(e) => handleChange("discountValue", parseFloat(e.target.value) || 0)}
+                            onChange={(e) =>
+                              handleChange("discountValue", parseFloat(e.target.value) || 0)
+                            }
                           />
                         </div>
 
@@ -285,12 +309,14 @@ export default function AddonForm({ onSave, onCancel, existingItems = [] }: Addo
                           <span className="text-sm text-gray-500"></span>
                           <Popover>
                             <PopoverTrigger asChild>
-                              <Button 
-                                variant="outline" 
+                              <Button
+                                variant="outline"
                                 className="w-[240px] justify-start text-left font-normal"
                               >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                {formData.discountExpiry ? format(formData.discountExpiry, "PPP") : "Pick a date"}
+                                {formData.discountExpiry
+                                  ? format(formData.discountExpiry, "PPP")
+                                  : "Pick a date"}
                               </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0" align="start">
@@ -317,7 +343,10 @@ export default function AddonForm({ onSave, onCancel, existingItems = [] }: Addo
                         <Checkbox
                           checked={checked}
                           onCheckedChange={(value) =>
-                            handleChange("availableDays", { ...formData.availableDays, [day]: value })
+                            handleChange("availableDays", {
+                              ...formData.availableDays,
+                              [day]: value,
+                            })
                           }
                         />
                         <Label>{day.charAt(0).toUpperCase() + day.slice(1)}</Label>
@@ -332,7 +361,10 @@ export default function AddonForm({ onSave, onCancel, existingItems = [] }: Addo
                         <Checkbox
                           checked={checked}
                           onCheckedChange={(value) =>
-                            handleChange("timeRestrictions", { ...formData.timeRestrictions, [time]: value })
+                            handleChange("timeRestrictions", {
+                              ...formData.timeRestrictions,
+                              [time]: value,
+                            })
                           }
                         />
                         <Label>{time.charAt(0).toUpperCase() + time.slice(1)}</Label>
@@ -352,7 +384,10 @@ export default function AddonForm({ onSave, onCancel, existingItems = [] }: Addo
                     <Switch
                       checked={formData.stockManagement.enableTracking}
                       onCheckedChange={(checked) =>
-                        handleChange("stockManagement", { ...formData.stockManagement, enableTracking: checked })
+                        handleChange("stockManagement", {
+                          ...formData.stockManagement,
+                          enableTracking: checked,
+                        })
                       }
                     />
                     <Label>Enable Stock Tracking</Label>
@@ -364,7 +399,10 @@ export default function AddonForm({ onSave, onCancel, existingItems = [] }: Addo
                         <Switch
                           checked={formData.stockManagement.autoDisable}
                           onCheckedChange={(checked) =>
-                            handleChange("stockManagement", { ...formData.stockManagement, autoDisable: checked })
+                            handleChange("stockManagement", {
+                              ...formData.stockManagement,
+                              autoDisable: checked,
+                            })
                           }
                         />
                         <Label>Auto-disable When Out of Stock</Label>
@@ -374,7 +412,10 @@ export default function AddonForm({ onSave, onCancel, existingItems = [] }: Addo
                         <Switch
                           checked={formData.stockManagement.alertEnabled}
                           onCheckedChange={(checked) =>
-                            handleChange("stockManagement", { ...formData.stockManagement, alertEnabled: checked })
+                            handleChange("stockManagement", {
+                              ...formData.stockManagement,
+                              alertEnabled: checked,
+                            })
                           }
                         />
                         <Label>Enable Stock Alerts</Label>
@@ -419,7 +460,7 @@ export default function AddonForm({ onSave, onCancel, existingItems = [] }: Addo
                   {formData.itemDependencies.linkedToSpecificItems && (
                     <div className="space-y-2">
                       {existingItems.map((item) => {
-                        const itemId = String(item.id)
+                        const itemId = String(item.id);
 
                         return (
                           <div key={item.id} className="flex items-center gap-2">
@@ -428,16 +469,18 @@ export default function AddonForm({ onSave, onCancel, existingItems = [] }: Addo
                               onCheckedChange={(checked) => {
                                 const newLinkedItems = checked
                                   ? [...formData.itemDependencies.linkedItems, itemId]
-                                  : formData.itemDependencies.linkedItems.filter((id) => id !== itemId)
+                                  : formData.itemDependencies.linkedItems.filter(
+                                      (id) => id !== itemId,
+                                    );
                                 handleChange("itemDependencies", {
                                   ...formData.itemDependencies,
                                   linkedItems: newLinkedItems,
-                                })
+                                });
                               }}
                             />
                             <Label>{item.name}</Label>
                           </div>
-                        )
+                        );
                       })}
                     </div>
                   )}
@@ -521,8 +564,7 @@ export default function AddonForm({ onSave, onCancel, existingItems = [] }: Addo
               <Button
                 type="button"
                 onClick={() => {
-                  handleChange("status", "published")
-                  handleSubmit
+                  handleChange("status", "published");
                 }}
               >
                 Publish
@@ -532,5 +574,5 @@ export default function AddonForm({ onSave, onCancel, existingItems = [] }: Addo
         </form>
       </DialogContent>
     </Dialog>
-  )
-} 
+  );
+}

@@ -171,9 +171,7 @@ def get_top_customers_report(
                 "total_orders": int(row.get("total_orders") or 0),
                 "total_spent": _as_float(row.get("total_spent")),
                 "last_order_date": (
-                    row.get("last_order_date").isoformat()
-                    if row.get("last_order_date")
-                    else None
+                    row.get("last_order_date").isoformat() if row.get("last_order_date") else None
                 ),
             }
         )
@@ -244,9 +242,7 @@ def get_subscription_report(
     metadata = _subscriptions_table_metadata(db)
     if metadata:
         plan_column, date_column, revenue_column = metadata
-        revenue_expression = (
-            f"SUM(COALESCE({revenue_column}, 0))" if revenue_column else "0"
-        )
+        revenue_expression = f"SUM(COALESCE({revenue_column}, 0))" if revenue_column else "0"
         query = text(
             f"""
             SELECT

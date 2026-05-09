@@ -387,9 +387,7 @@ def _fetch_item_unit_details(cursor, item_ids: Iterable[int]) -> Dict[int, Dict[
                 else None
             ),
             "buffer_percentage": (
-                float(row["buffer_percentage"])
-                if row.get("buffer_percentage") is not None
-                else 0.0
+                float(row["buffer_percentage"]) if row.get("buffer_percentage") is not None else 0.0
             ),
         }
     return details

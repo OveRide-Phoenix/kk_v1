@@ -400,6 +400,7 @@ export default function NewOrderPage() {
         setIsMenuLoading(false);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderDate, availableMealsKey, cityCode]);
 
   useEffect(() => {

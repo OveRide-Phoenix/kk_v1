@@ -6,7 +6,10 @@
     "dev": "BROWSERSLIST_IGNORE_OLD_DATA=1 NODE_OPTIONS=--no-deprecation concurrently \"next dev --turbopack\" \"./backend/venv/bin/python -m uvicorn backend.main:app --reload --reload-dir backend\"",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "ci:local": "gitlab-ci-local",
+    "ci:local:lint": "gitlab-ci-local --stage lint",
+    "ci:local:build": "gitlab-ci-local --stage build"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+/.gitlab-ci-local/
 
 # next.js
 /.next/
@@ -22,6 +23,7 @@
 
 # misc
 .DS_Store
+._*
 *.pem
 
 # debug

@@ -567,6 +567,7 @@ export default function CustomerV2CartPage() {
                 {cartItems.map((item) => (
                   <div key={`${item.meal}-${item.menu_item_id}`} className="flex gap-3">
                     <div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-2xl bg-orange-100/70">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         alt={item.item_name}
                         className="h-full w-full object-cover"

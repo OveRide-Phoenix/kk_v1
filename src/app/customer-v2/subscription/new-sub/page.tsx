@@ -1,68 +1,39 @@
-"use client"
+"use client";
 
-import Link from "next/link"
-import Image from "next/image"
-import { useState } from "react"
-import { Home, ShoppingBag, ShoppingCart, User, MapPin, Plus, Minus, X, Clock, Flame } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-} from "@/components/ui/card"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import CustomerNavBar from "@/components/customer-nav-bar"
+import Image from "next/image";
+import { useState } from "react";
+import { ShoppingBag, ShoppingCart, Plus, Minus, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import CustomerNavBar from "@/components/customer-nav-bar";
 
 type MenuItem = {
-  id: number
-  name: string
-  description: string
-  price: number
-  image: string
-  category: string
-}
+  id: number;
+  name: string;
+  description: string;
+  price: number;
+  image: string;
+  category: string;
+};
 
 export default function NewSubscription() {
-  const [quantities, setQuantities] = useState<{ [key: number]: number }>({})
+  const [quantities, setQuantities] = useState<{ [key: number]: number }>({});
   const [popupQuantities, setPopupQuantities] = useState<{ [key: number]: number }>({});
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
-  const [location, setLocation] = useState("WORK No. 3, St. Mark's Road, Bengaluru - 04......");
-  const [selectedAddress, setSelectedAddress] = useState("work");
-  const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [quantityChanged, setQuantityChanged] = useState(false);
-  const [addresses] = useState([
-    { type: "HOME", address: "123 Home Street, Bengaluru - 01" },
-    { type: "WORK", address: "WORK No. 3, St. Mark's Road, Bengaluru - 04" },
-    { type: "FRIEND", address: "456 Friend Avenue, Bengaluru - 02" },
-  ]);
 
   const handleQuantityChange = (itemId: number, change: number) => {
-    setQuantities(prev => ({
+    setQuantities((prev) => ({
       ...prev,
-      [itemId]: Math.max(0, (prev[itemId] || 0) + change)
+      [itemId]: Math.max(0, (prev[itemId] || 0) + change),
     }));
   };
 
   const handlePopupQuantityChange = (itemId: number, change: number) => {
-    setPopupQuantities(prev => ({
+    setPopupQuantities((prev) => ({
       ...prev,
-      [itemId]: Math.max(0, (prev[itemId] || 0) + change)
+      [itemId]: Math.max(0, (prev[itemId] || 0) + change),
     }));
     setQuantityChanged(true);
   };
@@ -70,9 +41,9 @@ export default function NewSubscription() {
   const handleConfirm = () => {
     if (!selectedItem) return;
 
-    setQuantities(prev => ({
+    setQuantities((prev) => ({
       ...prev,
-      [selectedItem.id]: popupQuantities[selectedItem.id] || 0
+      [selectedItem.id]: popupQuantities[selectedItem.id] || 0,
     }));
     setSelectedItem(null);
     setQuantityChanged(false);
@@ -88,9 +59,9 @@ export default function NewSubscription() {
 
   const openPopup = (item: MenuItem) => {
     setSelectedItem(item);
-    setPopupQuantities(prev => ({
+    setPopupQuantities((prev) => ({
       ...prev,
-      [item.id]: quantities[item.id] || 0
+      [item.id]: quantities[item.id] || 0,
     }));
     setQuantityChanged(false);
   };
@@ -103,7 +74,7 @@ export default function NewSubscription() {
       description: "Description for item 1",
       price: 100,
       image: "/images/sample1.jpg",
-      category: "category1"
+      category: "category1",
     },
     {
       id: 2,
@@ -111,7 +82,7 @@ export default function NewSubscription() {
       description: "Description for item 2",
       price: 150,
       image: "/images/sample2.jpg",
-      category: "category2"
+      category: "category2",
     },
     // Add more items as needed
   ];
@@ -119,7 +90,7 @@ export default function NewSubscription() {
   return (
     <div className="min-h-screen bg-brand-shell">
       <CustomerNavBar />
-      
+
       <main className="container mx-auto px-4 pt-20">
         <div className="py-4">
           <div className="flex items-center justify-center mb-8">
@@ -130,7 +101,7 @@ export default function NewSubscription() {
             </div>
             <div className="h-px bg-border flex-grow max-w-xs"></div>
           </div>
-          
+
           <div className="sticky top-20 z-10">
             <div className="flex justify-center gap-2">
               {["category1", "category2"].map((category) => (
@@ -144,16 +115,17 @@ export default function NewSubscription() {
                     const headerOffset = 160;
                     const elementPosition = element.getBoundingClientRect().top;
                     const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
-                    
+
                     window.scrollTo({
                       top: offsetPosition,
-                      behavior: 'smooth'
+                      behavior: "smooth",
                     });
                   }}
                   className={`px-4 py-1.5 rounded-full border border-primary capitalize font-serif text-sm transition-colors shadow-md
-                    ${activeCategory === category 
-                      ? 'bg-primary text-white' 
-                      : 'bg-brand-shell text-primary hover:bg-primary hover:text-white'
+                    ${
+                      activeCategory === category
+                        ? "bg-primary text-white"
+                        : "bg-brand-shell text-primary hover:bg-primary hover:text-white"
                     }`}
                 >
                   {category}
@@ -166,12 +138,15 @@ export default function NewSubscription() {
             <div className="grid grid-cols-1 gap-16">
               {["category1", "category2"].map((category) => (
                 <div key={category} id={category}>
-                  <h2 className="text-xl font-semibold text-[#463028] mb-4 capitalize font-serif">{category}</h2>
+                  <h2 className="text-xl font-semibold text-[#463028] mb-4 capitalize font-serif">
+                    {category}
+                  </h2>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {menuItems
-                      .filter(item => item.category === category)
+                      .filter((item) => item.category === category)
                       .map((item) => (
-                        <div key={item.id} 
+                        <div
+                          key={item.id}
                           className="flex bg-brand-shell border-2 border-brand-subtle rounded-lg overflow-hidden h-[120px] shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer"
                           onClick={() => openPopup(item)}
                         >
@@ -186,7 +161,9 @@ export default function NewSubscription() {
                           </div>
                           <div className="flex-1 p-3 relative">
                             <h3 className="font-medium text-[#463028] text-sm">{item.name}</h3>
-                            <p className="text-xs text-[#8d6e63] mt-1 line-clamp-2">{item.description}</p>
+                            <p className="text-xs text-[#8d6e63] mt-1 line-clamp-2">
+                              {item.description}
+                            </p>
                             <div className="absolute bottom-3 right-3 flex items-center gap-2">
                               <Button
                                 variant="outline"
@@ -226,9 +203,7 @@ export default function NewSubscription() {
       </main>
 
       <div className="fixed bottom-6 right-6">
-        <Button 
-          className="h-12 w-12 rounded-full bg-primary/80 hover:bg-primary text-white shadow-xl flex items-center justify-center relative"
-        >
+        <Button className="h-12 w-12 rounded-full bg-primary/80 hover:bg-primary text-white shadow-xl flex items-center justify-center relative">
           <ShoppingCart className="h-4 w-4" />
           <span className="absolute -top-2 -right-2 bg-[#463028] text-white text-xs font-medium rounded-full h-5 w-5 flex items-center justify-center border-2 border-[#faf7f2]">
             {Object.values(quantities).reduce((a, b) => a + b, 0)}
@@ -240,8 +215,8 @@ export default function NewSubscription() {
         <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden bg-brand-shell">
           <div className="relative w-full h-[250px]">
             <Image
-              src={selectedItem?.image || '/placeholder.svg'}
-              alt={selectedItem?.name || ''}
+              src={selectedItem?.image || "/placeholder.svg"}
+              alt={selectedItem?.name || ""}
               fill
               className="object-cover"
               priority
@@ -282,13 +257,15 @@ export default function NewSubscription() {
                   className="h-6 w-6 border-primary text-primary hover:bg-primary hover:text-white"
                   onClick={(e) => {
                     e.stopPropagation();
-                    selectedItem && handlePopupQuantityChange(selectedItem.id, -1);
+                    if (selectedItem) handlePopupQuantityChange(selectedItem.id, -1);
                   }}
                 >
                   <Minus className="h-3 w-3" />
                 </Button>
                 <span className="text-sm text-primary font-medium min-w-[20px] text-center">
-                  {selectedItem ? popupQuantities[selectedItem.id] || quantities[selectedItem.id] || 0 : 0}
+                  {selectedItem
+                    ? popupQuantities[selectedItem.id] || quantities[selectedItem.id] || 0
+                    : 0}
                 </span>
                 <Button
                   variant="outline"
@@ -296,7 +273,7 @@ export default function NewSubscription() {
                   className="h-6 w-6 border-primary text-primary hover:bg-primary hover:text-white"
                   onClick={(e) => {
                     e.stopPropagation();
-                    selectedItem && handlePopupQuantityChange(selectedItem.id, 1);
+                    if (selectedItem) handlePopupQuantityChange(selectedItem.id, 1);
                   }}
                 >
                   <Plus className="h-3 w-3" />

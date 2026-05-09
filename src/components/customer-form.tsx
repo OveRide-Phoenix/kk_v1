@@ -1,18 +1,23 @@
-"use client"
+"use client";
 
-import type React from "react"
-import { useState, useMemo } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import GoogleMapPicker from "@/components/gmap/GoogleMapPicker"
-import { Customer } from "@/types/customer"
-import { AlertCircle, Route } from "lucide-react"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import type React from "react";
+import { useState, useMemo, useCallback } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import GoogleMapPicker from "@/components/gmap/GoogleMapPicker";
+import { Customer } from "@/types/customer";
+import { AlertCircle, Route } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface DeliveryRouteOption {
   route_id: number;
@@ -62,50 +67,48 @@ export function CustomerForm({
 
   const [errors, setErrors] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
-  const [submitMessage, setSubmitMessage] = useState('');
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-      const { name, value } = e.target;
-      setFormData(prev => {
-          // Special handling for mobile fields and pin code
-          if (name === "primaryMobile" || name === "alternativeMobile") {
-              // Remove all non-digit characters
-              const digitsOnly = value.replace(/\D/g, "");
-              
-              // Limit to 10 digits without any formatting
-              const limitedNumber = digitsOnly.slice(0, 10);
-              
-              return { ...prev, [name]: limitedNumber };
-          } else if (name === "pinCode") {
-              // Remove non-digits and limit to 6 numbers
-              const digitsOnly = value.replace(/\D/g, "").slice(0, 6);
-              return { ...prev, [name]: digitsOnly };
-          }
-          
-          return { ...prev, [name]: value };
-      });
+    const { name, value } = e.target;
+    setFormData((prev) => {
+      // Special handling for mobile fields and pin code
+      if (name === "primaryMobile" || name === "alternativeMobile") {
+        // Remove all non-digit characters
+        const digitsOnly = value.replace(/\D/g, "");
+
+        // Limit to 10 digits without any formatting
+        const limitedNumber = digitsOnly.slice(0, 10);
+
+        return { ...prev, [name]: limitedNumber };
+      } else if (name === "pinCode") {
+        // Remove non-digits and limit to 6 numbers
+        const digitsOnly = value.replace(/\D/g, "").slice(0, 6);
+        return { ...prev, [name]: digitsOnly };
+      }
+
+      return { ...prev, [name]: value };
+    });
   };
 
   const handleSelectChange = (name: string, value: string) => {
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleRouteChange = (value: string) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       routeId: value === UNASSIGNED_ROUTE_VALUE ? null : Number(value),
     }));
   };
 
-  const handleLocationSelect = (lat: number, lng: number, address?: string) => {
-    setFormData(prev => ({
+  const handleLocationSelect = useCallback((lat: number, lng: number, address?: string) => {
+    setFormData((prev) => ({
       ...prev,
       latitude: lat,
       longitude: lng,
-      writtenAddress: address || prev.writtenAddress
+      writtenAddress: address || prev.writtenAddress,
     }));
-  };
+  }, []);
 
   const MemoizedGoogleMap = useMemo(
     () => (
@@ -119,7 +122,7 @@ export function CustomerForm({
         )}
       </div>
     ),
-    [handleLocationSelect, formData.latitude, formData.longitude]
+    [handleLocationSelect, formData.latitude, formData.longitude],
   );
 
   const handleSubmit = async (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -181,7 +184,7 @@ export function CustomerForm({
           </AlertDescription>
         </Alert>
       )}
-      
+
       <TabsList className="grid w-full grid-cols-3">
         <TabsTrigger value="basic">Basic Info</TabsTrigger>
         <TabsTrigger value="address">Address</TabsTrigger>
@@ -191,14 +194,10 @@ export function CustomerForm({
       <TabsContent value="basic" className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="name">Customer Name <span className="text-destructive">*</span></Label>
-            <Input
-              id="name"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              required
-            />
+            <Label htmlFor="name">
+              Customer Name <span className="text-destructive">*</span>
+            </Label>
+            <Input id="name" name="name" value={formData.name} onChange={handleChange} required />
           </div>
           <div className="space-y-2">
             <Label htmlFor="referredBy">Referred By</Label>
@@ -210,9 +209,13 @@ export function CustomerForm({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="primaryMobile">Primary Mobile <span className="text-destructive">*</span></Label>
+            <Label htmlFor="primaryMobile">
+              Primary Mobile <span className="text-destructive">*</span>
+            </Label>
             <div className="relative">
-              <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${formData.primaryMobile ? 'text-foreground' : 'text-muted-foreground'}`}>
+              <span
+                className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${formData.primaryMobile ? "text-foreground" : "text-muted-foreground"}`}
+              >
                 +91
               </span>
               <Input
@@ -229,7 +232,9 @@ export function CustomerForm({
           <div className="space-y-2">
             <Label htmlFor="alternativeMobile">Alternative Mobile</Label>
             <div className="relative">
-              <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${formData.alternativeMobile ? 'text-foreground' : 'text-muted-foreground'}`}>
+              <span
+                className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${formData.alternativeMobile ? "text-foreground" : "text-muted-foreground"}`}
+              >
                 +91
               </span>
               <Input
@@ -253,7 +258,9 @@ export function CustomerForm({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="recipientName">Deliver to / Recipient Name <span className="text-destructive">*</span></Label>
+            <Label htmlFor="recipientName">
+              Deliver to / Recipient Name <span className="text-destructive">*</span>
+            </Label>
             <Input
               id="recipientName"
               name="recipientName"
@@ -281,7 +288,10 @@ export function CustomerForm({
         </div>
       </TabsContent>
 
-      <TabsContent value="address" className="space-y-4 max-h-[calc(100vh-300px)] overflow-y-auto p-4">
+      <TabsContent
+        value="address"
+        className="space-y-4 max-h-[calc(100vh-300px)] overflow-y-auto p-4"
+      >
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="addressType">Address Type</Label>
@@ -300,7 +310,9 @@ export function CustomerForm({
             </Select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="houseApartmentNo">House/Apartment <span className="text-destructive">*</span></Label>
+            <Label htmlFor="houseApartmentNo">
+              House/Apartment <span className="text-destructive">*</span>
+            </Label>
             <Input
               id="houseApartmentNo"
               name="houseApartmentNo"
@@ -310,7 +322,9 @@ export function CustomerForm({
             />
           </div>
           <div className="col-span-2 space-y-2">
-            <Label htmlFor="address">Address <span className="text-destructive">*</span></Label>
+            <Label htmlFor="address">
+              Address <span className="text-destructive">*</span>
+            </Label>
             <Textarea
               id="address"
               name="writtenAddress"
@@ -321,7 +335,9 @@ export function CustomerForm({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="city">City <span className="text-destructive">*</span></Label>
+            <Label htmlFor="city">
+              City <span className="text-destructive">*</span>
+            </Label>
             <Select
               value={formData.city}
               onValueChange={(value) => handleSelectChange("city", value)}
@@ -336,16 +352,18 @@ export function CustomerForm({
             </Select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="pinCode">Pin Code <span className="text-destructive">*</span></Label>
+            <Label htmlFor="pinCode">
+              Pin Code <span className="text-destructive">*</span>
+            </Label>
             <Input
-                id="pinCode"
-                name="pinCode"
-                type="text"
-                inputMode="numeric"
-                value={formData.pinCode}
-                onChange={handleChange}
-                required
-                maxLength={6}
+              id="pinCode"
+              name="pinCode"
+              type="text"
+              inputMode="numeric"
+              value={formData.pinCode}
+              onChange={handleChange}
+              required
+              maxLength={6}
             />
           </div>
           {MemoizedGoogleMap}
@@ -403,13 +421,10 @@ export function CustomerForm({
         <Button variant="outline" onClick={onCancel} disabled={isSubmitting}>
           Cancel
         </Button>
-        <Button 
-          onClick={handleSubmit} 
-          disabled={isSubmitting}
-        >
+        <Button onClick={handleSubmit} disabled={isSubmitting}>
           {isSubmitting ? "Saving..." : "Save Customer"}
         </Button>
       </div>
     </Tabs>
-  )
+  );
 }

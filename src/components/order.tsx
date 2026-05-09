@@ -7,7 +7,7 @@ import { format as formatDate } from "date-fns";
 import { ShoppingCart, Minus, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getSupportedMeals } from "@/config/cities";
 
@@ -34,7 +34,6 @@ interface MenuSectionResponse {
   items: MenuItem[];
 }
 
-const MEALS: MealType[] = ["breakfast", "lunch", "dinner", "condiments"];
 const DINNER_CUTOFF_HOUR = 18; // 6 PM local time
 
 type CartContext = {
@@ -115,6 +114,7 @@ export default function CustomerDailyMenu({
     const defaultDate = now.getHours() >= DINNER_CUTOFF_HOUR ? tomorrow() : today();
     setSelectedDate(defaultDate);
     setConfirmedDate(defaultDate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Fetch released menus for the confirmed date
@@ -221,6 +221,7 @@ export default function CustomerDailyMenu({
       }
     };
     run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [confirmedDate, refreshSignal, availableMealsKey, cityCode]);
 
   useEffect(() => {
@@ -292,8 +293,6 @@ export default function CustomerDailyMenu({
     });
   };
 
-  const todayD = today();
-  const tomorrowD = tomorrow();
   const orderingLabel = confirmedDate ? formatDate(confirmedDate, "do MMMM") : null;
 
   return (
@@ -405,7 +404,7 @@ export default function CustomerDailyMenu({
                               : "",
                           ].join(" ")}
                         >
-                          {/* Left thumbnail */}
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={it.picture_url || "/images/menu/idli-sambar.jpg"}
                             alt={it.item_name}

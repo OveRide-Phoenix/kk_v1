@@ -42,7 +42,9 @@ def _parse_positive_int(value: Any, field_name: str) -> int:
     try:
         parsed = int(value)
     except (TypeError, ValueError):
-        raise HTTPException(status_code=400, detail=f"{field_name} must be a positive integer") from None
+        raise HTTPException(
+            status_code=400, detail=f"{field_name} must be a positive integer"
+        ) from None
     if parsed <= 0:
         raise HTTPException(status_code=400, detail=f"{field_name} must be a positive integer")
     return parsed
@@ -85,7 +87,11 @@ def normalize_combo_items(
                 )
             seen.add(dedupe_key)
             normalized.append(
-                {"item_id": normalized_item_id, "component_type_id": None, "quantity": normalized_quantity}
+                {
+                    "item_id": normalized_item_id,
+                    "component_type_id": None,
+                    "quantity": normalized_quantity,
+                }
             )
             continue
 

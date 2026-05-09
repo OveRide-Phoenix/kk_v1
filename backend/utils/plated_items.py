@@ -13,7 +13,9 @@ def _parse_positive_number(value: Any, field_name: str) -> float:
     try:
         parsed = float(value)
     except (TypeError, ValueError):
-        raise HTTPException(status_code=400, detail=f"{field_name} must be a positive number") from None
+        raise HTTPException(
+            status_code=400, detail=f"{field_name} must be a positive number"
+        ) from None
     if parsed <= 0:
         raise HTTPException(status_code=400, detail=f"{field_name} must be a positive number")
     return parsed
@@ -69,7 +71,11 @@ def normalize_plated_components(
                 )
             seen.add(dedupe_key)
             normalized.append(
-                {"item_id": normalized_item_id, "component_type_id": None, "quantity": normalized_quantity}
+                {
+                    "item_id": normalized_item_id,
+                    "component_type_id": None,
+                    "quantity": normalized_quantity,
+                }
             )
             continue
 
@@ -101,7 +107,9 @@ def normalize_plated_components(
         )
 
     if not normalized and require_items:
-        raise HTTPException(status_code=400, detail="A plated item must include at least one component")
+        raise HTTPException(
+            status_code=400, detail="A plated item must include at least one component"
+        )
 
     return normalized
 
@@ -142,12 +150,18 @@ def _fetch_plated_components(cursor, plated_ids: Sequence[int]) -> Dict[int, Lis
             {
                 "kind": "item" if component_item_id is not None else "type",
                 "itemId": int(component_item_id) if component_item_id is not None else None,
-                "componentTypeId": int(component_type_id) if component_type_id is not None else None,
+                "componentTypeId": (
+                    int(component_type_id) if component_type_id is not None else None
+                ),
                 "name": row.get("item_name") or row.get("component_type_name"),
                 "componentTypeName": row.get("component_type_name"),
                 "quantity": float(row.get("quantity") or 0),
                 "uomCustomer": row.get("uom_customer"),
-                "unitPacking": float(row.get("unit_packing") or 0) if row.get("unit_packing") is not None else None,
+                "unitPacking": (
+                    float(row.get("unit_packing") or 0)
+                    if row.get("unit_packing") is not None
+                    else None
+                ),
                 "uomPacking": row.get("uom_packing"),
                 "uomProduction": row.get("uom_production"),
             }
@@ -258,9 +272,7 @@ def fetch_plated_items_with_components(cursor) -> List[Dict[str, Any]]:
     )
     plated_items = cursor.fetchall() or []
     plated_ids = [
-        int(row["plated_item_id"])
-        for row in plated_items
-        if row.get("plated_item_id") is not None
+        int(row["plated_item_id"]) for row in plated_items if row.get("plated_item_id") is not None
     ]
     component_map = _fetch_plated_components(cursor, plated_ids)
     for row in plated_items:
@@ -309,8 +321,12 @@ def expand_plated_quantities(
             continue
         components_by_parent.setdefault(int(parent_item_id), []).append(
             {
-                "component_item_id": int(component_item_id) if component_item_id is not None else None,
-                "component_type_id": int(component_type_id) if component_type_id is not None else None,
+                "component_item_id": (
+                    int(component_item_id) if component_item_id is not None else None
+                ),
+                "component_type_id": (
+                    int(component_type_id) if component_type_id is not None else None
+                ),
                 "quantity": float(row.get("quantity") or 0),
             }
         )
@@ -322,7 +338,9 @@ def expand_plated_quantities(
         normalized_ordered_qty = float(ordered_qty or 0)
         components = components_by_parent.get(normalized_item_id)
         if not components:
-            expanded[normalized_item_id] = expanded.get(normalized_item_id, 0.0) + normalized_ordered_qty
+            expanded[normalized_item_id] = (
+                expanded.get(normalized_item_id, 0.0) + normalized_ordered_qty
+            )
             continue
         for component in components:
             component_qty = normalized_ordered_qty * float(component["quantity"])
@@ -330,11 +348,14 @@ def expand_plated_quantities(
             component_type_id = component.get("component_type_id")
             if component_item_id is not None:
                 normalized_component_item_id = int(component_item_id)
-                expanded[normalized_component_item_id] = expanded.get(normalized_component_item_id, 0.0) + component_qty
+                expanded[normalized_component_item_id] = (
+                    expanded.get(normalized_component_item_id, 0.0) + component_qty
+                )
             elif component_type_id is not None:
                 normalized_component_type_id = int(component_type_id)
                 unresolved_component_types[normalized_component_type_id] = (
-                    unresolved_component_types.get(normalized_component_type_id, 0.0) + component_qty
+                    unresolved_component_types.get(normalized_component_type_id, 0.0)
+                    + component_qty
                 )
 
     unresolved_rows: List[Dict[str, Any]] = []

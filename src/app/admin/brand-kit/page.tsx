@@ -593,18 +593,6 @@ export default function BrandKitPage() {
                 <SectionLabel>{group.group}</SectionLabel>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   {group.colors.map((color) => {
-                    const isDark =
-                      color.hex.startsWith("#3A") ||
-                      color.hex.startsWith("#1b") ||
-                      color.hex.startsWith("rgba(58") ||
-                      color.hex.startsWith("rgba(0") ||
-                      color.hex === "#8D4925" ||
-                      color.hex === "#463028" ||
-                      color.hex === "#3A2618" ||
-                      color.hex === "#6B5344" ||
-                      color.hex === "#6b7280" ||
-                      color.hex === "#64748b" ||
-                      color.hex === "#dc2626";
                     return (
                       <div
                         key={color.name}

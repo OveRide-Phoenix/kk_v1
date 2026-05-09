@@ -294,7 +294,7 @@ export default function LoginV2Page() {
             alt="KK"
             width={56}
             height={56}
-            style={{ width: 56, height: "auto" }}
+            style={{ height: "auto" }}
           />
           <span
             style={{
