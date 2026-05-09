@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+/.gitlab-ci-local/
 
 # next.js
 /.next/
