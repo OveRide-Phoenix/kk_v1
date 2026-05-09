@@ -37,7 +37,3 @@ def city_supports_food(city_code: CityCode) -> bool:
 
 def city_supports_condiments(city_code: CityCode) -> bool:
     return CITY_CONFIG[city_code]["supports_condiments"]
-
-
-def test_formatting(x,y,z):
-    return x+y+z
