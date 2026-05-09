@@ -2086,10 +2086,7 @@ def create_discount_code(
             cursor.executemany(
                 "INSERT INTO discount_code_conditions (code_id, dimension, entity_id, entity_label) "
                 "VALUES (%s, %s, %s, %s)",
-                [
-                    (code_id, c.dimension, c.entity_id, c.entity_label)
-                    for c in payload.conditions
-                ],
+                [(code_id, c.dimension, c.entity_id, c.entity_label) for c in payload.conditions],
             )
         db.commit()
         return _fetch_code_with_conditions(cursor, code_id)
@@ -2155,10 +2152,7 @@ def update_discount_code(
             cursor.executemany(
                 "INSERT INTO discount_code_conditions (code_id, dimension, entity_id, entity_label) "
                 "VALUES (%s, %s, %s, %s)",
-                [
-                    (code_id, c.dimension, c.entity_id, c.entity_label)
-                    for c in payload.conditions
-                ],
+                [(code_id, c.dimension, c.entity_id, c.entity_label) for c in payload.conditions],
             )
         db.commit()
         return _fetch_code_with_conditions(cursor, code_id)

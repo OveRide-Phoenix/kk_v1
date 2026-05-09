@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# Pre-push hook: auto-fixes what it can, then blocks on what it can't.
+#
+# Flow:
+#   1. Black auto-formats backend Python
+#   2. ESLint --fix auto-fixes frontend
+#   3. If files changed by (1) or (2), stages them and aborts push — commit the
+#      fixes first, then push again (they'll already be staged, just git commit)
+#   4. tsc --noEmit runs; blocks on errors (can't auto-fix)
+#
+# Skip entirely:    SKIP_HOOKS=1 git push
+# Full pipeline:    gitlab-ci-local lint   (requires Docker)
+
+set -euo pipefail
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+BOLD='\033[1m'
+RESET='\033[0m'
+
+pass() { echo -e "  ${GREEN}✓${RESET} $1"; }
+fail() { echo -e "  ${RED}✗${RESET} $1"; }
+skip() { echo -e "  ${YELLOW}–${RESET} $1 ${YELLOW}(skipped)${RESET}"; }
+fix()  { echo -e "  ${BLUE}⚡${RESET} $1"; }
+
+if [ "${SKIP_HOOKS:-}" = "1" ]; then
+  echo -e "${YELLOW}Pre-push hooks skipped (SKIP_HOOKS=1)${RESET}"
+  exit 0
+fi
+
+echo -e "\n${BOLD}Pre-push checks${RESET}"
+echo "──────────────────────────────"
+
+FAILED=0
+STAGED_FIXES=0
+
+# ── Black: auto-format Python ─────────────────────────────────────────────────
+BLACK_BIN="./backend/venv/bin/black"
+[ ! -x "$BLACK_BIN" ] && BLACK_BIN="$(command -v black 2>/dev/null || echo "")"
+
+if [ -z "$BLACK_BIN" ]; then
+  skip "Black (not found — install black or activate venv)"
+else
+  if ! "$BLACK_BIN" --check --line-length 100 backend/ --quiet 2>/dev/null; then
+    "$BLACK_BIN" --line-length 100 backend/ --quiet 2>/dev/null
+    git add -u -- backend/
+    STAGED_FIXES=1
+    fix "Black: auto-formatted backend/ (will be committed)"
+  else
+    pass "Black"
+  fi
+fi
+
+# ── ESLint: auto-fix frontend ─────────────────────────────────────────────────
+npx eslint src --fix --quiet 2>/dev/null || true
+
+ESLINT_FIXED=$(git diff --name-only -- src/ 2>/dev/null | wc -l | tr -d ' ')
+if [ "$ESLINT_FIXED" -gt 0 ]; then
+  git add -u -- src/
+  STAGED_FIXES=1
+  fix "ESLint: auto-fixed ${ESLINT_FIXED} file(s) (will be committed)"
+fi
+
+# Check if any errors remain after --fix (warnings are OK, exit 0)
+if ! npm run lint --silent 2>/dev/null; then
+  fail "ESLint: errors remain after auto-fix — fix manually"
+  FAILED=1
+else
+  [ "$ESLINT_FIXED" -eq 0 ] && pass "ESLint"
+fi
+
+# ── TypeScript: check only (no auto-fix exists) ───────────────────────────────
+if TSC_OUT=$(npx tsc --noEmit 2>&1); then
+  pass "TypeScript"
+else
+  fail "TypeScript — fix manually:"
+  echo "$TSC_OUT" | grep "error TS" | head -10
+  FAILED=1
+fi
+
+echo "──────────────────────────────"
+
+# Auto-fixes were staged — make the user commit them before pushing
+if [ "$STAGED_FIXES" -eq 1 ]; then
+  echo -e "\n${BLUE}⚡ Auto-fixes are staged. Commit them and push again:${RESET}"
+  echo -e "   ${YELLOW}git diff --cached${RESET}                  (review what was fixed)"
+  echo -e "   ${YELLOW}git commit -m 'chore: lint auto-fixes'${RESET}"
+  echo -e "   ${YELLOW}git push${RESET}"
+  exit 1
+fi
+
+if [ "$FAILED" -ne 0 ]; then
+  echo -e "${RED}Push blocked — fix the errors above and push again.${RESET}"
+  echo -e "Skip hooks:      ${YELLOW}SKIP_HOOKS=1 git push${RESET}"
+  echo -e "Full pipeline:   ${YELLOW}gitlab-ci-local lint${RESET}"
+  exit 1
+fi
+
+echo -e "${GREEN}All checks passed — pushing.${RESET}\n"
+exit 0

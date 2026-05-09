@@ -45,16 +45,12 @@ class IntentPattern:
         return self._match_keywords(utterance)
 
     def _match_keywords(self, utterance: NormalizedUtterance) -> bool:
-        if self.all_terms and not all(
-            _term_present(term, utterance) for term in self.all_terms
-        ):
+        if self.all_terms and not all(_term_present(term, utterance) for term in self.all_terms):
             return False
         if self.any_terms:
             if not any(_term_present(term, utterance) for term in self.any_terms):
                 return False
-        if self.none_terms and any(
-            _term_present(term, utterance) for term in self.none_terms
-        ):
+        if self.none_terms and any(_term_present(term, utterance) for term in self.none_terms):
             return False
         return True
 
@@ -135,9 +131,7 @@ class SharedResources:
         return lookup
 
     @staticmethod
-    def _build_range_lookup(
-        config: Mapping[str, Any]
-    ) -> Tuple[Dict[str, str], str]:
+    def _build_range_lookup(config: Mapping[str, Any]) -> Tuple[Dict[str, str], str]:
         lookup: Dict[str, str] = {}
         default_range = "today"
         for key, entry in config.get("ranges", {}).items():
@@ -285,7 +279,11 @@ class NLService:
 
     def _unknown_response(self) -> Dict[str, Any]:
         examples = self.help_examples()
-        message = "Try: " + ", ".join(f"'{sample}'" for sample in examples) if examples else "No matching intent"
+        message = (
+            "Try: " + ", ".join(f"'{sample}'" for sample in examples)
+            if examples
+            else "No matching intent"
+        )
         return {
             "intent": "UNKNOWN",
             "message": message,
@@ -591,7 +589,19 @@ def extract_customer_query(
     digits = re.search(r"\b\d{9,}\b", utterance.text)
     if digits:
         return digits.group(0)
-    stopwords = {"customer", "customers", "orders", "order", "for", "this", "month", "week", "address", "addresses", "show"}
+    stopwords = {
+        "customer",
+        "customers",
+        "orders",
+        "order",
+        "for",
+        "this",
+        "month",
+        "week",
+        "address",
+        "addresses",
+        "show",
+    }
     remaining = [
         token
         for token in utterance.tokens
@@ -611,7 +621,25 @@ def extract_item_name(
     shared: SharedResources,
     values: Dict[str, Any],
 ) -> Optional[str]:
-    stopwords = {"update", "set", "buffer", "for", "to", "show", "today", "this", "week", "month", "dinner", "lunch", "breakfast", "condiments", "breakfast", "dinner", "lunch"}
+    stopwords = {
+        "update",
+        "set",
+        "buffer",
+        "for",
+        "to",
+        "show",
+        "today",
+        "this",
+        "week",
+        "month",
+        "dinner",
+        "lunch",
+        "breakfast",
+        "condiments",
+        "breakfast",
+        "dinner",
+        "lunch",
+    }
     stopwords.update(WEEKDAY_LOOKUP.keys())
     stopwords.update(shared.range_lookup.keys())
     filtered = [
@@ -693,10 +721,7 @@ def sanitize_slots(slots: Mapping[str, Any]) -> Dict[str, Any]:
 
 def _sanitize_slot_value(value: Any) -> Any:
     if isinstance(value, dict):
-        return {
-            key: _sanitize_slot_value(inner)
-            for key, inner in value.items()
-        }
+        return {key: _sanitize_slot_value(inner) for key, inner in value.items()}
     if isinstance(value, date):
         return value.isoformat()
     return value
@@ -839,14 +864,12 @@ def resolve_customer(db: Session, query_text: Optional[str]) -> Optional[Dict[st
         return None
     if query_text.isdigit():
         result = db.execute(
-            text(
-                """
+            text("""
                 SELECT customer_id, name, primary_mobile
                 FROM customers
                 WHERE primary_mobile = :phone
                 LIMIT 1
-                """
-            ),
+                """),
             {"phone": query_text},
         )
         row = result.mappings().first()
@@ -854,8 +877,7 @@ def resolve_customer(db: Session, query_text: Optional[str]) -> Optional[Dict[st
             return dict(row)
     like_value = f"%{query_text.strip()}%"
     result = db.execute(
-        text(
-            """
+        text("""
             SELECT customer_id, name, primary_mobile
             FROM customers
             WHERE name LIKE :name_like
@@ -863,8 +885,7 @@ def resolve_customer(db: Session, query_text: Optional[str]) -> Optional[Dict[st
                 CASE WHEN LOWER(name) = LOWER(:exact) THEN 0 ELSE 1 END,
                 name
             LIMIT 1
-            """
-        ),
+            """),
         {"name_like": like_value, "exact": query_text.strip()},
     )
     row = result.mappings().first()
@@ -917,17 +938,17 @@ def execute_set_buffer_by_name(match: IntentMatch, db: Session) -> Dict[str, Any
             "intent": match.intent.id,
             "slots": sanitize_slots(match.slots),
             "data": rows,
-            "message": match.intent.responses.get("disambiguation_message", "Multiple matches found"),
+            "message": match.intent.responses.get(
+                "disambiguation_message", "Multiple matches found"
+            ),
         }
     menu_item_id = rows[0]["menu_item_id"]
     db.execute(
-        text(
-            """
+        text("""
             UPDATE menu_items
             SET buffer_qty = :buffer_qty
             WHERE menu_item_id = :menu_item_id
-            """
-        ),
+            """),
         {"buffer_qty": buffer_qty, "menu_item_id": menu_item_id},
     )
     db.commit()
@@ -989,8 +1010,7 @@ def find_menu_items_by_name(
 
 def fetch_menu_item(db: Session, menu_item_id: int) -> List[Dict[str, Any]]:
     result = db.execute(
-        text(
-            """
+        text("""
             SELECT
                 mi.menu_item_id,
                 m.date,
@@ -1006,8 +1026,7 @@ def fetch_menu_item(db: Session, menu_item_id: int) -> List[Dict[str, Any]]:
             JOIN bld b ON b.bld_id = m.bld_id
             JOIN items i ON i.item_id = mi.item_id
             WHERE mi.menu_item_id = :menu_item_id
-            """
-        ),
+            """),
         {"menu_item_id": menu_item_id},
     )
     return [dict(row) for row in result.mappings().all()]

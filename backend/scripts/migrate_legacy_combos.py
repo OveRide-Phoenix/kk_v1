@@ -20,7 +20,6 @@ from typing import Any, Dict, List, Tuple
 import mysql.connector
 from mysql.connector import Error
 
-
 DB_CONFIG = {
     "host": os.getenv("DB_HOST", "localhost"),
     "user": os.getenv("DB_USER", "fastapi_user"),
@@ -34,15 +33,12 @@ def get_connection():
 
 
 def ensure_schema(cursor) -> None:
-    cursor.execute(
-        """
+    cursor.execute("""
         ALTER TABLE combos
             ADD COLUMN IF NOT EXISTS legacy_item_id INT NULL UNIQUE,
             ADD INDEX IF NOT EXISTS idx_combos_legacy_item_id (legacy_item_id)
-        """
-    )
-    cursor.execute(
-        """
+        """)
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS legacy_combo_map (
             legacy_item_id INT NOT NULL PRIMARY KEY,
             combo_id INT NOT NULL,
@@ -50,13 +46,11 @@ def ensure_schema(cursor) -> None:
             CONSTRAINT fk_legacy_combo FOREIGN KEY (combo_id)
                 REFERENCES combos (combo_id) ON DELETE CASCADE
         )
-        """
-    )
+        """)
 
 
 def fetch_legacy_combos(cursor) -> List[Dict[str, Any]]:
-    cursor.execute(
-        """
+    cursor.execute("""
         SELECT
             i.item_id,
             i.name,
@@ -65,8 +59,7 @@ def fetch_legacy_combos(cursor) -> List[Dict[str, Any]]:
         FROM items i
         WHERE i.is_combo = 1
         ORDER BY i.item_id ASC
-        """
-    )
+        """)
     return cursor.fetchall() or []
 
 

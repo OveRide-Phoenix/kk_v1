@@ -90,8 +90,7 @@ class SQLGenerationService:
             menu_item_id, resolution_error = _resolve_menu_item_id(db, subquery)
             if menu_item_id is None:
                 return {
-                    "error": resolution_error
-                    or "No matching menu item found for buffer update.",
+                    "error": resolution_error or "No matching menu item found for buffer update.",
                     "sql": sql,
                 }
 
@@ -127,13 +126,11 @@ class SQLGenerationService:
         sql = prepared.sql
         try:
             result = db.execute(
-                text(
-                    """
+                text("""
                     UPDATE menu_items
                     SET buffer_qty = :buffer_qty
                     WHERE menu_item_id = :menu_item_id
-                    """
-                ),
+                    """),
                 {
                     "buffer_qty": prepared.buffer_qty,
                     "menu_item_id": prepared.menu_item_id,
@@ -267,9 +264,7 @@ def _resolve_menu_item_id(db: Session, subquery: str) -> Tuple[Optional[int], Op
     if not rows:
         return None, "No matching menu item found for buffer update."
     if len(rows) > 1:
-        return None, (
-            "Multiple menu items matched that description. Please specify the meal."
-        )
+        return None, ("Multiple menu items matched that description. Please specify the meal.")
     value = rows[0][0]
     try:
         return int(value), None

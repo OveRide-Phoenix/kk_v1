@@ -88,9 +88,7 @@ def roles_to_json(role_ids: Sequence[int]) -> str:
     return json.dumps(unique_sorted)
 
 
-def fetch_role_map(
-    cursor, role_ids: Optional[Iterable[int]] = None
-) -> Dict[int, Dict[str, Any]]:
+def fetch_role_map(cursor, role_ids: Optional[Iterable[int]] = None) -> Dict[int, Dict[str, Any]]:
     """
     Return metadata for roles keyed by id. If role_ids is provided the query is scoped.
     """
@@ -132,9 +130,7 @@ def fetch_role_map(
     return result
 
 
-def fetch_role_ids_by_codes(
-    cursor, codes: Sequence[str]
-) -> Dict[str, Optional[int]]:
+def fetch_role_ids_by_codes(cursor, codes: Sequence[str]) -> Dict[str, Optional[int]]:
     """
     Resolve role ids by their codes. Returns mapping code -> role_id (or None if missing).
     """

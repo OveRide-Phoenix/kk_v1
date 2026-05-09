@@ -78,9 +78,7 @@ def _validate_buffer_update(sql: str) -> None:
         re.IGNORECASE | re.DOTALL,
     )
     if not pattern.search(sql):
-        raise SQLValidationError(
-            "Only menu_items.buffer_qty updates are permitted."
-        )
+        raise SQLValidationError("Only menu_items.buffer_qty updates are permitted.")
     forbidden_columns = re.findall(
         r"SET\s+([^=]+)=",
         sql,
@@ -90,9 +88,7 @@ def _validate_buffer_update(sql: str) -> None:
         parts = [segment.strip().lower() for segment in clause.split(",")]
         for part in parts:
             if part and not part.startswith("buffer_qty"):
-                raise SQLValidationError(
-                    "UPDATE statement attempts to modify disallowed columns."
-                )
+                raise SQLValidationError("UPDATE statement attempts to modify disallowed columns.")
 
 
 def _validate_tables_and_columns(sql: str) -> None:
@@ -116,12 +112,8 @@ def _validate_tables_and_columns(sql: str) -> None:
                 raise SQLValidationError(f"Table '{table}' is not allowed.")
     else:
         # fallback: ensure raw table names exist inside SQL
-        found_tables = set(
-            re.findall(r"\bFROM\s+([a-zA-Z_][\w]*)", sql, flags=re.IGNORECASE)
-        )
-        found_tables.update(
-            re.findall(r"\bJOIN\s+([a-zA-Z_][\w]*)", sql, flags=re.IGNORECASE)
-        )
+        found_tables = set(re.findall(r"\bFROM\s+([a-zA-Z_][\w]*)", sql, flags=re.IGNORECASE))
+        found_tables.update(re.findall(r"\bJOIN\s+([a-zA-Z_][\w]*)", sql, flags=re.IGNORECASE))
         if not found_tables.issubset(allowed_tables):
             raise SQLValidationError("SQL references non-whitelisted tables.")
 

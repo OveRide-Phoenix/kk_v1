@@ -45,14 +45,12 @@ def log_admin_action(
                 return admin_role_id in roles
 
             if not is_valid_admin(effective_admin_id):
-                cursor.execute(
-                    """
+                cursor.execute("""
                     SELECT customer_id, roles
                     FROM customers
                     WHERE admin_is_active = 1
                     ORDER BY customer_id ASC
-                    """
-                )
+                    """)
                 for row in cursor.fetchall():
                     roles = parse_role_ids(row.get("roles"))
                     if admin_role_id and admin_role_id in roles:
