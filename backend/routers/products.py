@@ -1930,3 +1930,272 @@ def delete_item_discount(
     finally:
         cursor.close()
         db.close()
+
+
+# ---------------------------------------------------------------------------
+# Discount codes engine (KUT-61)
+# One code per rule; each code has multiple conditions (OR logic).
+# Discounts apply at order time only — menus always show full price.
+# ---------------------------------------------------------------------------
+
+VALID_DIMENSIONS = {"item", "category", "meal_type", "global"}
+
+
+class DiscountConditionPayload(BaseModel):
+    """A single targeting condition on a discount code."""
+
+    dimension: str
+    entity_id: Optional[int] = None
+    entity_label: Optional[str] = None
+
+
+class DiscountCodePayload(BaseModel):
+    """Payload for creating or updating a discount code."""
+
+    code: str
+    name: str
+    discount_pct: float
+    city_code: str
+    from_date: str
+    to_date: Optional[str] = None
+    max_uses: Optional[int] = None
+    is_active: bool = True
+    conditions: List[DiscountConditionPayload] = []
+
+
+def _fetch_code_with_conditions(cursor, code_id: int) -> Optional[Dict[str, Any]]:
+    """Fetch a discount code row with its conditions and resolved entity names."""
+    cursor.execute(
+        "SELECT dc.*, "
+        "  (SELECT COUNT(*) FROM orders o WHERE o.discount_code = dc.code) AS times_used "
+        "FROM discount_codes dc WHERE dc.code_id = %s",
+        (code_id,),
+    )
+    row = cursor.fetchone()
+    if not row:
+        return None
+    cursor.execute(
+        "SELECT dcc.*, i.name AS item_name, c.category_name "
+        "FROM discount_code_conditions dcc "
+        "LEFT JOIN items i ON dcc.dimension = 'item' AND i.item_id = dcc.entity_id "
+        "LEFT JOIN categories c ON dcc.dimension = 'category' AND c.category_id = dcc.entity_id "
+        "WHERE dcc.code_id = %s ORDER BY dcc.condition_id ASC",
+        (code_id,),
+    )
+    row["conditions"] = cursor.fetchall() or []
+    return row
+
+
+@router.get("/api/products/discount-codes")
+def list_discount_codes(
+    city_code: Optional[str] = Query(None),
+    active_only: bool = Query(False),
+    user: Dict[str, Any] = Depends(admin_required),
+) -> List[Dict[str, Any]]:
+    """List all discount codes with their conditions.
+
+    Args:
+        city_code: Filter by city code.
+        active_only: If true, return only codes valid today and marked active.
+        user: Current admin user (injected).
+
+    Returns:
+        List of discount code dicts, each with a nested conditions list.
+    """
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        conditions: List[str] = []
+        params: List[Any] = []
+        if city_code:
+            conditions.append("dc.city_code = %s")
+            params.append(city_code)
+        if active_only:
+            conditions.append("dc.is_active = 1")
+            conditions.append("dc.from_date <= CURDATE()")
+            conditions.append("(dc.to_date IS NULL OR dc.to_date >= CURDATE())")
+            conditions.append("(dc.max_uses IS NULL OR dc.use_count < dc.max_uses)")
+
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        cursor.execute(
+            f"SELECT dc.* FROM discount_codes dc {where} ORDER BY dc.code_id DESC",
+            tuple(params),
+        )
+        codes = cursor.fetchall() or []
+        for code in codes:
+            cursor.execute(
+                "SELECT dcc.*, i.name AS item_name, c.category_name "
+                "FROM discount_code_conditions dcc "
+                "LEFT JOIN items i ON dcc.dimension = 'item' AND i.item_id = dcc.entity_id "
+                "LEFT JOIN categories c ON dcc.dimension = 'category' AND c.category_id = dcc.entity_id "
+                "WHERE dcc.code_id = %s ORDER BY dcc.condition_id ASC",
+                (code["code_id"],),
+            )
+            code["conditions"] = cursor.fetchall() or []
+        return codes
+    finally:
+        cursor.close()
+        db.close()
+
+
+@router.post("/api/products/discount-codes")
+def create_discount_code(
+    payload: DiscountCodePayload,
+    user: Dict[str, Any] = Depends(admin_required),
+) -> Dict[str, Any]:
+    """Create a new discount code with its targeting conditions.
+
+    Args:
+        payload: Code details and list of conditions.
+        user: Current admin user (injected).
+
+    Returns:
+        Newly created discount code dict with conditions.
+    """
+    normalized_code = payload.code.strip().upper()
+    if not normalized_code:
+        raise HTTPException(status_code=400, detail="code cannot be empty")
+    for cond in payload.conditions:
+        if cond.dimension not in VALID_DIMENSIONS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid dimension '{cond.dimension}'. Valid: {sorted(VALID_DIMENSIONS)}",
+            )
+
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "INSERT INTO discount_codes "
+            "(code, name, discount_pct, city_code, from_date, to_date, max_uses, is_active) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+            (
+                normalized_code,
+                payload.name,
+                payload.discount_pct,
+                payload.city_code,
+                payload.from_date,
+                payload.to_date,
+                payload.max_uses,
+                int(payload.is_active),
+            ),
+        )
+        code_id = cursor.lastrowid
+
+        if payload.conditions:
+            cursor.executemany(
+                "INSERT INTO discount_code_conditions (code_id, dimension, entity_id, entity_label) "
+                "VALUES (%s, %s, %s, %s)",
+                [
+                    (code_id, c.dimension, c.entity_id, c.entity_label)
+                    for c in payload.conditions
+                ],
+            )
+        db.commit()
+        return _fetch_code_with_conditions(cursor, code_id)
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@router.put("/api/products/discount-codes/{code_id}")
+def update_discount_code(
+    code_id: int,
+    payload: DiscountCodePayload,
+    user: Dict[str, Any] = Depends(admin_required),
+) -> Dict[str, Any]:
+    """Update a discount code and replace its conditions.
+
+    Args:
+        code_id: ID of the code to update.
+        payload: Updated code fields and full conditions list (replaces existing).
+        user: Current admin user (injected).
+
+    Returns:
+        Updated discount code dict with conditions.
+    """
+    normalized_code = payload.code.strip().upper()
+    if not normalized_code:
+        raise HTTPException(status_code=400, detail="code cannot be empty")
+    for cond in payload.conditions:
+        if cond.dimension not in VALID_DIMENSIONS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid dimension '{cond.dimension}'. Valid: {sorted(VALID_DIMENSIONS)}",
+            )
+
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT 1 FROM discount_codes WHERE code_id = %s", (code_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Discount code not found")
+
+        cursor.execute(
+            "UPDATE discount_codes SET code=%s, name=%s, discount_pct=%s, city_code=%s, "
+            "from_date=%s, to_date=%s, max_uses=%s, is_active=%s WHERE code_id=%s",
+            (
+                normalized_code,
+                payload.name,
+                payload.discount_pct,
+                payload.city_code,
+                payload.from_date,
+                payload.to_date,
+                payload.max_uses,
+                int(payload.is_active),
+                code_id,
+            ),
+        )
+        # Replace conditions wholesale
+        cursor.execute("DELETE FROM discount_code_conditions WHERE code_id = %s", (code_id,))
+        if payload.conditions:
+            cursor.executemany(
+                "INSERT INTO discount_code_conditions (code_id, dimension, entity_id, entity_label) "
+                "VALUES (%s, %s, %s, %s)",
+                [
+                    (code_id, c.dimension, c.entity_id, c.entity_label)
+                    for c in payload.conditions
+                ],
+            )
+        db.commit()
+        return _fetch_code_with_conditions(cursor, code_id)
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@router.delete("/api/products/discount-codes/{code_id}")
+def delete_discount_code(
+    code_id: int,
+    user: Dict[str, Any] = Depends(admin_required),
+) -> Dict[str, Any]:
+    """Delete a discount code and all its conditions.
+
+    Args:
+        code_id: ID of the code to delete.
+        user: Current admin user (injected).
+
+    Returns:
+        Confirmation dict with deleted code_id.
+    """
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT 1 FROM discount_codes WHERE code_id = %s", (code_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Discount code not found")
+        cursor.execute("DELETE FROM discount_codes WHERE code_id = %s", (code_id,))
+        db.commit()
+        return {"status": "deleted", "code_id": code_id}
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()

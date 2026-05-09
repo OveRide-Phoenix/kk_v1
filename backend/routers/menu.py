@@ -633,19 +633,9 @@ def upsert_daily_menu(payload: DailyMenuPayload) -> Dict[str, Any]:
                 resolved_category_id = mi.category_id if mi.category_id is not None else row[0]
                 resolved_component_type_id = None
 
-            # Look up active discount rule for this item+city+date (items only, not combos)
+            # Discounts are applied at order time via discount codes, not at menu level.
+            # menu_items.discount_pct is always NULL — full price is always shown on the menu.
             resolved_discount_pct: Optional[float] = None
-            if has_item and menu_date:
-                cursor.execute(
-                    "SELECT discount_pct FROM item_discounts "
-                    "WHERE item_id = %s AND city_code = %s "
-                    "AND from_date <= %s AND (to_date IS NULL OR to_date >= %s) "
-                    "ORDER BY discount_id DESC LIMIT 1",
-                    (mi.item_id, city_code, menu_date, menu_date),
-                )
-                discount_row = cursor.fetchone()
-                if discount_row:
-                    resolved_discount_pct = float(discount_row[0])
 
             normalized_menu_items.append(
                 {
