@@ -53,14 +53,14 @@ class CreateOrderPayload(BaseModel):
     items: List[OrderItemPayload]
     order_date: Optional[str] = None
     order_type: Optional[str] = None
-    coupon_codes: Optional[List[str]] = None
+    discount_code: Optional[str] = None
 
 
 class OrderQuotePayload(BaseModel):
     """Payload for getting a price quote before placing an order."""
 
     items: List[OrderItemPayload]
-    coupon_codes: Optional[List[str]] = None
+    discount_code: Optional[str] = None
 
 
 class OrderStatusUpdate(BaseModel):
@@ -80,56 +80,94 @@ class OrderPaymentUpdate(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _load_coupon_discount(
-    cursor, coupon_codes: Optional[List[str]], subtotal: float
-) -> tuple[float, List[str]]:
-    """Load and apply coupon discounts to a subtotal.
+def _load_discount_code(cursor, code_str: Optional[str]) -> Optional[Dict[str, Any]]:
+    """Validate a discount code and return it with its conditions.
 
     Args:
         cursor: DB cursor.
-        coupon_codes: List of coupon code strings to apply.
-        subtotal: Order subtotal before discounts.
+        code_str: The code string the customer entered.
 
     Returns:
-        Tuple of (discount_amount, applied_coupon_codes).
+        Dict with code row + 'conditions' list, or None if no code provided.
+
+    Raises:
+        HTTPException 400 if code is invalid, expired, inactive, or exhausted.
     """
-    if not coupon_codes:
-        return 0.0, []
-    normalized_codes = []
-    for code in coupon_codes:
-        if not code:
-            continue
-        normalized = code.strip().upper()
-        if normalized and normalized not in normalized_codes:
-            normalized_codes.append(normalized)
-    if not normalized_codes:
-        return 0.0, []
-    placeholders = ", ".join(["%s"] * len(normalized_codes))
+    if not code_str:
+        return None
+    normalized = code_str.strip().upper()
+    if not normalized:
+        return None
+
     cursor.execute(
-        f"""
-        SELECT constant_code, constant_value
-          FROM constants
-         WHERE constant_type = 'coupon'
-           AND constant_code IN ({placeholders})
-           AND is_active = 1
-        """,
-        tuple(normalized_codes),
+        "SELECT * FROM discount_codes "
+        "WHERE code = %s AND is_active = 1 "
+        "AND from_date <= CURDATE() AND (to_date IS NULL OR to_date >= CURDATE())",
+        (normalized,),
     )
-    rows = cursor.fetchall() or []
-    valid_codes = {str(row[0]).strip().upper(): float(row[1] or 0) for row in rows}
-    missing = [code for code in normalized_codes if code not in valid_codes]
-    if missing:
+    row = cursor.fetchone()
+    if not row:
         raise HTTPException(
-            status_code=400,
-            detail=f"Invalid coupon code(s): {', '.join(missing)}",
+            status_code=400, detail=f"Invalid or expired discount code: {normalized}"
         )
-    total_percent = sum(valid_codes.values())
-    if total_percent < 0:
-        total_percent = 0.0
-    if total_percent > 100:
-        total_percent = 100.0
-    discount_amount = (subtotal * total_percent) / 100.0
-    return discount_amount, normalized_codes
+
+    if row["max_uses"] is not None and row["use_count"] >= row["max_uses"]:
+        raise HTTPException(
+            status_code=400, detail=f"Discount code {normalized} has reached its usage limit"
+        )
+
+    cursor.execute(
+        "SELECT * FROM discount_code_conditions WHERE code_id = %s",
+        (row["code_id"],),
+    )
+    row["conditions"] = cursor.fetchall() or []
+    return row
+
+
+def _item_matches_code(
+    cursor,
+    item: "OrderItemPayload",
+    code: Dict[str, Any],
+) -> bool:
+    """Check whether an order item qualifies for the discount code.
+
+    A code with no conditions applies to all items (global).
+    Otherwise any single matching condition fires the discount (OR logic).
+
+    Args:
+        cursor: DB cursor.
+        item: The order item being evaluated.
+        code: Discount code dict with nested conditions list.
+
+    Returns:
+        True if the discount should apply to this item.
+    """
+    conditions = code.get("conditions") or []
+    if not conditions:
+        return True  # no conditions = global
+
+    item_id = item.item_id
+    meal_type = (item.meal_type or "").lower()
+
+    # Lazy-fetch category_id only if a category condition exists
+    category_id: Optional[int] = None
+    needs_category = any(c["dimension"] == "category" for c in conditions)
+    if needs_category and item_id is not None:
+        cursor.execute("SELECT category_id FROM items WHERE item_id = %s LIMIT 1", (item_id,))
+        r = cursor.fetchone()
+        category_id = r["category_id"] if r else None
+
+    for cond in conditions:
+        dim = cond["dimension"]
+        if dim == "global":
+            return True
+        if dim == "item" and item_id is not None and cond["entity_id"] == item_id:
+            return True
+        if dim == "category" and category_id is not None and cond["entity_id"] == category_id:
+            return True
+        if dim == "meal_type" and meal_type and (cond["entity_label"] or "").lower() == meal_type:
+            return True
+    return False
 
 
 def _load_tax_amounts(cursor, discounted_subtotal: float) -> tuple[float, float]:
@@ -162,45 +200,43 @@ def _load_tax_amounts(cursor, discounted_subtotal: float) -> tuple[float, float]
     return cgst_amount, sgst_amount
 
 
-def _resolve_effective_price(cursor, item: "OrderItemPayload") -> float:
-    """Resolve the authoritative unit price for an order item.
-
-    When a menu_item_id is provided, fetch rate and discount_pct from menu_items
-    and compute the discounted price. Otherwise fall back to the client-supplied price.
+def _resolve_original_price(cursor, item: "OrderItemPayload") -> float:
+    """Resolve the full (undiscounted) unit price for an order item from menu_items.rate.
 
     Args:
         cursor: DB cursor.
         item: Order item payload.
 
     Returns:
-        Effective unit price after any item-level discount applied.
+        Full unit price (never discounted — menus always carry undiscounted rates).
     """
     if item.menu_item_id is not None:
         cursor.execute(
-            "SELECT rate, discount_pct FROM menu_items WHERE menu_item_id = %s",
+            "SELECT rate FROM menu_items WHERE menu_item_id = %s",
             (item.menu_item_id,),
         )
         row = cursor.fetchone()
         if row:
-            rate = float(row[0])
-            discount_pct = float(row[1]) if row[1] is not None else 0.0
-            return round(rate * (1 - discount_pct / 100), 2)
+            return float(row[0])
     return item.price
 
 
 def _compute_order_totals(
-    cursor, items: List[OrderItemPayload], coupon_codes: Optional[List[str]]
+    cursor, items: List[OrderItemPayload], discount_code: Optional[str]
 ) -> Dict[str, Any]:
-    """Compute order totals including discount and taxes.
+    """Compute order totals with per-item discount code resolution.
+
+    Discounts are applied per item: only items matching the code's conditions
+    get the discount. Items that don't match pay full price.
 
     Args:
         cursor: DB cursor.
         items: List of order item payloads.
-        coupon_codes: Optional list of coupon codes to apply.
+        discount_code: Optional discount code string entered by the customer.
 
     Returns:
-        Dict with subtotal, discount, cgst, sgst, total_price, coupon_codes,
-        and resolved_prices (list of effective unit prices per item).
+        Dict with subtotal, discount, cgst, sgst, total_price, discount_code,
+        resolved_prices, original_prices, and applied_discount_pcts per item.
     """
     for index, item in enumerate(items):
         has_item = item.item_id is not None
@@ -210,12 +246,27 @@ def _compute_order_totals(
                 status_code=400,
                 detail=f"items[{index}] must include exactly one of item_id or combo_id",
             )
-    resolved_prices = [_resolve_effective_price(cursor, item) for item in items]
-    subtotal = sum(price * item.quantity for price, item in zip(resolved_prices, items))
-    discount_amount, applied_coupons = _load_coupon_discount(cursor, coupon_codes, subtotal)
-    discounted_subtotal = max(subtotal - discount_amount, 0.0)
+
+    code = _load_discount_code(cursor, discount_code)
+    original_prices = [_resolve_original_price(cursor, item) for item in items]
+
+    resolved_prices: List[float] = []
+    applied_pcts: List[Optional[float]] = []
+    for original, item in zip(original_prices, items):
+        if code and _item_matches_code(cursor, item, code):
+            pct = float(code["discount_pct"])
+            resolved_prices.append(round(original * (1 - pct / 100), 2))
+            applied_pcts.append(pct)
+        else:
+            resolved_prices.append(original)
+            applied_pcts.append(None)
+
+    subtotal = sum(p * item.quantity for p, item in zip(original_prices, items))
+    discounted_subtotal = sum(p * item.quantity for p, item in zip(resolved_prices, items))
+    discount_amount = round(subtotal - discounted_subtotal, 2)
+
     cgst_amount, sgst_amount = _load_tax_amounts(cursor, discounted_subtotal)
-    delivery_charge = 0.0  # free for now; set via config/rules when charging begins
+    delivery_charge = 0.0
     total_price = discounted_subtotal + cgst_amount + sgst_amount + delivery_charge
     return {
         "subtotal": round(subtotal, 2),
@@ -224,8 +275,11 @@ def _compute_order_totals(
         "sgst": round(sgst_amount, 2),
         "delivery_charge": round(delivery_charge, 2),
         "total_price": round(total_price, 2),
-        "coupon_codes": applied_coupons,
+        "discount_code": code["code"] if code else None,
+        "discount_code_id": code["code_id"] if code else None,
         "resolved_prices": resolved_prices,
+        "original_prices": original_prices,
+        "applied_discount_pcts": applied_pcts,
     }
 
 
@@ -281,17 +335,17 @@ def quote_order(payload: OrderQuotePayload) -> Dict[str, Any]:
     """Return a price quote for a set of items without placing an order.
 
     Args:
-        payload: Items and optional coupon codes to quote.
+        payload: Items and optional discount code to quote.
 
     Returns:
-        Dict with subtotal, discount, cgst, sgst, total_price, and applied coupon_codes.
+        Dict with subtotal, discount, cgst, sgst, total_price, discount_code, and per-item breakdown.
     """
     if not payload.items:
         raise HTTPException(status_code=400, detail="Order must include at least one item")
     db = get_raw_db()
-    cursor = db.cursor()
+    cursor = db.cursor(dictionary=True)
     try:
-        totals = _compute_order_totals(cursor, payload.items, payload.coupon_codes)
+        totals = _compute_order_totals(cursor, payload.items, payload.discount_code)
         return totals
     except mysql.connector.Error as err:
         raise HTTPException(status_code=500, detail=str(err))
@@ -334,7 +388,7 @@ def create_order(payload: CreateOrderPayload) -> Dict[str, Any]:
                 raise HTTPException(status_code=400, detail="No valid address found for customer")
             address_id = fallback[0]
 
-        totals = _compute_order_totals(cursor, payload.items, payload.coupon_codes)
+        totals = _compute_order_totals(cursor, payload.items, payload.discount_code)
 
         normalized_method = (payload.payment_method or "").strip()
         paid_flag = 1 if normalized_method.lower() in {"upi", "card", "online"} else 0
@@ -343,8 +397,9 @@ def create_order(payload: CreateOrderPayload) -> Dict[str, Any]:
 
         cursor.execute(
             """
-            INSERT INTO orders (customer_id, address_id, total_price, payment_method, order_date, status, order_type, paid, discount, cgst, sgst, delivery_charge)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO orders (customer_id, address_id, total_price, payment_method, order_date,
+                                status, order_type, paid, discount, discount_code, cgst, sgst, delivery_charge)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 payload.customer_id,
@@ -356,6 +411,7 @@ def create_order(payload: CreateOrderPayload) -> Dict[str, Any]:
                 payload.order_type or "one_time",
                 paid_flag,
                 float(totals["discount"]),
+                totals["discount_code"],
                 float(totals["cgst"]),
                 float(totals["sgst"]),
                 float(totals["delivery_charge"]),
@@ -364,10 +420,14 @@ def create_order(payload: CreateOrderPayload) -> Dict[str, Any]:
         order_id = cursor.lastrowid
 
         resolved_prices = totals["resolved_prices"]
+        original_prices = totals["original_prices"]
+        applied_pcts = totals["applied_discount_pcts"]
         cursor.executemany(
             """
-            INSERT INTO order_items (order_id, item_id, combo_id, menu_item_id, meal_type, quantity, price)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO order_items
+                (order_id, item_id, combo_id, menu_item_id, meal_type, quantity,
+                 price, original_price, applied_discount_pct)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             [
                 (
@@ -378,10 +438,19 @@ def create_order(payload: CreateOrderPayload) -> Dict[str, Any]:
                     item.meal_type,
                     item.quantity,
                     resolved_prices[i],
+                    original_prices[i],
+                    applied_pcts[i],
                 )
                 for i, item in enumerate(payload.items)
             ],
         )
+
+        # Increment code use_count if a discount code was applied
+        if totals["discount_code_id"]:
+            cursor.execute(
+                "UPDATE discount_codes SET use_count = use_count + 1 WHERE code_id = %s",
+                (totals["discount_code_id"],),
+            )
 
         for item in payload.items:
             if item.menu_item_id is not None:
@@ -398,10 +467,10 @@ def create_order(payload: CreateOrderPayload) -> Dict[str, Any]:
             "total_price": float(totals["total_price"]),
             "subtotal": float(totals["subtotal"]),
             "discount": float(totals["discount"]),
+            "discount_code": totals["discount_code"],
             "cgst": float(totals["cgst"]),
             "sgst": float(totals["sgst"]),
             "delivery_charge": float(totals["delivery_charge"]),
-            "coupon_codes": totals["coupon_codes"],
             "status": initial_status,
         }
     except mysql.connector.Error as err:

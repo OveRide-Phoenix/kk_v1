@@ -469,7 +469,7 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
       case "dev-api-docs":
         return "Developer · API Docs";
       case "discounts":
-        return "Item Discount Rules";
+        return "Discount Rules";
       case "account":
         return "My Account";
       default:

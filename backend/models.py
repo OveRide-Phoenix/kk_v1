@@ -458,3 +458,40 @@ class ItemDiscount(Base):
     created_at = Column(TIMESTAMP, nullable=True)
 
     item = relationship("Item")
+
+
+class DiscountCode(Base):
+    """Discount code — one code per rule, applied optionally at order time."""
+
+    __tablename__ = "discount_codes"
+
+    code_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    code = Column(String(50), nullable=False)
+    name = Column(String(200), nullable=False)
+    discount_pct = Column(DECIMAL(5, 2), nullable=False)
+    city_code = Column(String(20), nullable=False)
+    from_date = Column(Date, nullable=False)
+    to_date = Column(Date, nullable=True)
+    max_uses = Column(Integer, nullable=True)
+    use_count = Column(Integer, nullable=False, default=0)
+    is_active = Column(Integer, nullable=False, default=1)
+    created_at = Column(TIMESTAMP, nullable=True)
+    updated_at = Column(TIMESTAMP, nullable=True)
+
+    conditions = relationship(
+        "DiscountCodeCondition", back_populates="discount_code", cascade="all, delete-orphan"
+    )
+
+
+class DiscountCodeCondition(Base):
+    """Targeting condition for a discount code (OR logic — any match fires the discount)."""
+
+    __tablename__ = "discount_code_conditions"
+
+    condition_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    code_id = Column(Integer, ForeignKey("discount_codes.code_id"), nullable=False)
+    dimension = Column(String(50), nullable=False)
+    entity_id = Column(Integer, nullable=True)
+    entity_label = Column(String(100), nullable=True)
+
+    discount_code = relationship("DiscountCode", back_populates="conditions")
