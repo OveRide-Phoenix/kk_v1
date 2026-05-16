@@ -85,7 +85,7 @@ Products are modeled in three distinct ways — this is a core complexity of the
 1. **Regular items** (`items` table) — simple products with meal-type-specific pricing (breakfast/lunch/dinner/condiments/festival)
 2. **Combos** (`item_combos`) — bundles of items or categories; logic in `backend/utils/combos.py`
 3. **Plated items** (`plated_items`, `plated_item_components`) — pre-assembled products with component breakdown; logic in `backend/utils/plated_items.py`
-   All types support add-ons (`item_add_ons` — optional or mandatory extras).
+   Item groups now cover optional or grouped extras; the legacy extras model has been removed.
 
 ### Multi-City Support (Always Required)
 

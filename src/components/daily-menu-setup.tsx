@@ -27,6 +27,13 @@ import {
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { useAuthStore } from "@/store/store";
 import { http } from "@/lib/http";
@@ -41,8 +48,9 @@ interface MenuItem {
   menu_item_id?: number;
   item_id?: number | null;
   combo_id?: number | null;
-  item_name: string;
-  category_id: number | null;
+      item_name: string;
+      category_id: number | null;
+      category_name?: string | null;
   component_type_id?: number | null;
   component_type_name?: string | null;
   is_combo?: boolean;
@@ -138,6 +146,10 @@ export function DailyMenuSetup() {
       bld_ids: number[];
     }[]
   >([]);
+  const [availableCategories, setAvailableCategories] = useState<
+    { category_id: number; category_name: string }[]
+  >([]);
+  const [itemCategoryFilter, setItemCategoryFilter] = useState("all");
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [currentSection, setCurrentSection] = useState<MealSection>(() =>
     citySupportsFood(adminCity) ? "breakfast" : "condiments",
@@ -405,6 +417,7 @@ export function DailyMenuSetup() {
   useEffect(() => {
     if (!itemDialogOpen) return;
     setLoadingItemsAPI(true);
+    setItemCategoryFilter("all");
     const fetchAvailable = async () => {
       try {
         const params = new URLSearchParams({ bld_type: currentSection, include_combos: "1" });
@@ -453,6 +466,33 @@ export function DailyMenuSetup() {
     };
     fetchAvailable();
   }, [itemDialogOpen, currentSection, adminCity]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchCategories = async () => {
+      try {
+        const response = await http.get("/api/products/categories");
+        if (!response.ok) {
+          throw new Error("Failed to load categories");
+        }
+        const data = await response.json();
+        if (!cancelled) {
+          setAvailableCategories(Array.isArray(data) ? data : []);
+        }
+      } catch {
+        if (!cancelled) {
+          setAvailableCategories([]);
+        }
+      }
+    };
+
+    void fetchCategories();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // ───────────────────────────────────────────────────────────────────────
   // 3) Add selected items into the correct section
@@ -706,7 +746,11 @@ export function DailyMenuSetup() {
     const byMeal = mealId
       ? arr.filter((item) => Array.isArray(item.bld_ids) && item.bld_ids.includes(mealId))
       : arr;
-    return byMeal.filter(
+    const byCategory =
+      itemCategoryFilter === "all"
+        ? byMeal
+        : byMeal.filter((item) => String(item.category_id ?? "") === itemCategoryFilter);
+    return byCategory.filter(
       (it) =>
         it.name.toLowerCase().includes(itemSearchQuery.toLowerCase()) ||
         (it.description || "").toLowerCase().includes(itemSearchQuery.toLowerCase()),
@@ -1073,18 +1117,40 @@ export function DailyMenuSetup() {
                 </DialogTitle>
 
                 {/* Search */}
-                <div className="relative !mt-6 sm:!mt-6">
-                  <Search
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                    size={18}
-                  />
-                  <Input
-                    placeholder="Search items..."
-                    className="pl-10"
-                    value={itemSearchQuery}
-                    onChange={(e) => setItemSearchQuery(e.target.value)}
+                <div className="!mt-6 grid gap-2 sm:!mt-6 sm:grid-cols-[220px_1fr]">
+                  <Select
+                    value={itemCategoryFilter}
+                    onValueChange={setItemCategoryFilter}
                     disabled={loadingItemsAPI}
-                  />
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Categories</SelectItem>
+                      {availableCategories.map((category) => (
+                        <SelectItem
+                          key={category.category_id}
+                          value={String(category.category_id)}
+                        >
+                          {category.category_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="relative">
+                    <Search
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                      size={18}
+                    />
+                    <Input
+                      placeholder="Search items..."
+                      className="pl-10"
+                      value={itemSearchQuery}
+                      onChange={(e) => setItemSearchQuery(e.target.value)}
+                      disabled={loadingItemsAPI}
+                    />
+                  </div>
                 </div>
               </DialogHeader>
 

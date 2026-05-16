@@ -19,7 +19,6 @@ import DeleteConfirmationDialog from "@/components/delete-confirmation-dialog";
 import {
   type Product,
   type ComboProduct,
-  type AddonProduct,
   type CategoryProduct,
   type PlatedProduct,
   type ComponentTypeProduct,
@@ -27,7 +26,6 @@ import {
 import { AdminLayout } from "./admin-layout";
 import ComboForm, { type ComboFormValues } from "@/components/combo-form";
 import CategoryForm, { type CategoryFormValues } from "@/components/category-form";
-import AddonForm from "@/components/addon-form";
 import { useToast } from "@/hooks/use-toast";
 import { http } from "@/lib/http";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -96,7 +94,6 @@ const buildItemUpdatePayload = (product: Product): Record<string, unknown> => {
     cgst: normalizeFloat(product.cgst),
     sgst: normalizeFloat(product.sgst),
     igst: normalizeFloat(product.igst),
-    net_price: normalizeFloat(product.net_price),
   };
 
   const pictureValue = (product as any).picture_url;
@@ -126,7 +123,6 @@ type TabKey =
   | "items"
   | "plated"
   | "combos"
-  | "addons"
   | "categories"
   | "component-types"
   | "condiments";
@@ -137,7 +133,6 @@ export default function ProductManagement() {
     (
       | Product
       | ComboProduct
-      | AddonProduct
       | CategoryProduct
       | PlatedProduct
       | ComponentTypeProduct
@@ -147,7 +142,6 @@ export default function ProductManagement() {
     (
       | Product
       | ComboProduct
-      | AddonProduct
       | CategoryProduct
       | PlatedProduct
       | ComponentTypeProduct
@@ -158,7 +152,6 @@ export default function ProductManagement() {
   const [selectedProduct, setSelectedProduct] = useState<
     | Product
     | ComboProduct
-    | AddonProduct
     | CategoryProduct
     | PlatedProduct
     | ComponentTypeProduct
@@ -168,21 +161,21 @@ export default function ProductManagement() {
   const [productToDelete, setProductToDelete] = useState<
     | Product
     | ComboProduct
-    | AddonProduct
     | CategoryProduct
     | PlatedProduct
     | ComponentTypeProduct
     | null
   >(null);
   const [mealFilter, setMealFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [filterGroup, setFilterGroup] = useState<string>("All Groups");
-  const [activeTab, setActiveTab] = useState<TabKey>("items");
+  const [activeTab, setActiveTab] = useState<TabKey>("categories");
+  const [categoryOptions, setCategoryOptions] = useState<CategoryProduct[]>([]);
 
   const resolveProductName = (
     product:
       | Product
       | ComboProduct
-      | AddonProduct
       | CategoryProduct
       | PlatedProduct
       | ComponentTypeProduct
@@ -195,12 +188,6 @@ export default function ProductManagement() {
     }
     if (typeof candidate.name === "string" && candidate.name.trim().length > 0) {
       return candidate.name;
-    }
-    if (
-      typeof candidate.add_on_item_name === "string" &&
-      candidate.add_on_item_name.trim().length > 0
-    ) {
-      return candidate.add_on_item_name;
     }
     if (typeof candidate.category_name === "string" && candidate.category_name.trim().length > 0) {
       return candidate.category_name;
@@ -215,7 +202,13 @@ export default function ProductManagement() {
   };
 
   // Get unique groups for filter dropdown
-  const uniqueGroups = Array.from(new Set((products as any[]).map((product) => product.group)));
+  const uniqueGroups = Array.from(
+    new Set(
+      (products as any[])
+        .map((product) => (typeof product.group === "string" ? product.group.trim() : ""))
+        .filter((group) => group.length > 0),
+    ),
+  );
   const mealFilterOptions = [
     { label: "All Meals", value: "all" },
     { label: "Breakfast", value: "1" },
@@ -223,6 +216,33 @@ export default function ProductManagement() {
     { label: "Dinner", value: "3" },
     { label: "Condiments", value: "4" },
   ];
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchCategories = async () => {
+      try {
+        const response = await http.get("/api/products/categories");
+        if (!response.ok) {
+          throw new Error("Failed to load categories");
+        }
+        const data = await response.json();
+        if (!cancelled) {
+          setCategoryOptions(Array.isArray(data) ? data : []);
+        }
+      } catch {
+        if (!cancelled) {
+          setCategoryOptions([]);
+        }
+      }
+    };
+
+    void fetchCategories();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const fetchProducts = useCallback(async () => {
     let path = "";
@@ -235,9 +255,6 @@ export default function ProductManagement() {
         break;
       case "plated":
         path = "/api/products/plated-items";
-        break;
-      case "addons":
-        path = "/api/products/addons";
         break;
       case "categories":
         path = "/api/products/categories";
@@ -292,10 +309,6 @@ export default function ProductManagement() {
             name = (product as PlatedProduct).name;
             id = (product as PlatedProduct).item_id;
             break;
-          case "addons":
-            name = (product as AddonProduct).add_on_item_name;
-            id = (product as AddonProduct).add_on_id;
-            break;
           case "categories":
             name = (product as CategoryProduct).category_name;
             id = (product as CategoryProduct).category_id;
@@ -322,13 +335,21 @@ export default function ProductManagement() {
       });
     }
 
+    if (categoryFilter !== "all" && activeTab !== "categories") {
+      const targetCategory = Number(categoryFilter);
+      filtered = filtered.filter((product) => {
+        const categoryId = Number(product.category_id);
+        return Number.isFinite(categoryId) && categoryId === targetCategory;
+      });
+    }
+
     // Apply group filter
-    if (filterGroup !== "All Groups") {
+    if (filterGroup !== "All Groups" && (activeTab === "items" || activeTab === "condiments")) {
       filtered = filtered.filter((product) => product.group === filterGroup);
     }
 
     setFilteredProducts(filtered);
-  }, [searchQuery, products, mealFilter, filterGroup, activeTab]);
+  }, [searchQuery, products, mealFilter, categoryFilter, filterGroup, activeTab]);
 
   useEffect(() => {
     if (activeTab !== "items" && activeTab !== "condiments") {
@@ -337,26 +358,14 @@ export default function ProductManagement() {
   }, [activeTab]);
 
   const handleAddProduct = () => {
-    if (activeTab === "combos") {
-      // For combos, use the specialized combo form
-      setSelectedProduct(null);
-      setIsFormOpen(true);
-    } else if (activeTab === "addons") {
-      // For add-ons, use the specialized add-on form
-      setSelectedProduct(null);
-      setIsFormOpen(true);
-    } else {
-      // For other types, use the regular product form
-      setSelectedProduct(null);
-      setIsFormOpen(true);
-    }
+    setSelectedProduct(null);
+    setIsFormOpen(true);
   };
 
   const handleEditProduct = (
     product:
       | Product
       | ComboProduct
-      | AddonProduct
       | CategoryProduct
       | PlatedProduct
       | ComponentTypeProduct,
@@ -369,7 +378,6 @@ export default function ProductManagement() {
     product:
       | Product
       | ComboProduct
-      | AddonProduct
       | CategoryProduct
       | PlatedProduct
       | ComponentTypeProduct,
@@ -479,7 +487,7 @@ export default function ProductManagement() {
       try {
         const response = await http.delete(`/api/products/component-types/${componentTypeId}`);
         if (!response.ok) {
-          let detail = "Failed to delete generic component";
+          let detail = "Failed to delete item group";
           try {
             const body = await response.json();
             if (typeof body?.detail === "string" && body.detail.trim().length > 0) {
@@ -500,8 +508,8 @@ export default function ProductManagement() {
         }
 
         toast({
-          title: "Generic component deleted",
-          description: `Generic component #${componentTypeId} removed successfully.`,
+          title: "Item group deleted",
+          description: `Item group #${componentTypeId} removed successfully.`,
         });
         await fetchProducts();
       } catch (error) {
@@ -510,7 +518,7 @@ export default function ProductManagement() {
           description:
             error instanceof Error
               ? error.message
-              : "Unexpected error while deleting generic component.",
+              : "Unexpected error while deleting item group.",
           variant: "destructive",
         });
       } finally {
@@ -735,15 +743,19 @@ export default function ProductManagement() {
     const path = isUpdating
       ? `/api/products/component-types/${payload.component_type_id}`
       : "/api/products/component-types";
-    const body = { name: payload.name, description: payload.description };
+    const body = {
+      name: payload.name,
+      description: payload.description,
+      category_id: payload.category_id,
+    };
 
     try {
       const response = await (isUpdating ? http.put(path, body) : http.post(path, body));
 
       if (!response.ok) {
         let detail = isUpdating
-          ? "Failed to update generic component"
-          : "Failed to create generic component";
+          ? "Failed to update item group"
+          : "Failed to create item group";
         try {
           const data = await response.json();
           if (typeof data?.detail === "string" && data.detail.trim().length > 0) {
@@ -757,7 +769,7 @@ export default function ProductManagement() {
         }
 
         toast({
-          title: "Generic component save failed",
+          title: "Item group save failed",
           description: detail,
           variant: "destructive",
         });
@@ -765,7 +777,7 @@ export default function ProductManagement() {
       }
 
       toast({
-        title: isUpdating ? "Generic component updated" : "Generic component created",
+        title: isUpdating ? "Item group updated" : "Item group created",
         description: `${payload.name} saved successfully.`,
       });
 
@@ -774,11 +786,11 @@ export default function ProductManagement() {
       setSelectedProduct(null);
     } catch (error) {
       toast({
-        title: "Generic component save failed",
+        title: "Item group save failed",
         description:
           error instanceof Error
             ? error.message
-            : "Unexpected error while saving generic component.",
+            : "Unexpected error while saving item group.",
         variant: "destructive",
       });
     }
@@ -868,9 +880,8 @@ export default function ProductManagement() {
     items: "Item",
     plated: "Plated Item",
     combos: "Combo",
-    addons: "Add-on",
     categories: "Category",
-    "component-types": "Generic Component",
+    "component-types": "Item Group",
     condiments: "Condiment",
   };
 
@@ -878,6 +889,7 @@ export default function ProductManagement() {
   useEffect(() => {
     setSearchQuery("");
     setMealFilter("all");
+    setCategoryFilter("all");
     setFilterGroup("All Groups");
   }, [activeTab]);
 
@@ -917,13 +929,12 @@ export default function ProductManagement() {
               className="mb-6"
               onValueChange={(value) => setActiveTab(value as TabKey)}
             >
-              <TabsList className="grid w-full grid-cols-7">
+              <TabsList className="grid w-full grid-cols-6">
+                <TabsTrigger value="categories">Categories</TabsTrigger>
+                <TabsTrigger value="component-types">Item Groups</TabsTrigger>
                 <TabsTrigger value="items">Items</TabsTrigger>
                 <TabsTrigger value="plated">Plated</TabsTrigger>
                 <TabsTrigger value="combos">Combos</TabsTrigger>
-                <TabsTrigger value="addons">Add-ons</TabsTrigger>
-                <TabsTrigger value="categories">Categories</TabsTrigger>
-                <TabsTrigger value="component-types">Generic</TabsTrigger>
                 <TabsTrigger value="condiments">Condiments</TabsTrigger>
               </TabsList>
             </Tabs>
@@ -958,7 +969,32 @@ export default function ProductManagement() {
                   </SelectContent>
                 </Select>
 
-                <Select value={filterGroup} onValueChange={setFilterGroup}>
+                <Select
+                  value={categoryFilter}
+                  onValueChange={setCategoryFilter}
+                  disabled={activeTab === "categories"}
+                >
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <SelectValue placeholder="Category Filter" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {categoryOptions.map((category) => (
+                      <SelectItem
+                        key={category.category_id}
+                        value={String(category.category_id)}
+                      >
+                        {category.category_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select
+                  value={filterGroup}
+                  onValueChange={setFilterGroup}
+                  disabled={activeTab !== "items" && activeTab !== "condiments"}
+                >
                   <SelectTrigger className="w-full sm:w-[180px]">
                     <SelectValue placeholder="All Groups" />
                   </SelectTrigger>
@@ -981,7 +1017,6 @@ export default function ProductManagement() {
                     filteredProducts as (
                       | Product
                       | ComboProduct
-                      | AddonProduct
                       | CategoryProduct
                       | PlatedProduct
                       | ComponentTypeProduct
@@ -1036,12 +1071,6 @@ export default function ProductManagement() {
               />
             </DialogContent>
           </Dialog>
-        ) : isFormOpen && activeTab === "addons" ? (
-          <AddonForm
-            onSave={handleSaveProduct}
-            onCancel={() => setIsFormOpen(false)}
-            existingItems={(products as any[]).filter((p) => !p.is_combo && !p.isSubItem)} // Pass regular items as options
-          />
         ) : isFormOpen && activeTab === "categories" ? (
           <CategoryForm
             category={selectedProduct as CategoryProduct | null}

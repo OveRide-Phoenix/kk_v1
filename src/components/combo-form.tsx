@@ -22,6 +22,8 @@ interface ComponentTypeOption {
   component_type_id: number;
   name: string;
   description?: string | null;
+  category_id?: number | null;
+  category_name?: string | null;
 }
 
 export interface ComboFormValues {
@@ -53,6 +55,7 @@ const MEAL_LABELS: Record<number, string> = {
   3: "Dinner",
   4: "Condiments",
 };
+const ALL_CATEGORIES_VALUE = "all";
 
 export default function ComboForm({ onSave, onCancel, combo }: ComboFormProps) {
   const [availableItems, setAvailableItems] = useState<Product[]>([]);
@@ -76,13 +79,14 @@ export default function ComboForm({ onSave, onCancel, combo }: ComboFormProps) {
         name:
           item.name ??
           (item.kind === "type"
-            ? (item.componentTypeName ?? "Generic Component")
+            ? (item.componentTypeName ?? "Item Group")
             : `Item #${item.itemId}`),
         quantity: item.quantity ?? 1,
       })) ?? [],
   );
   const [itemSearch, setItemSearch] = useState("");
   const [typeSearch, setTypeSearch] = useState("");
+  const [typeCategoryFilter, setTypeCategoryFilter] = useState(ALL_CATEGORIES_VALUE);
   const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -105,7 +109,7 @@ export default function ComboForm({ onSave, onCancel, combo }: ComboFormProps) {
           throw new Error("Failed to fetch categories");
         }
         if (!componentTypesResponse.ok) {
-          throw new Error("Failed to fetch component types");
+          throw new Error("Failed to fetch item groups");
         }
         const [itemsData, categoriesData, componentTypesData] = await Promise.all([
           itemsResponse.json(),
@@ -154,7 +158,7 @@ export default function ComboForm({ onSave, onCancel, combo }: ComboFormProps) {
         name:
           item.name ??
           (item.kind === "type"
-            ? (item.componentTypeName ?? "Generic Component")
+            ? (item.componentTypeName ?? "Item Group")
             : `Item #${item.itemId}`),
         quantity: item.quantity ?? 1,
       })) ?? [],
@@ -188,13 +192,16 @@ export default function ComboForm({ onSave, onCancel, combo }: ComboFormProps) {
     const query = typeSearch.trim().toLowerCase();
     return componentTypes.filter((componentType) => {
       const matchesSearch = componentType.name.toLowerCase().includes(query) || !query;
+      const matchesCategory =
+        typeCategoryFilter === ALL_CATEGORIES_VALUE ||
+        String(componentType.category_id ?? "") === typeCategoryFilter;
       const alreadySelected = selectedItems.some(
         (entry) =>
           entry.kind === "type" && entry.componentTypeId === componentType.component_type_id,
       );
-      return matchesSearch && !alreadySelected;
+      return matchesSearch && matchesCategory && !alreadySelected;
     });
-  }, [componentTypes, typeSearch, selectedItems]);
+  }, [componentTypes, typeSearch, typeCategoryFilter, selectedItems]);
 
   const resolveItemName = (itemId: number): string => {
     const item = itemsMap.get(itemId);
@@ -414,22 +421,37 @@ export default function ComboForm({ onSave, onCancel, combo }: ComboFormProps) {
             )}
           </ScrollArea>
           <div>
-            <Label htmlFor="combo-type-search">Add Generic Component Types</Label>
-            <div className="relative mt-1">
+            <Label htmlFor="combo-type-search">Add Item Groups</Label>
+            <div className="mt-1 grid gap-2 sm:grid-cols-[180px_1fr]">
+              <Select value={typeCategoryFilter} onValueChange={setTypeCategoryFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_CATEGORIES_VALUE}>All Categories</SelectItem>
+                  {categories.map((category) => (
+                    <SelectItem key={category.category_id} value={String(category.category_id)}>
+                      {category.category_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 id="combo-type-search"
                 value={typeSearch}
                 onChange={(event) => setTypeSearch(event.target.value)}
-                placeholder="Search component types"
+                placeholder="Search item groups"
                 className="pl-9"
               />
+              </div>
             </div>
           </div>
           <ScrollArea className="max-h-[220px] rounded-md border">
             {filteredComponentTypes.length === 0 ? (
               <p className="py-10 text-center text-muted-foreground">
-                No component types match that search.
+                No item groups match that search.
               </p>
             ) : (
               <div className="divide-y">
@@ -452,6 +474,11 @@ export default function ComboForm({ onSave, onCancel, combo }: ComboFormProps) {
                     }}
                   >
                     <p className="font-medium">{componentType.name}</p>
+                    {componentType.category_name ? (
+                      <Badge variant="outline" className="mt-2 text-[10px]">
+                        {componentType.category_name}
+                      </Badge>
+                    ) : null}
                     <p className="text-xs text-muted-foreground">
                       {componentType.description ?? "Resolves to the item of the day"}
                     </p>
@@ -464,7 +491,7 @@ export default function ComboForm({ onSave, onCancel, combo }: ComboFormProps) {
 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <Label>Selected Components</Label>
+            <Label>Selected Items and Groups</Label>
             {selectedItems.length > 0 && (
               <span className="text-xs text-muted-foreground">{selectedItems.length} item(s)</span>
             )}
@@ -486,7 +513,7 @@ export default function ComboForm({ onSave, onCancel, combo }: ComboFormProps) {
                       <p className="text-xs text-muted-foreground uppercase tracking-wide">
                         {entry.kind === "item"
                           ? `#${(entry.itemId ?? 0).toString().padStart(3, "0")}`
-                          : `TYPE #${(entry.componentTypeId ?? 0).toString().padStart(3, "0")}`}
+                          : `GROUP #${(entry.componentTypeId ?? 0).toString().padStart(3, "0")}`}
                       </p>
                     </div>
                     <div className="w-24">

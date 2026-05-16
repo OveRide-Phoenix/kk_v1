@@ -140,7 +140,7 @@ export default function LogsPage() {
             <div>
               <CardTitle>Logs &amp; Audit Trail</CardTitle>
               <CardDescription>
-                Review administrator activity across items, combos, addons, and categories.
+                Review administrator activity across items, combos, item groups, and categories.
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">

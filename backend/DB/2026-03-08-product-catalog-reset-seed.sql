@@ -14,7 +14,6 @@ CREATE TABLE IF NOT EXISTS combo_bld_map (
 -- Reset dependent transactional/menu data that references catalog items.
 DELETE FROM menu_items;
 DELETE FROM menu;
-DELETE FROM item_add_ons;
 DELETE FROM combo_bld_map;
 DELETE FROM combo_items;
 DELETE FROM combos;
@@ -30,7 +29,6 @@ DELETE FROM categories;
 
 ALTER TABLE menu_items AUTO_INCREMENT = 1;
 ALTER TABLE menu AUTO_INCREMENT = 1;
-ALTER TABLE item_add_ons AUTO_INCREMENT = 1;
 ALTER TABLE combo_items AUTO_INCREMENT = 1;
 ALTER TABLE combos AUTO_INCREMENT = 1;
 ALTER TABLE plated_item_components AUTO_INCREMENT = 1;
@@ -47,18 +45,23 @@ INSERT INTO categories (category_name) VALUES
   ('North Indian'),
   ('Beverages'),
   ('Condiments'),
-  ('Sweets');
+  ('Sweets'),
+  ('Ready Mixes'),
+  ('Savouries'),
+  ('Spices'),
+  ('Accompaniments'),
+  ('Festival Specials');
 
--- Generic operational slots for plated/combo products.
-INSERT INTO component_types (name, description, is_active) VALUES
-  ('Curry', 'Generic curry slot resolved to the item of the day', 1),
-  ('Rice', 'Generic rice slot resolved to the item of the day', 1),
-  ('Sambar', 'Generic sambar slot resolved to the item of the day', 1),
-  ('Chutney', 'Generic chutney slot resolved to the item of the day', 1),
-  ('Dal', 'Generic dal slot resolved to the item of the day', 1),
-  ('Raita', 'Generic raita slot resolved to the item of the day', 1),
-  ('Sweet', 'Generic sweet slot resolved to the item of the day', 1),
-  ('Beverage', 'Generic beverage slot resolved to the item of the day', 1);
+-- Item groups for plated/combo products.
+INSERT INTO component_types (name, description, category_id, is_active) VALUES
+  ('Curry', 'Item group resolved to the curry of the day', (SELECT category_id FROM categories WHERE category_name = 'South Indian'), 1),
+  ('Rice', 'Item group resolved to the rice of the day', (SELECT category_id FROM categories WHERE category_name = 'South Indian'), 1),
+  ('Sambar', 'Item group resolved to the sambar of the day', (SELECT category_id FROM categories WHERE category_name = 'South Indian'), 1),
+  ('Chutney', 'Item group resolved to the chutney of the day', (SELECT category_id FROM categories WHERE category_name = 'Accompaniments'), 1),
+  ('Dal', 'Item group resolved to the dal of the day', (SELECT category_id FROM categories WHERE category_name = 'North Indian'), 1),
+  ('Raita', 'Item group resolved to the raita of the day', (SELECT category_id FROM categories WHERE category_name = 'Accompaniments'), 1),
+  ('Sweet', 'Item group resolved to the sweet of the day', (SELECT category_id FROM categories WHERE category_name = 'Sweets'), 1),
+  ('Beverage', 'Item group resolved to the beverage of the day', (SELECT category_id FROM categories WHERE category_name = 'Beverages'), 1);
 
 -- Atomic sellable/packable items.
 INSERT INTO items (
@@ -1369,43 +1372,6 @@ SELECT combo_id, 2 FROM combos WHERE combo_name IN ('Chapati Meal Combo', 'Rice 
 INSERT INTO combo_bld_map (combo_id, bld_id)
 SELECT combo_id, 3 FROM combos WHERE combo_name IN ('Chapati Meal Combo');
 
--- Add-ons are simple item-to-item mappings.
-INSERT INTO item_add_ons (main_item_id, add_on_item_id, is_mandatory, max_quantity)
-SELECT main.item_id, addon.item_id, 0, 2
-FROM items main
-JOIN items addon ON addon.name = 'Coconut Chutney'
-WHERE main.name = 'Masala Dosa';
-
-INSERT INTO item_add_ons (main_item_id, add_on_item_id, is_mandatory, max_quantity)
-SELECT main.item_id, addon.item_id, 0, 2
-FROM items main
-JOIN items addon ON addon.name = 'Tomato Chutney'
-WHERE main.name = 'Plain Dosa';
-
-INSERT INTO item_add_ons (main_item_id, add_on_item_id, is_mandatory, max_quantity)
-SELECT main.item_id, addon.item_id, 0, 1
-FROM items main
-JOIN items addon ON addon.name = 'Ghee'
-WHERE main.name = 'Idly Vada';
-
-INSERT INTO item_add_ons (main_item_id, add_on_item_id, is_mandatory, max_quantity)
-SELECT main.item_id, addon.item_id, 0, 1
-FROM items main
-JOIN items addon ON addon.name = 'Veg Raita'
-WHERE main.name = 'Rice & Sambar';
-
-INSERT INTO item_add_ons (main_item_id, add_on_item_id, is_mandatory, max_quantity)
-SELECT main.item_id, addon.item_id, 0, 1
-FROM items main
-JOIN items addon ON addon.name = 'Buttermilk'
-WHERE main.name = 'Chapati & Curry';
-
-INSERT INTO item_add_ons (main_item_id, add_on_item_id, is_mandatory, max_quantity)
-SELECT main.item_id, addon.item_id, 0, 2
-FROM items main
-JOIN items addon ON addon.name = 'Gulab Jamun'
-WHERE main.name = 'Mini Meals';
-
 INSERT INTO component_types (name, description, is_active)
 SELECT 'Idly', 'Items that fulfill an idly slot', 1
 WHERE NOT EXISTS (SELECT 1 FROM component_types WHERE name = 'Idly');
@@ -1473,6 +1439,40 @@ WHERE NOT EXISTS (SELECT 1 FROM component_types WHERE name = 'Poori Saagu');
 INSERT INTO component_types (name, description, is_active)
 SELECT 'Mini Meals', 'Items that fulfill a mini meals slot', 1
 WHERE NOT EXISTS (SELECT 1 FROM component_types WHERE name = 'Mini Meals');
+
+UPDATE component_types ct
+LEFT JOIN (
+    SELECT 'Curry' AS name, 'South Indian' AS category_name
+    UNION ALL SELECT 'Rice', 'South Indian'
+    UNION ALL SELECT 'Sambar', 'South Indian'
+    UNION ALL SELECT 'Huli', 'South Indian'
+    UNION ALL SELECT 'Palya', 'South Indian'
+    UNION ALL SELECT 'Dal', 'North Indian'
+    UNION ALL SELECT 'Sweet', 'Sweets'
+    UNION ALL SELECT 'Beverage', 'Beverages'
+    UNION ALL SELECT 'Chutney', 'Accompaniments'
+    UNION ALL SELECT 'Raita', 'Accompaniments'
+    UNION ALL SELECT 'Pickle', 'Accompaniments'
+    UNION ALL SELECT 'Ghee', 'Accompaniments'
+    UNION ALL SELECT 'Curd', 'Accompaniments'
+    UNION ALL SELECT 'Idly', 'South Indian'
+    UNION ALL SELECT 'Vada', 'South Indian'
+    UNION ALL SELECT 'Dosa', 'South Indian'
+    UNION ALL SELECT 'Poori', 'South Indian'
+    UNION ALL SELECT 'Upma', 'South Indian'
+    UNION ALL SELECT 'Pongal', 'South Indian'
+    UNION ALL SELECT 'Curd Rice', 'South Indian'
+    UNION ALL SELECT 'Chapati', 'North Indian'
+    UNION ALL SELECT 'Bhature', 'North Indian'
+    UNION ALL SELECT 'Idly Vada', 'South Indian'
+    UNION ALL SELECT 'Rice Meal', 'South Indian'
+    UNION ALL SELECT 'Chapati Meal', 'North Indian'
+    UNION ALL SELECT 'Poori Saagu', 'South Indian'
+    UNION ALL SELECT 'Mini Meals', 'South Indian'
+) AS mapping ON mapping.name = ct.name
+LEFT JOIN categories c ON c.category_name = mapping.category_name
+SET ct.category_id = c.category_id
+WHERE c.category_id IS NOT NULL;
 
 UPDATE items
 SET component_type_id = (SELECT component_type_id FROM component_types WHERE name = 'Idly' LIMIT 1)

@@ -25,10 +25,13 @@ CREATE TABLE `component_types` (
   `component_type_id` int NOT NULL AUTO_INCREMENT,
   `name` varchar(100) NOT NULL,
   `description` text,
+  `category_id` int DEFAULT NULL,
   `is_active` tinyint(1) NOT NULL DEFAULT '1',
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`component_type_id`),
-  UNIQUE KEY `uk_component_types_name` (`name`)
+  UNIQUE KEY `uk_component_types_name` (`name`),
+  KEY `idx_component_types_category_id` (`category_id`),
+  CONSTRAINT `fk_component_types_category` FOREIGN KEY (`category_id`) REFERENCES `categories` (`category_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- TABLE: constants
@@ -186,20 +189,6 @@ CREATE TABLE `menu` (
   PRIMARY KEY (`menu_id`),
   KEY `fk_menu_bld` (`bld_id`),
   CONSTRAINT `fk_menu_bld` FOREIGN KEY (`bld_id`) REFERENCES `bld` (`bld_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
--- TABLE: item_add_ons
-CREATE TABLE `item_add_ons` (
-  `add_on_id` int NOT NULL AUTO_INCREMENT,
-  `main_item_id` int NOT NULL,
-  `add_on_item_id` int NOT NULL,
-  `is_mandatory` tinyint(1) NOT NULL DEFAULT '0',
-  `max_quantity` int NOT NULL DEFAULT '1',
-  PRIMARY KEY (`add_on_id`),
-  KEY `main_item_id` (`main_item_id`),
-  KEY `add_on_item_id` (`add_on_item_id`),
-  CONSTRAINT `item_add_ons_ibfk_1` FOREIGN KEY (`main_item_id`) REFERENCES `items` (`item_id`),
-  CONSTRAINT `item_add_ons_ibfk_2` FOREIGN KEY (`add_on_item_id`) REFERENCES `items` (`item_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- TABLE: item_price_history

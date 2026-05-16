@@ -94,7 +94,7 @@ export default function ProductDetails({ product, open, onOpenChange }: ProductD
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500">Component Type</h3>
+                  <h3 className="text-sm font-medium text-gray-500">Item Group</h3>
                   <p className="mt-1">{(product as any).component_type_name ?? "—"}</p>
                 </div>
               </div>
@@ -155,8 +155,8 @@ export default function ProductDetails({ product, open, onOpenChange }: ProductD
                           <p className="text-sm text-muted-foreground">Qty: {component.quantity}</p>
                           {component.kind === "type" && (
                             <p className="text-xs text-muted-foreground">
-                              Resolves from component type:{" "}
-                              {component.componentTypeName ?? "Generic slot"}
+                              Resolves from item group:{" "}
+                              {component.componentTypeName ?? "Item group"}
                             </p>
                           )}
                           <p className="text-xs text-muted-foreground">
@@ -187,14 +187,14 @@ export default function ProductDetails({ product, open, onOpenChange }: ProductD
                           <p className="font-medium">
                             {component.name ??
                               (component.kind === "type"
-                                ? "Generic Component"
+                                ? "Item Group"
                                 : `Item #${component.itemId}`)}
                           </p>
                           <p className="text-sm text-muted-foreground">Qty: {component.quantity}</p>
                           {component.kind === "type" && (
                             <p className="text-xs text-muted-foreground">
-                              Resolves from component type:{" "}
-                              {component.componentTypeName ?? "Generic slot"}
+                              Resolves from item group:{" "}
+                              {component.componentTypeName ?? "Item group"}
                             </p>
                           )}
                         </div>

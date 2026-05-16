@@ -100,7 +100,7 @@ const normalizeDate = (date: Date) => {
 const describeIssue = (issue: ProductionIssue) => {
   const componentLabel = issue.component_type_name || issue.item_name || "component";
   if (issue.type === "unresolved_generic_component") {
-    return `No default ${componentLabel} item is set in Daily Menu for this meal, so production cannot resolve ${issue.parent_name} into a concrete item.`;
+    return `No default item is set for the ${componentLabel} item group in Daily Menu for this meal, so production cannot resolve ${issue.parent_name} into a concrete item.`;
   }
   if (issue.type === "missing_item_configuration") {
     return `${issue.parent_name} is missing production setup such as packing quantity, conversion rate, or production UOM.`;

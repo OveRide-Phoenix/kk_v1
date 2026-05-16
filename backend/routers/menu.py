@@ -311,6 +311,7 @@ def get_available_items(
                 i.description,
                 i.alias,
                 i.category_id,
+                cat.category_name,
                 i.component_type_id,
                 ct.name AS component_type_name,
                 i.uom_customer,
@@ -336,6 +337,7 @@ def get_available_items(
                 i.igst,
                 i.net_price
             FROM items i
+            LEFT JOIN categories cat ON i.category_id = cat.category_id
             LEFT JOIN component_types ct ON i.component_type_id = ct.component_type_id
             WHERE EXISTS (
                 SELECT 1
@@ -358,6 +360,7 @@ def get_available_items(
                         i.description,
                         i.alias,
                         i.category_id,
+                        cat.category_name,
                         i.component_type_id,
                         ct.name AS component_type_name,
                         i.uom_customer,
@@ -381,6 +384,7 @@ def get_available_items(
                         i.igst,
                         i.net_price
                     FROM items i
+                    LEFT JOIN categories cat ON i.category_id = cat.category_id
                     LEFT JOIN component_types ct ON i.component_type_id = ct.component_type_id
                     WHERE EXISTS (
                         SELECT 1
@@ -417,6 +421,7 @@ def get_available_items(
                 NULL AS description,
                 NULL AS alias,
                 c.category_id,
+                cat.category_name,
                 NULL AS component_type_id,
                 NULL AS component_type_name,
                 'combo' AS uom_customer,
@@ -443,6 +448,7 @@ def get_available_items(
                 c.price AS net_price,
                 1 AS is_combo
             FROM combos c
+            LEFT JOIN categories cat ON c.category_id = cat.category_id
             WHERE EXISTS (
                 SELECT 1
                   FROM combo_bld_map cbm

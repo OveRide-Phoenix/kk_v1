@@ -582,7 +582,7 @@ def _append_production_issue(
         issue_type: Short string classifier for the issue.
         parent_name: Name of the parent menu entry that caused the issue.
         required_units: Demand units that could not be resolved.
-        component_type_name: Optional name of the unresolved component type.
+        component_type_name: Optional name of the unresolved item group.
         item_name: Optional name of the unresolved item.
         detail: Optional human-readable explanation.
     """
@@ -606,20 +606,20 @@ def _resolve_component_type_for_meal(
     meal: str,
     component_type_id: Optional[int],
 ) -> Tuple[Optional[int], Optional[str], Optional[str]]:
-    """Attempt to resolve a generic component type to a specific item for the given meal.
+    """Attempt to resolve an item group to a specific item for the given meal.
 
     Args:
         resolved_default_ids: Map of (meal, component_type_id) -> item_id.
         resolved_default_names: Map of (meal, component_type_id) -> item_name.
         resolution_counts: Map of (meal, component_type_id) -> count of defaults.
         meal: Meal string (e.g. "Lunch").
-        component_type_id: The component type ID to resolve.
+        component_type_id: The item group ID to resolve.
 
     Returns:
         Tuple of (item_id, item_name, error_message). item_id is None on failure.
     """
     if component_type_id is None:
-        return None, None, "Missing component type"
+        return None, None, "Missing item group"
     key = (meal, int(component_type_id))
     count = resolution_counts.get(key, 0)
     if count == 1:
@@ -1174,7 +1174,7 @@ def get_daily_production_plan(
                                 required_units=required_units,
                                 component_type_name=component.get("component_type_name"),
                                 detail=resolution_error
-                                or "Generic component still needs item-of-the-day resolution",
+                                or "Item group still needs item-of-the-day resolution",
                             )
                     continue
 
@@ -1223,7 +1223,7 @@ def get_daily_production_plan(
                                 required_units=required_units,
                                 component_type_name=component.get("component_type_name"),
                                 detail=resolution_error
-                                or "Generic component still needs item-of-the-day resolution",
+                                or "Item group still needs item-of-the-day resolution",
                             )
                     continue
 

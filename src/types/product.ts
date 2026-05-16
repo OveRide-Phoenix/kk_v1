@@ -104,15 +104,6 @@ export interface PlatedProduct {
   }>
 }
 
-// Addon product from item_add_ons
-export interface AddonProduct {
-  add_on_id: number
-  main_item_name: string
-  add_on_item_name: string
-  is_mandatory: boolean
-  max_quantity: number
-}
-
 // Category product from categories
 export interface CategoryProduct {
   category_id: number
@@ -123,6 +114,8 @@ export interface ComponentTypeProduct {
   component_type_id: number
   name: string
   description?: string | null
+  category_id?: number | null
+  category_name?: string | null
   is_active?: boolean
 }
 
@@ -176,16 +169,4 @@ export interface Combo {
     quantity: number
     name: string
   }>
-}
-
-// Add-on detailed structure for editing
-export interface Addon {
-  id: number
-  mainItemId: number
-  mainItemName: string
-  addOnItemId: number
-  addOnItemName: string
-  isMandatory: boolean
-  maxQuantity: number
-  price?: number
 }

@@ -1,4 +1,4 @@
-import { Item, Combo, Addon, Category } from "@/types/product";
+import { Item, Combo, Category } from "@/types/product";
 
 export const sampleCategories: Category[] = [
   {
@@ -78,28 +78,5 @@ export const sampleCombos: Combo[] = [
       { categoryId: 1, quantity: 2, name: "Curry" },
       { itemId: 3, quantity: 1, name: "Papad" }
     ]
-  }
-];
-
-export const sampleAddons: Addon[] = [
-  {
-    id: 1,
-    mainItemId: 2,
-    mainItemName: "South Indian Thali",
-    addOnItemId: 3,
-    addOnItemName: "Extra Papad",
-    isMandatory: false,
-    maxQuantity: 2,
-    price: 10
-  },
-  {
-    id: 2,
-    mainItemId: 2,
-    mainItemName: "South Indian Thali",
-    addOnItemId: 4,
-    addOnItemName: "Extra Rice",
-    isMandatory: false,
-    maxQuantity: 1,
-    price: 25
   }
 ];
