@@ -80,8 +80,11 @@ class ComponentType(Base):
     component_type_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     name = Column(String(100), unique=True, nullable=False)
     description = Column(Text, nullable=True)
+    category_id = Column(Integer, ForeignKey("categories.category_id"), nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(TIMESTAMP, nullable=False)
+
+    category = relationship("Category")
 
 
 class Constant(Base):
@@ -186,16 +189,6 @@ class Item(Base):
     order_items = relationship("OrderItem", back_populates="item")
     menu_items = relationship("MenuItem", back_populates="item")
     price_history = relationship("ItemPriceHistory", back_populates="item")
-    add_on_links = relationship(
-        "ItemAddOn",
-        back_populates="main_item",
-        foreign_keys="ItemAddOn.main_item_id",
-    )
-    add_on_for_links = relationship(
-        "ItemAddOn",
-        back_populates="add_on_item",
-        foreign_keys="ItemAddOn.add_on_item_id",
-    )
     item_bld_links = relationship("ItemBLDMap", back_populates="item")
     combo_item_links = relationship("ComboItem", back_populates="item")
     plated_items = relationship("PlatedItem", back_populates="item")
@@ -244,21 +237,6 @@ class Menu(Base):
 
     bld = relationship("BLD", back_populates="menus")
     menu_items = relationship("MenuItem", back_populates="menu")
-
-
-class ItemAddOn(Base):
-    __tablename__ = "item_add_ons"
-
-    add_on_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    main_item_id = Column(Integer, ForeignKey("items.item_id"), nullable=False)
-    add_on_item_id = Column(Integer, ForeignKey("items.item_id"), nullable=False)
-    is_mandatory = Column(Boolean, nullable=False, default=False)
-    max_quantity = Column(Integer, nullable=False, default=1)
-
-    main_item = relationship("Item", back_populates="add_on_links", foreign_keys=[main_item_id])
-    add_on_item = relationship(
-        "Item", back_populates="add_on_for_links", foreign_keys=[add_on_item_id]
-    )
 
 
 class ItemPriceHistory(Base):

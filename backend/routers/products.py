@@ -1,4 +1,4 @@
-"""Products router: items, combos, plated-items, addons, categories, component-types."""
+"""Products router: items, combos, plated-items, categories, and item groups."""
 
 from __future__ import annotations
 
@@ -234,17 +234,19 @@ class CategoryUpdatePayload(BaseModel):
 
 
 class ComponentTypeCreatePayload(BaseModel):
-    """Payload for creating a new component type."""
+    """Payload for creating a new item group."""
 
     name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
+    category_id: Optional[int] = None
 
 
 class ComponentTypeUpdatePayload(BaseModel):
-    """Payload for updating an existing component type."""
+    """Payload for updating an existing item group."""
 
     name: Optional[str] = Field(default=None, min_length=1, max_length=100)
     description: Optional[str] = None
+    category_id: Optional[int] = None
     is_active: Optional[bool] = None
 
 
@@ -1295,44 +1297,6 @@ def delete_plated_item(
         db.close()
 
 
-# ---------------------------------------------------------------------------
-# Addons endpoint
-# ---------------------------------------------------------------------------
-
-
-@router.get("/api/products/addons")
-def get_all_addons() -> List[Dict[str, Any]]:
-    """Return all item add-ons with their main and add-on item names.
-
-    Returns:
-        List of add-on dicts with add_on_id, main_item_name, add_on_item_name,
-        is_mandatory, and max_quantity.
-    """
-    db = get_raw_db()
-    cursor = db.cursor(dictionary=True)
-    try:
-        cursor.execute(
-            """
-            SELECT
-                ia.add_on_id,
-                main_item.name AS main_item_name,
-                add_on_item.name AS add_on_item_name,
-                ia.is_mandatory,
-                ia.max_quantity
-            FROM item_add_ons ia
-            LEFT JOIN items main_item ON ia.main_item_id = main_item.item_id
-            LEFT JOIN items add_on_item ON ia.add_on_item_id = add_on_item.item_id
-        """
-        )
-        return cursor.fetchall()
-    except mysql.connector.Error as err:
-        raise HTTPException(status_code=500, detail=str(err))
-    finally:
-        cursor.close()
-        db.close()
-
-
-# ---------------------------------------------------------------------------
 # Categories endpoints
 # ---------------------------------------------------------------------------
 
@@ -1505,26 +1469,33 @@ def delete_category(
 
 
 # ---------------------------------------------------------------------------
-# Component types endpoints
+# Item group endpoints
 # ---------------------------------------------------------------------------
 
 
 @router.get("/api/products/component-types")
 def get_all_component_types() -> List[Dict[str, Any]]:
-    """Return all active component types.
+    """Return all active item groups.
 
     Returns:
-        List of component type dicts with component_type_id, name, description, is_active.
+        List of item group dicts with component_type_id, name, description, category, and is_active.
     """
     db = get_raw_db()
     cursor = db.cursor(dictionary=True)
     try:
         cursor.execute(
             """
-            SELECT component_type_id, name, description, is_active
-              FROM component_types
-             WHERE is_active = 1
-             ORDER BY name ASC
+            SELECT
+                ct.component_type_id,
+                ct.name,
+                ct.description,
+                ct.category_id,
+                c.category_name,
+                ct.is_active
+              FROM component_types ct
+              LEFT JOIN categories c ON ct.category_id = c.category_id
+             WHERE ct.is_active = 1
+             ORDER BY c.category_name ASC, ct.name ASC
             """
         )
         rows = cursor.fetchall() or []
@@ -1543,10 +1514,10 @@ def create_component_type(
     payload: ComponentTypeCreatePayload,
     user: Dict[str, Any] = Depends(admin_required),
 ) -> Dict[str, Any]:
-    """Create a new component type.
+    """Create a new item group.
 
     Args:
-        payload: Component type payload with name and optional description.
+        payload: Item group payload with name and optional description.
         user: Current admin user (injected).
 
     Returns:
@@ -1559,12 +1530,15 @@ def create_component_type(
         if not name:
             raise HTTPException(status_code=400, detail="name is required")
         description = (payload.description or "").strip() or None
+        category_id = payload.category_id
+        if category_id is not None:
+            ensure_category_exists(cursor, category_id)
         cursor.execute(
             """
-            INSERT INTO component_types (name, description, is_active)
-            VALUES (%s, %s, 1)
+            INSERT INTO component_types (name, description, category_id, is_active)
+            VALUES (%s, %s, %s, 1)
             """,
-            (name, description),
+            (name, description, category_id),
         )
         component_type_id = cursor.lastrowid
         db.commit()
@@ -1574,18 +1548,20 @@ def create_component_type(
             action_type="ADD",
             entity_type="COMPONENT_TYPE",
             entity_id=component_type_id,
-            description=f"Created component type {component_type_id}",
+            description=f"Created item group {component_type_id}",
         )
         return {
             "component_type_id": component_type_id,
             "name": name,
             "description": description,
+            "category_id": category_id,
+            "category_name": None,
             "is_active": True,
         }
     except mysql.connector.Error as err:
         db.rollback()
         if err.errno == errorcode.ER_DUP_ENTRY:
-            raise HTTPException(status_code=400, detail="Component type already exists")
+            raise HTTPException(status_code=400, detail="Item group already exists")
         raise HTTPException(status_code=500, detail=str(err))
     finally:
         cursor.close()
@@ -1598,15 +1574,15 @@ def update_component_type(
     payload: ComponentTypeUpdatePayload,
     user: Dict[str, Any] = Depends(admin_required),
 ) -> Dict[str, Any]:
-    """Update an existing component type's name, description, or active status.
+    """Update an existing item group's name, description, or active status.
 
     Args:
-        component_type_id: ID of the component type to update.
+        component_type_id: ID of the item group to update.
         payload: Fields to update (name, description, is_active — all optional).
         user: Current admin user (injected).
 
     Returns:
-        Updated component type dict.
+        Updated item group dict.
     """
     db = get_raw_db()
     cursor = db.cursor(dictionary=True)
@@ -1616,7 +1592,7 @@ def update_component_type(
             (component_type_id,),
         )
         if cursor.fetchone() is None:
-            raise HTTPException(status_code=404, detail="Component type not found")
+            raise HTTPException(status_code=404, detail="Item group not found")
 
         updates: List[str] = []
         values: List[Any] = []
@@ -1629,6 +1605,14 @@ def update_component_type(
         if payload.description is not None:
             updates.append("description = %s")
             values.append((payload.description or "").strip() or None)
+        payload_fields = getattr(
+            payload, "model_fields_set", getattr(payload, "__fields_set__", set())
+        )
+        if "category_id" in payload_fields:
+            if payload.category_id is not None:
+                ensure_category_exists(cursor, payload.category_id)
+            updates.append("category_id = %s")
+            values.append(payload.category_id)
         if payload.is_active is not None:
             updates.append("is_active = %s")
             values.append(1 if payload.is_active else 0)
@@ -1647,13 +1631,20 @@ def update_component_type(
             action_type="UPDATE",
             entity_type="COMPONENT_TYPE",
             entity_id=component_type_id,
-            description=f"Updated component type {component_type_id}",
+            description=f"Updated item group {component_type_id}",
         )
         cursor.execute(
             """
-            SELECT component_type_id, name, description, is_active
-              FROM component_types
-             WHERE component_type_id = %s
+            SELECT
+                ct.component_type_id,
+                ct.name,
+                ct.description,
+                ct.category_id,
+                c.category_name,
+                ct.is_active
+              FROM component_types ct
+              LEFT JOIN categories c ON ct.category_id = c.category_id
+             WHERE ct.component_type_id = %s
             """,
             (component_type_id,),
         )
@@ -1664,7 +1655,7 @@ def update_component_type(
     except mysql.connector.Error as err:
         db.rollback()
         if err.errno == errorcode.ER_DUP_ENTRY:
-            raise HTTPException(status_code=400, detail="Component type already exists")
+            raise HTTPException(status_code=400, detail="Item group already exists")
         raise HTTPException(status_code=500, detail=str(err))
     finally:
         cursor.close()
@@ -1676,10 +1667,10 @@ def delete_component_type(
     component_type_id: int,
     user: Dict[str, Any] = Depends(admin_required),
 ) -> Dict[str, Any]:
-    """Delete a component type if it is not referenced by any items, plated items, or combos.
+    """Delete an item group if it is not referenced by any items, plated items, or combos.
 
     Args:
-        component_type_id: ID of the component type to delete.
+        component_type_id: ID of the item group to delete.
         user: Current admin user (injected).
 
     Returns:
@@ -1693,7 +1684,7 @@ def delete_component_type(
             (component_type_id,),
         )
         if cursor.fetchone() is None:
-            raise HTTPException(status_code=404, detail="Component type not found")
+            raise HTTPException(status_code=404, detail="Item group not found")
         cursor.execute(
             "SELECT 1 FROM items WHERE component_type_id = %s LIMIT 1",
             (component_type_id,),
@@ -1701,7 +1692,7 @@ def delete_component_type(
         if cursor.fetchone() is not None:
             raise HTTPException(
                 status_code=400,
-                detail="Component type is still assigned to one or more items",
+                detail="Item group is still assigned to one or more items",
             )
         cursor.execute(
             "SELECT 1 FROM plated_item_components WHERE component_type_id = %s LIMIT 1",
@@ -1710,7 +1701,7 @@ def delete_component_type(
         if cursor.fetchone() is not None:
             raise HTTPException(
                 status_code=400,
-                detail="Component type is still used in one or more plated items",
+                detail="Item group is still used in one or more plated items",
             )
         cursor.execute(
             "SELECT 1 FROM combo_items WHERE component_type_id = %s LIMIT 1",
@@ -1719,7 +1710,7 @@ def delete_component_type(
         if cursor.fetchone() is not None:
             raise HTTPException(
                 status_code=400,
-                detail="Component type is still used in one or more combos",
+                detail="Item group is still used in one or more combos",
             )
 
         cursor.execute(
@@ -1733,7 +1724,7 @@ def delete_component_type(
             action_type="DELETE",
             entity_type="COMPONENT_TYPE",
             entity_id=component_type_id,
-            description=f"Deleted component type {component_type_id}",
+            description=f"Deleted item group {component_type_id}",
         )
         return {"status": "deleted", "component_type_id": component_type_id}
     except mysql.connector.Error as err:

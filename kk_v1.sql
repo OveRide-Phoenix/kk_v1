@@ -307,37 +307,6 @@ INSERT INTO `customers` VALUES (13,'Sanjay D','9108254344','9880962761','Shashan
 /*!40000 ALTER TABLE `customers` ENABLE KEYS */;
 UNLOCK TABLES;
 
---
--- Table structure for table `item_add_ons`
---
-
-DROP TABLE IF EXISTS `item_add_ons`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
-CREATE TABLE `item_add_ons` (
-  `add_on_id` int NOT NULL AUTO_INCREMENT,
-  `main_item_id` int NOT NULL,
-  `add_on_item_id` int NOT NULL,
-  `is_mandatory` tinyint(1) NOT NULL DEFAULT '0',
-  `max_quantity` int NOT NULL DEFAULT '1',
-  PRIMARY KEY (`add_on_id`),
-  KEY `main_item_id` (`main_item_id`),
-  KEY `add_on_item_id` (`add_on_item_id`),
-  CONSTRAINT `item_add_ons_ibfk_1` FOREIGN KEY (`main_item_id`) REFERENCES `items` (`item_id`),
-  CONSTRAINT `item_add_ons_ibfk_2` FOREIGN KEY (`add_on_item_id`) REFERENCES `items` (`item_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Dumping data for table `item_add_ons`
---
-
-LOCK TABLES `item_add_ons` WRITE;
-/*!40000 ALTER TABLE `item_add_ons` DISABLE KEYS */;
-/*!40000 ALTER TABLE `item_add_ons` ENABLE KEYS */;
-UNLOCK TABLES;
-
---
 -- Table structure for table `item_price_history`
 --
 

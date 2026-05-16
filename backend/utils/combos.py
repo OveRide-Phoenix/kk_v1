@@ -55,7 +55,7 @@ def normalize_combo_items(
     *,
     require_items: bool = True,
 ) -> List[Dict[str, Any]]:
-    """Sanitize combo items, ensuring a unique concrete item or generic component type per row."""
+    """Sanitize combo items, ensuring a unique concrete item or item group per row."""
     if items is None:
         return []
 

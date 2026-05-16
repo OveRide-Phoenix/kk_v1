@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { useEffect, useState } from "react"
-import type { Product, ComboProduct, AddonProduct, CategoryProduct, PlatedProduct, ComponentTypeProduct } from "@/types/product"
+import type { Product, ComboProduct, CategoryProduct, PlatedProduct, ComponentTypeProduct } from "@/types/product"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,10 +15,10 @@ import ProductDetails from "@/components/product-details"
 
 
 interface ProductTableProps {
-  products: (Product | ComboProduct | AddonProduct | CategoryProduct | PlatedProduct | ComponentTypeProduct)[]
+  products: (Product | ComboProduct | CategoryProduct | PlatedProduct | ComponentTypeProduct)[]
   onEdit: (product: any) => void
   onDelete: (product: any) => void
-  tableType: "items" | "plated" | "combos" | "addons" | "categories" | "component-types" | "condiments"
+  tableType: "items" | "plated" | "combos" | "categories" | "component-types" | "condiments"
 }
 
 export default function ProductTable({ products, onEdit, onDelete, tableType }: ProductTableProps) {
@@ -31,7 +31,6 @@ export default function ProductTable({ products, onEdit, onDelete, tableType }: 
       case "items": return "name"
       case "plated": return "name"
       case "combos": return "combo_name"
-      case "addons": return "main_item_name"
       case "categories": return "category_name"
       case "component-types": return "name"
       default: return ""
@@ -61,9 +60,6 @@ export default function ProductTable({ products, onEdit, onDelete, tableType }: 
       case "combos":
         setSortKey("combo_name")
         break
-      case "addons":
-        setSortKey("main_item_name")
-        break
       case "categories":
         setSortKey("category_name")
         break
@@ -92,6 +88,7 @@ export default function ProductTable({ products, onEdit, onDelete, tableType }: 
       { key: "name", header: "Name", priority: 1 },
       { key: "item_id", header: "ID", priority: 3 },
       { key: "category_name", header: "Category", priority: 2 },
+      { key: "component_type_name", header: "Item Group", priority: 2 },
       ...(isCondimentsTable
         ? [{ key: "condiments_price", header: "Condiments Price", priority: 4 }]
         : [
@@ -123,16 +120,6 @@ export default function ProductTable({ products, onEdit, onDelete, tableType }: 
       { key: "price", header: "Price", priority: 2 },
       { key: "actions", header: "Actions", priority: 1 },
     ]
-  } else if (tableType === "addons") {
-    columns = [
-      { key: "sl_no", header: "Sl.No", priority: 3 },
-      { key: "main_item_name", header: "Main Item", priority: 1 },
-      { key: "add_on_id", header: "ID", priority: 3 },
-      { key: "add_on_item_name", header: "Add-on Item", priority: 2 },
-      { key: "is_mandatory", header: "Mandatory", priority: 4 },
-      { key: "max_quantity", header: "Max Qty", priority: 4 },
-      { key: "actions", header: "Actions", priority: 1 },
-    ]
   } else if (tableType === "categories") {
     columns = [
       { key: "sl_no", header: "Sl.No", priority: 3 },
@@ -145,6 +132,7 @@ export default function ProductTable({ products, onEdit, onDelete, tableType }: 
       { key: "sl_no", header: "Sl.No", priority: 3 },
       { key: "name", header: "Name", priority: 1 },
       { key: "component_type_id", header: "ID", priority: 2 },
+      { key: "category_name", header: "Category", priority: 2 },
       { key: "description", header: "Description", priority: 2 },
       { key: "actions", header: "Actions", priority: 1 },
     ]
@@ -230,7 +218,7 @@ export default function ProductTable({ products, onEdit, onDelete, tableType }: 
                 const isCondimentProduct = Boolean(product?.is_condiment)
                 return (
                 <TableRow
-                  key={`${tableType}-${tableType === "items" || tableType === "condiments" || tableType === "plated" ? product.item_id : tableType === "combos" ? product.combo_id : tableType === "addons" ? product.add_on_id : tableType === "categories" ? product.category_id : tableType === "component-types" ? product.component_type_id : idx}-${idx}`}
+                  key={`${tableType}-${tableType === "items" || tableType === "condiments" || tableType === "plated" ? product.item_id : tableType === "combos" ? product.combo_id : tableType === "categories" ? product.category_id : tableType === "component-types" ? product.component_type_id : idx}-${idx}`}
                 >
                   {visibleColumns.map((column) => {
                     if (column.key === "sl_no") {
@@ -309,7 +297,7 @@ export default function ProductTable({ products, onEdit, onDelete, tableType }: 
                             ? product.includedItems
                                 .map((item: any) =>
                                   item.kind === "type"
-                                    ? `${item.quantity} x ${item.componentTypeName ?? item.name ?? "Generic Component"}`
+                                    ? `${item.quantity} x ${item.componentTypeName ?? item.name ?? "Item Group"}`
                                     : `${item.quantity} x ${item.name ?? `Item #${item.itemId}`}`
                                 )
                                 .join(", ")
@@ -324,7 +312,7 @@ export default function ProductTable({ products, onEdit, onDelete, tableType }: 
                             ? product.platedComponents
                                 .map((item: any) =>
                                   item.kind === "type"
-                                    ? `${item.quantity} x ${item.componentTypeName ?? item.name ?? "Generic Component"}`
+                                    ? `${item.quantity} x ${item.componentTypeName ?? item.name ?? "Item Group"}`
                                     : `${item.quantity} x ${item.name ?? `Item #${item.itemId}`}`
                                 )
                                 .join(", ")
@@ -337,22 +325,30 @@ export default function ProductTable({ products, onEdit, onDelete, tableType }: 
                         <TableCell key={column.key} className={`px-4 py-3 ${isMobile ? 'text-xs' : 'text-sm'} font-medium`}>
                           <div className="flex flex-col gap-1">
                             <span>{product.name ?? "-"}</span>
-                            {Boolean(product?.component_type_name) && (
-                              <Badge variant="outline" className="w-max text-[10px] tracking-wide">
-                                {product.component_type_name}
-                              </Badge>
-                            )}
                             {Boolean(product?.is_plated) && (
                               <Badge variant="outline" className="w-max text-[10px] tracking-wide">
                                 Plated
                               </Badge>
                             )}
-                            {isCondimentProduct && (
+                            {isCondimentProduct && tableType !== "condiments" && (
                               <Badge variant="secondary" className="w-max text-[10px] tracking-wide">
                                 Condiment
                               </Badge>
                             )}
                           </div>
+                        </TableCell>
+                      )
+                    }
+                    if (column.key === "component_type_name") {
+                      return (
+                        <TableCell key={column.key} className={`px-4 py-3 ${isMobile ? 'text-xs' : ''}`}>
+                          {product.component_type_name ? (
+                            <Badge variant="outline" className={`${isMobile ? 'text-[10px] px-1' : 'text-xs'}`}>
+                              {product.component_type_name}
+                            </Badge>
+                          ) : (
+                            "-"
+                          )}
                         </TableCell>
                       )
                     }
@@ -384,7 +380,7 @@ export default function ProductTable({ products, onEdit, onDelete, tableType }: 
                       )
                     }
                     return (
-                      <TableCell key={column.key} className={`px-4 py-3 ${isMobile ? 'text-xs' : ''} ${column.key === 'name' || column.key === 'combo_name' || column.key === 'add_on_item_name' || column.key === 'category_name' ? 'font-medium' : ''}`}>
+                      <TableCell key={column.key} className={`px-4 py-3 ${isMobile ? 'text-xs' : ''} ${column.key === 'name' || column.key === 'combo_name' || column.key === 'category_name' ? 'font-medium' : ''}`}>
                         {column.key === "category_name" ? (
                           <Badge variant="outline" className={`${isMobile ? 'text-[10px] px-1' : 'text-xs'}`}>
                             {product[column.key] ?? "-"}
