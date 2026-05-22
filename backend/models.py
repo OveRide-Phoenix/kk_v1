@@ -332,6 +332,9 @@ class MenuItem(Base):
     menu_id = Column(Integer, ForeignKey("menu.menu_id"), nullable=False)
     item_id = Column(Integer, ForeignKey("items.item_id"), nullable=True)
     combo_id = Column(Integer, ForeignKey("combos.combo_id"), nullable=True)
+    component_type_id = Column(
+        Integer, ForeignKey("component_types.component_type_id"), nullable=True
+    )
     category_id = Column(Integer, ForeignKey("categories.category_id"), nullable=True)
     max_qty = Column(Integer, nullable=True)
     rate = Column(DECIMAL(10, 2), nullable=False)

@@ -6,6 +6,7 @@ import {
   Package,
   Users,
   Calendar,
+  CalendarDays,
   Utensils,
   Menu,
   ShoppingCart,
@@ -31,6 +32,7 @@ interface SidebarProps {
   setActivePage: (page: string) => void;
   collapsed?: boolean;
   setCollapsed?: (collapsed: boolean) => void;
+  onNavigateAttempt?: (href: string) => boolean;
 }
 
 const primaryNavigationItems = [
@@ -38,6 +40,12 @@ const primaryNavigationItems = [
   { name: "Product Management", icon: Package, href: "/admin/productmgmt", id: "productmgmt" },
   { name: "Customer Management", icon: Users, href: "/admin/customermgmt", id: "customermgmt" },
   { name: "Daily Menu Setup", icon: Calendar, href: "/admin/dailymenusetup", id: "dailymenusetup" },
+  {
+    name: "Subscription Menu",
+    icon: CalendarDays,
+    href: "/admin/subscription-menu",
+    id: "subscription-menu",
+  },
   { name: "Kitchen Production", icon: Utensils, href: "/admin/production", id: "production" },
   { name: "Packing Plan", icon: Package, href: "/admin/packing", id: "packing" },
   { name: "Trip Sheets", icon: Truck, href: "/admin/trip-sheet", id: "trip-sheet" },
@@ -67,6 +75,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   setActivePage,
   collapsed = false,
   setCollapsed = () => {},
+  onNavigateAttempt,
 }) => {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
@@ -137,6 +146,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   variant={activePage === item.id ? "default" : "ghost"}
                   className={`w-full ${collapsed ? "justify-center p-2" : "justify-start"}`}
                   onClick={() => {
+                    if (onNavigateAttempt && !onNavigateAttempt(item.href)) return;
                     setActivePage(item.id);
                     router.push(item.href);
                     setSidebarOpen(false);
@@ -163,6 +173,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                       variant={activePage === item.id ? "default" : "ghost"}
                       className={`w-full ${collapsed ? "justify-center p-2" : "justify-start"}`}
                       onClick={() => {
+                        if (onNavigateAttempt && !onNavigateAttempt(item.href)) return;
                         setActivePage(item.id);
                         router.push(item.href);
                         setSidebarOpen(false);

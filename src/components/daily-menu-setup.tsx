@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { InputWithButton } from "@/components/ui/input-button";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,7 @@ import { AdminLayout } from "@/components/admin-layout";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -34,6 +36,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { useAuthStore } from "@/store/store";
 import { http } from "@/lib/http";
@@ -79,11 +82,51 @@ const MEALS_REQUIRING_DEFAULT = new Set<MealSection>(["breakfast", "lunch", "din
 const buildMenuEntryKey = (entry: { item_id?: number | null; combo_id?: number | null }) =>
   entry.combo_id != null ? `combo:${entry.combo_id}` : `item:${entry.item_id}`;
 
+const emptyFingerprintState = (): Record<MealSection, string> => ({
+  breakfast: "[]",
+  lunch: "[]",
+  dinner: "[]",
+  condiments: "[]",
+});
+
+const serializeMenuRows = (rows: MenuItem[]) =>
+  JSON.stringify(
+    rows.map((row, index) => ({
+      item_id: row.item_id ?? null,
+      combo_id: row.combo_id ?? null,
+      category_id: row.category_id ?? null,
+      max_qty: Number(row.max_qty ?? 0),
+      available_qty: Number(row.available_qty ?? 0),
+      rate: Number(row.rate ?? 0),
+      is_default: Boolean(row.is_default),
+      sort_order: row.sort_order || index + 1,
+    })),
+  );
+
+const parseMenuErrorMessage = (bodyText: string, fallback: string) => {
+  if (!bodyText) return fallback;
+  try {
+    const errorData = JSON.parse(bodyText);
+    const detail = errorData?.detail;
+    if (typeof detail === "string") {
+      return detail;
+    }
+    if (detail?.message) {
+      const issues = Array.isArray(detail.issues) ? detail.issues.join(" ") : "";
+      return `${detail.message}${issues ? ` ${issues}` : ""}`;
+    }
+  } catch {
+    /* fall through to plain-text body */
+  }
+  return bodyText;
+};
+
 export function DailyMenuSetup() {
   // ───────────────────────────────────────────────────────────────────────
   // Local state
   // ───────────────────────────────────────────────────────────────────────
   const adminCity = useAuthStore((state) => state.adminCity || state.user?.city_code || "MYS");
+  const router = useRouter();
 
   // items grouped by meal section
   const [itemsByMeal, setItemsByMeal] = useState<Record<MealSection, MenuItem[]>>({
@@ -92,6 +135,10 @@ export function DailyMenuSetup() {
     dinner: [],
     condiments: [],
   });
+  const [savedFingerprintByMeal, setSavedFingerprintByMeal] =
+    useState<Record<MealSection, string>>(emptyFingerprintState);
+  const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false);
+  const [pendingNavigationHref, setPendingNavigationHref] = useState<string | null>(null);
 
   // Calendar state
   const [draftDate, setDraftDate] = useState<Date | null>(() => {
@@ -253,6 +300,7 @@ export function DailyMenuSetup() {
       dinner: false,
       condiments: false,
     });
+    setSavedFingerprintByMeal(emptyFingerprintState());
   }, [adminCity]);
 
   useEffect(() => {
@@ -321,6 +369,7 @@ export function DailyMenuSetup() {
           setMenuIdByMeal((prev) => ({ ...prev, [meal]: null }));
           setIsReleasedByMeal((prev) => ({ ...prev, [meal]: false }));
           setItemsByMeal((prev) => ({ ...prev, [meal]: [] }));
+          setSavedFingerprintByMeal((prev) => ({ ...prev, [meal]: "[]" }));
           return;
         }
         if (!res.ok) {
@@ -328,6 +377,7 @@ export function DailyMenuSetup() {
           setMenuIdByMeal((prev) => ({ ...prev, [meal]: null }));
           setIsReleasedByMeal((prev) => ({ ...prev, [meal]: false }));
           setItemsByMeal((prev) => ({ ...prev, [meal]: [] }));
+          setSavedFingerprintByMeal((prev) => ({ ...prev, [meal]: "[]" }));
           return;
         }
 
@@ -360,11 +410,16 @@ export function DailyMenuSetup() {
           };
         });
         setItemsByMeal((prev) => ({ ...prev, [meal]: mapped }));
+        setSavedFingerprintByMeal((prev) => ({
+          ...prev,
+          [meal]: serializeMenuRows(mapped),
+        }));
       } catch (err) {
         console.error(`Failed to fetch ${meal}`, err);
         setMenuIdByMeal((prev) => ({ ...prev, [meal]: null }));
         setIsReleasedByMeal((prev) => ({ ...prev, [meal]: false }));
         setItemsByMeal((prev) => ({ ...prev, [meal]: [] }));
+        setSavedFingerprintByMeal((prev) => ({ ...prev, [meal]: "[]" }));
       } finally {
         setLoadingMenu(false);
       }
@@ -380,6 +435,12 @@ export function DailyMenuSetup() {
         breakfast: [],
         lunch: [],
         dinner: [],
+      }));
+      setSavedFingerprintByMeal((prev) => ({
+        ...prev,
+        breakfast: "[]",
+        lunch: "[]",
+        dinner: "[]",
       }));
       setMenuIdByMeal((prev) => ({
         ...prev,
@@ -404,6 +465,7 @@ export function DailyMenuSetup() {
   useEffect(() => {
     if (!supportsCondiments) {
       setItemsByMeal((prev) => ({ ...prev, condiments: [] }));
+      setSavedFingerprintByMeal((prev) => ({ ...prev, condiments: "[]" }));
       setMenuIdByMeal((prev) => ({ ...prev, condiments: null }));
       setIsReleasedByMeal((prev) => ({ ...prev, condiments: false }));
       return;
@@ -662,7 +724,12 @@ export function DailyMenuSetup() {
       const res = await http.post("/api/menu", payload);
 
       if (!res.ok) {
-        console.error("Save failed:", await res.text());
+        const message = parseMenuErrorMessage(await res.text(), "Unable to save this menu.");
+        toast({
+          title: "Menu not saved",
+          description: message,
+          variant: "destructive",
+        });
         return false;
       }
 
@@ -696,6 +763,10 @@ export function DailyMenuSetup() {
         };
       });
       setItemsByMeal((prev) => ({ ...prev, [meal]: mapped }));
+      setSavedFingerprintByMeal((prev) => ({
+        ...prev,
+        [meal]: serializeMenuRows(mapped),
+      }));
       return true;
     } catch (err) {
       console.error(err);
@@ -726,7 +797,15 @@ export function DailyMenuSetup() {
 
       const res = await http.patch(endpoint);
       if (!res.ok) {
-        console.error("Toggle release failed:", await res.text());
+        const message = parseMenuErrorMessage(
+          await res.text(),
+          "Unable to update menu release status.",
+        );
+        toast({
+          title: unrelease ? "Could not unrelease menu" : "Could not release menu",
+          description: message,
+          variant: "destructive",
+        });
         return;
       }
       await res.json();
@@ -772,12 +851,69 @@ export function DailyMenuSetup() {
   const isTodaySelected = selectedTimestamp === todayTimestamp;
   const isTomorrowSelected = selectedTimestamp === tomorrowTimestamp;
   const isReadOnlyMode = selectedTimestamp !== null && selectedTimestamp < todayTimestamp;
+  const dirtyMeals = visibleMeals.filter(
+    (meal) => serializeMenuRows(itemsByMeal[meal]) !== savedFingerprintByMeal[meal],
+  );
+  const hasUnsavedChanges = dirtyMeals.length > 0;
+  const activeTab = visibleMeals.includes(currentSection) ? currentSection : visibleMeals[0];
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasUnsavedChanges]);
+
+  const handleNavigateAttempt = useCallback(
+    (href: string) => {
+      if (!hasUnsavedChanges) return true;
+      setPendingNavigationHref(href);
+      setUnsavedDialogOpen(true);
+      return false;
+    },
+    [hasUnsavedChanges],
+  );
+
+  const discardChangesAndNavigate = () => {
+    const href = pendingNavigationHref;
+    setUnsavedDialogOpen(false);
+    setPendingNavigationHref(null);
+    if (href) {
+      router.push(href);
+    }
+  };
+
+  const getMealTabStatus = (meal: MealSection) => {
+    const hasItems = itemsByMeal[meal].length > 0;
+    if (!hasItems) {
+      return {
+        className:
+          "border border-muted-foreground/45 bg-background shadow-[0_0_0_1px_rgba(148,163,184,0.1)]",
+        label: "No items",
+      };
+    }
+    if (menuIdByMeal[meal] != null && isReleasedByMeal[meal]) {
+      return {
+        className:
+          "border border-emerald-300 bg-emerald-400 shadow-[0_0_0_1px_rgba(16,185,129,0.14),0_0_6px_rgba(16,185,129,0.65)]",
+        label: "Released",
+      };
+    }
+    return {
+      className:
+        "border border-amber-300 bg-amber-300 shadow-[0_0_0_1px_rgba(245,158,11,0.14),0_0_6px_rgba(245,158,11,0.62)]",
+      label: menuIdByMeal[meal] != null ? "Saved draft" : "Unsaved draft",
+    };
+  };
 
   // ───────────────────────────────────────────────────────────────────────
   // JSX
   // ───────────────────────────────────────────────────────────────────────
   return (
-    <AdminLayout activePage="dailymenusetup">
+    <AdminLayout activePage="dailymenusetup" onNavigateAttempt={handleNavigateAttempt}>
       <Card>
         <CardHeader className="pb-2">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -854,21 +990,47 @@ export function DailyMenuSetup() {
           </div>
 
           {/* Sections adapt based on city capabilities */}
-          {visibleMeals.map((meal) => {
+          <Tabs
+            value={activeTab}
+            onValueChange={(value) => setCurrentSection(value as MealSection)}
+          >
+            <TabsList className="mb-6 flex h-auto flex-wrap justify-start gap-2 bg-transparent p-0">
+              {visibleMeals.map((meal) => {
+                const status = getMealTabStatus(meal);
+                return (
+                  <TabsTrigger
+                    key={meal}
+                    value={meal}
+                    className="gap-2 rounded-md border px-4 py-2 data-[state=active]:border-primary data-[state=active]:shadow-sm"
+                  >
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full ring-1 ring-white/70 ${status.className}`}
+                      aria-label={status.label}
+                      title={status.label}
+                    />
+                    {meal === "condiments" ? "Condiments" : mealLabel(meal)}
+                  </TabsTrigger>
+                );
+              })}
+            </TabsList>
+
+            {visibleMeals.map((meal) => {
             const isCondimentsSection = meal === "condiments";
             const requiresDate = !isCondimentsSection;
             const rows = itemsByMeal[meal];
             const hasItems = rows.length > 0;
             const hasMenuId = menuIdByMeal[meal] != null;
+            const isReleased = isReleasedByMeal[meal];
             const showSaveButton =
-              !isReadOnlyMode && hasItems && (!requiresDate || Boolean(confirmedDate));
+              !isReadOnlyMode && !isReleased && hasItems && (!requiresDate || Boolean(confirmedDate));
             const showReleaseControls = !isReadOnlyMode && hasMenuId;
             const showButtonRow = showSaveButton || showReleaseControls;
-            const disableAdd = isReleasedByMeal[meal] || (requiresDate && !confirmedDate);
+            const disableAdd = isReleased || (requiresDate && !confirmedDate);
             const showDefaultColumn = !isCondimentsSection;
 
             return (
-              <section key={meal} className="mb-8">
+              <TabsContent key={meal} value={meal} className="mt-0">
+                <section className="mb-8">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4">
                   <div>
                     <h2 className="text-lg font-semibold capitalize">
@@ -1068,18 +1230,7 @@ export function DailyMenuSetup() {
                 {/* Save / Release Buttons for this section */}
                 {showButtonRow && (
                   <div className="mt-4 flex justify-end gap-4">
-                    {showReleaseControls && (
-                      <Button
-                        variant="destructive"
-                        onClick={() => handleToggleRelease(meal, false)}
-                        disabled={!menuIdByMeal[meal] || togglingRelease}
-                      >
-                        {togglingRelease && !isReleasedByMeal[meal]
-                          ? "Releasing…"
-                          : `Release ${mealLabel(meal)}`}
-                      </Button>
-                    )}
-                    {showReleaseControls && isReleasedByMeal[meal] && (
+                    {showReleaseControls && isReleased ? (
                       <Button
                         variant="outline"
                         onClick={() => handleToggleRelease(meal, true)}
@@ -1087,27 +1238,37 @@ export function DailyMenuSetup() {
                       >
                         {togglingRelease ? "Unreleasing…" : `Unrelease ${mealLabel(meal)}`}
                       </Button>
-                    )}
+                    ) : null}
                     {showSaveButton && (
                       <Button
                         onClick={() => handleSaveMenu(meal)}
                         disabled={
                           isCondimentsSection
-                            ? rows.length === 0 || savingMenu || isReleasedByMeal[meal]
+                            ? rows.length === 0 || savingMenu
                             : !confirmedDate ||
                               rows.length === 0 ||
-                              savingMenu ||
-                              isReleasedByMeal[meal]
+                              savingMenu
                         }
                       >
                         {savingMenu ? "Saving…" : `Save ${mealLabel(meal)}`}
                       </Button>
                     )}
+                    {showReleaseControls && !isReleased ? (
+                      <Button
+                        variant="destructive"
+                        onClick={() => handleToggleRelease(meal, false)}
+                        disabled={!menuIdByMeal[meal] || togglingRelease}
+                      >
+                        {togglingRelease ? "Releasing…" : `Release ${mealLabel(meal)}`}
+                      </Button>
+                    ) : null}
                   </div>
                 )}
-              </section>
+                </section>
+              </TabsContent>
             );
-          })}
+            })}
+          </Tabs>
           {/* Item Selection Dialog */}
           <Dialog open={itemDialogOpen} onOpenChange={setItemDialogOpen}>
             <DialogContent className="w-[95vw] sm:max-w-[1100px] max-h-[85vh] overflow-y-auto p-6">
@@ -1224,6 +1385,25 @@ export function DailyMenuSetup() {
           </Dialog>
         </CardContent>
       </Card>
+      <Dialog open={unsavedDialogOpen} onOpenChange={setUnsavedDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Unsaved menu changes</DialogTitle>
+            <DialogDescription>
+              You have unsaved edits in {dirtyMeals.map(mealLabel).join(", ")}. Save the menu
+              before leaving, or your changes will be lost.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUnsavedDialogOpen(false)}>
+              Stay here
+            </Button>
+            <Button variant="destructive" onClick={discardChangesAndNavigate}>
+              Leave without saving
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AdminLayout>
   );
 }

@@ -1351,7 +1351,7 @@ def get_production_orders_summary(
                 FROM orders o
                 JOIN order_items oi ON oi.order_id = o.order_id
                 JOIN addresses a ON o.address_id = a.address_id
-                WHERE DATE(o.created_at) = %s
+                WHERE COALESCE(o.order_date, DATE(o.created_at)) = %s
                   AND a.city_code = %s
                   AND LOWER(REPLACE(COALESCE(o.status, ''), ' (Payment Due)', '')) NOT IN (
                     'cancelled',

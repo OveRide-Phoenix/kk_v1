@@ -33,9 +33,10 @@ import { formatDistanceToNow } from "date-fns";
 interface AdminLayoutProps {
   children: React.ReactNode;
   activePage: string;
+  onNavigateAttempt?: (href: string) => boolean;
 }
 
-export function AdminLayout({ children, activePage }: AdminLayoutProps) {
+export function AdminLayout({ children, activePage, onNavigateAttempt }: AdminLayoutProps) {
   const logout = useAuthStore((state) => state.logout);
   const user = useAuthStore((state) => state.user);
   const setUser = useAuthStore((state) => state.setUser);
@@ -487,6 +488,7 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
           setActivePage={() => {}}
           collapsed={collapsed}
           setCollapsed={setCollapsed}
+          onNavigateAttempt={onNavigateAttempt}
         />
 
         <div className="flex-1 flex flex-col">
@@ -638,7 +640,14 @@ export function AdminLayout({ children, activePage }: AdminLayoutProps) {
                   </PopoverContent>
                 </Popover>
                 <Button variant="ghost" className="flex items-center space-x-2" asChild>
-                  <Link href="/admin/account">
+                  <Link
+                    href="/admin/account"
+                    onClick={(event) => {
+                      if (onNavigateAttempt && !onNavigateAttempt("/admin/account")) {
+                        event.preventDefault();
+                      }
+                    }}
+                  >
                     <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
                       <User className="h-5 w-5" />
                     </div>
