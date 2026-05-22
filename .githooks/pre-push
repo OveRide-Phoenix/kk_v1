@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
-# Pre-push hook: run the GitLab CI pipeline locally before pushing.
+# Pre-push hook: fast local checks.
 #
-# This intentionally mirrors .gitlab-ci.yml through gitlab-ci-local instead of
-# maintaining a separate hand-written approximation of the pipeline.
+# Runs the same practical quality checks you would run by hand:
+#   - Black check for backend Python formatting
+#   - Ruff check for backend Python if Ruff is installed
+#   - ESLint for frontend
+#   - TypeScript typecheck
 #
-# Skip entirely:            SKIP_HOOKS=1 git push
-# Do not auto-start Docker: NO_DOCKER_AUTOSTART=1 git push
-# Keep auto-started Docker: KEEP_DOCKER_RUNNING=1 git push
-# Run manually:             gitlab-ci-local --no-artifacts-to-source
-# Run one job manually:     gitlab-ci-local nextjs_build
+# Skip entirely: SKIP_HOOKS=1 git push
 
 set -euo pipefail
 
@@ -18,80 +17,71 @@ YELLOW='\033[1;33m'
 BOLD='\033[1m'
 RESET='\033[0m'
 
+pass() { echo -e "  ${GREEN}✓${RESET} $1"; }
+fail() { echo -e "  ${RED}✗${RESET} $1"; }
+skip() { echo -e "  ${YELLOW}–${RESET} $1 ${YELLOW}(skipped)${RESET}"; }
+
 if [ "${SKIP_HOOKS:-}" = "1" ]; then
   echo -e "${YELLOW}Pre-push hooks skipped (SKIP_HOOKS=1)${RESET}"
   exit 0
 fi
 
-echo -e "\n${BOLD}Pre-push GitLab pipeline mirror${RESET}"
+echo -e "\n${BOLD}Pre-push local checks${RESET}"
 echo "──────────────────────────────"
 
-STARTED_DOCKER=0
+FAILED=0
 
-cleanup() {
-  if [ "$STARTED_DOCKER" -eq 1 ] && [ "${KEEP_DOCKER_RUNNING:-}" != "1" ]; then
-    echo "Stopping Docker Desktop..."
-    osascript -e 'quit app "Docker"' >/dev/null 2>&1 || true
-  fi
-}
+# ── Python formatting ────────────────────────────────────────────────────────
+BLACK_BIN="./backend/venv/bin/black"
+[ ! -x "$BLACK_BIN" ] && BLACK_BIN="$(command -v black 2>/dev/null || true)"
 
-trap cleanup EXIT
+if [ -z "$BLACK_BIN" ]; then
+  skip "Black not found"
+  echo "    Install it with: ./backend/venv/bin/pip install black==24.10.0"
+elif "$BLACK_BIN" --check --line-length 100 backend/; then
+  pass "Black"
+else
+  fail "Black formatting"
+  echo "    Fix with: $BLACK_BIN --line-length 100 backend/"
+  FAILED=1
+fi
 
-if ! command -v gitlab-ci-local >/dev/null 2>&1; then
-  echo -e "${RED}gitlab-ci-local is not installed.${RESET}"
-  echo -e "Install it, then push again:"
-  echo -e "  ${YELLOW}npm install -g gitlab-ci-local${RESET}"
-  echo -e "Skip hooks only if you intentionally want GitLab to be the first full check:"
-  echo -e "  ${YELLOW}SKIP_HOOKS=1 git push${RESET}"
+# ── Python linting, if configured locally ────────────────────────────────────
+RUFF_BIN="./backend/venv/bin/ruff"
+[ ! -x "$RUFF_BIN" ] && RUFF_BIN="$(command -v ruff 2>/dev/null || true)"
+
+if [ -z "$RUFF_BIN" ]; then
+  skip "Ruff not found"
+elif "$RUFF_BIN" check backend/; then
+  pass "Ruff"
+else
+  fail "Ruff"
+  FAILED=1
+fi
+
+# ── Frontend linting ─────────────────────────────────────────────────────────
+if npm run lint --silent; then
+  pass "ESLint"
+else
+  fail "ESLint"
+  FAILED=1
+fi
+
+# ── TypeScript ───────────────────────────────────────────────────────────────
+if npx tsc --noEmit; then
+  pass "TypeScript"
+else
+  fail "TypeScript"
+  FAILED=1
+fi
+
+echo "──────────────────────────────"
+
+if [ "$FAILED" -ne 0 ]; then
+  echo -e "${RED}Push blocked — fix the local check failures above.${RESET}"
+  echo -e "Skip hooks: ${YELLOW}SKIP_HOOKS=1 git push${RESET}"
   exit 1
 fi
 
-if ! command -v docker >/dev/null 2>&1; then
-  echo -e "${RED}Docker is not installed or not on PATH.${RESET}"
-  echo "gitlab-ci-local needs Docker to run the same container images as GitLab."
-  exit 1
-fi
-
-if ! docker info >/dev/null 2>&1; then
-  if [ "${NO_DOCKER_AUTOSTART:-}" = "1" ]; then
-    echo -e "${RED}Docker is not running.${RESET}"
-    echo "Start Docker, then push again."
-    exit 1
-  fi
-
-  if [ "$(uname -s)" = "Darwin" ] && [ -d "/Applications/Docker.app" ]; then
-    echo "Docker is not running. Starting Docker Desktop..."
-    open -a Docker
-    STARTED_DOCKER=1
-
-    for _ in $(seq 1 60); do
-      if docker info >/dev/null 2>&1; then
-        echo -e "${GREEN}Docker is ready.${RESET}"
-        break
-      fi
-      sleep 2
-    done
-  fi
-
-  if ! docker info >/dev/null 2>&1; then
-    echo -e "${RED}Docker is not running.${RESET}"
-    echo "Start Docker, then push again."
-    echo -e "Disable auto-start: ${YELLOW}NO_DOCKER_AUTOSTART=1 git push${RESET}"
-    exit 1
-  fi
-fi
-
-echo "Running: gitlab-ci-local --no-artifacts-to-source"
-echo "──────────────────────────────"
-
-if gitlab-ci-local --no-artifacts-to-source; then
-  echo "──────────────────────────────"
-  echo -e "${GREEN}Local GitLab pipeline passed — pushing.${RESET}\n"
-  exit 0
-fi
-
-echo "──────────────────────────────"
-echo -e "${RED}Push blocked — local GitLab pipeline failed.${RESET}"
-echo -e "Run again for details: ${YELLOW}gitlab-ci-local --no-artifacts-to-source${RESET}"
-echo -e "Skip hooks:            ${YELLOW}SKIP_HOOKS=1 git push${RESET}"
-exit 1
+echo -e "${GREEN}All local checks passed — pushing.${RESET}\n"
+exit 0

@@ -12,8 +12,6 @@
 
 # testing
 /coverage
-/.gitlab-ci-local/
-gl-*-report.json
 
 # next.js
 /.next/
