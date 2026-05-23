@@ -84,6 +84,7 @@ export function AdminLayout({ children, activePage, onNavigateAttempt }: AdminLa
   const [tokenVersion, setTokenVersion] = useState(0);
   const [askOpen, setAskOpen] = useState(false);
   const notifications = useNotificationStore((state) => state.notifications);
+  const addNotification = useNotificationStore((state) => state.addNotification);
   const markAllNotificationsAsRead = useNotificationStore((state) => state.markAllAsRead);
   const markNotificationAsRead = useNotificationStore((state) => state.markAsRead);
   const clearNotification = useNotificationStore((state) => state.clearNotification);
@@ -107,6 +108,43 @@ export function AdminLayout({ children, activePage, onNavigateAttempt }: AdminLa
       markAllNotificationsAsRead();
     }
   }, [notificationsOpen, unreadNotifications, markAllNotificationsAsRead]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+
+    const checkLowStock = async () => {
+      try {
+        const params = new URLSearchParams({ city_code: normalizedAdminCity });
+        const res = await fetch(`/api/backend/menu/low-stock-alerts?${params}`);
+        if (!res.ok) return;
+        const items = (await res.json()) as {
+          menu_item_id: number;
+          item_name: string;
+          available_qty: number;
+          final_qty: number;
+        }[];
+        items.forEach((item) => {
+          const id = `low-stock-${item.menu_item_id}`;
+          const isSoldOut = item.available_qty === 0;
+          addNotification({
+            id,
+            title: isSoldOut ? `${item.item_name} — Sold Out` : `${item.item_name} — Low Stock`,
+            message: isSoldOut
+              ? "No units remaining on today's menu."
+              : `Only ${item.available_qty} of ${item.final_qty} units left.`,
+            severity: isSoldOut ? "error" : "warning",
+            href: "/admin/dailymenusetup",
+          });
+        });
+      } catch {
+        // ignore network errors silently
+      }
+    };
+
+    checkLowStock();
+    const intervalId = setInterval(checkLowStock, 60_000);
+    return () => clearInterval(intervalId);
+  }, [isHydrated, normalizedAdminCity, addNotification]);
 
   const handleLogout = useCallback(async () => {
     clearSessionTimers();

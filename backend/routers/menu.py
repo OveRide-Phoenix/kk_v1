@@ -493,6 +493,54 @@ def get_available_items(
         db.close()
 
 
+@router.get("/api/menu/low-stock-alerts")
+def get_low_stock_alerts(
+    city_code: Optional[str] = Query(None),
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user),
+) -> List[Dict[str, Any]]:
+    """Return today's released menu items where available_qty is at or below 10% of final_qty.
+
+    Args:
+        city_code: City to filter by; falls back to the authenticated user's city.
+        user: Optional authenticated user (injected).
+
+    Returns:
+        List of dicts with menu_item_id, item_name, available_qty, final_qty, and menu_id.
+    """
+    resolved_city = _resolve_city_context(city_code, user)
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            SELECT
+                mi.menu_item_id,
+                COALESCE(i.name, c.combo_name) AS item_name,
+                mi.available_qty,
+                CAST(mi.final_qty AS UNSIGNED) AS final_qty,
+                mi.menu_id
+            FROM menu_items mi
+            JOIN menu m ON m.menu_id = mi.menu_id
+            LEFT JOIN items i ON i.item_id = mi.item_id
+            LEFT JOIN combos c ON c.combo_id = mi.combo_id
+            WHERE m.city_code = %s
+              AND m.date = CURDATE()
+              AND m.is_released = 1
+              AND m.menu_type = 'ONE_DAY'
+              AND mi.final_qty > 0
+              AND mi.available_qty <= mi.final_qty * 0.10
+            ORDER BY mi.available_qty ASC
+            """,
+            (resolved_city,),
+        )
+        return cursor.fetchall() or []
+    except mysql.connector.Error as err:
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
 @router.get("/api/menu")
 def get_daily_menu(
     date: Optional[str] = Query(None, description="Date in YYYY-MM-DD"),

@@ -438,7 +438,7 @@ export default function MobileCustomerMenuPage() {
               return menuView === "list" ? (
                 <article
                   key={`${activeMeal}-${item.menu_item_id}`}
-                  className="rounded-xl border border-[#8D4925]/8 bg-white px-3 py-3 shadow-[0_4px_12px_rgba(27,67,50,0.06)]"
+                  className={`rounded-xl border bg-white px-3 py-3 shadow-[0_4px_12px_rgba(27,67,50,0.06)] ${item.available_qty === 0 ? "border-stone-200 opacity-60" : "border-[#8D4925]/8"}`}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0 pr-2">
@@ -449,7 +449,11 @@ export default function MobileCustomerMenuPage() {
                         ₹{Math.round(item.rate || 0)}
                       </span>
                     </div>
-                    {qty > 0 ? (
+                    {item.available_qty === 0 ? (
+                      <span className="shrink-0 rounded-lg bg-stone-100 px-3 py-1.5 text-xs font-semibold text-stone-500">
+                        Sold Out
+                      </span>
+                    ) : qty > 0 ? (
                       <div className="flex items-center gap-1 rounded-lg bg-[#8D4925] px-1 py-1 text-[#FDFAF1]">
                         <button
                           type="button"
@@ -481,7 +485,7 @@ export default function MobileCustomerMenuPage() {
               ) : (
                 <article
                   key={`${activeMeal}-${item.menu_item_id}`}
-                  className="flex flex-col overflow-hidden rounded-2xl border border-stone-50 bg-white shadow-[0_4px_12px_rgba(27,67,50,0.06)]"
+                  className={`flex flex-col overflow-hidden rounded-2xl border bg-white shadow-[0_4px_12px_rgba(27,67,50,0.06)] ${item.available_qty === 0 ? "border-stone-100 opacity-60" : "border-stone-50"}`}
                 >
                   <div className="relative p-1.5">
                     <Image
@@ -492,6 +496,11 @@ export default function MobileCustomerMenuPage() {
                       className="aspect-[4/3] w-full rounded-xl object-cover"
                       unoptimized={Boolean(item.picture_url)}
                     />
+                    {item.available_qty === 0 && (
+                      <span className="absolute left-3 top-3 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                        Sold Out
+                      </span>
+                    )}
                   </div>
                   <div className="flex flex-1 flex-col px-3 pb-3">
                     <h3 className="truncate text-[13px] font-bold text-[#8D4925]">
@@ -501,7 +510,7 @@ export default function MobileCustomerMenuPage() {
                       <span className="text-sm font-bold text-[#1B4332]">
                         ₹{Math.round(item.rate || 0)}
                       </span>
-                      {qty > 0 ? (
+                      {item.available_qty === 0 ? null : qty > 0 ? (
                         <div className="flex items-center gap-1 rounded-lg bg-[#8D4925] px-1 py-1 text-[#FDFAF1]">
                           <button
                             type="button"
