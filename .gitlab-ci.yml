@@ -66,9 +66,11 @@ deploy_dev:
     - printf '%s' "$DEV_FRONTEND_ENV" > /var/www/kk_v1_dev/.env
     - printf '%s' "$DEV_BACKEND_ENV" > /var/www/kk_v1_dev/backend/.env
     - cd /var/www/kk_v1_dev
+    - git remote set-url origin "https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.com/kuteera-kitchen/kk_v1.git"
     - git fetch origin
     - git checkout -f develop
     - git reset --hard origin/develop
+    - git remote set-url origin "git@gitlab.com:kuteera-kitchen/kk_v1.git"
     - npm ci --prefer-offline
     - npm run build
     - backend/venv/bin/pip install -q -r requirements.txt
@@ -90,9 +92,11 @@ deploy_prod:
     - printf '%s' "$PROD_FRONTEND_ENV" > /var/www/kk_v1_prod/.env
     - printf '%s' "$PROD_BACKEND_ENV" > /var/www/kk_v1_prod/backend/.env
     - cd /var/www/kk_v1_prod
+    - git remote set-url origin "https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.com/kuteera-kitchen/kk_v1.git"
     - git fetch origin
     - git checkout -f main
     - git reset --hard origin/main
+    - git remote set-url origin "git@gitlab.com:kuteera-kitchen/kk_v1.git"
     - npm ci --prefer-offline
     - npm run build
     - backend/venv/bin/pip install -q -r requirements.txt
