@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from ..city_config import DEFAULT_CITY, normalize_city_code
-from ..db import get_raw_db
+from ..db import get_raw_db, DATABASE_NAME
 from ..utils.auth_deps import developer_required
 from ..utils.helpers import (
     MENU_TYPE_CONDIMENTS,
@@ -190,9 +190,7 @@ def get_dev_db_schema(
         if schema and schema.strip():
             schema_name = schema.strip()
         else:
-            metadata_cursor.execute("SELECT DATABASE()")
-            row = metadata_cursor.fetchone()
-            schema_name = row[0] if row and row[0] else "kk_v1"
+            schema_name = DATABASE_NAME
         if not SCHEMA_NAME_PATTERN.fullmatch(schema_name):
             raise HTTPException(status_code=400, detail="Invalid schema name")
         metadata_cursor.execute(f"USE `{schema_name}`")
