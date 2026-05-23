@@ -31,6 +31,11 @@ interface ComponentTypeOption {
   description?: string | null;
 }
 
+interface CondimentTypeOption {
+  condiment_type_id: number;
+  name: string;
+}
+
 type ProductFormScope = "items" | "condiments";
 
 interface ProductFormProps {
@@ -38,6 +43,7 @@ interface ProductFormProps {
   onSave: (product: Product) => Promise<void> | void;
   onCancel: () => void;
   formScope?: ProductFormScope;
+  initialCondimentTypeId?: number;
 }
 
 const normalizeMaxField = (value: unknown): number => {
@@ -84,6 +90,7 @@ const createInitialFormData = (item: Product | null, scope: ProductFormScope) =>
     description: "",
     alias: "",
     category_id: "",
+    condiment_type_id: "",
     component_type_id: "",
     uom_customer: "",
     unit_packing: 0,
@@ -114,9 +121,16 @@ export default function ProductForm({
   onSave,
   onCancel,
   formScope = "items",
+  initialCondimentTypeId,
 }: ProductFormProps) {
   const isEditing = !!product;
-  const [formData, setFormData] = useState<any>(() => createInitialFormData(product, formScope));
+  const [formData, setFormData] = useState<any>(() => {
+    const initial: any = createInitialFormData(product, formScope);
+    if (!product && initialCondimentTypeId) {
+      initial.condiment_type_id = initialCondimentTypeId;
+    }
+    return initial;
+  });
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const previousMealsRef = useRef<number[]>([]);
@@ -125,6 +139,7 @@ export default function ProductForm({
   const isCondiment = isCondimentScope || selectedMeals.includes(CONDIMENTS_BLD_ID);
   const [categoryOptions, setCategoryOptions] = useState<CategoryProduct[]>([]);
   const [componentTypeOptions, setComponentTypeOptions] = useState<ComponentTypeOption[]>([]);
+  const [condimentTypeOptions, setCondimentTypeOptions] = useState<CondimentTypeOption[]>([]);
   const [loadingReferences, setLoadingReferences] = useState(false);
 
   const handleChange = (field: string, value: any) => {
@@ -207,30 +222,32 @@ export default function ProductForm({
     const fetchReferences = async () => {
       setLoadingReferences(true);
       try {
-        const [categoriesRes, componentTypesRes] = await Promise.all([
+        const fetches: Promise<Response>[] = [
           http.get("/api/products/categories"),
           http.get("/api/products/component-types"),
-        ]);
-        if (!categoriesRes.ok) {
-          throw new Error("Failed to load categories");
+        ];
+        if (isCondimentScope) {
+          fetches.push(http.get("/api/products/condiment-types"));
         }
-        if (!componentTypesRes.ok) {
-          throw new Error("Failed to load item groups");
-        }
+        const results = await Promise.all(fetches);
+        const [categoriesRes, componentTypesRes, condimentTypesRes] = results;
+        if (!categoriesRes.ok) throw new Error("Failed to load categories");
+        if (!componentTypesRes.ok) throw new Error("Failed to load item groups");
         const [categoriesData, componentTypesData] = await Promise.all([
           categoriesRes.json(),
           componentTypesRes.json(),
         ]);
-        if (cancelled) {
-          return;
-        }
+        const condimentTypesData = condimentTypesRes ? await condimentTypesRes.json() : [];
+        if (cancelled) return;
         setCategoryOptions(Array.isArray(categoriesData) ? categoriesData : []);
         setComponentTypeOptions(Array.isArray(componentTypesData) ? componentTypesData : []);
+        setCondimentTypeOptions(Array.isArray(condimentTypesData) ? condimentTypesData : []);
       } catch (error) {
         console.error("Failed to load reference data", error);
         if (!cancelled) {
           setCategoryOptions([]);
           setComponentTypeOptions([]);
+          setCondimentTypeOptions([]);
         }
       } finally {
         if (!cancelled) {
@@ -350,6 +367,43 @@ export default function ProductForm({
                     </SelectContent>
                   </Select>
                 </div>
+                {isCondimentScope && (
+                  <div className="space-y-2">
+                    <Label htmlFor="condiment_type_id">Condiment Type</Label>
+                    <Select
+                      value={
+                        typeof formData.condiment_type_id === "number" &&
+                        formData.condiment_type_id > 0
+                          ? String(formData.condiment_type_id)
+                          : EMPTY_OPTION_VALUE
+                      }
+                      onValueChange={(value) =>
+                        handleChange(
+                          "condiment_type_id",
+                          value === EMPTY_OPTION_VALUE ? "" : Number(value),
+                        )
+                      }
+                      disabled={loadingReferences}
+                    >
+                      <SelectTrigger id="condiment_type_id">
+                        <SelectValue
+                          placeholder={loadingReferences ? "Loading…" : "Select condiment type"}
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={EMPTY_OPTION_VALUE}>None</SelectItem>
+                        {condimentTypeOptions.map((ct) => (
+                          <SelectItem
+                            key={ct.condiment_type_id}
+                            value={String(ct.condiment_type_id)}
+                          >
+                            {ct.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="component_type_id">
                     Item Group {!isCondiment && <span className="text-red-500">*</span>}

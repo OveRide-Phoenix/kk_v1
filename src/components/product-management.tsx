@@ -119,52 +119,24 @@ const buildItemUpdatePayload = (product: Product): Record<string, unknown> => {
   return Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== undefined));
 };
 
-type TabKey =
-  | "items"
-  | "plated"
-  | "combos"
-  | "categories"
-  | "component-types"
-  | "condiments";
+type TabKey = "items" | "plated" | "combos" | "categories" | "component-types";
 
 export default function ProductManagement() {
   const { toast } = useToast();
   const [products, setProducts] = useState<
-    (
-      | Product
-      | ComboProduct
-      | CategoryProduct
-      | PlatedProduct
-      | ComponentTypeProduct
-    )[]
+    (Product | ComboProduct | CategoryProduct | PlatedProduct | ComponentTypeProduct)[]
   >([]);
   const [filteredProducts, setFilteredProducts] = useState<
-    (
-      | Product
-      | ComboProduct
-      | CategoryProduct
-      | PlatedProduct
-      | ComponentTypeProduct
-    )[]
+    (Product | ComboProduct | CategoryProduct | PlatedProduct | ComponentTypeProduct)[]
   >([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<
-    | Product
-    | ComboProduct
-    | CategoryProduct
-    | PlatedProduct
-    | ComponentTypeProduct
-    | null
+    Product | ComboProduct | CategoryProduct | PlatedProduct | ComponentTypeProduct | null
   >(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<
-    | Product
-    | ComboProduct
-    | CategoryProduct
-    | PlatedProduct
-    | ComponentTypeProduct
-    | null
+    Product | ComboProduct | CategoryProduct | PlatedProduct | ComponentTypeProduct | null
   >(null);
   const [mealFilter, setMealFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
@@ -173,13 +145,7 @@ export default function ProductManagement() {
   const [categoryOptions, setCategoryOptions] = useState<CategoryProduct[]>([]);
 
   const resolveProductName = (
-    product:
-      | Product
-      | ComboProduct
-      | CategoryProduct
-      | PlatedProduct
-      | ComponentTypeProduct
-      | null,
+    product: Product | ComboProduct | CategoryProduct | PlatedProduct | ComponentTypeProduct | null,
   ): string => {
     if (!product) return "";
     const candidate: any = product;
@@ -214,7 +180,6 @@ export default function ProductManagement() {
     { label: "Breakfast", value: "1" },
     { label: "Lunch", value: "2" },
     { label: "Dinner", value: "3" },
-    { label: "Condiments", value: "4" },
   ];
 
   useEffect(() => {
@@ -262,9 +227,6 @@ export default function ProductManagement() {
       case "component-types":
         path = "/api/products/component-types";
         break;
-      case "condiments":
-        path = "/api/products/items?only_condiments=1";
-        break;
     }
 
     try {
@@ -297,7 +259,6 @@ export default function ProductManagement() {
         let name, id;
         switch (activeTab) {
           case "items":
-          case "condiments":
             name = (product as Product).name;
             id = (product as Product).item_id;
             break;
@@ -327,7 +288,7 @@ export default function ProductManagement() {
     }
 
     // Apply type filter
-    if (mealFilter !== "all" && (activeTab === "items" || activeTab === "condiments")) {
+    if (mealFilter !== "all" && activeTab === "items") {
       const targetMeal = Number(mealFilter);
       filtered = filtered.filter((product) => {
         const bldIds = (product as Product).bld_ids;
@@ -344,7 +305,7 @@ export default function ProductManagement() {
     }
 
     // Apply group filter
-    if (filterGroup !== "All Groups" && (activeTab === "items" || activeTab === "condiments")) {
+    if (filterGroup !== "All Groups" && activeTab === "items") {
       filtered = filtered.filter((product) => product.group === filterGroup);
     }
 
@@ -352,7 +313,7 @@ export default function ProductManagement() {
   }, [searchQuery, products, mealFilter, categoryFilter, filterGroup, activeTab]);
 
   useEffect(() => {
-    if (activeTab !== "items" && activeTab !== "condiments") {
+    if (activeTab !== "items") {
       setMealFilter("all");
     }
   }, [activeTab]);
@@ -363,24 +324,14 @@ export default function ProductManagement() {
   };
 
   const handleEditProduct = (
-    product:
-      | Product
-      | ComboProduct
-      | CategoryProduct
-      | PlatedProduct
-      | ComponentTypeProduct,
+    product: Product | ComboProduct | CategoryProduct | PlatedProduct | ComponentTypeProduct,
   ) => {
     setSelectedProduct(product);
     setIsFormOpen(true);
   };
 
   const handleDeleteProduct = (
-    product:
-      | Product
-      | ComboProduct
-      | CategoryProduct
-      | PlatedProduct
-      | ComponentTypeProduct,
+    product: Product | ComboProduct | CategoryProduct | PlatedProduct | ComponentTypeProduct,
   ) => {
     setProductToDelete(product);
     setIsDeleteDialogOpen(true);
@@ -516,9 +467,7 @@ export default function ProductManagement() {
         toast({
           title: "Delete failed",
           description:
-            error instanceof Error
-              ? error.message
-              : "Unexpected error while deleting item group.",
+            error instanceof Error ? error.message : "Unexpected error while deleting item group.",
           variant: "destructive",
         });
       } finally {
@@ -753,9 +702,7 @@ export default function ProductManagement() {
       const response = await (isUpdating ? http.put(path, body) : http.post(path, body));
 
       if (!response.ok) {
-        let detail = isUpdating
-          ? "Failed to update item group"
-          : "Failed to create item group";
+        let detail = isUpdating ? "Failed to update item group" : "Failed to create item group";
         try {
           const data = await response.json();
           if (typeof data?.detail === "string" && data.detail.trim().length > 0) {
@@ -788,9 +735,7 @@ export default function ProductManagement() {
       toast({
         title: "Item group save failed",
         description:
-          error instanceof Error
-            ? error.message
-            : "Unexpected error while saving item group.",
+          error instanceof Error ? error.message : "Unexpected error while saving item group.",
         variant: "destructive",
       });
     }
@@ -814,7 +759,7 @@ export default function ProductManagement() {
       return;
     }
 
-    if (activeTab !== "items" && activeTab !== "condiments") {
+    if (activeTab !== "items") {
       if (selectedProduct) {
         const updatedProducts = (products as any[]).map((p) => (p.id === product.id ? product : p));
         setProducts(updatedProducts);
@@ -882,7 +827,6 @@ export default function ProductManagement() {
     combos: "Combo",
     categories: "Category",
     "component-types": "Item Group",
-    condiments: "Condiment",
   };
 
   // Reset filters when tab changes
@@ -929,13 +873,12 @@ export default function ProductManagement() {
               className="mb-6"
               onValueChange={(value) => setActiveTab(value as TabKey)}
             >
-              <TabsList className="grid w-full grid-cols-6">
+              <TabsList className="grid w-full grid-cols-5">
                 <TabsTrigger value="categories">Categories</TabsTrigger>
                 <TabsTrigger value="component-types">Item Groups</TabsTrigger>
                 <TabsTrigger value="items">Items</TabsTrigger>
                 <TabsTrigger value="plated">Plated</TabsTrigger>
                 <TabsTrigger value="combos">Combos</TabsTrigger>
-                <TabsTrigger value="condiments">Condiments</TabsTrigger>
               </TabsList>
             </Tabs>
 
@@ -955,7 +898,7 @@ export default function ProductManagement() {
                 <Select
                   value={mealFilter}
                   onValueChange={setMealFilter}
-                  disabled={activeTab !== "items" && activeTab !== "condiments"}
+                  disabled={activeTab !== "items"}
                 >
                   <SelectTrigger className="w-full sm:w-[180px]">
                     <SelectValue placeholder="Meal Filter" />
@@ -980,10 +923,7 @@ export default function ProductManagement() {
                   <SelectContent>
                     <SelectItem value="all">All Categories</SelectItem>
                     {categoryOptions.map((category) => (
-                      <SelectItem
-                        key={category.category_id}
-                        value={String(category.category_id)}
-                      >
+                      <SelectItem key={category.category_id} value={String(category.category_id)}>
                         {category.category_name}
                       </SelectItem>
                     ))}
@@ -993,7 +933,7 @@ export default function ProductManagement() {
                 <Select
                   value={filterGroup}
                   onValueChange={setFilterGroup}
-                  disabled={activeTab !== "items" && activeTab !== "condiments"}
+                  disabled={activeTab !== "items"}
                 >
                   <SelectTrigger className="w-full sm:w-[180px]">
                     <SelectValue placeholder="All Groups" />
@@ -1087,7 +1027,7 @@ export default function ProductManagement() {
           isFormOpen && (
             <ProductForm
               product={selectedProduct as Product | null}
-              formScope={activeTab === "condiments" ? "condiments" : "items"}
+              formScope="items"
               onSave={handleSaveProduct}
               onCancel={() => setIsFormOpen(false)}
             />
