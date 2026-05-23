@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -27,6 +27,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Search, Plus, Settings2, Pencil, Trash2, PackageOpen } from "lucide-react";
+import { AdminLayout } from "@/components/admin-layout";
 import ProductForm from "@/components/product-form";
 import ProductTable from "@/components/product-table";
 import type { Product } from "@/types/product";
@@ -227,280 +228,282 @@ export default function CondimentsPage() {
       : (condimentTypes.find((t) => t.condiment_type_id === selectedTypeId)?.name ?? "Condiments");
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Condiments</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Manage condiment items and their types
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={openAddType}>
-            <Settings2 className="mr-2 h-4 w-4" />
-            Manage Types
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => {
-              setSelectedItem(null);
-              setItemFormOpen(true);
-            }}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add Condiment
-          </Button>
-        </div>
-      </div>
-
-      {/* Type filter cards */}
-      <div className="flex flex-wrap gap-3">
-        <button
-          onClick={() => setSelectedTypeId(null)}
-          className={`rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-            selectedTypeId === null
-              ? "border-primary bg-primary text-primary-foreground"
-              : "border-border bg-card text-foreground hover:bg-accent"
-          }`}
-        >
-          All
-          <Badge variant="secondary" className="ml-2">
-            {items.length}
-          </Badge>
-        </button>
-        {loadingTypes
-          ? null
-          : condimentTypes.map((ct) => (
-              <button
-                key={ct.condiment_type_id}
-                onClick={() =>
-                  setSelectedTypeId(
-                    selectedTypeId === ct.condiment_type_id ? null : ct.condiment_type_id,
-                  )
-                }
-                className={`rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                  selectedTypeId === ct.condiment_type_id
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-card text-foreground hover:bg-accent"
-                }`}
-              >
-                {ct.name}
-                <Badge variant="secondary" className="ml-2">
-                  {ct.item_count}
-                </Badge>
-              </button>
-            ))}
-      </div>
-
-      {/* Items section */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-4">
-            <CardTitle className="text-base">{selectedTypeName}</CardTitle>
-            <div className="relative w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
-              <Input
-                placeholder="Search…"
-                className="pl-9"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
+    <AdminLayout activePage="condiments">
+      <div className="flex flex-col gap-6 p-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold">Condiments</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Manage condiment items and their types
+            </p>
           </div>
-        </CardHeader>
-        <CardContent>
-          {loadingItems ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">Loading…</p>
-          ) : filteredItems.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
-              <PackageOpen className="h-8 w-8" />
-              <p className="text-sm">
-                {searchQuery ? "No items match your search." : "No condiment items here yet."}
-              </p>
-              {!searchQuery && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="mt-1"
-                  onClick={() => {
-                    setSelectedItem(null);
-                    setItemFormOpen(true);
-                  }}
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add first item
-                </Button>
-              )}
-            </div>
-          ) : (
-            <ProductTable
-              products={filteredItems}
-              tableType="condiments"
-              onEdit={(p) => {
-                setSelectedItem(p as Product);
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={openAddType}>
+              <Settings2 className="mr-2 h-4 w-4" />
+              Manage Types
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                setSelectedItem(null);
                 setItemFormOpen(true);
               }}
-              onDelete={(p) => setItemToDelete(p as Product)}
-            />
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Manage Types dialog */}
-      <Dialog open={manageOpen} onOpenChange={setManageOpen}>
-        <DialogContent className="sm:max-w-[540px]">
-          <DialogHeader>
-            <DialogTitle>{editingType ? "Edit Type" : "Add Condiment Type"}</DialogTitle>
-            <DialogDescription>
-              {editingType
-                ? `Editing "${editingType.name}"`
-                : "Create a new condiment type to help organise your condiment catalog."}
-            </DialogDescription>
-          </DialogHeader>
-
-          {/* Existing types list (when adding) */}
-          {!editingType && condimentTypes.length > 0 && (
-            <div className="rounded-md border">
-              <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b">
-                Existing types
-              </div>
-              <ul className="divide-y max-h-48 overflow-y-auto">
-                {condimentTypes.map((ct) => (
-                  <li
-                    key={ct.condiment_type_id}
-                    className="flex items-center justify-between px-3 py-2"
-                  >
-                    <div>
-                      <span className="text-sm font-medium">{ct.name}</span>
-                      <Badge variant="outline" className="ml-2 text-xs">
-                        {ct.item_count} item{ct.item_count !== 1 ? "s" : ""}
-                      </Badge>
-                    </div>
-                    <div className="flex gap-1">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7"
-                        onClick={() => openEditType(ct)}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7 text-destructive hover:text-destructive"
-                        onClick={() => {
-                          setManageOpen(false);
-                          setTypeToDelete(ct);
-                        }}
-                        disabled={ct.item_count > 0}
-                        title={ct.item_count > 0 ? "Remove all items before deleting" : "Delete"}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <div className="grid gap-4 pt-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="type-name">Name</Label>
-              <Input
-                id="type-name"
-                value={typeForm.name}
-                onChange={(e) => setTypeForm((p) => ({ ...p, name: e.target.value }))}
-                placeholder="e.g. Sweets"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="type-description">Description (optional)</Label>
-              <Input
-                id="type-description"
-                value={typeForm.description}
-                onChange={(e) => setTypeForm((p) => ({ ...p, description: e.target.value }))}
-                placeholder="Short description"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="type-sort">Sort Order</Label>
-              <Input
-                id="type-sort"
-                type="number"
-                value={typeForm.sort_order}
-                onChange={(e) => setTypeForm((p) => ({ ...p, sort_order: e.target.value }))}
-              />
-            </div>
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add Condiment
+            </Button>
           </div>
+        </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setManageOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveType} disabled={savingType}>
-              {savingType ? "Saving…" : editingType ? "Save Changes" : "Create Type"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        {/* Type filter cards */}
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={() => setSelectedTypeId(null)}
+            className={`rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              selectedTypeId === null
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border bg-card text-foreground hover:bg-accent"
+            }`}
+          >
+            All
+            <Badge variant="secondary" className="ml-2">
+              {items.length}
+            </Badge>
+          </button>
+          {loadingTypes
+            ? null
+            : condimentTypes.map((ct) => (
+                <button
+                  key={ct.condiment_type_id}
+                  onClick={() =>
+                    setSelectedTypeId(
+                      selectedTypeId === ct.condiment_type_id ? null : ct.condiment_type_id,
+                    )
+                  }
+                  className={`rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                    selectedTypeId === ct.condiment_type_id
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-card text-foreground hover:bg-accent"
+                  }`}
+                >
+                  {ct.name}
+                  <Badge variant="secondary" className="ml-2">
+                    {ct.item_count}
+                  </Badge>
+                </button>
+              ))}
+        </div>
 
-      {/* Delete type confirmation */}
-      <AlertDialog open={!!typeToDelete} onOpenChange={(open) => !open && setTypeToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete &quot;{typeToDelete?.name}&quot;?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This condiment type will be permanently removed. This cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => typeToDelete && handleDeleteType(typeToDelete)}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        {/* Items section */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between gap-4">
+              <CardTitle className="text-base">{selectedTypeName}</CardTitle>
+              <div className="relative w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  placeholder="Search…"
+                  className="pl-9"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loadingItems ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">Loading…</p>
+            ) : filteredItems.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
+                <PackageOpen className="h-8 w-8" />
+                <p className="text-sm">
+                  {searchQuery ? "No items match your search." : "No condiment items here yet."}
+                </p>
+                {!searchQuery && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-1"
+                    onClick={() => {
+                      setSelectedItem(null);
+                      setItemFormOpen(true);
+                    }}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add first item
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <ProductTable
+                products={filteredItems}
+                tableType="condiments"
+                onEdit={(p) => {
+                  setSelectedItem(p as Product);
+                  setItemFormOpen(true);
+                }}
+                onDelete={(p) => setItemToDelete(p as Product)}
+              />
+            )}
+          </CardContent>
+        </Card>
 
-      {/* Item form */}
-      {itemFormOpen && (
-        <ProductForm
-          product={selectedItem}
-          formScope="condiments"
-          onSave={handleSaveItem}
-          onCancel={() => {
-            setItemFormOpen(false);
-            setSelectedItem(null);
-          }}
-        />
-      )}
+        {/* Manage Types dialog */}
+        <Dialog open={manageOpen} onOpenChange={setManageOpen}>
+          <DialogContent className="sm:max-w-[540px]">
+            <DialogHeader>
+              <DialogTitle>{editingType ? "Edit Type" : "Add Condiment Type"}</DialogTitle>
+              <DialogDescription>
+                {editingType
+                  ? `Editing "${editingType.name}"`
+                  : "Create a new condiment type to help organise your condiment catalog."}
+              </DialogDescription>
+            </DialogHeader>
 
-      {/* Delete item confirmation */}
-      <AlertDialog open={!!itemToDelete} onOpenChange={(open) => !open && setItemToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete &quot;{itemToDelete?.name}&quot;?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This condiment item will be permanently removed. This cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => itemToDelete && handleDeleteItem(itemToDelete)}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
+            {/* Existing types list (when adding) */}
+            {!editingType && condimentTypes.length > 0 && (
+              <div className="rounded-md border">
+                <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b">
+                  Existing types
+                </div>
+                <ul className="divide-y max-h-48 overflow-y-auto">
+                  {condimentTypes.map((ct) => (
+                    <li
+                      key={ct.condiment_type_id}
+                      className="flex items-center justify-between px-3 py-2"
+                    >
+                      <div>
+                        <span className="text-sm font-medium">{ct.name}</span>
+                        <Badge variant="outline" className="ml-2 text-xs">
+                          {ct.item_count} item{ct.item_count !== 1 ? "s" : ""}
+                        </Badge>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          onClick={() => openEditType(ct)}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          onClick={() => {
+                            setManageOpen(false);
+                            setTypeToDelete(ct);
+                          }}
+                          disabled={ct.item_count > 0}
+                          title={ct.item_count > 0 ? "Remove all items before deleting" : "Delete"}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="grid gap-4 pt-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="type-name">Name</Label>
+                <Input
+                  id="type-name"
+                  value={typeForm.name}
+                  onChange={(e) => setTypeForm((p) => ({ ...p, name: e.target.value }))}
+                  placeholder="e.g. Sweets"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="type-description">Description (optional)</Label>
+                <Input
+                  id="type-description"
+                  value={typeForm.description}
+                  onChange={(e) => setTypeForm((p) => ({ ...p, description: e.target.value }))}
+                  placeholder="Short description"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="type-sort">Sort Order</Label>
+                <Input
+                  id="type-sort"
+                  type="number"
+                  value={typeForm.sort_order}
+                  onChange={(e) => setTypeForm((p) => ({ ...p, sort_order: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setManageOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSaveType} disabled={savingType}>
+                {savingType ? "Saving…" : editingType ? "Save Changes" : "Create Type"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete type confirmation */}
+        <AlertDialog open={!!typeToDelete} onOpenChange={(open) => !open && setTypeToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete &quot;{typeToDelete?.name}&quot;?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This condiment type will be permanently removed. This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => typeToDelete && handleDeleteType(typeToDelete)}
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Item form */}
+        {itemFormOpen && (
+          <ProductForm
+            product={selectedItem}
+            formScope="condiments"
+            onSave={handleSaveItem}
+            onCancel={() => {
+              setItemFormOpen(false);
+              setSelectedItem(null);
+            }}
+          />
+        )}
+
+        {/* Delete item confirmation */}
+        <AlertDialog open={!!itemToDelete} onOpenChange={(open) => !open && setItemToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete &quot;{itemToDelete?.name}&quot;?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This condiment item will be permanently removed. This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => itemToDelete && handleDeleteItem(itemToDelete)}
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    </AdminLayout>
   );
 }
