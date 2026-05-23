@@ -430,7 +430,10 @@ export default function CustomerHomeV2Page() {
                                 className={`${showBothTopCards ? "text-xl" : "text-2xl"} font-bold italic`}
                               >
                                 {orderStartValue(todaysBooking)
-                                  ? formatDate(new Date(orderStartValue(todaysBooking)!), "EEE, d MMM")
+                                  ? formatDate(
+                                      new Date(orderStartValue(todaysBooking)!),
+                                      "EEE, d MMM",
+                                    )
                                   : "Scheduled"}
                               </span>
                             </div>
@@ -501,7 +504,10 @@ export default function CustomerHomeV2Page() {
                             className={`${showBothTopCards ? "text-xl" : "text-2xl"} font-bold italic`}
                           >
                             {currentSubscription && orderStartValue(currentSubscription)
-                              ? formatDate(new Date(orderStartValue(currentSubscription)!), "EEE, d MMM")
+                              ? formatDate(
+                                  new Date(orderStartValue(currentSubscription)!),
+                                  "EEE, d MMM",
+                                )
                               : "Scheduled"}
                           </span>
                         </div>
@@ -511,7 +517,7 @@ export default function CustomerHomeV2Page() {
                         </p>
                       </div>
                       <button
-                        onClick={() => router.push("/customer-v2/subscription")}
+                        onClick={() => router.push("/customer-v2/subscription/manage")}
                         className={`rounded-xl bg-white ${showBothTopCards ? "px-6 py-2.5 text-sm" : "px-8 py-3"} font-bold text-[#8D4925] shadow-lg transition-all active:scale-95 hover:bg-orange-50`}
                       >
                         Manage Plan
