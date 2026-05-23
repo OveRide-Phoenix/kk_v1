@@ -705,7 +705,6 @@ export default function OrderTestPage() {
       setResetCartSignal((value) => value + 1);
       setRefreshSignal((value) => value + 1);
       setCartSelection([]);
-      localStorage.setItem("kk_last_order_ts", Date.now().toString());
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Unexpected error");
     } finally {
