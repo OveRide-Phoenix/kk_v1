@@ -12,8 +12,6 @@
 
 # testing
 /coverage
-/.gitlab-ci-local/
-gl-*-report.json
 
 # next.js
 /.next/
@@ -46,3 +44,6 @@ next-env.d.ts
 __pycache__/
 *.pyc
 backend/venv/
+
+# claude
+.impeccable/

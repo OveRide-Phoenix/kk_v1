@@ -185,7 +185,8 @@ CONDIMENTS_BLD_TYPE = "Condiments"
 
 MENU_TYPE_ONE_DAY = "ONE_DAY"
 MENU_TYPE_CONDIMENTS = "CONDIMENTS"
-VALID_MENU_TYPES: Set[str] = {MENU_TYPE_ONE_DAY, MENU_TYPE_CONDIMENTS}
+MENU_TYPE_SUBSCRIPTION = "SUBSCRIPTION"
+VALID_MENU_TYPES: Set[str] = {MENU_TYPE_ONE_DAY, MENU_TYPE_CONDIMENTS, MENU_TYPE_SUBSCRIPTION}
 MEAL_TYPES = ["Breakfast", "Lunch", "Dinner", "Condiments"]
 
 
@@ -213,7 +214,7 @@ def normalize_menu_type(value: Optional[str]) -> str:
         value: Raw menu_type from the request.
 
     Returns:
-        One of "ONE_DAY" or "CONDIMENTS".
+        One of "ONE_DAY", "CONDIMENTS", or "SUBSCRIPTION".
     """
     if not value:
         return MENU_TYPE_ONE_DAY
@@ -230,7 +231,9 @@ def ensure_menu_allowed(city_code: CityCode, menu_type: str) -> None:
         city_code: Target city.
         menu_type: Validated menu type constant.
     """
-    if menu_type == MENU_TYPE_ONE_DAY and not city_supports_food(city_code):
+    if menu_type in {MENU_TYPE_ONE_DAY, MENU_TYPE_SUBSCRIPTION} and not city_supports_food(
+        city_code
+    ):
         raise HTTPException(status_code=400, detail="This city does not support food menus yet.")
     if menu_type == MENU_TYPE_CONDIMENTS and not city_supports_condiments(city_code):
         raise HTTPException(
@@ -1192,6 +1195,11 @@ def _ensure_menu_type_column(db) -> None:
         row = cursor.fetchone()
         if row and row[2] == "NO":
             cursor.execute("ALTER TABLE menu MODIFY date DATE NULL")
+            db.commit()
+
+        cursor.execute("SHOW COLUMNS FROM menu_items LIKE 'component_type_id'")
+        if cursor.fetchone() is None:
+            cursor.execute("ALTER TABLE menu_items ADD COLUMN component_type_id INT NULL")
             db.commit()
 
         _MENU_HAS_TYPE_COLUMN = True

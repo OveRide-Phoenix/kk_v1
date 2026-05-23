@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { Fragment, useState, useEffect, useCallback } from "react";
 import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, X } from "lucide-react";
 import { AdminLayout } from "@/components/admin-layout";
 import { Button } from "@/components/ui/button";
@@ -487,9 +487,8 @@ export default function DiscountManagement() {
                   </TableRow>
                 ) : (
                   codes.map((dc) => (
-                    <>
+                    <Fragment key={dc.code_id}>
                       <TableRow
-                        key={dc.code_id}
                         className="cursor-pointer"
                         onClick={() => setExpandedId(expandedId === dc.code_id ? null : dc.code_id)}
                       >
@@ -572,7 +571,7 @@ export default function DiscountManagement() {
                           </TableCell>
                         </TableRow>
                       )}
-                    </>
+                    </Fragment>
                   ))
                 )}
               </TableBody>

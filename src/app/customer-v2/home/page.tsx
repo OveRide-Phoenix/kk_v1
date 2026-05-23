@@ -58,6 +58,7 @@ type OrderItem = {
 type OrderSummary = {
   order_id: number;
   created_at: string | null;
+  order_date?: string | null;
   total_price: number;
   status: string;
   payment_method: string;
@@ -70,6 +71,8 @@ type OrderSummary = {
   };
   items: OrderItem[];
 };
+
+const orderStartValue = (order: OrderSummary) => order.order_date ?? order.created_at;
 
 const MEAL_ORDER: MealType[] = ["breakfast", "lunch", "dinner", "condiments"];
 
@@ -260,15 +263,17 @@ export default function CustomerHomeV2Page() {
     if (!orders.length) return [];
     const today = new Date();
     const matches = orders.filter((order) => {
-      if (!order.created_at) return false;
-      const orderDate = new Date(order.created_at);
+      if ((order.order_type ?? "").toLowerCase() === "subscription") return false;
+      const value = orderStartValue(order);
+      if (!value) return false;
+      const orderDate = new Date(value);
       if (Number.isNaN(orderDate.getTime())) return false;
       return isSameDay(orderDate, today);
     });
     if (!matches.length) return [];
     matches.sort((a, b) => {
-      const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
-      const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      const timeA = orderStartValue(a) ? new Date(orderStartValue(a)!).getTime() : 0;
+      const timeB = orderStartValue(b) ? new Date(orderStartValue(b)!).getTime() : 0;
       return timeB - timeA;
     });
     return matches;
@@ -284,16 +289,17 @@ export default function CustomerHomeV2Page() {
   const currentSubscription = useMemo(() => {
     const today = new Date();
     const subscriptions = orders.filter((order) => {
-      if (!order.created_at) return false;
       if ((order.order_type ?? "").toLowerCase() !== "subscription") return false;
-      const orderDate = new Date(order.created_at);
+      const value = orderStartValue(order);
+      if (!value) return false;
+      const orderDate = new Date(value);
       if (Number.isNaN(orderDate.getTime())) return false;
       return isSameMonth(orderDate, today);
     });
     if (!subscriptions.length) return null;
     subscriptions.sort((a, b) => {
-      const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
-      const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      const timeA = orderStartValue(a) ? new Date(orderStartValue(a)!).getTime() : 0;
+      const timeB = orderStartValue(b) ? new Date(orderStartValue(b)!).getTime() : 0;
       return timeB - timeA;
     });
     return subscriptions[0];
@@ -303,9 +309,10 @@ export default function CustomerHomeV2Page() {
     if (!orders.length) return 0;
     const today = new Date();
     return orders.filter((order) => {
-      if (!order.created_at) return false;
       if ((order.order_type ?? "").toLowerCase() !== "subscription") return false;
-      const orderDate = new Date(order.created_at);
+      const value = orderStartValue(order);
+      if (!value) return false;
+      const orderDate = new Date(value);
       if (Number.isNaN(orderDate.getTime())) return false;
       return isSameMonth(orderDate, today);
     }).length;
@@ -349,13 +356,16 @@ export default function CustomerHomeV2Page() {
         >
           <div className="flex flex-col gap-6 lg:col-span-1">
             <div>
+              <p className="mb-1 text-sm font-bold uppercase tracking-widest text-[#8D4925]/50">
+                {formatDate(new Date(), "EEE, d MMM")}
+              </p>
               <h1
                 className="mb-2 text-4xl font-bold text-[#8D4925]"
                 style={{ fontFamily: "var(--font-v2-playfair)" }}
               >
-                Good Morning, {customerName}!
+                Good morning, {customerName}.
               </h1>
-              <p className="text-gray-600">Your healthy meals are ready for the day.</p>
+              <p className="text-gray-600">Your fresh meals are ready for the day.</p>
             </div>
           </div>
 
@@ -419,8 +429,11 @@ export default function CustomerHomeV2Page() {
                               <span
                                 className={`${showBothTopCards ? "text-xl" : "text-2xl"} font-bold italic`}
                               >
-                                {todaysBooking.created_at
-                                  ? formatDate(new Date(todaysBooking.created_at), "EEE, h:mm a")
+                                {orderStartValue(todaysBooking)
+                                  ? formatDate(
+                                      new Date(orderStartValue(todaysBooking)!),
+                                      "EEE, d MMM",
+                                    )
                                   : "Scheduled"}
                               </span>
                             </div>
@@ -479,7 +492,7 @@ export default function CustomerHomeV2Page() {
                     >
                       <div>
                         <p className="mb-2 text-xs font-bold uppercase tracking-widest text-orange-200">
-                          Next Delivery
+                          Plan Start
                         </p>
                         <div className="flex items-center gap-3">
                           <span
@@ -490,8 +503,11 @@ export default function CustomerHomeV2Page() {
                           <span
                             className={`${showBothTopCards ? "text-xl" : "text-2xl"} font-bold italic`}
                           >
-                            {currentSubscription?.created_at
-                              ? formatDate(new Date(currentSubscription.created_at), "EEE, h:mm a")
+                            {currentSubscription && orderStartValue(currentSubscription)
+                              ? formatDate(
+                                  new Date(orderStartValue(currentSubscription)!),
+                                  "EEE, d MMM",
+                                )
                               : "Scheduled"}
                           </span>
                         </div>
@@ -501,7 +517,7 @@ export default function CustomerHomeV2Page() {
                         </p>
                       </div>
                       <button
-                        onClick={() => router.push("/customer-v2/subscription")}
+                        onClick={() => router.push("/customer-v2/subscription/manage")}
                         className={`rounded-xl bg-white ${showBothTopCards ? "px-6 py-2.5 text-sm" : "px-8 py-3"} font-bold text-[#8D4925] shadow-lg transition-all active:scale-95 hover:bg-orange-50`}
                       >
                         Manage Plan
@@ -575,9 +591,11 @@ export default function CustomerHomeV2Page() {
           ) : (
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
               {todayMenuItems.map((item) => (
-                <div
+                <button
                   key={`${item.meal}-${item.menu_item_id}`}
-                  className="group overflow-hidden rounded-2xl border border-orange-50 bg-white shadow-sm transition-shadow hover:shadow-md"
+                  type="button"
+                  onClick={() => router.push(`/customer-v2/new-order?meal=${currentMeal}`)}
+                  className="group cursor-pointer overflow-hidden rounded-2xl border border-orange-50 bg-white text-left shadow-sm transition-shadow hover:shadow-md"
                 >
                   <div className="relative h-44 overflow-hidden">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -598,7 +616,7 @@ export default function CustomerHomeV2Page() {
                       {item.description || "Freshly prepared special from Kuteera Kitchen."}
                     </p>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}
@@ -698,8 +716,8 @@ export default function CustomerHomeV2Page() {
               <div className="flex items-center justify-between text-sm">
                 <span className="text-[#64748b]">Date</span>
                 <span className="font-semibold text-[#1e293b]">
-                  {selectedOrder.created_at
-                    ? formatDate(new Date(selectedOrder.created_at), "dd MMM yyyy • hh:mm a")
+                  {orderStartValue(selectedOrder)
+                    ? formatDate(new Date(orderStartValue(selectedOrder)!), "dd MMM yyyy")
                     : "Scheduled"}
                 </span>
               </div>

@@ -54,6 +54,19 @@ class CreateOrderPayload(BaseModel):
     order_date: Optional[str] = None
     order_type: Optional[str] = None
     discount_code: Optional[str] = None
+    coupon_codes: Optional[List[str]] = None
+
+    def effective_discount_code(self) -> Optional[str]:
+        """Return the submitted discount code, including legacy coupon payloads.
+
+        Returns:
+            Normalized discount code string or None.
+        """
+        if self.discount_code:
+            return self.discount_code
+        if self.coupon_codes:
+            return self.coupon_codes[0]
+        return None
 
 
 class OrderQuotePayload(BaseModel):
@@ -61,6 +74,19 @@ class OrderQuotePayload(BaseModel):
 
     items: List[OrderItemPayload]
     discount_code: Optional[str] = None
+    coupon_codes: Optional[List[str]] = None
+
+    def effective_discount_code(self) -> Optional[str]:
+        """Return the submitted discount code, including legacy coupon payloads.
+
+        Returns:
+            Normalized discount code string or None.
+        """
+        if self.discount_code:
+            return self.discount_code
+        if self.coupon_codes:
+            return self.coupon_codes[0]
+        return None
 
 
 class OrderStatusUpdate(BaseModel):
@@ -190,7 +216,12 @@ def _load_tax_amounts(cursor, discounted_subtotal: float) -> tuple[float, float]
     )
     cgst_percent = 0.0
     sgst_percent = 0.0
-    for code, value in cursor.fetchall() or []:
+    for row in cursor.fetchall() or []:
+        if isinstance(row, dict):
+            code = row.get("constant_code")
+            value = row.get("constant_value")
+        else:
+            code, value = row
         normalized = str(code or "").strip().upper()
         percent = float(value or 0)
         if normalized == "CGST":
@@ -219,6 +250,8 @@ def _resolve_original_price(cursor, item: "OrderItemPayload") -> float:
         )
         row = cursor.fetchone()
         if row:
+            if isinstance(row, dict):
+                return float(row["rate"])
             return float(row[0])
     return item.price
 
@@ -243,7 +276,9 @@ def _compute_order_totals(
     for index, item in enumerate(items):
         has_item = item.item_id is not None
         has_combo = item.combo_id is not None
-        if has_item == has_combo:
+        # Item-group subscription lines carry only menu_item_id (no resolved item/combo yet)
+        is_group_line = not has_item and not has_combo and item.menu_item_id is not None
+        if not is_group_line and has_item == has_combo:
             raise HTTPException(
                 status_code=400,
                 detail=f"items[{index}] must include exactly one of item_id or combo_id",
@@ -347,7 +382,7 @@ def quote_order(payload: OrderQuotePayload) -> Dict[str, Any]:
     db = get_raw_db()
     cursor = db.cursor(dictionary=True)
     try:
-        totals = _compute_order_totals(cursor, payload.items, payload.discount_code)
+        totals = _compute_order_totals(cursor, payload.items, payload.effective_discount_code())
         return totals
     except mysql.connector.Error as err:
         raise HTTPException(status_code=500, detail=str(err))
@@ -373,7 +408,7 @@ def create_order(payload: CreateOrderPayload) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail="Order must include at least one item")
 
     db = get_raw_db()
-    cursor = db.cursor()
+    cursor = db.cursor(dictionary=True)
     try:
         address_id = payload.address_id if payload.address_id is not None else 0
         cursor.execute(
@@ -388,9 +423,9 @@ def create_order(payload: CreateOrderPayload) -> Dict[str, Any]:
             fallback = cursor.fetchone()
             if fallback is None:
                 raise HTTPException(status_code=400, detail="No valid address found for customer")
-            address_id = fallback[0]
+            address_id = fallback["address_id"]
 
-        totals = _compute_order_totals(cursor, payload.items, payload.discount_code)
+        totals = _compute_order_totals(cursor, payload.items, payload.effective_discount_code())
 
         normalized_method = (payload.payment_method or "").strip()
         paid_flag = 1 if normalized_method.lower() in {"upi", "card", "online"} else 0
@@ -491,6 +526,7 @@ def admin_order_history(
     customer: Optional[str] = None,
     product: Optional[str] = None,
     meal_type: Optional[str] = None,
+    order_type: Optional[str] = None,
     city_code: Optional[str] = Query(None, alias="city_code"),
     limit: int = Query(10, ge=1, le=200),
     offset: int = Query(0, ge=0),
@@ -506,6 +542,7 @@ def admin_order_history(
         customer: Filter by customer name or phone substring.
         product: Filter by product name substring.
         meal_type: Filter by meal type (Breakfast/Lunch/Dinner/Condiments).
+        order_type: Filter by order type (one_time or subscription).
         city_code: City to filter orders for.
         limit: Page size (max 200).
         offset: Pagination offset.
@@ -538,6 +575,14 @@ def admin_order_history(
         where_clauses.append("a.city_code = %s")
         params.append(resolved_city)
         _apply_order_filters(where_clauses, params, status, customer, product, meal_type)
+        normalized_order_type = (order_type or "").strip().lower()
+        if normalized_order_type and normalized_order_type != "all":
+            if normalized_order_type == "subscription":
+                where_clauses.append("LOWER(COALESCE(o.order_type, 'one_time')) = 'subscription'")
+            elif normalized_order_type in {"one_time", "normal"}:
+                where_clauses.append("LOWER(COALESCE(o.order_type, 'one_time')) <> 'subscription'")
+            else:
+                raise HTTPException(status_code=400, detail="Invalid order_type filter")
         where_sql = " AND ".join(where_clauses)
         where_fragment = f"WHERE {where_sql}" if where_sql else ""
 
@@ -563,6 +608,7 @@ def admin_order_history(
                 o.status,
                 o.paid,
                 o.payment_method,
+                COALESCE(o.order_type, 'one_time') AS order_type,
                 o.customer_id,
                 c.name AS customer_name,
                 c.primary_mobile,
@@ -586,6 +632,7 @@ def admin_order_history(
                 o.status,
                 o.paid,
                 o.payment_method,
+                COALESCE(o.order_type, 'one_time'),
                 o.customer_id,
                 c.name,
                 c.primary_mobile,
@@ -610,6 +657,7 @@ def admin_order_history(
                     o.status,
                     o.paid,
                     o.payment_method,
+                    COALESCE(o.order_type, 'one_time') AS order_type,
                     c.name AS customer_name,
                     c.primary_mobile,
                     COALESCE(i.name, co.combo_name) AS item_name,
@@ -642,6 +690,7 @@ def admin_order_history(
                             "Status",
                             "Payment Method",
                             "Payment Status",
+                            "Order Type",
                             "Item",
                             "Quantity",
                             "Price",
@@ -671,6 +720,7 @@ def admin_order_history(
                                     normalize_status_for_response(row.get("status")),
                                     row.get("payment_method") or "",
                                     payment_status_label(paid_flag),
+                                    row.get("order_type") or "one_time",
                                     row.get("item_name") or "",
                                     int(row.get("quantity") or 0),
                                     float(row.get("price") or 0),
@@ -743,6 +793,7 @@ def admin_order_history(
                     "status": normalized_status,
                     "payment_status": payment_status_label(paid_flag),
                     "payment_method": record.get("payment_method") or "Unknown",
+                    "order_type": record.get("order_type") or "one_time",
                     "paid": paid_flag,
                     "total_price": float(record.get("total_price") or 0),
                     "customer_id": int(record.get("customer_id") or 0),

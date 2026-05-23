@@ -10,10 +10,10 @@ stages:
   - sonarqube
 
 variables:
-  GENERATED_EXCLUDED_PATHS: ".next, .next/**, out, out/**, build, build/**, coverage, coverage/**, node_modules, node_modules/**, .gitlab-ci-local, .gitlab-ci-local/**"
-  SAST_EXCLUDED_PATHS: "spec, test, tests, tmp, .next, .next/**, out, out/**, build, build/**, coverage, coverage/**, node_modules, node_modules/**, .gitlab-ci-local, .gitlab-ci-local/**"
-  SECRET_DETECTION_EXCLUDED_PATHS: ".next, .next/**, out, out/**, build, build/**, coverage, coverage/**, node_modules, node_modules/**, .gitlab-ci-local, .gitlab-ci-local/**"
-  DS_EXCLUDED_PATHS: "spec, test, tests, tmp, .next, .next/**, out, out/**, build, build/**, coverage, coverage/**, node_modules, node_modules/**, .gitlab-ci-local, .gitlab-ci-local/**"
+  GENERATED_EXCLUDED_PATHS: ".next, .next/**, out, out/**, build, build/**, coverage, coverage/**, node_modules, node_modules/**"
+  SAST_EXCLUDED_PATHS: "spec, test, tests, tmp, .next, .next/**, out, out/**, build, build/**, coverage, coverage/**, node_modules, node_modules/**"
+  SECRET_DETECTION_EXCLUDED_PATHS: ".next, .next/**, out, out/**, build, build/**, coverage, coverage/**, node_modules, node_modules/**"
+  DS_EXCLUDED_PATHS: "spec, test, tests, tmp, .next, .next/**, out, out/**, build, build/**, coverage, coverage/**, node_modules, node_modules/**"
 
 # ─── Cache ─────────────────────────────────────────────────────────────────────
 

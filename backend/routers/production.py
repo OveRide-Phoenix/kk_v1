@@ -1121,6 +1121,7 @@ def get_daily_production_plan(
         response_meals: List[Dict[str, Any]] = []
         for meal in meals:
             aggregate: Dict[int, Dict[str, Any]] = {}
+            combo_packs: List[Dict[str, Any]] = []
             issues: List[Dict[str, Any]] = []
             for row in rows_by_meal.get(meal, []):
                 menu_item_id = row.get("menu_item_id")
@@ -1134,6 +1135,50 @@ def get_daily_production_plan(
                 combo_id = row.get("combo_id")
                 item_id = row.get("item_id")
                 if combo_id is not None:
+                    combo_pack_components: List[Dict[str, Any]] = []
+                    for component in combo_components.get(int(combo_id), []):
+                        component_qty = float(component.get("quantity") or 0)
+                        component_name = component.get("component_item_name")
+                        resolved_item_name = component_name
+                        resolution_status = "specific"
+                        resolution_detail = None
+                        if component.get("component_item_id") is None:
+                            resolution_status = "resolved"
+                            resolved_item_id, resolved_name, resolution_error = (
+                                _resolve_component_type_for_meal(
+                                    resolved_default_ids,
+                                    resolved_default_names,
+                                    resolution_counts,
+                                    meal=meal,
+                                    component_type_id=component.get("component_type_id"),
+                                )
+                            )
+                            if resolved_item_id is not None:
+                                resolved_item_name = resolved_name
+                            else:
+                                resolution_status = "unresolved"
+                                resolved_item_name = None
+                                resolution_detail = resolution_error
+                        combo_pack_components.append(
+                            {
+                                "item_name": resolved_item_name,
+                                "component_type_name": component.get("component_type_name"),
+                                "quantity_per_pack": round(component_qty, 3),
+                                "total_units": round(ordered_units * component_qty, 3),
+                                "resolution_status": resolution_status,
+                                "detail": resolution_detail,
+                            }
+                        )
+                    combo_packs.append(
+                        {
+                            "combo_id": int(combo_id),
+                            "menu_item_id": int(menu_item_id),
+                            "combo_name": parent_name,
+                            "order_units": round(ordered_units, 3),
+                            "pack_count": round(ordered_units, 3),
+                            "components": combo_pack_components,
+                        }
+                    )
                     for component in combo_components.get(int(combo_id), []):
                         required_units = ordered_units * float(component.get("quantity") or 0)
                         if required_units <= 0:
@@ -1280,6 +1325,7 @@ def get_daily_production_plan(
                     "is_production_generated": meal_status[meal]["is_production_generated"],
                     "buffer_override_pct": meal_status[meal]["buffer_override_pct"],
                     "items": meal_items,
+                    "combo_packs": combo_packs,
                     "issues": issues,
                 }
             )
@@ -1351,7 +1397,7 @@ def get_production_orders_summary(
                 FROM orders o
                 JOIN order_items oi ON oi.order_id = o.order_id
                 JOIN addresses a ON o.address_id = a.address_id
-                WHERE DATE(o.created_at) = %s
+                WHERE COALESCE(o.order_date, DATE(o.created_at)) = %s
                   AND a.city_code = %s
                   AND LOWER(REPLACE(COALESCE(o.status, ''), ' (Payment Due)', '')) NOT IN (
                     'cancelled',

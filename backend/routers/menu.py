@@ -17,6 +17,7 @@ from ..utils.helpers import (
     CONDIMENTS_BLD_TYPE,
     MENU_TYPE_ONE_DAY,
     MENU_TYPE_CONDIMENTS,
+    MENU_TYPE_SUBSCRIPTION,
     _is_condiment_from_blds,
     attach_bld_ids,
     attach_plated_flags,
@@ -44,6 +45,7 @@ class MenuItemPayload(BaseModel):
 
     item_id: Optional[int] = None
     combo_id: Optional[int] = None
+    component_type_id: Optional[int] = None
     category_id: Optional[int] = None
     max_qty: Optional[int] = None
     available_qty: Optional[int] = None
@@ -63,6 +65,18 @@ class DailyMenuPayload(BaseModel):
     city_code: Optional[str] = None
     menu_type: Optional[str] = None
     delivers_by: Optional[str] = None
+
+
+class SubscriptionPausePayload(BaseModel):
+    """Payload for creating or updating a customer subscription pause window."""
+
+    customer_id: int
+    order_id: Optional[int] = None
+    start_date: str
+    end_date: str
+    meal_type: Optional[str] = None
+    reason: Optional[str] = None
+    city_code: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -113,6 +127,9 @@ def _get_daily_menu_internal(
             param_period = None if period_type == "festivals" else period_type
             where_clauses.append("((period_type IS NULL AND %s IS NULL) OR (period_type = %s))")
             params.extend([param_period, param_period])
+        elif resolved_menu_type == MENU_TYPE_SUBSCRIPTION:
+            where_clauses.append("date IS NULL")
+            where_clauses.append("period_type = 'subscription'")
         else:
             where_clauses.append("date IS NULL")
 
@@ -143,10 +160,10 @@ def _get_daily_menu_internal(
                 mi.menu_item_id,
                 mi.item_id,
                 mi.combo_id,
-                COALESCE(i.name, c.combo_name) AS item_name,
-                i.component_type_id,
-                ct.name AS component_type_name,
-                COALESCE(i.uom_customer, 'combo') AS uom,
+                COALESCE(i.name, c.combo_name, ct_menu.name) AS item_name,
+                COALESCE(i.component_type_id, mi.component_type_id) AS component_type_id,
+                COALESCE(ct.name, ct_menu.name) AS component_type_name,
+                COALESCE(i.uom_customer, CASE WHEN mi.combo_id IS NOT NULL THEN 'combo' ELSE 'item_group' END) AS uom,
                 CASE
                     WHEN mi.combo_id IS NOT NULL THEN 1
                     ELSE 0
@@ -177,6 +194,7 @@ def _get_daily_menu_internal(
             LEFT JOIN items i ON mi.item_id = i.item_id
             LEFT JOIN combos c ON mi.combo_id = c.combo_id
             LEFT JOIN component_types ct ON i.component_type_id = ct.component_type_id
+            LEFT JOIN component_types ct_menu ON mi.component_type_id = ct_menu.component_type_id
             WHERE mi.menu_id = %s
               AND (%s = 1 OR mi.combo_id IS NULL)
             ORDER BY mi.sort_order ASC
@@ -500,7 +518,7 @@ def get_daily_menu(
         bld_type: Meal type (Breakfast, Lunch, Dinner, Condiments).
         period_type: Menu period type.
         city_code: City to fetch menu for; defaults to admin's active city.
-        menu_type: Menu type (ONE_DAY or CONDIMENTS).
+        menu_type: Menu type (ONE_DAY, CONDIMENTS, or SUBSCRIPTION).
         include_combos: When true, includes combo items in the response.
         user: Optional authenticated user (injected).
 
@@ -512,6 +530,8 @@ def get_daily_menu(
     target_bld_type = bld_type or CONDIMENTS_BLD_TYPE
     if resolved_menu_type == MENU_TYPE_ONE_DAY and not date:
         raise HTTPException(status_code=400, detail="date is required for ONE_DAY menus")
+    if resolved_menu_type == MENU_TYPE_SUBSCRIPTION and not bld_type:
+        raise HTTPException(status_code=400, detail="bld_type is required for subscription menus")
     if resolved_menu_type == MENU_TYPE_CONDIMENTS and not bld_type:
         target_bld_type = CONDIMENTS_BLD_TYPE
     ensure_menu_allowed(resolved_city, resolved_menu_type)
@@ -548,6 +568,9 @@ def upsert_daily_menu(payload: DailyMenuPayload) -> Dict[str, Any]:
         resolved_menu_type = normalize_menu_type(payload.menu_type)
         ensure_menu_allowed(city_code, resolved_menu_type)
         menu_date = payload.date if resolved_menu_type == MENU_TYPE_ONE_DAY else None
+        resolved_period_type = (
+            "subscription" if resolved_menu_type == MENU_TYPE_SUBSCRIPTION else payload.period_type
+        )
         resolved_delivers_by = resolve_delivers_by_value(canonical_bld_type, payload.delivers_by)
 
         find_conditions = ["menu_type = %s", "bld_id = %s", "city_code = %s"]
@@ -557,6 +580,9 @@ def upsert_daily_menu(payload: DailyMenuPayload) -> Dict[str, Any]:
                 raise HTTPException(status_code=400, detail="date is required for ONE_DAY menus")
             find_conditions.append("date = %s")
             params.append(menu_date)
+        elif resolved_menu_type == MENU_TYPE_SUBSCRIPTION:
+            find_conditions.append("date IS NULL")
+            find_conditions.append("period_type = 'subscription'")
         else:
             find_conditions.append("date IS NULL")
 
@@ -577,7 +603,7 @@ def upsert_daily_menu(payload: DailyMenuPayload) -> Dict[str, Any]:
                 """,
                 (
                     int(payload.is_festival),
-                    payload.period_type,
+                    resolved_period_type,
                     menu_date,
                     resolved_delivers_by,
                     menu_id,
@@ -592,7 +618,7 @@ def upsert_daily_menu(payload: DailyMenuPayload) -> Dict[str, Any]:
                 (
                     menu_date,
                     int(payload.is_festival),
-                    payload.period_type,
+                    resolved_period_type,
                     bld_id,
                     city_code,
                     resolved_menu_type,
@@ -606,12 +632,26 @@ def upsert_daily_menu(payload: DailyMenuPayload) -> Dict[str, Any]:
         for idx, mi in enumerate(payload.items, start=1):
             has_item = mi.item_id is not None
             has_combo = mi.combo_id is not None
-            if has_item == has_combo:
+            has_component_type = mi.component_type_id is not None
+            if sum([has_item, has_combo, has_component_type]) != 1:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"items[{idx - 1}] must include exactly one of item_id or combo_id",
+                    detail=(
+                        f"items[{idx - 1}] must include exactly one of item_id, "
+                        "combo_id, or component_type_id"
+                    ),
                 )
-            payload_key = ("item", int(mi.item_id)) if has_item else ("combo", int(mi.combo_id))
+            if has_component_type and resolved_menu_type != MENU_TYPE_SUBSCRIPTION:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Item group rows are only supported for subscription menus",
+                )
+            if has_item:
+                payload_key = ("item", int(mi.item_id))
+            elif has_combo:
+                payload_key = ("combo", int(mi.combo_id))
+            else:
+                payload_key = ("component_type", int(mi.component_type_id))
             if payload_key in seen_payload_keys:
                 raise HTTPException(
                     status_code=400,
@@ -628,7 +668,7 @@ def upsert_daily_menu(payload: DailyMenuPayload) -> Dict[str, Any]:
                     raise HTTPException(status_code=400, detail=f"Unknown item_id: {mi.item_id}")
                 resolved_category_id = mi.category_id if mi.category_id is not None else row[0]
                 resolved_component_type_id = row[1]
-            else:
+            elif has_combo:
                 cursor.execute(
                     "SELECT category_id FROM combos WHERE combo_id = %s LIMIT 1",
                     (mi.combo_id,),
@@ -638,6 +678,19 @@ def upsert_daily_menu(payload: DailyMenuPayload) -> Dict[str, Any]:
                     raise HTTPException(status_code=400, detail=f"Unknown combo_id: {mi.combo_id}")
                 resolved_category_id = mi.category_id if mi.category_id is not None else row[0]
                 resolved_component_type_id = None
+            else:
+                cursor.execute(
+                    "SELECT category_id FROM component_types WHERE component_type_id = %s AND is_active = 1 LIMIT 1",
+                    (mi.component_type_id,),
+                )
+                row = cursor.fetchone()
+                if row is None:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Unknown component_type_id: {mi.component_type_id}",
+                    )
+                resolved_category_id = mi.category_id if mi.category_id is not None else row[0]
+                resolved_component_type_id = mi.component_type_id
 
             # Discounts are applied at order time via discount codes, not at menu level.
             # menu_items.discount_pct is always NULL — full price is always shown on the menu.
@@ -647,8 +700,8 @@ def upsert_daily_menu(payload: DailyMenuPayload) -> Dict[str, Any]:
                 {
                     "item_id": mi.item_id,
                     "combo_id": mi.combo_id,
-                    "category_id": resolved_category_id,
                     "component_type_id": resolved_component_type_id,
+                    "category_id": resolved_category_id,
                     "max_qty": mi.max_qty if mi.max_qty is not None else None,
                     "available_qty": mi.available_qty if mi.available_qty is not None else None,
                     "rate": float(mi.rate),
@@ -672,7 +725,7 @@ def upsert_daily_menu(payload: DailyMenuPayload) -> Dict[str, Any]:
 
         cursor.execute(
             """
-            SELECT menu_item_id, item_id, combo_id
+            SELECT menu_item_id, item_id, combo_id, component_type_id
             FROM menu_items
             WHERE menu_id = %s
             ORDER BY menu_item_id ASC
@@ -685,10 +738,13 @@ def upsert_daily_menu(payload: DailyMenuPayload) -> Dict[str, Any]:
         for row in existing_menu_items:
             existing_item_id = row[1]
             existing_combo_id = row[2]
+            existing_component_type_id = row[3]
             if existing_item_id is not None:
                 row_key = ("item", int(existing_item_id))
             elif existing_combo_id is not None:
                 row_key = ("combo", int(existing_combo_id))
+            elif existing_component_type_id is not None:
+                row_key = ("component_type", int(existing_component_type_id))
             else:
                 stale_menu_item_ids.append(int(row[0]))
                 continue
@@ -705,6 +761,7 @@ def upsert_daily_menu(payload: DailyMenuPayload) -> Dict[str, Any]:
         for entry in normalized_menu_items:
             item_id = entry["item_id"]
             combo_id = entry["combo_id"]
+            component_type_id = entry["component_type_id"]
             category_id = entry["category_id"]
             max_qty_value = entry["max_qty"]
             available_qty_value = entry["available_qty"]
@@ -724,6 +781,7 @@ def upsert_daily_menu(payload: DailyMenuPayload) -> Dict[str, Any]:
                     """
                     UPDATE menu_items
                     SET category_id = %s,
+                        component_type_id = %s,
                         max_qty = %s,
                         available_qty = %s,
                         rate = %s,
@@ -734,6 +792,7 @@ def upsert_daily_menu(payload: DailyMenuPayload) -> Dict[str, Any]:
                     """,
                     (
                         category_id,
+                        component_type_id,
                         max_qty_value,
                         effective_available_qty,
                         rate_value,
@@ -748,13 +807,14 @@ def upsert_daily_menu(payload: DailyMenuPayload) -> Dict[str, Any]:
             cursor.execute(
                 """
                 INSERT INTO menu_items
-                    (menu_id, item_id, combo_id, category_id, max_qty, available_qty, rate, discount_pct, is_default, sort_order)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    (menu_id, item_id, combo_id, component_type_id, category_id, max_qty, available_qty, rate, discount_pct, is_default, sort_order)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     menu_id,
                     item_id,
                     combo_id,
+                    component_type_id,
                     category_id,
                     max_qty_value,
                     effective_available_qty,
@@ -779,6 +839,13 @@ def upsert_daily_menu(payload: DailyMenuPayload) -> Dict[str, Any]:
                 tuple(unique_stale_ids),
             )
 
+        if resolved_menu_type == MENU_TYPE_ONE_DAY:
+            validation_cursor = db.cursor(dictionary=True)
+            try:
+                _validate_subscription_groups_for_daily_menu(validation_cursor, menu_id)
+            finally:
+                validation_cursor.close()
+
         db.commit()
         action = "ADD" if existing is None else "UPDATE"
         log_admin_action(
@@ -792,17 +859,184 @@ def upsert_daily_menu(payload: DailyMenuPayload) -> Dict[str, Any]:
         return _get_daily_menu_internal(
             date=menu_date,
             bld_type=canonical_bld_type,
-            period_type=payload.period_type,
+            period_type=resolved_period_type,
             city_code=city_code,
             menu_type=resolved_menu_type,
             include_combos=True,
         )
+    except HTTPException:
+        db.rollback()
+        raise
     except mysql.connector.Error as err:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(err))
     finally:
         cursor.close()
         db.close()
+
+
+def _validate_subscription_groups_for_daily_menu(cursor, menu_id: int) -> None:
+    """Ensure a Daily Menu can resolve all released Subscription Menu item groups.
+
+    Args:
+        cursor: Dictionary cursor on the active database connection.
+        menu_id: Daily menu ID being saved or released.
+    """
+    cursor.execute(
+        """
+        SELECT
+            m.menu_id,
+            m.date,
+            m.city_code,
+            m.bld_id,
+            m.menu_type,
+            b.bld_type
+          FROM menu m
+          JOIN bld b ON b.bld_id = m.bld_id
+         WHERE m.menu_id = %s
+         LIMIT 1
+        """,
+        (menu_id,),
+    )
+    menu = cursor.fetchone()
+    if not menu:
+        raise HTTPException(status_code=404, detail="Menu not found")
+    if menu.get("menu_type") != MENU_TYPE_ONE_DAY:
+        return
+
+    subscription_filter_params = (MENU_TYPE_SUBSCRIPTION, menu["city_code"], menu["bld_id"])
+    cursor.execute(
+        """
+        SELECT DISTINCT
+            required.component_type_id,
+            required.component_type_name,
+            GROUP_CONCAT(DISTINCT required.source_name ORDER BY required.source_name SEPARATOR ', ') AS sources
+        FROM (
+            SELECT
+                mi.component_type_id,
+                ct.name AS component_type_name,
+                ct.name AS source_name
+              FROM menu sm
+              JOIN menu_items mi ON mi.menu_id = sm.menu_id
+              JOIN component_types ct ON ct.component_type_id = mi.component_type_id
+             WHERE sm.menu_type = %s
+               AND sm.period_type = 'subscription'
+               AND sm.date IS NULL
+               AND sm.is_released = 1
+               AND sm.city_code = %s
+               AND sm.bld_id = %s
+               AND mi.component_type_id IS NOT NULL
+               AND mi.item_id IS NULL
+               AND mi.combo_id IS NULL
+
+            UNION ALL
+
+            SELECT
+                ci.component_type_id,
+                ct.name AS component_type_name,
+                c.combo_name AS source_name
+              FROM menu sm
+              JOIN menu_items mi ON mi.menu_id = sm.menu_id
+              JOIN combos c ON c.combo_id = mi.combo_id
+              JOIN combo_items ci ON ci.combo_id = c.combo_id
+              JOIN component_types ct ON ct.component_type_id = ci.component_type_id
+             WHERE sm.menu_type = %s
+               AND sm.period_type = 'subscription'
+               AND sm.date IS NULL
+               AND sm.is_released = 1
+               AND sm.city_code = %s
+               AND sm.bld_id = %s
+               AND ci.component_type_id IS NOT NULL
+               AND ci.item_id IS NULL
+
+            UNION ALL
+
+            SELECT
+                pic.component_type_id,
+                ct.name AS component_type_name,
+                i.name AS source_name
+              FROM menu sm
+              JOIN menu_items mi ON mi.menu_id = sm.menu_id
+              JOIN items i ON i.item_id = mi.item_id
+              JOIN plated_items p ON p.item_id = mi.item_id
+              JOIN plated_item_components pic ON pic.plated_item_id = p.plated_item_id
+              JOIN component_types ct ON ct.component_type_id = pic.component_type_id
+             WHERE sm.menu_type = %s
+               AND sm.period_type = 'subscription'
+               AND sm.date IS NULL
+               AND sm.is_released = 1
+               AND sm.city_code = %s
+               AND sm.bld_id = %s
+               AND pic.component_type_id IS NOT NULL
+               AND pic.component_item_id IS NULL
+        ) required
+        GROUP BY required.component_type_id, required.component_type_name
+        ORDER BY required.component_type_name ASC
+        """,
+        (*subscription_filter_params, *subscription_filter_params, *subscription_filter_params),
+    )
+    subscription_groups = cursor.fetchall() or []
+    if not subscription_groups:
+        return
+
+    issues: List[Dict[str, Any]] = []
+    for group in subscription_groups:
+        component_type_id = group.get("component_type_id")
+        component_type_name = group.get("component_type_name") or f"Item Group #{component_type_id}"
+        sources = group.get("sources")
+        cursor.execute(
+            """
+            SELECT
+                COUNT(*) AS item_count,
+                SUM(CASE WHEN mi.is_default = 1 THEN 1 ELSE 0 END) AS default_count
+              FROM menu_items mi
+              JOIN items i ON i.item_id = mi.item_id
+             WHERE mi.menu_id = %s
+               AND i.component_type_id = %s
+            """,
+            (menu_id, component_type_id),
+        )
+        resolution = cursor.fetchone() or {}
+        item_count = int(resolution.get("item_count") or 0)
+        default_count = int(resolution.get("default_count") or 0)
+        if item_count == 0:
+            issues.append(
+                {
+                    "issue_type": "missing_daily_item",
+                    "component_type_id": component_type_id,
+                    "component_type_name": component_type_name,
+                    "meal": menu["bld_type"],
+                    "sources": sources,
+                    "item_count": item_count,
+                    "default_count": default_count,
+                    "message": (f"Add one {menu['bld_type']} Daily Menu item for this item group."),
+                }
+            )
+        elif item_count > 1 and default_count != 1:
+            issues.append(
+                {
+                    "issue_type": "missing_default_item",
+                    "component_type_id": component_type_id,
+                    "component_type_name": component_type_name,
+                    "meal": menu["bld_type"],
+                    "sources": sources,
+                    "item_count": item_count,
+                    "default_count": default_count,
+                    "message": (
+                        "Choose exactly one default item because multiple Daily Menu "
+                        "items match this item group."
+                    ),
+                }
+            )
+
+    if issues:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "Resolve subscription item groups before saving or releasing this Daily Menu.",
+                "issues": issues,
+            },
+        )
 
 
 @router.patch("/api/menu/{menu_id}/release")
@@ -816,11 +1050,13 @@ def release_menu(menu_id: int) -> Dict[str, Any]:
         Dict with status and menu_id.
     """
     db = get_raw_db()
-    cursor = db.cursor()
+    cursor = db.cursor(dictionary=True)
     try:
         cursor.execute("SELECT menu_id FROM menu WHERE menu_id = %s", (menu_id,))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Menu not found")
+
+        _validate_subscription_groups_for_daily_menu(cursor, menu_id)
 
         cursor.execute("UPDATE menu SET is_released = 1 WHERE menu_id = %s", (menu_id,))
         db.commit()
@@ -869,6 +1105,303 @@ def unrelease_menu(menu_id: int) -> Dict[str, Any]:
             description="Menu unreleased",
         )
         return {"status": "unreleased", "menu_id": menu_id}
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+def _ensure_subscription_pause_table(cursor) -> None:
+    """Create the subscription pause table if the deployment has not run migrations yet.
+
+    Args:
+        cursor: Active MySQL cursor.
+    """
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS subscription_pause_windows (
+            pause_id INT NOT NULL AUTO_INCREMENT,
+            customer_id INT NOT NULL,
+            order_id INT NULL,
+            city_code VARCHAR(3) NOT NULL,
+            meal_type VARCHAR(20) NULL,
+            start_date DATE NOT NULL,
+            end_date DATE NOT NULL,
+            reason VARCHAR(255) NULL,
+            is_active TINYINT(1) NOT NULL DEFAULT 1,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (pause_id),
+            KEY idx_subscription_pause_city_dates (city_code, start_date, end_date),
+            KEY idx_subscription_pause_customer (customer_id),
+            KEY idx_subscription_pause_order (order_id),
+            CONSTRAINT fk_subscription_pause_customer
+                FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
+                ON DELETE CASCADE
+        )
+        """
+    )
+    cursor.execute("SHOW COLUMNS FROM subscription_pause_windows LIKE 'order_id'")
+    if cursor.fetchone() is None:
+        cursor.execute(
+            "ALTER TABLE subscription_pause_windows ADD COLUMN order_id INT NULL AFTER customer_id"
+        )
+    cursor.execute(
+        "SHOW INDEX FROM subscription_pause_windows WHERE Key_name = 'idx_subscription_pause_order'"
+    )
+    if cursor.fetchone() is None:
+        cursor.execute(
+            "CREATE INDEX idx_subscription_pause_order ON subscription_pause_windows (order_id)"
+        )
+
+
+@router.get("/api/subscription-pauses")
+def list_subscription_pauses(
+    city_code: Optional[str] = Query(None, alias="city_code"),
+    customer_id: Optional[int] = Query(None, description="Limit pauses to one customer"),
+    include_inactive: bool = Query(False, description="Include cancelled pause windows"),
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user),
+) -> List[Dict[str, Any]]:
+    """Return customer subscription pause windows for a city.
+
+    Args:
+        city_code: City to filter by; defaults from the authenticated admin context.
+        customer_id: Optional customer filter.
+        include_inactive: Whether cancelled windows should be included.
+        user: Optional authenticated user for city resolution.
+
+    Returns:
+        List of pause windows with customer display fields.
+    """
+    resolved_city = _resolve_city_context(city_code, user)
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        _ensure_subscription_pause_table(cursor)
+        where = ["spw.city_code = %s"]
+        params: List[Any] = [resolved_city]
+        if customer_id is not None:
+            where.append("spw.customer_id = %s")
+            params.append(customer_id)
+        if not include_inactive:
+            where.append("spw.is_active = 1")
+        cursor.execute(
+            f"""
+            SELECT
+                spw.pause_id,
+                spw.customer_id,
+                spw.order_id,
+                c.name AS customer_name,
+                c.primary_mobile AS customer_phone,
+                spw.city_code,
+                spw.meal_type,
+                spw.start_date,
+                spw.end_date,
+                spw.reason,
+                spw.is_active,
+                spw.created_at,
+                spw.updated_at
+            FROM subscription_pause_windows spw
+            JOIN customers c ON c.customer_id = spw.customer_id
+            WHERE {' AND '.join(where)}
+            ORDER BY spw.start_date DESC, spw.pause_id DESC
+            """,
+            tuple(params),
+        )
+        rows = cursor.fetchall() or []
+        return [
+            {
+                **row,
+                "is_active": bool(row.get("is_active")),
+                "start_date": str(row.get("start_date")),
+                "end_date": str(row.get("end_date")),
+                "created_at": str(row.get("created_at")) if row.get("created_at") else None,
+                "updated_at": str(row.get("updated_at")) if row.get("updated_at") else None,
+            }
+            for row in rows
+        ]
+    except mysql.connector.Error as err:
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@router.post("/api/subscription-pauses")
+def create_subscription_pause(payload: SubscriptionPausePayload) -> Dict[str, Any]:
+    """Create a customer subscription pause window.
+
+    Args:
+        payload: Customer, date range, optional meal, reason, and city code.
+
+    Returns:
+        Dict containing the created pause_id.
+    """
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        _ensure_subscription_pause_table(cursor)
+        city_code = normalize_city_code(payload.city_code or DEFAULT_CITY)
+        cursor.execute(
+            """
+            SELECT c.customer_id
+              FROM customers c
+              JOIN addresses a ON a.customer_id = c.customer_id
+             WHERE c.customer_id = %s
+               AND a.city_code = %s
+               AND a.is_active = 1
+             LIMIT 1
+            """,
+            (payload.customer_id, city_code),
+        )
+        if not cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Customer not found in selected city")
+        if payload.order_id is None:
+            raise HTTPException(status_code=400, detail="Subscription order is required")
+        cursor.execute(
+            """
+            SELECT order_id
+              FROM orders
+             WHERE order_id = %s
+               AND customer_id = %s
+               AND LOWER(COALESCE(order_type, 'one_time')) = 'subscription'
+               AND LOWER(COALESCE(status, '')) NOT IN ('cancelled', 'rejected')
+             LIMIT 1
+            """,
+            (payload.order_id, payload.customer_id),
+        )
+        if not cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Subscription order not found")
+        if payload.end_date < payload.start_date:
+            raise HTTPException(status_code=400, detail="end_date must be on or after start_date")
+        cursor.execute(
+            """
+            INSERT INTO subscription_pause_windows
+                (customer_id, order_id, city_code, meal_type, start_date, end_date, reason, is_active)
+            VALUES (%s, %s, %s, NULL, %s, %s, %s, 1)
+            """,
+            (
+                payload.customer_id,
+                payload.order_id,
+                city_code,
+                payload.start_date,
+                payload.end_date,
+                payload.reason,
+            ),
+        )
+        pause_id = int(cursor.lastrowid)
+        db.commit()
+        log_admin_action(
+            db,
+            admin_id=1,
+            action_type="ADD",
+            entity_type="ITEM",
+            entity_id=pause_id,
+            description=f"Created subscription pause for customer {payload.customer_id}",
+        )
+        return {"pause_id": pause_id}
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@router.put("/api/subscription-pauses/{pause_id}")
+def update_subscription_pause(pause_id: int, payload: SubscriptionPausePayload) -> Dict[str, Any]:
+    """Update a customer subscription pause window.
+
+    Args:
+        pause_id: Pause window to update.
+        payload: Replacement pause window fields.
+
+    Returns:
+        Dict with update status and pause_id.
+    """
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        _ensure_subscription_pause_table(cursor)
+        city_code = normalize_city_code(payload.city_code or DEFAULT_CITY)
+        if payload.end_date < payload.start_date:
+            raise HTTPException(status_code=400, detail="end_date must be on or after start_date")
+        if payload.order_id is None:
+            raise HTTPException(status_code=400, detail="Subscription order is required")
+        cursor.execute(
+            """
+            SELECT order_id
+              FROM orders
+             WHERE order_id = %s
+               AND customer_id = %s
+               AND LOWER(COALESCE(order_type, 'one_time')) = 'subscription'
+             LIMIT 1
+            """,
+            (payload.order_id, payload.customer_id),
+        )
+        if not cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Subscription order not found")
+        cursor.execute(
+            "SELECT pause_id FROM subscription_pause_windows WHERE pause_id = %s", (pause_id,)
+        )
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Pause window not found")
+        cursor.execute(
+            """
+            UPDATE subscription_pause_windows
+               SET customer_id = %s,
+                   order_id = %s,
+                   city_code = %s,
+                   meal_type = NULL,
+                   start_date = %s,
+                   end_date = %s,
+                   reason = %s
+             WHERE pause_id = %s
+            """,
+            (
+                payload.customer_id,
+                payload.order_id,
+                city_code,
+                payload.start_date,
+                payload.end_date,
+                payload.reason,
+                pause_id,
+            ),
+        )
+        db.commit()
+        return {"status": "updated", "pause_id": pause_id}
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@router.patch("/api/subscription-pauses/{pause_id}/resume")
+def resume_subscription_pause(pause_id: int) -> Dict[str, Any]:
+    """Cancel a subscription pause window so the subscription resumes.
+
+    Args:
+        pause_id: Pause window to cancel.
+
+    Returns:
+        Dict with resume status and pause_id.
+    """
+    db = get_raw_db()
+    cursor = db.cursor()
+    try:
+        _ensure_subscription_pause_table(cursor)
+        cursor.execute(
+            "UPDATE subscription_pause_windows SET is_active = 0 WHERE pause_id = %s",
+            (pause_id,),
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Pause window not found")
+        db.commit()
+        return {"status": "resumed", "pause_id": pause_id}
     except mysql.connector.Error as err:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(err))
