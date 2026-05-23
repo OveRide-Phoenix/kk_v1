@@ -18,7 +18,7 @@ import { mobilePalette, playfairMobile, workSans } from "@/components/mobile/cus
 import { normalizeCityCode } from "@/config/cities";
 import { useHydrateAuthUser } from "@/hooks/useHydrateAuthUser";
 import { useAuthStore } from "@/store/store";
-import { http } from "@/lib/http";
+import { http, readJsonResponse } from "@/lib/http";
 
 const CART_STORAGE_KEY = "customer_cart_items";
 const CART_CONTEXT_KEY = "customer_cart_context";
@@ -82,6 +82,10 @@ type OrderQuoteResponse = {
   sgst: number;
   total_price: number;
   coupon_codes?: string[];
+};
+
+type ApiErrorResponse = {
+  detail?: string;
 };
 
 const currency = (value: number) =>
@@ -218,10 +222,12 @@ export default function MobileCartPage() {
           combo_id: item.combo_id,
           quantity: item.quantity,
           price: item.price,
+          menu_item_id: item.menu_item_id,
+          meal_type: item.meal,
         })),
-        coupon_codes: couponOverride ?? appliedCoupons,
+        discount_code: (couponOverride ?? appliedCoupons)[0],
       });
-      const data = await response.json();
+      const data = await readJsonResponse<OrderQuoteResponse & ApiErrorResponse>(response);
       if (!response.ok) {
         const message = data?.detail || "Invalid coupon";
         if (showCouponError) {
@@ -254,7 +260,7 @@ export default function MobileCartPage() {
     const normalized = next.toUpperCase();
     setCouponCode("");
     if (appliedCoupons.includes(normalized)) return;
-    const updated = [...appliedCoupons, normalized];
+    const updated = [normalized];
     const ok = await fetchQuote(updated, true);
     if (ok) {
       setAppliedCoupons(updated);
@@ -309,7 +315,7 @@ export default function MobileCartPage() {
       payment_method: paymentMethod,
       order_date: cartContext?.order_date,
       order_type: cartContext?.order_type ?? "one_time",
-      coupon_codes: appliedCoupons.length ? appliedCoupons : undefined,
+      discount_code: appliedCoupons[0],
       items: cartItems.map((item) => ({
         item_id: item.item_id,
         combo_id: item.combo_id,
@@ -323,7 +329,7 @@ export default function MobileCartPage() {
     try {
       const response = await http.post("/api/orders/create", payload);
 
-      const data = await response.json();
+      const data = await readJsonResponse<OrderResponse & ApiErrorResponse>(response);
       if (!response.ok) {
         throw new Error(data?.detail || "Failed to place order");
       }

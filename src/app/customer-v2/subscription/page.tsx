@@ -19,6 +19,7 @@ type OrderItem = {
 type OrderSummary = {
   order_id: number;
   created_at: string | null;
+  order_date?: string | null;
   total_price: number;
   status: string;
   payment_method: string;
@@ -31,6 +32,8 @@ type OrderSummary = {
   };
   items: OrderItem[];
 };
+
+const planStartValue = (plan: OrderSummary) => plan.order_date ?? plan.created_at;
 
 const currency = (value: number) =>
   new Intl.NumberFormat("en-IN", {
@@ -163,12 +166,17 @@ export default function SubscriptionHomePage() {
     const today = new Date();
     return orders
       .filter((o) => {
-        if (!o.created_at) return false;
         if ((o.order_type ?? "").toLowerCase() !== "subscription") return false;
-        const d = new Date(o.created_at);
+        const startValue = planStartValue(o);
+        if (!startValue) return false;
+        const d = new Date(startValue);
         return !Number.isNaN(d.getTime()) && isSameMonth(d, today);
       })
-      .sort((a, b) => new Date(b.created_at!).getTime() - new Date(a.created_at!).getTime());
+      .sort((a, b) => {
+        const left = planStartValue(a);
+        const right = planStartValue(b);
+        return new Date(right!).getTime() - new Date(left!).getTime();
+      });
   }, [orders]);
 
   const hasActivePlan = activeSubscriptions.length > 0;
@@ -247,13 +255,13 @@ export default function SubscriptionHomePage() {
                       ) : latestSub ? (
                         <>
                           <p className="mb-2 text-xs font-bold uppercase tracking-widest text-orange-200">
-                            Last Delivery
+                            Plan Start
                           </p>
                           <div className="flex items-center gap-3">
                             <span className="material-symbols-outlined text-3xl">schedule</span>
                             <span className="text-2xl font-bold italic">
-                              {latestSub.created_at
-                                ? formatDate(new Date(latestSub.created_at), "EEE, d MMM")
+                              {planStartValue(latestSub)
+                                ? formatDate(new Date(planStartValue(latestSub)!), "EEE, d MMM")
                                 : "Scheduled"}
                             </span>
                           </div>
@@ -505,10 +513,10 @@ export default function SubscriptionHomePage() {
                       {/* meta rows */}
                       <div className="space-y-2 px-4 py-3">
                         <div className="flex items-center justify-between text-sm">
-                          <span className="text-[#64748b]">Date</span>
+                          <span className="text-[#64748b]">Start date</span>
                           <span className="font-semibold text-[#1e293b]">
-                            {sub.created_at
-                              ? formatDate(new Date(sub.created_at), "dd MMM yyyy • hh:mm a")
+                            {planStartValue(sub)
+                              ? formatDate(new Date(planStartValue(sub)!), "dd MMM yyyy")
                               : "Scheduled"}
                           </span>
                         </div>

@@ -77,6 +77,7 @@ import {
 } from "@/components/ui/pagination";
 import { useAuthStore } from "@/store/store";
 import { OrderStatusPill } from "@/components/order-status-pill";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type OrderItem = {
   name: string;
@@ -88,6 +89,7 @@ type OrderItem = {
 type OrderRecord = {
   order_id: number;
   created_at: string | null;
+  order_type: string;
   status: string;
   payment_status?: string;
   payment_method: string;
@@ -143,6 +145,7 @@ type InvoiceResponse = {
 type Filters = {
   startDate: Date | null;
   endDate: Date | null;
+  orderType: string;
   status: string;
   mealType: string;
   customerQuery: string;
@@ -165,6 +168,12 @@ const mealTypeOptions = [
   { label: "Lunch", value: "Lunch" },
   { label: "Dinner", value: "Dinner" },
   { label: "Condiments", value: "Condiments" },
+];
+
+const orderTypeTabs = [
+  { label: "All orders", value: "all" },
+  { label: "Normal orders", value: "one_time" },
+  { label: "Subscription orders", value: "subscription" },
 ];
 
 const formatCurrency = (value: number) =>
@@ -190,6 +199,9 @@ const paymentBadgeClass = (paid: boolean) =>
     : "bg-amber-50 text-amber-900 border border-amber-200";
 
 const formatOrderId = (raw: number) => `ORD-${String(raw).padStart(5, "0")}`;
+
+const orderTypeLabel = (orderType: string) =>
+  orderType.trim().toLowerCase() === "subscription" ? "Subscription" : "Normal";
 
 const buildInvoiceHtml = (invoice: InvoiceResponse) => {
   const rows = invoice.items
@@ -281,6 +293,7 @@ const defaultFilters = (): Filters => {
   return {
     startDate: null,
     endDate: null,
+    orderType: "all",
     status: "all",
     mealType: "all",
     customerQuery: "",
@@ -320,6 +333,9 @@ export default function OrderHistoryPage() {
     if (filters.status !== "all") {
       params.set("status", filters.status);
     }
+    if (filters.orderType !== "all") {
+      params.set("order_type", filters.orderType);
+    }
     if (filters.mealType !== "all") {
       params.set("meal_type", filters.mealType);
     }
@@ -350,6 +366,7 @@ export default function OrderHistoryPage() {
       const normalizedOrders = (data.orders ?? []).map((order) => ({
         ...order,
         status: orderStatusLabel(order.status),
+        order_type: order.order_type ?? "one_time",
         payment_status: order.payment_status ?? paymentStatusLabel(Boolean(order.paid)),
         paid: Boolean(order.paid),
       }));
@@ -565,6 +582,7 @@ export default function OrderHistoryPage() {
 
   const filtersApplied =
     filters.status !== "all" ||
+    filters.orderType !== "all" ||
     filters.mealType !== "all" ||
     filters.customerQuery.trim().length > 0 ||
     filters.productQuery.trim().length > 0 ||
@@ -595,6 +613,19 @@ export default function OrderHistoryPage() {
             </div>
           </CardHeader>
           <CardContent>
+            <Tabs
+              value={filters.orderType}
+              onValueChange={(value) => handleFilterChange("orderType", value)}
+              className="mb-5"
+            >
+              <TabsList>
+                {orderTypeTabs.map((tab) => (
+                  <TabsTrigger key={tab.value} value={tab.value}>
+                    {tab.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
             <div className="grid gap-4 lg:grid-cols-4">
               <div className="space-y-2 lg:col-span-2">
                 <span className="block text-sm font-medium text-muted-foreground">Date range</span>
@@ -755,6 +786,9 @@ export default function OrderHistoryPage() {
                               <span className="font-medium text-foreground">
                                 {formatOrderId(order.order_id)}
                               </span>
+                              <Badge variant="outline" className="w-fit text-xs">
+                                {orderTypeLabel(order.order_type)}
+                              </Badge>
                               <span className="flex items-center gap-1 text-xs text-muted-foreground">
                                 {paymentMethodIcon(order.payment_method)}
                                 {normalizePaymentMethod(order.payment_method)}
@@ -937,6 +971,10 @@ export default function OrderHistoryPage() {
                 <div className="space-y-1 text-sm">
                   <p className="font-semibold text-foreground">Placed</p>
                   <p>{formatDateTime(selectedOrder.created_at)}</p>
+                  <p className="font-semibold text-foreground">Order type</p>
+                  <Badge variant="outline" className="w-fit">
+                    {orderTypeLabel(selectedOrder.order_type)}
+                  </Badge>
                   <p className="font-semibold text-foreground">Status</p>
                   <OrderStatusPill
                     status={selectedOrder.status}

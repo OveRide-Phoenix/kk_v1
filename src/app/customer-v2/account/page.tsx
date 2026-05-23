@@ -105,6 +105,7 @@ type OrderItem = {
 type OrderSummary = {
   order_id: number;
   created_at: string | null;
+  order_date?: string | null;
   total_price: number;
   status: string;
   payment_status?: string;
@@ -118,6 +119,8 @@ type OrderSummary = {
   };
   items: OrderItem[];
 };
+
+const orderStartValue = (order: OrderSummary) => order.order_date ?? order.created_at;
 
 type AddressFormState = {
   address_type: string;
@@ -321,8 +324,9 @@ export default function AccountPage() {
 
   const sortedOrders = useMemo(() => {
     const getTimestamp = (order: OrderSummary) => {
-      if (order.created_at) {
-        const parsed = new Date(order.created_at).getTime();
+      const value = orderStartValue(order);
+      if (value) {
+        const parsed = new Date(value).getTime();
         if (!Number.isNaN(parsed)) {
           return parsed;
         }
@@ -581,8 +585,8 @@ export default function AccountPage() {
     if (!printWindow) return;
 
     const generatedAt = formatDate(new Date(), "PPP p");
-    const orderDate = billOrder.created_at
-      ? formatDate(new Date(billOrder.created_at), "PPP p")
+    const orderDate = orderStartValue(billOrder)
+      ? formatDate(new Date(orderStartValue(billOrder)!), "PPP")
       : "N/A";
 
     const itemsRows = billOrder.items
@@ -1119,8 +1123,8 @@ export default function AccountPage() {
                               #{order.order_id}
                             </td>
                             <td className="px-4 py-4 text-gray-600">
-                              {order.created_at
-                                ? formatDate(new Date(order.created_at), "PPP")
+                              {orderStartValue(order)
+                                ? formatDate(new Date(orderStartValue(order)!), "PPP")
                                 : "Scheduled"}
                             </td>
                             <td className="px-4 py-4">
@@ -1328,8 +1332,8 @@ export default function AccountPage() {
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#8d6e63]">
                 <span>Order #{billOrder.order_id}</span>
                 <span>
-                  {billOrder.created_at
-                    ? formatDate(new Date(billOrder.created_at), "PPP p")
+                  {orderStartValue(billOrder)
+                    ? formatDate(new Date(orderStartValue(billOrder)!), "PPP")
                     : "Scheduled"}
                 </span>
               </div>

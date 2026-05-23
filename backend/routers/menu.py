@@ -1147,6 +1147,7 @@ def _ensure_subscription_pause_table(cursor) -> None:
 @router.get("/api/subscription-pauses")
 def list_subscription_pauses(
     city_code: Optional[str] = Query(None, alias="city_code"),
+    customer_id: Optional[int] = Query(None, description="Limit pauses to one customer"),
     include_inactive: bool = Query(False, description="Include cancelled pause windows"),
     user: Optional[Dict[str, Any]] = Depends(get_optional_user),
 ) -> List[Dict[str, Any]]:
@@ -1154,6 +1155,7 @@ def list_subscription_pauses(
 
     Args:
         city_code: City to filter by; defaults from the authenticated admin context.
+        customer_id: Optional customer filter.
         include_inactive: Whether cancelled windows should be included.
         user: Optional authenticated user for city resolution.
 
@@ -1167,6 +1169,9 @@ def list_subscription_pauses(
         _ensure_subscription_pause_table(cursor)
         where = ["spw.city_code = %s"]
         params: List[Any] = [resolved_city]
+        if customer_id is not None:
+            where.append("spw.customer_id = %s")
+            params.append(customer_id)
         if not include_inactive:
             where.append("spw.is_active = 1")
         cursor.execute(

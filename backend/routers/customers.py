@@ -22,6 +22,7 @@ from ..customer.customer_crud import (
 from ..db import get_raw_db
 from ..utils.auth_deps import admin_required, get_current_user
 from ..utils.helpers import (
+    ORDER_STATUS_CANCELLED,
     _format_datetime,
     _normalize_city_label,
     _resolve_city_code,
@@ -57,6 +58,13 @@ class AddressRouteAssignPayload(BaseModel):
     """Payload for assigning or clearing a delivery route on an address."""
 
     route_id: Optional[int] = None
+
+
+class SubscriptionOrderUpdatePayload(BaseModel):
+    """Payload for customer subscription order management updates."""
+
+    address_id: Optional[int] = None
+    payment_method: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -117,6 +125,36 @@ def _resolve_coordinates(
             float(fallback_lng) if fallback_lng is not None else 0.0,
         )
     return float(lat or 0.0), float(lng or 0.0)
+
+
+def _ensure_subscription_pause_table(cursor) -> None:
+    """Create the subscription pause table if a deployment has not run migrations yet.
+
+    Args:
+        cursor: Active MySQL cursor.
+    """
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS subscription_pause_windows (
+            pause_id INT NOT NULL AUTO_INCREMENT,
+            customer_id INT NOT NULL,
+            city_code VARCHAR(3) NOT NULL,
+            meal_type VARCHAR(20) NULL,
+            start_date DATE NOT NULL,
+            end_date DATE NOT NULL,
+            reason VARCHAR(255) NULL,
+            is_active TINYINT(1) NOT NULL DEFAULT 1,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (pause_id),
+            KEY idx_subscription_pause_city_dates (city_code, start_date, end_date),
+            KEY idx_subscription_pause_customer (customer_id),
+            CONSTRAINT fk_subscription_pause_customer_from_customers
+                FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
+                ON DELETE CASCADE
+        )
+        """
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -555,6 +593,7 @@ def list_customer_orders(customer_id: int, limit: int = Query(50, ge=1, le=200))
                 """
                 SELECT o.order_id,
                        o.created_at,
+                       o.order_date,
                        o.total_price,
                        o.status,
                        o.paid,
@@ -578,6 +617,7 @@ def list_customer_orders(customer_id: int, limit: int = Query(50, ge=1, le=200))
                     """
                     SELECT o.order_id,
                            o.created_at,
+                           NULL AS order_date,
                            o.total_price,
                            o.status,
                            o.paid,
@@ -609,6 +649,7 @@ def list_customer_orders(customer_id: int, limit: int = Query(50, ge=1, le=200))
             SELECT oi.order_id,
                    oi.quantity,
                    oi.price,
+                   oi.meal_type,
                    COALESCE(i.name, co.combo_name) AS item_name
               FROM order_items oi
               LEFT JOIN items i ON oi.item_id = i.item_id
@@ -627,6 +668,7 @@ def list_customer_orders(customer_id: int, limit: int = Query(50, ge=1, le=200))
                     "item_name": row.get("item_name") or "Item",
                     "quantity": int(row.get("quantity") or 0),
                     "price": float(row.get("price") or 0),
+                    "meal_type": row.get("meal_type"),
                 }
             )
 
@@ -634,11 +676,13 @@ def list_customer_orders(customer_id: int, limit: int = Query(50, ge=1, le=200))
         for order in orders:
             order_id = order["order_id"]
             created = order.get("created_at")
+            order_date = order.get("order_date")
             paid_flag = bool(order.get("paid"))
             result.append(
                 {
                     "order_id": order_id,
                     "created_at": created.isoformat() if created else None,
+                    "order_date": order_date.isoformat() if order_date else None,
                     "total_price": float(order.get("total_price") or 0),
                     "status": normalize_status_for_response(order.get("status")),
                     "payment_status": payment_status_label(paid_flag),
@@ -681,6 +725,7 @@ def get_subscription_today(
     today = date_type.today().isoformat()
     city = normalize_city_code(city_code or DEFAULT_CITY)
     try:
+        _ensure_subscription_pause_table(cursor)
         cursor.execute(
             """
             SELECT
@@ -694,12 +739,22 @@ def get_subscription_today(
             LEFT JOIN items i_sub     ON oi.item_id = i_sub.item_id
             LEFT JOIN component_types ct  ON sub_mi.component_type_id = ct.component_type_id
             LEFT JOIN component_types ct2 ON i_sub.component_type_id  = ct2.component_type_id
+            LEFT JOIN subscription_pause_windows spw
+                   ON spw.customer_id = o.customer_id
+                  AND spw.city_code = %s
+                  AND spw.is_active = 1
+                  AND %s BETWEEN spw.start_date AND spw.end_date
+                  AND (
+                        spw.meal_type IS NULL
+                        OR LOWER(spw.meal_type) = LOWER(COALESCE(oi.meal_type, ''))
+                  )
             WHERE o.customer_id = %s
               AND o.order_type  = 'subscription'
               AND o.status NOT IN ('cancelled', 'rejected')
               AND COALESCE(sub_mi.component_type_id, i_sub.component_type_id) IS NOT NULL
+              AND spw.pause_id IS NULL
             """,
-            (customer_id,),
+            (city, today, customer_id),
         )
         sub_rows = cursor.fetchall()
         if not sub_rows:
@@ -755,6 +810,139 @@ def get_subscription_today(
                 }
             )
         return result
+    finally:
+        cursor.close()
+        db.close()
+
+
+@router.patch("/api/customers/{customer_id}/subscription-orders/{order_id}", tags=["Customers"])
+def update_customer_subscription_order(
+    customer_id: int,
+    order_id: int,
+    payload: SubscriptionOrderUpdatePayload,
+) -> Dict[str, Any]:
+    """Update editable details for one customer subscription order.
+
+    Args:
+        customer_id: Customer who owns the subscription order.
+        order_id: Subscription order to update.
+        payload: Optional address_id and payment_method fields.
+
+    Returns:
+        Dict with update status and order_id.
+    """
+    if payload.address_id is None and payload.payment_method is None:
+        raise HTTPException(status_code=400, detail="No changes submitted")
+
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            SELECT order_id
+              FROM orders
+             WHERE order_id = %s
+               AND customer_id = %s
+               AND LOWER(COALESCE(order_type, 'one_time')) = 'subscription'
+             LIMIT 1
+            """,
+            (order_id, customer_id),
+        )
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Subscription order not found")
+
+        updates: List[str] = []
+        params: List[Any] = []
+        if payload.address_id is not None:
+            cursor.execute(
+                """
+                SELECT address_id
+                  FROM addresses
+                 WHERE address_id = %s
+                   AND customer_id = %s
+                   AND is_active = 1
+                 LIMIT 1
+                """,
+                (payload.address_id, customer_id),
+            )
+            if cursor.fetchone() is None:
+                raise HTTPException(status_code=400, detail="Address is not available")
+            updates.append("address_id = %s")
+            params.append(payload.address_id)
+
+        if payload.payment_method is not None:
+            normalized_method = payload.payment_method.strip()
+            if normalized_method not in {"UPI", "Card", "Cash"}:
+                raise HTTPException(status_code=400, detail="Invalid payment method")
+            updates.append("payment_method = %s")
+            params.append(normalized_method)
+            updates.append("paid = %s")
+            params.append(1 if normalized_method.lower() in {"upi", "card", "online"} else 0)
+
+        params.append(order_id)
+        cursor.execute(
+            f"UPDATE orders SET {', '.join(updates)} WHERE order_id = %s",
+            tuple(params),
+        )
+        db.commit()
+        return {"status": "updated", "order_id": order_id}
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(err)}")
+    finally:
+        cursor.close()
+        db.close()
+
+
+@router.patch(
+    "/api/customers/{customer_id}/subscription-orders/{order_id}/cancel",
+    tags=["Customers"],
+)
+def cancel_customer_subscription_order(customer_id: int, order_id: int) -> Dict[str, Any]:
+    """Cancel one customer subscription order.
+
+    Args:
+        customer_id: Customer who owns the subscription order.
+        order_id: Subscription order to cancel.
+
+    Returns:
+        Dict with cancellation status and order_id.
+    """
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            SELECT status
+              FROM orders
+             WHERE order_id = %s
+               AND customer_id = %s
+               AND LOWER(COALESCE(order_type, 'one_time')) = 'subscription'
+             LIMIT 1
+            """,
+            (order_id, customer_id),
+        )
+        order = cursor.fetchone()
+        if order is None:
+            raise HTTPException(status_code=404, detail="Subscription order not found")
+        current_status = str(order.get("status") or "").strip().lower()
+        if current_status == ORDER_STATUS_CANCELLED.lower():
+            return {"status": "cancelled", "order_id": order_id}
+        if current_status == "delivered":
+            raise HTTPException(
+                status_code=400,
+                detail="Delivered subscriptions cannot be cancelled",
+            )
+
+        cursor.execute(
+            "UPDATE orders SET status = %s WHERE order_id = %s",
+            (ORDER_STATUS_CANCELLED, order_id),
+        )
+        db.commit()
+        return {"status": "cancelled", "order_id": order_id}
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(err)}")
     finally:
         cursor.close()
         db.close()

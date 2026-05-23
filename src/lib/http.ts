@@ -70,6 +70,20 @@ async function request(path: string, init?: RequestInit) {
   return res;
 }
 
+export async function readJsonResponse<T = unknown>(response: Response): Promise<T> {
+  const text = await response.text();
+  if (!text) {
+    return {} as T;
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return {
+      detail: text || response.statusText || "Request failed",
+    } as T;
+  }
+}
+
 export const http = {
   get: (p: string) => request(p, { method: "GET" }),
   post: <T extends Record<string, unknown>>(p: string, body?: T) =>

@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Search, Plus, Calendar as CalendarIcon, Eye, Pencil, Trash2, Check } from "lucide-react";
+import { Search, Plus, Calendar as CalendarIcon, Pencil, Trash2, Check } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { format as formatDate } from "date-fns";
@@ -253,14 +253,13 @@ export function DailyMenuSetup() {
     citySupportsFood(adminCity) ? "breakfast" : "condiments",
   );
 
-  // Edit / view states
+  // Edit states
   const [editIndexByMeal, setEditIndexByMeal] = useState<Record<MealSection, number | null>>({
     breakfast: null,
     lunch: null,
     dinner: null,
     condiments: null,
   });
-  const [, setViewItem] = useState<null | MenuItem>(null);
 
   // Loading flags
   const [loadingItemsAPI, setLoadingItemsAPI] = useState(false);
@@ -1242,13 +1241,6 @@ export function DailyMenuSetup() {
                               )}
 
                               <TableCell className="flex justify-center gap-2">
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  onClick={() => setViewItem(row)}
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </Button>
                                 {isRowEditing ? (
                                   <Button
                                     size="icon"
@@ -1275,7 +1267,8 @@ export function DailyMenuSetup() {
                                 )}
                                 <Button
                                   size="icon"
-                                  variant="destructive"
+                                  variant="ghost"
+                                  className="text-red-600 hover:bg-transparent hover:text-red-700"
                                   disabled={!canEditRow}
                                   onClick={() => handleDelete(meal, index)}
                                 >
