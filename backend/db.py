@@ -70,13 +70,16 @@ if not _RAW_DATABASE_URL:
     )
 _POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", "10"))
 
+_db_params = _parse_db_url(_DATABASE_URL)
+DATABASE_NAME: str = _db_params["database"]
+
 _pool = MySQLConnectionPool(
     pool_name="kk_pool",
     pool_size=_POOL_SIZE,
     pool_reset_session=True,
     use_pure=True,
     autocommit=False,
-    **_parse_db_url(_DATABASE_URL),
+    **_db_params,
 )
 
 

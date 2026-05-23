@@ -89,7 +89,7 @@ app.include_router(dashboard_router)
 app.include_router(developer_router)
 
 
-@app.get("/health", tags=["ops"])
+@app.api_route("/health", methods=["GET", "HEAD"], tags=["ops"])
 async def health() -> JSONResponse:
     """Health check endpoint.
 
