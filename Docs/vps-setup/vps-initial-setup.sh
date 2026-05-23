@@ -74,10 +74,10 @@ sudo -u deploy git -C "$PROD_DIR" checkout main
 
 echo "=== [8/9] Create Python venvs and install requirements ==="
 sudo -u deploy python3.12 -m venv "$DEV_DIR/backend/venv"
-sudo -u deploy "$DEV_DIR/backend/venv/bin/pip" install -q -r "$DEV_DIR/backend/requirements.txt"
+sudo -u deploy "$DEV_DIR/backend/venv/bin/pip" install -q -r "$DEV_DIR/requirements.txt"
 
 sudo -u deploy python3.12 -m venv "$PROD_DIR/backend/venv"
-sudo -u deploy "$PROD_DIR/backend/venv/bin/pip" install -q -r "$PROD_DIR/backend/requirements.txt"
+sudo -u deploy "$PROD_DIR/backend/venv/bin/pip" install -q -r "$PROD_DIR/requirements.txt"
 
 echo "=== [9/9] Install systemd services, sudoers, logrotate, and backup dir ==="
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

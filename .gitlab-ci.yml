@@ -31,7 +31,7 @@ variables:
   cache:
     key:
       files:
-        - backend/requirements.txt
+        - requirements.txt
     paths:
       - backend/.pip_cache/
     policy: pull-push
@@ -92,7 +92,7 @@ nextjs_build:
 #   image: python:3.12-slim
 #   <<: *pip_cache
 #   before_script:
-#     - pip install --cache-dir backend/.pip_cache -r backend/requirements.txt pytest pytest-asyncio httpx
+#     - pip install --cache-dir backend/.pip_cache -r requirements.txt pytest pytest-asyncio httpx
 #   script:
 #     - pytest backend/ -v --tb=short
 #   allow_failure: false
@@ -209,7 +209,7 @@ deploy_dev:
         git reset --hard origin/develop
         npm ci --prefer-offline
         npm run build
-        backend/venv/bin/pip install -q -r backend/requirements.txt
+        backend/venv/bin/pip install -q -r requirements.txt
         sudo systemctl restart kk-backend-dev
         sudo systemctl restart kk-frontend-dev
         sudo systemctl reload nginx
@@ -247,7 +247,7 @@ deploy_prod:
         git reset --hard origin/main
         npm ci --prefer-offline
         npm run build
-        backend/venv/bin/pip install -q -r backend/requirements.txt
+        backend/venv/bin/pip install -q -r requirements.txt
         sudo systemctl restart kk-backend-prod
         sudo systemctl restart kk-frontend-prod
         sudo systemctl reload nginx
