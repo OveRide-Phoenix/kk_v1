@@ -528,7 +528,7 @@ def get_low_stock_alerts(
               AND m.is_released = 1
               AND m.menu_type = 'ONE_DAY'
               AND mi.final_qty > 0
-              AND mi.available_qty <= mi.final_qty * 0.10
+              AND mi.available_qty <= mi.final_qty * 0.20
             ORDER BY mi.available_qty ASC
             """,
             (resolved_city,),

@@ -115,7 +115,7 @@ export function AdminLayout({ children, activePage, onNavigateAttempt }: AdminLa
     const checkLowStock = async () => {
       try {
         const params = new URLSearchParams({ city_code: normalizedAdminCity });
-        const res = await fetch(`/api/backend/menu/low-stock-alerts?${params}`);
+        const res = await fetch(`/api/backend/api/menu/low-stock-alerts?${params}`);
         if (!res.ok) return;
         const items = (await res.json()) as {
           menu_item_id: number;
