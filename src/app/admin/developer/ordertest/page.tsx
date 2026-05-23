@@ -101,7 +101,13 @@ type SubscriptionResolvedLine = {
   combo_id?: number | null;
   menu_item_id?: number;
   rate: number;
-  status: "resolved" | "specific" | "not_released" | "not_configured" | "missing_daily" | "missing_default";
+  status:
+    | "resolved"
+    | "specific"
+    | "not_released"
+    | "not_configured"
+    | "missing_daily"
+    | "missing_default";
   detail: string;
 };
 
@@ -131,7 +137,9 @@ function SubscriptionCustomerPreview({
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
   const [subscriptionQuantities, setSubscriptionQuantities] = useState<Record<string, number>>({});
   const [placingSubscription, setPlacingSubscription] = useState(false);
-  const [subscriptionOrderResult, setSubscriptionOrderResult] = useState<OrderResponse | null>(null);
+  const [subscriptionOrderResult, setSubscriptionOrderResult] = useState<OrderResponse | null>(
+    null,
+  );
   const [subscriptionError, setSubscriptionError] = useState<string | null>(null);
 
   const mealLabel = (meal: string) => meal.charAt(0).toUpperCase() + meal.slice(1);
@@ -147,7 +155,9 @@ function SubscriptionCustomerPreview({
         const rows = Array.isArray(data.customers) ? data.customers : [];
         if (cancelled) return;
         setCustomers(rows);
-        setSelectedCustomerId((current) => current || (rows[0]?.customer_id ? String(rows[0].customer_id) : ""));
+        setSelectedCustomerId(
+          (current) => current || (rows[0]?.customer_id ? String(rows[0].customer_id) : ""),
+        );
       } catch (error) {
         console.error("Failed to load customers for subscription test", error);
         if (!cancelled) setCustomers([]);
@@ -224,10 +234,11 @@ function SubscriptionCustomerPreview({
               include_combos: "1",
             });
 
-            const dailyItems = daily?.is_released ? daily.items ?? [] : [];
+            const dailyItems = daily?.is_released ? (daily.items ?? []) : [];
             next[meal] = subscription.items.map((entry, index) => {
               const key = `${meal}-${entry.menu_item_id ?? entry.component_type_id ?? entry.item_id ?? index}`;
-              const isGroup = entry.item_id == null && entry.combo_id == null && entry.component_type_id != null;
+              const isGroup =
+                entry.item_id == null && entry.combo_id == null && entry.component_type_id != null;
               if (!isGroup) {
                 const matches = dailyItems.filter((item) =>
                   entry.combo_id != null
@@ -235,7 +246,9 @@ function SubscriptionCustomerPreview({
                     : item.item_id === entry.item_id,
                 );
                 const resolved =
-                  matches.length <= 1 ? matches[0] : matches.find((item) => item.is_default) ?? matches[0];
+                  matches.length <= 1
+                    ? matches[0]
+                    : (matches.find((item) => item.is_default) ?? matches[0]);
                 if (!daily?.is_released) {
                   return {
                     key,
@@ -304,7 +317,8 @@ function SubscriptionCustomerPreview({
                 };
               }
 
-              const resolved = matches.length === 1 ? matches[0] : matches.find((item) => item.is_default);
+              const resolved =
+                matches.length === 1 ? matches[0] : matches.find((item) => item.is_default);
               if (!resolved) {
                 return {
                   key,
@@ -420,7 +434,7 @@ function SubscriptionCustomerPreview({
         customer_id: customerId,
         address_id: addressId,
         payment_method: "Cash",
-        order_date: dateISO,
+        delivery_date: dateISO,
         order_type: "subscription",
         items: selectedSubscriptionLines.map(({ line, quantity }) => ({
           item_id: line.item_id ?? null,
@@ -513,7 +527,9 @@ function SubscriptionCustomerPreview({
           </p>
         ) : null}
       </div>
-      {loading ? <p className="text-sm text-muted-foreground">Resolving subscription menu...</p> : null}
+      {loading ? (
+        <p className="text-sm text-muted-foreground">Resolving subscription menu...</p>
+      ) : null}
       <div className="space-y-6">
         {visibleMeals.map((meal) => {
           const lines = linesByMeal[meal] ?? [];
@@ -665,7 +681,7 @@ export default function OrderTestPage() {
       customer_id: TEST_CUSTOMER_ID,
       address_id: addressId,
       payment_method: "Cash",
-      order_date: cartContext.confirmedDateISO ?? format(new Date(), "yyyy-MM-dd"),
+      delivery_date: cartContext.confirmedDateISO ?? format(new Date(), "yyyy-MM-dd"),
       items: cartSelection.map((item) => ({
         item_id: item.item_id ?? null,
         combo_id: item.combo_id ?? null,

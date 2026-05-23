@@ -19,7 +19,7 @@ type OrderItem = {
 type OrderSummary = {
   order_id: number;
   created_at: string | null;
-  order_date?: string | null;
+  delivery_date?: string | null;
   total_price: number;
   status: string;
   payment_method: string;
@@ -33,7 +33,7 @@ type OrderSummary = {
   items: OrderItem[];
 };
 
-const planStartValue = (plan: OrderSummary) => plan.order_date ?? plan.created_at;
+const planStartValue = (plan: OrderSummary) => plan.delivery_date ?? plan.created_at;
 
 const currency = (value: number) =>
   new Intl.NumberFormat("en-IN", {

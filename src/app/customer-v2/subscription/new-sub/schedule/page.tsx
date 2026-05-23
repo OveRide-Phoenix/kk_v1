@@ -214,7 +214,7 @@ export default function SubscriptionSchedulePage() {
         customer_id: user.customer_id,
         address_id: selectedAddress.address_id,
         payment_method: paymentMethod,
-        order_date: startDate,
+        delivery_date: startDate,
         order_type: "subscription",
         items: items.map((item) => ({
           item_id: item.item_id,

@@ -132,19 +132,14 @@ def _persist_plan_items(
             ),
             0.0,
         )
-        available_input = plan.available_quantity
-        if available_input is None:
-            available_input = final_value - buffer_value
-        available_value = max(0.0, min(float(available_input), final_value))
 
         cursor.execute(
             """
             UPDATE menu_items mi
             JOIN items i ON mi.item_id = i.item_id
-               SET mi.max_qty = %s,
+               SET mi.planned_qty = %s,
                    mi.buffer_qty = %s,
-                   mi.final_qty = %s,
-                   mi.available_qty = %s
+                   mi.final_qty = %s
              WHERE mi.menu_id = %s
                AND LOWER(i.name) = LOWER(%s)
             """,
@@ -152,7 +147,6 @@ def _persist_plan_items(
                 planned_value,
                 buffer_value,
                 final_value,
-                available_value,
                 menu_id,
                 item_name,
             ),
@@ -316,9 +310,10 @@ def _fetch_order_quantities_by_menu_item(
         FROM orders o
         JOIN order_items oi ON oi.order_id = o.order_id
         JOIN addresses a ON o.address_id = a.address_id
-        WHERE COALESCE(o.order_date, DATE(o.created_at)) = %s
+        WHERE COALESCE(o.delivery_date, DATE(o.created_at)) = %s
           AND a.city_code = %s
           AND oi.menu_item_id IS NOT NULL
+          AND COALESCE(o.order_type, '') != 'subscription'
           AND LOWER(REPLACE(COALESCE(o.status, ''), ' (Payment Due)', '')) NOT IN (
             'cancelled',
             'cancelled by customer',
@@ -932,10 +927,9 @@ def update_max_quantities(payload: UpdateMaxQtyRequest) -> Dict[str, Any]:
                 """
                 SELECT
                     mi.menu_item_id,
-                    COALESCE(mi.max_qty, 0) AS max_qty,
+                    COALESCE(mi.planned_qty, 0) AS planned_qty,
                     COALESCE(mi.buffer_qty, 0) AS buffer_qty,
                     COALESCE(mi.final_qty, 0) AS final_qty,
-                    COALESCE(mi.available_qty, 0) AS available_qty,
                     COALESCE(i.buffer_percentage, 0) AS buffer_percentage
                 FROM menu_items mi
                 JOIN items i ON mi.item_id = i.item_id
@@ -953,13 +947,12 @@ def update_max_quantities(payload: UpdateMaxQtyRequest) -> Dict[str, Any]:
             if additional == 0:
                 continue
 
-            current_max = float(row["max_qty"] or 0)
+            current_planned = float(row["planned_qty"] or 0)
             current_buffer = float(row["buffer_qty"] or 0)
             if current_buffer <= 0:
-                inferred = float(row["final_qty"] or 0) - current_max
+                inferred = float(row["final_qty"] or 0) - current_planned
                 if inferred > 0:
                     current_buffer = inferred
-            current_available = float(row["available_qty"] or 0)
             buffer_pct = float(row["buffer_percentage"] or 0)
 
             buffer_delta = 0.0
@@ -968,33 +961,23 @@ def update_max_quantities(payload: UpdateMaxQtyRequest) -> Dict[str, Any]:
                 if additional < 0:
                     buffer_delta *= -1
 
-            new_max = current_max + additional
-            if new_max < 0:
-                new_max = 0
-
-            new_buffer = current_buffer + buffer_delta
-            if new_buffer < 0:
-                new_buffer = 0
-
-            new_final = max(new_max + new_buffer, 0)
-            new_available = current_available + additional + buffer_delta
-            new_available = max(0, min(new_available, new_final, new_max))
+            new_planned = max(current_planned + additional, 0)
+            new_buffer = max(current_buffer + buffer_delta, 0)
+            new_final = max(new_planned + new_buffer, 0)
 
             cursor.execute(
                 """
                 UPDATE menu_items
-                   SET max_qty = %s,
+                   SET planned_qty = %s,
                        buffer_qty = %s,
-                       final_qty = %s,
-                       available_qty = %s
+                       final_qty = %s
                  WHERE menu_id = %s
                    AND menu_item_id = %s
                 """,
                 (
-                    new_max,
+                    new_planned,
                     new_buffer,
                     new_final,
-                    new_available,
                     menu_id,
                     row["menu_item_id"],
                 ),
@@ -1003,10 +986,9 @@ def update_max_quantities(payload: UpdateMaxQtyRequest) -> Dict[str, Any]:
             updated_items.append(
                 {
                     "item_name": adjustment.item_name,
-                    "new_max_qty": new_max,
+                    "new_planned_qty": new_planned,
                     "new_buffer_qty": new_buffer,
                     "new_final_qty": new_final,
-                    "new_available_qty": new_available,
                 }
             )
 
@@ -1397,8 +1379,9 @@ def get_production_orders_summary(
                 FROM orders o
                 JOIN order_items oi ON oi.order_id = o.order_id
                 JOIN addresses a ON o.address_id = a.address_id
-                WHERE COALESCE(o.order_date, DATE(o.created_at)) = %s
+                WHERE COALESCE(o.delivery_date, DATE(o.created_at)) = %s
                   AND a.city_code = %s
+                  AND COALESCE(o.order_type, '') != 'subscription'
                   AND LOWER(REPLACE(COALESCE(o.status, ''), ' (Payment Due)', '')) NOT IN (
                     'cancelled',
                     'cancelled by customer',

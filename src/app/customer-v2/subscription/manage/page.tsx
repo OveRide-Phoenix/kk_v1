@@ -21,7 +21,7 @@ type OrderItem = {
 type OrderSummary = {
   order_id: number;
   created_at: string | null;
-  order_date?: string | null;
+  delivery_date?: string | null;
   total_price: number;
   status: string;
   payment_status?: string;
@@ -89,7 +89,7 @@ const readableDate = (value: string | null) => {
   return formatDate(date, "EEE, d MMM yyyy");
 };
 
-const planStartValue = (plan: OrderSummary) => plan.order_date ?? plan.created_at;
+const planStartValue = (plan: OrderSummary) => plan.delivery_date ?? plan.created_at;
 
 const inputDate = (date: Date) => formatDate(date, "yyyy-MM-dd");
 

@@ -311,7 +311,7 @@ class Order(Base):
     total_price = Column(DECIMAL(10, 2), nullable=False)
     status = Column(String(50), nullable=True, default="Confirmed")
     payment_method = Column(String(50), nullable=False)
-    order_date = Column(Date, nullable=True)
+    delivery_date = Column(Date, nullable=True)
     discount = Column(DECIMAL(10, 2), nullable=True, default=0.00)
     cgst = Column(DECIMAL(10, 2), nullable=True, default=0.00)
     sgst = Column(DECIMAL(10, 2), nullable=True, default=0.00)

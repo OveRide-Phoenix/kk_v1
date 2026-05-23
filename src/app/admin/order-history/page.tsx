@@ -89,6 +89,7 @@ type OrderItem = {
 type OrderRecord = {
   order_id: number;
   created_at: string | null;
+  delivery_date: string | null;
   order_type: string;
   status: string;
   payment_status?: string;
@@ -200,8 +201,12 @@ const paymentBadgeClass = (paid: boolean) =>
 
 const formatOrderId = (raw: number) => `ORD-${String(raw).padStart(5, "0")}`;
 
-const orderTypeLabel = (orderType: string) =>
-  orderType.trim().toLowerCase() === "subscription" ? "Subscription" : "Normal";
+const orderTypeLabel = (orderType: string) => {
+  const t = orderType.trim().toLowerCase();
+  if (t === "subscription") return "Subscription";
+  if (t === "subscription_daily") return "Subscription (Daily)";
+  return "Normal";
+};
 
 const buildInvoiceHtml = (invoice: InvoiceResponse) => {
   const rows = invoice.items
@@ -803,7 +808,14 @@ export default function OrderHistoryPage() {
                               </span>
                             </div>
                           </TableCell>
-                          <TableCell>{formatDateTime(order.created_at)}</TableCell>
+                          <TableCell>
+                            <div>{formatDateTime(order.created_at)}</div>
+                            {order.delivery_date && (
+                              <div className="text-xs text-muted-foreground">
+                                Delivery: {order.delivery_date}
+                              </div>
+                            )}
+                          </TableCell>
                           <TableCell>
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -971,6 +983,12 @@ export default function OrderHistoryPage() {
                 <div className="space-y-1 text-sm">
                   <p className="font-semibold text-foreground">Placed</p>
                   <p>{formatDateTime(selectedOrder.created_at)}</p>
+                  {selectedOrder.delivery_date && (
+                    <>
+                      <p className="font-semibold text-foreground">Delivery date</p>
+                      <p>{selectedOrder.delivery_date}</p>
+                    </>
+                  )}
                   <p className="font-semibold text-foreground">Order type</p>
                   <Badge variant="outline" className="w-fit">
                     {orderTypeLabel(selectedOrder.order_type)}

@@ -278,7 +278,7 @@ CREATE TABLE `orders` (
   `total_price` decimal(10,2) NOT NULL,
   `status` varchar(50) DEFAULT 'Confirmed',
   `payment_method` varchar(50) NOT NULL,
-  `order_date` date DEFAULT NULL,
+  `delivery_date` date DEFAULT NULL,
   `discount` decimal(10,2) DEFAULT '0.00',
   `cgst` decimal(10,2) DEFAULT '0.00',
   `sgst` decimal(10,2) DEFAULT '0.00',
@@ -289,7 +289,7 @@ CREATE TABLE `orders` (
   PRIMARY KEY (`order_id`),
   KEY `customer_id` (`customer_id`),
   KEY `address_id` (`address_id`),
-  KEY `idx_orders_order_date` (`order_date`),
+  KEY `idx_orders_delivery_date` (`delivery_date`),
   CONSTRAINT `orders_ibfk_1` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`customer_id`),
   CONSTRAINT `orders_ibfk_2` FOREIGN KEY (`address_id`) REFERENCES `addresses` (`address_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

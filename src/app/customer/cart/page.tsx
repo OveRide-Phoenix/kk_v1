@@ -54,7 +54,7 @@ type CartLine = {
 };
 
 type CartContext = {
-  order_date: string;
+  delivery_date: string;
   address_id: number;
   order_type?: string;
 };
@@ -232,7 +232,7 @@ export default function CartPage() {
       customer_id: user?.customer_id ?? 0,
       address_id: selectedAddress.address_id,
       payment_method: paymentMethod,
-      order_date: cartContext?.order_date,
+      delivery_date: cartContext?.delivery_date,
       order_type: cartContext?.order_type ?? "one_time",
       discount_code: appliedCoupons[0],
       items: cartItems.map((item) => ({
@@ -343,7 +343,7 @@ export default function CartPage() {
   useEffect(() => {
     if (!cartItems.length || !selectedAddress) return;
     const context: CartContext = {
-      order_date: cartContext?.order_date ?? formatDate(new Date(), "yyyy-MM-dd"),
+      delivery_date: cartContext?.delivery_date ?? formatDate(new Date(), "yyyy-MM-dd"),
       address_id: selectedAddress.address_id,
       order_type: cartContext?.order_type ?? "one_time",
     };
@@ -489,10 +489,10 @@ export default function CartPage() {
                 <CardTitle className="text-xl font-serif text-[#463028]">Order Summary</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 text-sm text-[#8d6e63]">
-                {cartContext?.order_date && (
+                {cartContext?.delivery_date && (
                   <div className="flex justify-between">
                     <span>Delivery date</span>
-                    <span>{cartContext.order_date}</span>
+                    <span>{cartContext.delivery_date}</span>
                   </div>
                 )}
                 {selectedAddress && (
