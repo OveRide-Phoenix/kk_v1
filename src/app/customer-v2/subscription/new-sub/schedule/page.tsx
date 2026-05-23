@@ -229,6 +229,7 @@ export default function SubscriptionSchedulePage() {
       if (!res.ok) throw new Error(data?.detail || "Failed to confirm subscription");
       setOrderResult(data as OrderResponse);
       localStorage.removeItem(SUB_ITEMS_KEY);
+      localStorage.setItem("kk_last_order_ts", Date.now().toString());
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : "Something went wrong");
     } finally {

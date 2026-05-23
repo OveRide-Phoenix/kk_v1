@@ -141,9 +141,16 @@ export function AdminLayout({ children, activePage, onNavigateAttempt }: AdminLa
       }
     };
 
+    // Check once on mount, then re-check whenever the customer cart signals a new order
     checkLowStock();
-    const intervalId = setInterval(checkLowStock, 60_000);
-    return () => clearInterval(intervalId);
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === "kk_last_order_ts") {
+        checkLowStock();
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
   }, [isHydrated, normalizedAdminCity, addNotification]);
 
   const handleLogout = useCallback(async () => {

@@ -360,6 +360,7 @@ export default function CustomerV2CartPage() {
       localStorage.removeItem(CART_STORAGE_KEY);
       localStorage.removeItem(CART_CONTEXT_KEY);
       localStorage.setItem(CART_REFRESH_KEY, "1");
+      localStorage.setItem("kk_last_order_ts", Date.now().toString());
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Unexpected error");
     } finally {
