@@ -32,11 +32,28 @@ type PackingIssue = {
   detail?: string | null;
 };
 
+type ComboPack = {
+  combo_id: number;
+  menu_item_id: number;
+  combo_name: string;
+  order_units: number;
+  pack_count: number;
+  components?: Array<{
+    item_name?: string | null;
+    component_type_name?: string | null;
+    quantity_per_pack: number;
+    total_units: number;
+    resolution_status?: "specific" | "resolved" | "unresolved" | string;
+    detail?: string | null;
+  }>;
+};
+
 type PackingMeal = {
   meal: MealName;
   is_released: boolean;
   is_production_generated: boolean;
   items: PackingItem[];
+  combo_packs?: ComboPack[];
   issues: PackingIssue[];
 };
 
@@ -77,6 +94,57 @@ const buildPrintMarkup = (
     plan?.meals
       .filter((meal) => visibleMeals.includes(meal.meal))
       .map((meal) => {
+        const comboRows =
+          meal.combo_packs && meal.combo_packs.length > 0
+            ? `
+          <div class="combo-packs">
+            <h3>Combo Packs</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Combo</th>
+                  <th>No. of Combo Packs</th>
+                  <th>Consists of</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${meal.combo_packs
+                  .map(
+                    (combo) => `
+                    <tr>
+                      <td>${combo.combo_name}</td>
+                      <td>${formatQuantity(combo.pack_count)}</td>
+                      <td>
+                        ${
+                          combo.components && combo.components.length > 0
+                            ? `<ul class="components">${combo.components
+                                .map((component) => {
+                                  const name =
+                                    component.item_name ||
+                                    component.component_type_name ||
+                                    component.detail ||
+                                    "Unresolved item";
+                                  const group =
+                                    component.component_type_name &&
+                                    component.item_name &&
+                                    component.component_type_name !== component.item_name
+                                      ? ` (${component.component_type_name})`
+                                      : "";
+                                  return `<li>${name}${group} · ${formatQuantity(component.quantity_per_pack)} per pack · ${formatQuantity(component.total_units)} total</li>`;
+                                })
+                                .join("")}</ul>`
+                            : "—"
+                        }
+                      </td>
+                    </tr>
+                  `,
+                  )
+                  .join("")}
+              </tbody>
+            </table>
+          </div>
+        `
+            : "";
         const rows =
           meal.items.length > 0
             ? meal.items
@@ -127,6 +195,7 @@ const buildPrintMarkup = (
             </thead>
             <tbody>${rows}</tbody>
           </table>
+          ${comboRows}
           ${issues}
         </section>
       `;
@@ -147,6 +216,9 @@ const buildPrintMarkup = (
         table { width: 100%; border-collapse: collapse; }
         th, td { border: 1px solid #e5e7eb; padding: 10px; text-align: left; }
         th { background: #f9fafb; }
+        .combo-packs { margin-top: 18px; }
+        .combo-packs h3 { margin: 0 0 8px; font-size: 16px; }
+        .components { margin: 0; padding-left: 18px; }
         .issues { margin-top: 12px; }
         .issues h4 { margin: 0 0 8px; font-size: 14px; }
         .issues ul { margin: 0; padding-left: 18px; color: #92400e; }
@@ -237,6 +309,10 @@ function PackingPlanPageContent() {
           isProductionExported: Boolean(mealData?.is_production_generated),
           totalPackingQty: (mealData?.items ?? []).reduce(
             (sum, item) => sum + getPackingTotal(item),
+            0,
+          ),
+          comboPackCount: (mealData?.combo_packs ?? []).reduce(
+            (sum, combo) => sum + Number(combo.pack_count || 0),
             0,
           ),
         };
@@ -332,6 +408,12 @@ function PackingPlanPageContent() {
                 </span>
               </div>
               <div className="flex items-center justify-between">
+                <span>Combo packs</span>
+                <span className="font-medium text-foreground">
+                  {formatQuantity(card.comboPackCount)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
                 <span>Issues</span>
                 <span className="font-medium text-foreground">{card.issueCount}</span>
               </div>
@@ -397,6 +479,93 @@ function PackingPlanPageContent() {
               </table>
             </div>
           )}
+
+          {selectedMealData?.is_production_generated &&
+          selectedMealData.combo_packs &&
+          selectedMealData.combo_packs.length > 0 ? (
+            <div className="mt-6 rounded-lg border border-border">
+              <div className="border-b border-border px-4 py-3">
+                <p className="font-semibold text-foreground">Combo Packs</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Pack these combos as complete customer packs after component packing is ready.
+                </p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[420px] border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b text-left">
+                      <th className="px-4 py-3 font-medium text-muted-foreground">Combo</th>
+                      <th className="px-4 py-3 font-medium text-muted-foreground">
+                        No. of Combo Packs
+                      </th>
+                      <th className="px-4 py-3 font-medium text-muted-foreground">
+                        Consists of
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedMealData.combo_packs.map((combo) => (
+                      <tr
+                        key={`${selectedMeal}-${combo.menu_item_id}`}
+                        className="border-b last:border-0"
+                      >
+                        <td className="px-4 py-3 font-medium text-foreground">
+                          {combo.combo_name}
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-foreground">
+                          {formatQuantity(combo.pack_count)}
+                        </td>
+                        <td className="px-4 py-3">
+                          {combo.components && combo.components.length > 0 ? (
+                            <ul className="space-y-1">
+                              {combo.components.map((component, index) => {
+                                const componentName =
+                                  component.item_name ||
+                                  component.component_type_name ||
+                                  component.detail ||
+                                  "Unresolved item";
+                                const groupLabel =
+                                  component.component_type_name &&
+                                  component.item_name &&
+                                  component.component_type_name !== component.item_name
+                                    ? component.component_type_name
+                                    : null;
+                                return (
+                                  <li
+                                    key={`${combo.menu_item_id}-component-${index}`}
+                                    className="text-muted-foreground"
+                                  >
+                                    <span className="font-medium text-foreground">
+                                      {componentName}
+                                    </span>
+                                    {groupLabel ? (
+                                      <span className="text-xs"> ({groupLabel})</span>
+                                    ) : null}
+                                    <span>
+                                      {" "}
+                                      · {formatQuantity(component.quantity_per_pack)} per pack ·{" "}
+                                      {formatQuantity(component.total_units)} total
+                                    </span>
+                                    {component.resolution_status === "unresolved" ? (
+                                      <Badge variant="destructive" className="ml-2">
+                                        Unresolved
+                                      </Badge>
+                                    ) : null}
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : null}
 
           {selectedMealData?.issues.length ? (
             <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">

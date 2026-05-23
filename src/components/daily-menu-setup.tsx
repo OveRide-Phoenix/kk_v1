@@ -103,22 +103,71 @@ const serializeMenuRows = (rows: MenuItem[]) =>
     })),
   );
 
-const parseMenuErrorMessage = (bodyText: string, fallback: string) => {
-  if (!bodyText) return fallback;
+type MenuValidationIssue = {
+  issue_type?: string | null;
+  component_type_id?: number | null;
+  component_type_name?: string | null;
+  meal?: string | null;
+  sources?: string | null;
+  item_count?: number | null;
+  default_count?: number | null;
+  message: string;
+};
+
+type MenuErrorInfo = {
+  message: string;
+  issues: MenuValidationIssue[];
+};
+
+type MenuValidationDialogState = MenuErrorInfo & {
+  title: string;
+};
+
+const issueFromUnknown = (issue: unknown): MenuValidationIssue => {
+  if (typeof issue === "string") {
+    return { message: issue };
+  }
+  if (issue && typeof issue === "object") {
+    const raw = issue as Record<string, unknown>;
+    return {
+      issue_type: typeof raw.issue_type === "string" ? raw.issue_type : null,
+      component_type_id: typeof raw.component_type_id === "number" ? raw.component_type_id : null,
+      component_type_name:
+        typeof raw.component_type_name === "string" ? raw.component_type_name : null,
+      meal: typeof raw.meal === "string" ? raw.meal : null,
+      sources: typeof raw.sources === "string" ? raw.sources : null,
+      item_count: typeof raw.item_count === "number" ? raw.item_count : null,
+      default_count: typeof raw.default_count === "number" ? raw.default_count : null,
+      message: typeof raw.message === "string" ? raw.message : "Subscription menu issue.",
+    };
+  }
+  return { message: "Subscription menu issue." };
+};
+
+const parseMenuErrorInfo = (bodyText: string, fallback: string): MenuErrorInfo => {
+  if (!bodyText) return { message: fallback, issues: [] };
   try {
     const errorData = JSON.parse(bodyText);
     const detail = errorData?.detail;
     if (typeof detail === "string") {
-      return detail;
+      return { message: detail, issues: [] };
     }
     if (detail?.message) {
-      const issues = Array.isArray(detail.issues) ? detail.issues.join(" ") : "";
-      return `${detail.message}${issues ? ` ${issues}` : ""}`;
+      return {
+        message: String(detail.message),
+        issues: Array.isArray(detail.issues) ? detail.issues.map(issueFromUnknown) : [],
+      };
     }
   } catch {
     /* fall through to plain-text body */
   }
-  return bodyText;
+  return { message: bodyText, issues: [] };
+};
+
+const issueTypeLabel = (issueType?: string | null) => {
+  if (issueType === "missing_daily_item") return "Missing item";
+  if (issueType === "missing_default_item") return "Default needed";
+  return "Issue";
 };
 
 export function DailyMenuSetup() {
@@ -139,6 +188,8 @@ export function DailyMenuSetup() {
     useState<Record<MealSection, string>>(emptyFingerprintState);
   const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false);
   const [pendingNavigationHref, setPendingNavigationHref] = useState<string | null>(null);
+  const [menuValidationDialog, setMenuValidationDialog] =
+    useState<MenuValidationDialogState | null>(null);
 
   // Calendar state
   const [draftDate, setDraftDate] = useState<Date | null>(() => {
@@ -724,10 +775,16 @@ export function DailyMenuSetup() {
       const res = await http.post("/api/menu", payload);
 
       if (!res.ok) {
-        const message = parseMenuErrorMessage(await res.text(), "Unable to save this menu.");
+        const errorInfo = parseMenuErrorInfo(await res.text(), "Unable to save this menu.");
+        if (errorInfo.issues.length > 0) {
+          setMenuValidationDialog({
+            title: "Resolve subscription menu issues",
+            ...errorInfo,
+          });
+        }
         toast({
           title: "Menu not saved",
-          description: message,
+          description: errorInfo.message,
           variant: "destructive",
         });
         return false;
@@ -797,13 +854,19 @@ export function DailyMenuSetup() {
 
       const res = await http.patch(endpoint);
       if (!res.ok) {
-        const message = parseMenuErrorMessage(
+        const errorInfo = parseMenuErrorInfo(
           await res.text(),
           "Unable to update menu release status.",
         );
+        if (errorInfo.issues.length > 0) {
+          setMenuValidationDialog({
+            title: unrelease ? "Could not unrelease menu" : "Resolve subscription menu issues",
+            ...errorInfo,
+          });
+        }
         toast({
           title: unrelease ? "Could not unrelease menu" : "Could not release menu",
-          description: message,
+          description: errorInfo.message,
           variant: "destructive",
         });
         return;
@@ -1385,6 +1448,52 @@ export function DailyMenuSetup() {
           </Dialog>
         </CardContent>
       </Card>
+      <Dialog
+        open={Boolean(menuValidationDialog)}
+        onOpenChange={(open) => {
+          if (!open) setMenuValidationDialog(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-[680px]">
+          <DialogHeader>
+            <DialogTitle>{menuValidationDialog?.title ?? "Menu needs attention"}</DialogTitle>
+            <DialogDescription>{menuValidationDialog?.message}</DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[55vh] space-y-3 overflow-y-auto pr-1">
+            {menuValidationDialog?.issues.map((issue, index) => (
+              <div key={`${issue.component_type_id ?? "issue"}-${index}`} className="rounded-md border border-border p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="destructive">{issueTypeLabel(issue.issue_type)}</Badge>
+                  <p className="font-medium text-foreground">
+                    {issue.component_type_name ?? `Issue ${index + 1}`}
+                  </p>
+                  {issue.meal ? (
+                    <Badge variant="outline" className="capitalize">
+                      {issue.meal}
+                    </Badge>
+                  ) : null}
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">{issue.message}</p>
+                {issue.sources ? (
+                  <p className="mt-2 text-sm">
+                    <span className="font-medium text-foreground">Used by subscription:</span>{" "}
+                    <span className="text-muted-foreground">{issue.sources}</span>
+                  </p>
+                ) : null}
+                {issue.item_count != null || issue.default_count != null ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Daily Menu matches: {issue.item_count ?? 0}; defaults selected:{" "}
+                    {issue.default_count ?? 0}.
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setMenuValidationDialog(null)}>Got it</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={unsavedDialogOpen} onOpenChange={setUnsavedDialogOpen}>
         <DialogContent>
           <DialogHeader>

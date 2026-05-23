@@ -978,12 +978,11 @@ def _validate_subscription_groups_for_daily_menu(cursor, menu_id: int) -> None:
     if not subscription_groups:
         return
 
-    issues: List[str] = []
+    issues: List[Dict[str, Any]] = []
     for group in subscription_groups:
         component_type_id = group.get("component_type_id")
         component_type_name = group.get("component_type_name") or f"Item Group #{component_type_id}"
         sources = group.get("sources")
-        source_suffix = f" Used by: {sources}." if sources else ""
         cursor.execute(
             """
             SELECT
@@ -1001,11 +1000,34 @@ def _validate_subscription_groups_for_daily_menu(cursor, menu_id: int) -> None:
         default_count = int(resolution.get("default_count") or 0)
         if item_count == 0:
             issues.append(
-                f"{component_type_name}: add one {menu['bld_type']} Daily Menu item for this item group.{source_suffix}"
+                {
+                    "issue_type": "missing_daily_item",
+                    "component_type_id": component_type_id,
+                    "component_type_name": component_type_name,
+                    "meal": menu["bld_type"],
+                    "sources": sources,
+                    "item_count": item_count,
+                    "default_count": default_count,
+                    "message": (
+                        f"Add one {menu['bld_type']} Daily Menu item for this item group."
+                    ),
+                }
             )
         elif item_count > 1 and default_count != 1:
             issues.append(
-                f"{component_type_name}: choose exactly one default item because multiple Daily Menu items match.{source_suffix}"
+                {
+                    "issue_type": "missing_default_item",
+                    "component_type_id": component_type_id,
+                    "component_type_name": component_type_name,
+                    "meal": menu["bld_type"],
+                    "sources": sources,
+                    "item_count": item_count,
+                    "default_count": default_count,
+                    "message": (
+                        "Choose exactly one default item because multiple Daily Menu "
+                        "items match this item group."
+                    ),
+                }
             )
 
     if issues:
