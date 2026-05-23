@@ -187,7 +187,12 @@ def get_dev_db_schema(
         except Exception:
             pass
 
-        schema_name = (schema.strip() if schema else "kk_v1") or "kk_v1"
+        if schema and schema.strip():
+            schema_name = schema.strip()
+        else:
+            metadata_cursor.execute("SELECT DATABASE()")
+            row = metadata_cursor.fetchone()
+            schema_name = row[0] if row and row[0] else "kk_v1"
         if not SCHEMA_NAME_PATTERN.fullmatch(schema_name):
             raise HTTPException(status_code=400, detail="Invalid schema name")
         metadata_cursor.execute(f"USE `{schema_name}`")
