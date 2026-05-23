@@ -1039,6 +1039,69 @@ def _validate_subscription_groups_for_daily_menu(cursor, menu_id: int) -> None:
         )
 
 
+def _validate_combo_generic_components(cursor, menu_id: int) -> None:
+    """Block menu release if any combo's generic components are missing from the daily menu.
+
+    A combo may include generic components — rows in combo_items where component_type_id is set
+    and item_id is NULL. These mean "pick any item of this type". For a daily menu to be
+    releasable, every such component_type must be satisfied by at least one item in the menu
+    (i.e., a menu_items row with an item whose items.component_type_id matches).
+
+    Args:
+        cursor: Dictionary cursor on the active database connection.
+        menu_id: ID of the daily menu being released.
+    """
+    cursor.execute(
+        """
+        SELECT
+            ci.component_type_id,
+            ct.name AS component_type_name,
+            GROUP_CONCAT(DISTINCT c.combo_name ORDER BY c.combo_name SEPARATOR ', ') AS combo_names
+          FROM menu_items mi
+          JOIN combos c ON c.combo_id = mi.combo_id
+          JOIN combo_items ci ON ci.combo_id = c.combo_id
+          JOIN component_types ct ON ct.component_type_id = ci.component_type_id
+         WHERE mi.menu_id = %s
+           AND mi.combo_id IS NOT NULL
+           AND ci.component_type_id IS NOT NULL
+           AND ci.item_id IS NULL
+         GROUP BY ci.component_type_id, ct.name
+         ORDER BY ct.name ASC
+        """,
+        (menu_id,),
+    )
+    required_types = cursor.fetchall() or []
+    if not required_types:
+        return
+
+    issues: List[str] = []
+    for row in required_types:
+        component_type_id = row.get("component_type_id")
+        component_type_name = row.get("component_type_name") or f"component #{component_type_id}"
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS item_count
+              FROM menu_items mi
+              JOIN items i ON i.item_id = mi.item_id
+             WHERE mi.menu_id = %s
+               AND i.component_type_id = %s
+            """,
+            (menu_id, component_type_id),
+        )
+        result = cursor.fetchone() or {}
+        if int(result.get("item_count") or 0) == 0:
+            issues.append(f"Please select today's {component_type_name}")
+
+    if issues:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "Resolve missing combo components before releasing this menu.",
+                "issues": issues,
+            },
+        )
+
+
 @router.patch("/api/menu/{menu_id}/release")
 def release_menu(menu_id: int) -> Dict[str, Any]:
     """Mark a menu as released so customers can see and order from it.
@@ -1057,6 +1120,7 @@ def release_menu(menu_id: int) -> Dict[str, Any]:
             raise HTTPException(status_code=404, detail="Menu not found")
 
         _validate_subscription_groups_for_daily_menu(cursor, menu_id)
+        _validate_combo_generic_components(cursor, menu_id)
 
         cursor.execute("UPDATE menu SET is_released = 1 WHERE menu_id = %s", (menu_id,))
         db.commit()

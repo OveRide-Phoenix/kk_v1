@@ -48,7 +48,7 @@ export default function RootLayout({
 
         {/* ✅ Use Next.js `Script` component for better handling */}
         <Script
-          src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCE0f3L2qXluZn96UVI-U_Bh8WIWX_e_kI&libraries=places"
+          src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCE0f3L2qXluZn96UVI-U_Bh8WIWX_e_kI&libraries=places&loading=async"
           strategy="lazyOnload"
         />
       </body>
