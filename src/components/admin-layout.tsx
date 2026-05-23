@@ -587,7 +587,10 @@ export function AdminLayout({ children, activePage, onNavigateAttempt }: AdminLa
                     >
                       <Bell className="h-5 w-5" />
                       {unreadNotifications > 0 && (
-                        <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-destructive" />
+                        <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-60" />
+                          <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-400 shadow-[0_0_6px_2px_rgba(251,191,36,0.5)]" />
+                        </span>
                       )}
                     </Button>
                   </PopoverTrigger>
