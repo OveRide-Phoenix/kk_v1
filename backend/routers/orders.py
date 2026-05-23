@@ -243,7 +243,9 @@ def _compute_order_totals(
     for index, item in enumerate(items):
         has_item = item.item_id is not None
         has_combo = item.combo_id is not None
-        if has_item == has_combo:
+        # Item-group subscription lines carry only menu_item_id (no resolved item/combo yet)
+        is_group_line = not has_item and not has_combo and item.menu_item_id is not None
+        if not is_group_line and has_item == has_combo:
             raise HTTPException(
                 status_code=400,
                 detail=f"items[{index}] must include exactly one of item_id or combo_id",

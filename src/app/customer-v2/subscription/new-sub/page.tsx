@@ -261,7 +261,7 @@ export default function NewSubscriptionPage() {
             Subscriptions
           </button>
           <h1
-            className="mb-2 text-4xl font-bold text-[#8D4925] md:text-5xl"
+            className="mb-2 text-4xl font-bold text-[#8D4925]"
             style={{ fontFamily: "var(--font-v2-playfair)" }}
           >
             Subscription Menu
@@ -367,10 +367,7 @@ export default function NewSubscriptionPage() {
             menu_book
           </span>
           <p className="text-sm text-[#8D4925]">
-            No subscription items available for {MEAL_LABELS[activeMeal]} yet.
-          </p>
-          <p className="mt-1 text-xs text-gray-400">
-            The admin hasn&apos;t released the subscription menu for this meal.
+            No items available for {MEAL_LABELS[activeMeal]} right now.
           </p>
         </div>
       ) : menuView === "grid" ? (
@@ -386,7 +383,9 @@ export default function NewSubscriptionPage() {
                 <div className="relative h-44 overflow-hidden">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    alt={item.item_name}
+                    alt={
+                      isItemGroup ? (item.component_type_name ?? item.item_name) : item.item_name
+                    }
                     className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                     src={item.picture_url || PLACEHOLDER_IMAGE}
                   />
@@ -402,7 +401,7 @@ export default function NewSubscriptionPage() {
                       className="text-base font-bold text-gray-900 transition-colors group-hover:text-[#8D4925]"
                       style={{ fontFamily: "var(--font-v2-playfair)" }}
                     >
-                      {item.item_name}
+                      {isItemGroup ? (item.component_type_name ?? item.item_name) : item.item_name}
                     </h3>
                     {isItemGroup && (
                       <p className="text-xs font-semibold text-[#1b4332]">
@@ -473,7 +472,9 @@ export default function NewSubscriptionPage() {
                 <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-lg">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    alt={item.item_name}
+                    alt={
+                      isItemGroup ? (item.component_type_name ?? item.item_name) : item.item_name
+                    }
                     className="h-full w-full object-cover"
                     src={item.picture_url || PLACEHOLDER_IMAGE}
                   />
@@ -491,7 +492,9 @@ export default function NewSubscriptionPage() {
                           className="text-lg font-bold text-gray-900"
                           style={{ fontFamily: "var(--font-v2-playfair)" }}
                         >
-                          {item.item_name}
+                          {isItemGroup
+                            ? (item.component_type_name ?? item.item_name)
+                            : item.item_name}
                         </h3>
                         {isItemGroup && (
                           <p className="text-xs font-semibold text-[#1b4332]">
@@ -602,7 +605,29 @@ export default function NewSubscriptionPage() {
 
             <button
               type="button"
-              onClick={() => router.push("/customer-v2/subscription/new-sub/schedule")}
+              onClick={() => {
+                localStorage.setItem(
+                  "sub_schedule_items",
+                  JSON.stringify(
+                    selectionLines.map((l) => {
+                      const mi = allMenuItems[l.menu_item_id];
+                      const isGroup =
+                        Boolean(mi?.component_type_id) && !mi?.item_id && !mi?.combo_id;
+                      return {
+                        menu_item_id: l.menu_item_id,
+                        item_name: isGroup ? (mi?.component_type_name ?? l.item_name) : l.item_name,
+                        quantity: l.quantity,
+                        rate: l.rate,
+                        item_id: mi?.item_id ?? null,
+                        combo_id: mi?.combo_id ?? null,
+                        meal: mi?.meal ?? "breakfast",
+                        picture_url: mi?.picture_url ?? null,
+                      };
+                    }),
+                  ),
+                );
+                router.push("/customer-v2/subscription/new-sub/schedule");
+              }}
               className="flex items-center gap-3 rounded-full border-2 border-white/20 bg-[#114232] px-6 py-4 text-white shadow-2xl transition-transform hover:scale-105 active:scale-95"
             >
               <span className="material-symbols-outlined">event_available</span>

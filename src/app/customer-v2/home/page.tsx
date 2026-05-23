@@ -261,6 +261,7 @@ export default function CustomerHomeV2Page() {
     const today = new Date();
     const matches = orders.filter((order) => {
       if (!order.created_at) return false;
+      if ((order.order_type ?? "").toLowerCase() === "subscription") return false;
       const orderDate = new Date(order.created_at);
       if (Number.isNaN(orderDate.getTime())) return false;
       return isSameDay(orderDate, today);
@@ -349,13 +350,16 @@ export default function CustomerHomeV2Page() {
         >
           <div className="flex flex-col gap-6 lg:col-span-1">
             <div>
+              <p className="mb-1 text-sm font-bold uppercase tracking-widest text-[#8D4925]/50">
+                {formatDate(new Date(), "EEE, d MMM")}
+              </p>
               <h1
                 className="mb-2 text-4xl font-bold text-[#8D4925]"
                 style={{ fontFamily: "var(--font-v2-playfair)" }}
               >
-                Good Morning, {customerName}!
+                Good morning, {customerName}.
               </h1>
-              <p className="text-gray-600">Your healthy meals are ready for the day.</p>
+              <p className="text-gray-600">Your fresh meals are ready for the day.</p>
             </div>
           </div>
 
@@ -575,9 +579,11 @@ export default function CustomerHomeV2Page() {
           ) : (
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
               {todayMenuItems.map((item) => (
-                <div
+                <button
                   key={`${item.meal}-${item.menu_item_id}`}
-                  className="group overflow-hidden rounded-2xl border border-orange-50 bg-white shadow-sm transition-shadow hover:shadow-md"
+                  type="button"
+                  onClick={() => router.push(`/customer-v2/new-order?meal=${currentMeal}`)}
+                  className="group cursor-pointer overflow-hidden rounded-2xl border border-orange-50 bg-white text-left shadow-sm transition-shadow hover:shadow-md"
                 >
                   <div className="relative h-44 overflow-hidden">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -598,7 +604,7 @@ export default function CustomerHomeV2Page() {
                       {item.description || "Freshly prepared special from Kuteera Kitchen."}
                     </p>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}

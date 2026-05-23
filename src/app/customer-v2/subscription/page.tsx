@@ -64,6 +64,16 @@ const MEAL_OPTIONS = [
   },
 ] as const;
 
+type TodayItem = {
+  meal_type: string;
+  group_name: string;
+  quantity: number;
+  resolved_item_name: string | null;
+  resolved_picture_url: string | null;
+  resolved_price: number | null;
+  menu_released: boolean;
+};
+
 export default function SubscriptionHomePage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
@@ -72,6 +82,8 @@ export default function SubscriptionHomePage() {
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [showPlansDialog, setShowPlansDialog] = useState(false);
+  const [todayItems, setTodayItems] = useState<TodayItem[]>([]);
+  const [todayLoading, setTodayLoading] = useState(false);
 
   useEffect(() => {
     setHydrated(true);
@@ -119,6 +131,32 @@ export default function SubscriptionHomePage() {
       cancelled = true;
     };
   }, [customerId]);
+
+  useEffect(() => {
+    if (!customerId) return;
+    let cancelled = false;
+    setTodayLoading(true);
+    (async () => {
+      try {
+        const cityCode =
+          (typeof window !== "undefined" && localStorage.getItem("admin_city_code")) ||
+          user?.city_code ||
+          "";
+        const qs = cityCode ? `?city_code=${encodeURIComponent(cityCode)}` : "";
+        const res = await http.get(`/api/customers/${customerId}/subscription-today${qs}`);
+        if (!res.ok) throw new Error();
+        const data = (await res.json()) as TodayItem[];
+        if (!cancelled) setTodayItems(data);
+      } catch {
+        if (!cancelled) setTodayItems([]);
+      } finally {
+        if (!cancelled) setTodayLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [customerId, user?.city_code]);
 
   const activeSubscriptions = useMemo(() => {
     if (!orders.length) return [];
@@ -243,89 +281,100 @@ export default function SubscriptionHomePage() {
           ) : null}
         </div>
 
-        {/* ── Active plans list preview ─────────────────────────────── */}
-        {hasActivePlan && !ordersLoading ? (
+        {/* ── Today's resolved menu ────────────────────────────────── */}
+        {(todayLoading || todayItems.length > 0) && (
           <section className="mb-12">
             <div className="mb-6 flex items-center justify-between">
-              <h2
-                className="text-3xl font-bold text-[#8D4925]"
-                style={{ fontFamily: "var(--font-v2-playfair)" }}
-              >
-                Active Plans
-              </h2>
-              <button
-                type="button"
-                onClick={() => setShowPlansDialog(true)}
-                className="group flex cursor-pointer items-center gap-2 text-sm font-bold uppercase tracking-widest text-[#1b4332] transition-colors hover:text-[#0d3327]"
-              >
-                View All{" "}
-                <span className="material-symbols-outlined text-lg transition-transform duration-200 group-hover:translate-x-0.5">
-                  arrow_forward
-                </span>
-              </button>
+              <div>
+                <p className="mb-1 text-sm font-bold uppercase tracking-widest text-[#8D4925]/50">
+                  {formatDate(new Date(), "EEE, d MMM")}
+                </p>
+                <h2
+                  className="text-3xl font-bold text-[#8D4925]"
+                  style={{ fontFamily: "var(--font-v2-playfair)" }}
+                >
+                  Today&apos;s Delivery
+                </h2>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {activeSubscriptions.slice(0, 3).map((sub) => (
-                <button
-                  key={sub.order_id}
-                  type="button"
-                  onClick={() => setShowPlansDialog(true)}
-                  className="cursor-pointer overflow-hidden rounded-2xl border border-orange-50 bg-white text-left shadow-sm transition-shadow hover:shadow-md"
-                >
-                  <div className="border-b border-orange-50 px-5 py-4">
-                    <div className="flex items-center justify-between">
+            {todayLoading ? (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-32 rounded-2xl" />
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                {todayItems.map((item, idx) => (
+                  <div
+                    key={idx}
+                    className="overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-sm"
+                  >
+                    <div className="relative h-44 w-full bg-orange-50">
+                      {item.resolved_picture_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={item.resolved_picture_url}
+                          alt={item.resolved_item_name ?? item.group_name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center">
+                          <span className="material-symbols-outlined text-5xl text-[#8D4925]/20">
+                            restaurant
+                          </span>
+                        </div>
+                      )}
+                      {!item.menu_released && (
+                        <span className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[#8D4925]/70 backdrop-blur-sm">
+                          TBD
+                        </span>
+                      )}
+                    </div>
+                    <div className="p-4">
+                      <p className="mb-1 text-xs font-bold uppercase tracking-widest text-[#8D4925]/50">
+                        {item.meal_type}
+                      </p>
                       <p
-                        className="text-base font-bold text-gray-800"
+                        className="text-base font-bold text-gray-900"
                         style={{ fontFamily: "var(--font-v2-playfair)" }}
                       >
-                        Order #{sub.order_id}
+                        {item.menu_released && item.resolved_item_name
+                          ? item.resolved_item_name
+                          : item.group_name}
                       </p>
-                      <OrderStatusPill status={sub.status} />
-                    </div>
-                    <p className="mt-0.5 text-xs text-gray-500">
-                      {sub.created_at
-                        ? formatDate(new Date(sub.created_at), "EEE, d MMM yyyy")
-                        : "—"}
-                    </p>
-                  </div>
-                  <div className="px-5 py-4">
-                    <p className="mb-2 text-xs font-bold uppercase tracking-wider text-[#8D4925]/60">
-                      Items
-                    </p>
-                    <ul className="space-y-1">
-                      {sub.items.length > 0 ? (
-                        sub.items.slice(0, 3).map((item, idx) => (
-                          <li key={`${sub.order_id}-item-${idx}`} className="text-sm text-gray-700">
-                            {item.item_name} × {item.quantity}
-                          </li>
-                        ))
-                      ) : (
-                        <li className="text-sm text-gray-400">No items</li>
+                      {item.menu_released && item.resolved_item_name && (
+                        <p className="mt-0.5 text-xs text-[#1b4332]">{item.group_name}</p>
                       )}
-                    </ul>
+                      <div className="mt-3 flex items-center justify-between border-t border-orange-50 pt-3">
+                        <span className="text-xs text-gray-400">×{item.quantity}</span>
+                        {item.menu_released && item.resolved_price != null && (
+                          <span className="text-sm font-bold text-[#8D4925]">
+                            {currency(item.resolved_price)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </button>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </section>
-        ) : null}
+        )}
 
         {/* ── Meal picker ───────────────────────────────────────────── */}
         <section className="mb-12">
-          <div className="mb-6 flex items-end justify-between">
-            <div>
+          {hasActivePlan && (
+            <div className="mb-6 flex items-end justify-between">
               <h2
                 className="text-3xl font-bold text-[#8D4925]"
                 style={{ fontFamily: "var(--font-v2-playfair)" }}
               >
-                {hasActivePlan ? "Add Another Meal" : "Start a Subscription"}
+                Add Another Meal
               </h2>
-              <p className="mt-1.5 text-gray-500">
-                Choose a meal and we&apos;ll resolve it from the daily menu each day.
-              </p>
             </div>
-          </div>
+          )}
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
             {MEAL_OPTIONS.map(({ meal, label, icon, time, description }) => (

@@ -8,7 +8,9 @@ import mysql.connector
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from ..city_config import DEFAULT_CITY
+from datetime import date as date_type
+
+from ..city_config import DEFAULT_CITY, normalize_city_code
 from ..customer.customer_crud import (
     CustomerUpdate,
     create_customer,
@@ -653,6 +655,105 @@ def list_customer_orders(customer_id: int, limit: int = Query(50, ge=1, le=200))
                 }
             )
 
+        return result
+    finally:
+        cursor.close()
+        db.close()
+
+
+@router.get("/api/customers/{customer_id}/subscription-today", tags=["Customers"])
+def get_subscription_today(
+    customer_id: int,
+    city_code: Optional[str] = Query(None),
+) -> List[Dict[str, Any]]:
+    """Return today's resolved menu items for a customer's active subscriptions.
+
+    Args:
+        customer_id: Customer to look up.
+        city_code: City code; defaults to DEFAULT_CITY.
+
+    Returns:
+        List of dicts with meal_type, group_name, quantity, resolved_item_name,
+        resolved_picture_url, resolved_price, and menu_released flag.
+    """
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    today = date_type.today().isoformat()
+    city = normalize_city_code(city_code or DEFAULT_CITY)
+    try:
+        cursor.execute(
+            """
+            SELECT
+                oi.meal_type,
+                oi.quantity,
+                COALESCE(sub_mi.component_type_id, i_sub.component_type_id) AS component_type_id,
+                COALESCE(ct.name, ct2.name)                                 AS group_name
+            FROM orders o
+            JOIN order_items oi ON oi.order_id = o.order_id
+            LEFT JOIN menu_items sub_mi ON oi.menu_item_id = sub_mi.menu_item_id
+            LEFT JOIN items i_sub     ON oi.item_id = i_sub.item_id
+            LEFT JOIN component_types ct  ON sub_mi.component_type_id = ct.component_type_id
+            LEFT JOIN component_types ct2 ON i_sub.component_type_id  = ct2.component_type_id
+            WHERE o.customer_id = %s
+              AND o.order_type  = 'subscription'
+              AND o.status NOT IN ('cancelled', 'rejected')
+              AND COALESCE(sub_mi.component_type_id, i_sub.component_type_id) IS NOT NULL
+            """,
+            (customer_id,),
+        )
+        sub_rows = cursor.fetchall()
+        if not sub_rows:
+            return []
+
+        ct_ids = list({r["component_type_id"] for r in sub_rows if r["component_type_id"]})
+        if not ct_ids:
+            return []
+
+        placeholders = ",".join(["%s"] * len(ct_ids))
+        cursor.execute(
+            f"""
+            SELECT
+                COALESCE(i.component_type_id, today_mi.component_type_id) AS component_type_id,
+                i.name          AS resolved_item_name,
+                i.picture_url   AS resolved_picture_url,
+                today_mi.rate   AS resolved_price,
+                m.is_released
+            FROM menu m
+            JOIN menu_items today_mi ON today_mi.menu_id = m.menu_id
+            JOIN items i             ON today_mi.item_id = i.item_id
+            WHERE m.date       = %s
+              AND m.menu_type  = 'ONE_DAY'
+              AND m.city_code  = %s
+              AND COALESCE(i.component_type_id, today_mi.component_type_id) IN ({placeholders})
+            """,
+            [today, city] + ct_ids,
+        )
+        resolved: Dict[int, Dict[str, Any]] = {r["component_type_id"]: r for r in cursor.fetchall()}
+
+        seen: set = set()
+        result: List[Dict[str, Any]] = []
+        for row in sub_rows:
+            ct_id = row["component_type_id"]
+            key = (row["meal_type"], ct_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            res = resolved.get(ct_id, {})
+            result.append(
+                {
+                    "meal_type": row["meal_type"],
+                    "group_name": row["group_name"],
+                    "quantity": row["quantity"],
+                    "resolved_item_name": res.get("resolved_item_name"),
+                    "resolved_picture_url": res.get("resolved_picture_url"),
+                    "resolved_price": (
+                        float(res["resolved_price"])
+                        if res.get("resolved_price") is not None
+                        else None
+                    ),
+                    "menu_released": bool(res.get("is_released", False)),
+                }
+            )
         return result
     finally:
         cursor.close()

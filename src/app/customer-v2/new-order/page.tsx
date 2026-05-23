@@ -1,6 +1,6 @@
 "use client";
 
-import { format as formatDate } from "date-fns";
+import { addDays, format as formatDate } from "date-fns";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -8,7 +8,7 @@ import { useHydrateAuthUser } from "@/hooks/useHydrateAuthUser";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/store/store";
 import { http } from "@/lib/http";
-import { getDeliveryText } from "@/config/delivery-times";
+import { getDeliveryText, isMealOrderClosed } from "@/config/delivery-times";
 
 type MealType = "breakfast" | "lunch" | "dinner" | "condiments";
 
@@ -127,6 +127,18 @@ export default function CustomerV2OrderPage() {
   const cartPreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const todayISO = useMemo(() => formatDate(new Date(), "yyyy-MM-dd"), []);
+  const tomorrowISO = useMemo(() => formatDate(addDays(new Date(), 1), "yyyy-MM-dd"), []);
+
+  // Per-meal fetch date: if today's order window is closed, show tomorrow's menu
+  const mealMenuDate = useMemo<Record<MealType, string>>(
+    () => ({
+      breakfast: isMealOrderClosed("breakfast") ? tomorrowISO : todayISO,
+      lunch: isMealOrderClosed("lunch") ? tomorrowISO : todayISO,
+      dinner: isMealOrderClosed("dinner") ? tomorrowISO : todayISO,
+      condiments: todayISO,
+    }),
+    [todayISO, tomorrowISO],
+  );
   const cityCode = useMemo(() => {
     const raw = typeof user?.city_code === "string" ? user.city_code.trim().toUpperCase() : "";
     return raw.length ? raw : "MYS";
@@ -157,7 +169,7 @@ export default function CustomerV2OrderPage() {
             if (meal === "condiments") {
               params.set("menu_type", "CONDIMENTS");
             } else {
-              params.set("date", todayISO);
+              params.set("date", mealMenuDate[meal]);
               params.set("period_type", "one_day");
               params.set("menu_type", "ONE_DAY");
             }
@@ -224,7 +236,7 @@ export default function CustomerV2OrderPage() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [todayISO, cityCode, userHasCityOverride]);
+  }, [mealMenuDate, cityCode, userHasCityOverride]);
 
   const menuItemsMap = useMemo(() => createMenuItemMap(menuByMeal), [menuByMeal]);
 
@@ -256,10 +268,12 @@ export default function CustomerV2OrderPage() {
   };
 
   const activeMealItems = menuByMeal[activeMeal] ?? [];
-  const activeMealDeliveryText = useMemo(
-    () => getDeliveryText(activeMeal, deliversByMeal[activeMeal]),
-    [activeMeal, deliversByMeal],
-  );
+  const activeMealDeliveryText = useMemo(() => {
+    const base = getDeliveryText(activeMeal, deliversByMeal[activeMeal]);
+    if (activeMeal === "condiments") return base;
+    const dateLabel = mealMenuDate[activeMeal] === tomorrowISO ? "tomorrow" : "today";
+    return `${base} ${dateLabel}`;
+  }, [activeMeal, deliversByMeal, mealMenuDate, tomorrowISO]);
 
   const cartSelection = useMemo<CartLine[]>(() => {
     const lines: CartLine[] = [];
@@ -364,18 +378,20 @@ export default function CustomerV2OrderPage() {
   };
 
   return (
-    <main className="mx-auto max-w-7xl px-6 py-10">
+    <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-10 flex flex-col justify-between gap-6 md:flex-row md:items-end">
         <div>
+          <p className="mb-1 text-sm font-bold uppercase tracking-widest text-[#8D4925]/50">
+            Hello, {user?.name?.trim().split(" ")[0] ?? "there"}
+          </p>
           <h1
-            className="mb-2 text-4xl font-bold text-[#8D4925] md:text-5xl"
+            className="mb-2 text-4xl font-bold text-[#8D4925]"
             style={{ fontFamily: "var(--font-v2-playfair)" }}
           >
-            Daily Menu Explorer
+            Order a Meal
           </h1>
-          <p className="max-w-xl text-lg text-gray-600">
-            Freshly prepared authentic South-Indian meals delivered to your doorstep. Choose your
-            favorites for the day.
+          <p className="max-w-xl text-gray-600">
+            Freshly prepared South-Indian meals, delivered to your door.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3 rounded-full border border-orange-50 bg-white p-1.5 shadow-sm">
