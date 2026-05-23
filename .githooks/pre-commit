@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Run local checks before pushing.
+# Run local checks before creating a commit.
 
 set -euo pipefail
 
 if [ "${SKIP_HOOKS:-}" = "1" ]; then
-  echo "Pre-push hooks skipped (SKIP_HOOKS=1)"
+  echo "Pre-commit hooks skipped (SKIP_HOOKS=1)"
   exit 0
 fi
 
