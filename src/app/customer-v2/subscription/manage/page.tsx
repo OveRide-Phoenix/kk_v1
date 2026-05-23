@@ -49,6 +49,7 @@ type AddressEntry = {
 type PauseWindow = {
   pause_id: number;
   customer_id: number;
+  order_id?: number | null;
   city_code: string;
   meal_type: string | null;
   start_date: string;
@@ -65,13 +66,6 @@ const PAYMENT_METHODS = [
   { id: "UPI", label: "UPI", icon: "payments" },
   { id: "Card", label: "Card", icon: "credit_card" },
   { id: "Cash", label: "Cash", icon: "local_atm" },
-];
-
-const MEAL_FILTERS = [
-  { value: "all", label: "All meals" },
-  { value: "breakfast", label: "Breakfast" },
-  { value: "lunch", label: "Lunch" },
-  { value: "dinner", label: "Dinner" },
 ];
 
 const PAUSE_DURATIONS = [
@@ -103,7 +97,8 @@ const friendlyDate = (date: Date) => formatDate(date, "EEE, d MMM");
 
 const isCancelled = (status: string) => status.trim().toLowerCase() === "cancelled";
 
-const mealLabel = (meal: string) => meal.charAt(0).toUpperCase() + meal.slice(1);
+const pauseAppliesToPlan = (pause: PauseWindow, plan: OrderSummary) =>
+  pause.order_id === plan.order_id;
 
 const planMealLabel = (plan: OrderSummary) => {
   const meals = Array.from(
@@ -132,7 +127,6 @@ export default function ManageSubscriptionPage() {
   const [actionMode, setActionMode] = useState<"pause" | "edit" | "cancel">("pause");
 
   const [pauseDays, setPauseDays] = useState(3);
-  const [pauseMeal, setPauseMeal] = useState("all");
   const [pauseReason, setPauseReason] = useState("");
   const [editAddressId, setEditAddressId] = useState("");
   const [editPaymentMethod, setEditPaymentMethod] = useState("UPI");
@@ -171,17 +165,6 @@ export default function ManageSubscriptionPage() {
     return activePlans.find((plan) => plan.order_id === selectedOrderId) ?? activePlans[0];
   }, [activePlans, selectedOrderId]);
 
-  const selectedPlanMeals = useMemo(() => {
-    if (!selectedPlan) return [];
-    return Array.from(
-      new Set(
-        selectedPlan.items
-          .map((item) => item.meal_type?.trim().toLowerCase())
-          .filter((meal): meal is string => Boolean(meal)),
-      ),
-    );
-  }, [selectedPlan]);
-
   const pauseStartDate = useMemo(() => addDays(new Date(), 1), []);
   const pauseEndDate = useMemo(
     () => addDays(pauseStartDate, pauseDays - 1),
@@ -191,10 +174,22 @@ export default function ManageSubscriptionPage() {
   const pauseStart = inputDate(pauseStartDate);
   const pauseEnd = inputDate(pauseEndDate);
 
-  const activePauses = useMemo(
-    () => pauses.filter((pause) => pause.is_active),
+  const orderScopedPauses = useMemo(
+    () => pauses.filter((pause) => pause.order_id != null),
     [pauses],
   );
+
+  const activePauses = useMemo(
+    () => orderScopedPauses.filter((pause) => pause.is_active),
+    [orderScopedPauses],
+  );
+
+  const selectedPlanPauses = useMemo(() => {
+    if (!selectedPlan) return [];
+    return activePauses.filter((pause) => pauseAppliesToPlan(pause, selectedPlan));
+  }, [activePauses, selectedPlan]);
+
+  const selectedPlanIsPaused = selectedPlanPauses.length > 0;
 
   const monthPlans = useMemo(() => {
     const today = new Date();
@@ -262,8 +257,7 @@ export default function ManageSubscriptionPage() {
     });
     setEditAddressId(String(matchingAddress?.address_id ?? addresses[0]?.address_id ?? ""));
     setEditPaymentMethod(selectedPlan.payment_method || "UPI");
-    setPauseMeal(selectedPlanMeals.length === 1 ? selectedPlanMeals[0] : "all");
-  }, [addresses, selectedPlan, selectedPlanMeals]);
+  }, [addresses, selectedPlan]);
 
   const runAction = async (action: () => Promise<void>, success: string) => {
     setSaving(true);
@@ -281,13 +275,14 @@ export default function ManageSubscriptionPage() {
   };
 
   const handlePause = async () => {
-    if (!customerId) throw new Error("Please sign in again.");
+    if (!customerId || !selectedPlan) throw new Error("Choose a plan first.");
     const response = await http.post("/api/subscription-pauses", {
       customer_id: customerId,
+      order_id: selectedPlan.order_id,
       city_code: cityCode,
       start_date: pauseStart,
       end_date: pauseEnd,
-      meal_type: pauseMeal === "all" ? null : pauseMeal,
+      meal_type: null,
       reason: pauseReason.trim() || null,
     });
     const data = await readJsonResponse<ApiMessage>(response);
@@ -301,6 +296,19 @@ export default function ManageSubscriptionPage() {
       const data = await readJsonResponse<ApiMessage>(response);
       if (!response.ok) throw new Error(data.detail || "Unable to resume subscription.");
     }, "Pause removed. Your subscription is active for those dates.");
+  };
+
+  const handleResumeSelectedPlan = async () => {
+    if (!selectedPlanPauses.length) throw new Error("This subscription is not paused.");
+    await Promise.all(
+      selectedPlanPauses.map(async (pause) => {
+        const response = await http.patch(`/api/subscription-pauses/${pause.pause_id}/resume`);
+        const data = await readJsonResponse<ApiMessage>(response);
+        if (!response.ok) {
+          throw new Error(data.detail || "Unable to resume subscription.");
+        }
+      }),
+    );
   };
 
   const handleEdit = async () => {
@@ -335,10 +343,10 @@ export default function ManageSubscriptionPage() {
             <button
               type="button"
               onClick={() => router.back()}
-              className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-orange-100 bg-white text-[#8D4925] transition-colors hover:bg-orange-50"
+              className="mt-1 flex shrink-0 items-center justify-center rounded p-1.5 text-[#8D4925] transition-colors hover:bg-orange-50/40"
               aria-label="Go back"
             >
-              <span className="material-symbols-outlined text-xl">arrow_back</span>
+              <span className="material-symbols-outlined text-[22px]">arrow_back</span>
             </button>
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#8D4925]/60">
@@ -382,25 +390,19 @@ export default function ManageSubscriptionPage() {
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#8D4925]/60">
                     Active
                   </p>
-                  <p className="mt-1 text-2xl font-bold text-gray-900">
-                    {activePlans.length}
-                  </p>
+                  <p className="mt-1 text-2xl font-bold text-gray-900">{activePlans.length}</p>
                 </div>
                 <div className="rounded-lg px-3 py-3">
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#8D4925]/60">
                     This month
                   </p>
-                  <p className="mt-1 text-2xl font-bold text-gray-900">
-                    {monthPlans.length}
-                  </p>
+                  <p className="mt-1 text-2xl font-bold text-gray-900">{monthPlans.length}</p>
                 </div>
                 <div className="rounded-lg px-3 py-3">
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#8D4925]/60">
                     Paused
                   </p>
-                  <p className="mt-1 text-2xl font-bold text-gray-900">
-                    {activePauses.length}
-                  </p>
+                  <p className="mt-1 text-2xl font-bold text-gray-900">{activePauses.length}</p>
                 </div>
               </div>
 
@@ -428,9 +430,7 @@ export default function ManageSubscriptionPage() {
 
               {activePlans.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-orange-100 bg-[#FDFAF1] px-6 py-12 text-center">
-                  <span className="material-symbols-outlined text-5xl text-[#8D4925]/30">
-                    eco
-                  </span>
+                  <span className="material-symbols-outlined text-5xl text-[#8D4925]/30">eco</span>
                   <h3
                     className="mt-3 text-xl font-bold text-[#8D4925]"
                     style={{ fontFamily: "var(--font-v2-playfair)" }}
@@ -445,6 +445,7 @@ export default function ManageSubscriptionPage() {
                 <div className="space-y-3">
                   {activePlans.map((plan) => {
                     const selected = selectedPlan?.order_id === plan.order_id;
+                    const paused = activePauses.some((pause) => pauseAppliesToPlan(pause, plan));
                     return (
                       <button
                         type="button"
@@ -459,10 +460,13 @@ export default function ManageSubscriptionPage() {
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                           <div>
                             <div className="flex flex-wrap items-center gap-2">
-                              <p className="font-bold text-gray-900">
-                                #{plan.order_id}
-                              </p>
+                              <p className="font-bold text-gray-900">#{plan.order_id}</p>
                               <OrderStatusPill status={plan.status} />
+                              {paused ? (
+                                <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">
+                                  Paused
+                                </span>
+                              ) : null}
                             </div>
                             <p className="mt-2 text-sm font-semibold text-[#8D4925]">
                               {planMealLabel(plan)}
@@ -475,9 +479,7 @@ export default function ManageSubscriptionPage() {
                             <p className="text-lg font-bold text-gray-900">
                               {currency(plan.total_price)}
                             </p>
-                            <p className="text-xs text-gray-600">
-                              {plan.payment_method}
-                            </p>
+                            <p className="text-xs text-gray-600">{plan.payment_method}</p>
                           </div>
                         </div>
                         <div className="mt-4 flex flex-wrap gap-2">
@@ -533,101 +535,111 @@ export default function ManageSubscriptionPage() {
                 ) : actionMode === "pause" ? (
                   <div className="space-y-4">
                     <div className="rounded-xl border border-orange-100 bg-[#FDFAF1] p-4">
-                      <p className="text-sm font-bold text-gray-900">How pause works</p>
+                      <p className="text-sm font-bold text-gray-900">
+                        {selectedPlanIsPaused ? "Subscription is paused" : "How pause works"}
+                      </p>
                       <p className="mt-1 text-sm leading-6 text-gray-600">
-                        Pause applies to upcoming deliveries only. Choose how long to skip meals;
-                        we resume automatically after the pause ends.
+                        {selectedPlanIsPaused
+                          ? "Resume this plan to restart all upcoming deliveries for this subscription."
+                          : "Pause applies to this whole subscription only. Choose how long to skip deliveries; we resume automatically after the pause ends."}
                       </p>
                     </div>
 
-                    <div>
-                      <p className="mb-2 text-sm font-semibold text-gray-900">Duration</p>
-                      <div className="grid grid-cols-2 gap-2">
-                        {PAUSE_DURATIONS.map((duration) => (
-                          <button
-                            type="button"
-                            key={duration.days}
-                            onClick={() => setPauseDays(duration.days)}
-                            className={`h-11 rounded-xl border text-sm font-bold transition-colors ${
-                              pauseDays === duration.days
-                                ? "border-orange-200 bg-orange-50 text-[#8D4925]"
-                                : "border-orange-100 bg-white text-gray-600 hover:bg-orange-50"
-                            }`}
+                    {selectedPlanIsPaused ? (
+                      <div className="space-y-3">
+                        {selectedPlanPauses.map((pause) => (
+                          <div
+                            key={pause.pause_id}
+                            className="rounded-xl border border-amber-100 bg-amber-50 p-4"
                           >
-                            {duration.label}
-                          </button>
+                            <p className="text-xs font-bold uppercase tracking-[0.14em] text-amber-700/70">
+                              Current pause
+                            </p>
+                            <p className="mt-1 text-sm font-bold text-gray-900">
+                              {pause.start_date} to {pause.end_date}
+                            </p>
+                            {pause.reason ? (
+                              <p className="mt-1 text-sm text-gray-600">{pause.reason}</p>
+                            ) : null}
+                          </div>
                         ))}
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() =>
+                            runAction(handleResumeSelectedPlan, "Subscription resumed.")
+                          }
+                          className="h-11 w-full rounded-xl bg-[#8D4925] text-sm font-bold text-white transition-colors hover:bg-[#7a3f20] disabled:opacity-60"
+                        >
+                          {saving ? "Resuming..." : "Resume subscription"}
+                        </button>
                       </div>
-                    </div>
+                    ) : (
+                      <>
+                        <div>
+                          <p className="mb-2 text-sm font-semibold text-gray-900">Duration</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            {PAUSE_DURATIONS.map((duration) => (
+                              <button
+                                type="button"
+                                key={duration.days}
+                                onClick={() => setPauseDays(duration.days)}
+                                className={`h-11 rounded-xl border text-sm font-bold transition-colors ${
+                                  pauseDays === duration.days
+                                    ? "border-orange-200 bg-orange-50 text-[#8D4925]"
+                                    : "border-orange-100 bg-white text-gray-600 hover:bg-orange-50"
+                                }`}
+                              >
+                                {duration.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
 
-                    <div className="grid grid-cols-2 gap-2 rounded-xl bg-orange-50 p-2">
-                      <div className="rounded-lg bg-white px-3 py-3">
-                        <p className="text-[11px] font-bold uppercase tracking-wider text-[#8D4925]/60">
-                          Paused through
-                        </p>
-                        <p className="mt-1 text-sm font-bold text-gray-900">
-                          {friendlyDate(pauseEndDate)}
-                        </p>
-                      </div>
-                      <div className="rounded-lg bg-white px-3 py-3">
-                        <p className="text-[11px] font-bold uppercase tracking-wider text-[#8D4925]/60">
-                          Resumes
-                        </p>
-                        <p className="mt-1 text-sm font-bold text-gray-900">
-                          {friendlyDate(resumeDate)}
-                        </p>
-                      </div>
-                    </div>
+                        <div className="grid grid-cols-2 gap-2 rounded-xl bg-orange-50 p-2">
+                          <div className="rounded-lg bg-white px-3 py-3">
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-[#8D4925]/60">
+                              Paused through
+                            </p>
+                            <p className="mt-1 text-sm font-bold text-gray-900">
+                              {friendlyDate(pauseEndDate)}
+                            </p>
+                          </div>
+                          <div className="rounded-lg bg-white px-3 py-3">
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-[#8D4925]/60">
+                              Resumes
+                            </p>
+                            <p className="mt-1 text-sm font-bold text-gray-900">
+                              {friendlyDate(resumeDate)}
+                            </p>
+                          </div>
+                        </div>
 
-                    <label className="space-y-1.5 text-sm font-semibold text-gray-900">
-                      Applies to
-                      <select
-                        value={pauseMeal}
-                        onChange={(event) => setPauseMeal(event.target.value)}
-                        className="h-11 w-full rounded-xl border border-orange-100 bg-white px-3 text-sm font-normal"
-                      >
-                        {MEAL_FILTERS.filter(
-                          (meal) =>
-                            meal.value === "all" ||
-                            selectedPlanMeals.length === 0 ||
-                            selectedPlanMeals.includes(meal.value),
-                        ).map((meal) => (
-                          <option key={meal.value} value={meal.value}>
-                            {meal.value === "all"
-                              ? "All active subscription meals"
-                              : `${meal.label} only`}
-                          </option>
-                        ))}
-                      </select>
-                      {selectedPlanMeals.length > 0 ? (
-                        <span className="block text-xs font-normal text-gray-500">
-                          Selected plan contains {selectedPlanMeals.map(mealLabel).join(", ")}.
-                        </span>
-                      ) : null}
-                    </label>
-                    <label className="space-y-1.5 text-sm font-semibold text-gray-900">
-                      Note
-                      <textarea
-                        value={pauseReason}
-                        onChange={(event) => setPauseReason(event.target.value)}
-                        rows={3}
-                        placeholder="Travel, family function, or anything we should know"
-                        className="w-full resize-none rounded-xl border border-orange-100 bg-white px-3 py-2 text-sm font-normal"
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={() =>
-                        runAction(
-                          handlePause,
-                          `Pause scheduled. Deliveries resume on ${friendlyDate(resumeDate)}.`,
-                        )
-                      }
-                      className="h-11 w-full rounded-xl bg-[#8D4925] text-sm font-bold text-white transition-colors hover:bg-[#7a3f20] disabled:opacity-60"
-                    >
-                      {saving ? "Saving..." : "Schedule pause"}
-                    </button>
+                        <label className="space-y-1.5 text-sm font-semibold text-gray-900">
+                          Note
+                          <textarea
+                            value={pauseReason}
+                            onChange={(event) => setPauseReason(event.target.value)}
+                            rows={3}
+                            placeholder="Travel, family function, or anything we should know"
+                            className="w-full resize-none rounded-xl border border-orange-100 bg-white px-3 py-2 text-sm font-normal"
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() =>
+                            runAction(
+                              handlePause,
+                              `Pause scheduled. Deliveries resume on ${friendlyDate(resumeDate)}.`,
+                            )
+                          }
+                          className="h-11 w-full rounded-xl bg-[#8D4925] text-sm font-bold text-white transition-colors hover:bg-[#7a3f20] disabled:opacity-60"
+                        >
+                          {saving ? "Saving..." : "Schedule pause"}
+                        </button>
+                      </>
+                    )}
                   </div>
                 ) : actionMode === "edit" ? (
                   <div className="space-y-4">
@@ -646,9 +658,7 @@ export default function ManageSubscriptionPage() {
                       </select>
                     </label>
                     <div>
-                      <p className="mb-2 text-sm font-semibold text-gray-900">
-                        Payment
-                      </p>
+                      <p className="mb-2 text-sm font-semibold text-gray-900">Payment</p>
                       <div className="grid grid-cols-3 gap-2">
                         {PAYMENT_METHODS.map((method) => (
                           <button
@@ -681,9 +691,7 @@ export default function ManageSubscriptionPage() {
                 ) : (
                   <div className="space-y-4">
                     <div className="rounded-xl border border-red-100 bg-red-50 p-4">
-                      <p className="text-sm font-bold text-red-700">
-                        Cancel this subscription?
-                      </p>
+                      <p className="text-sm font-bold text-red-700">Cancel this subscription?</p>
                       <p className="mt-1 text-sm leading-6 text-red-700/80">
                         This stops the selected plan. Already delivered meals stay in your history.
                       </p>
@@ -706,18 +714,16 @@ export default function ManageSubscriptionPage() {
                     <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#8D4925]/60">
                       Pause history
                     </p>
-                    <h2 className="mt-1 text-lg font-bold text-gray-900">
-                      Delivery breaks
-                    </h2>
+                    <h2 className="mt-1 text-lg font-bold text-gray-900">Delivery breaks</h2>
                   </div>
                 </div>
-                {pauses.length === 0 ? (
+                {orderScopedPauses.length === 0 ? (
                   <p className="text-sm leading-6 text-gray-600">
                     No pauses yet. Add one before travel or busy weeks.
                   </p>
                 ) : (
                   <div className="space-y-3">
-                    {pauses.slice(0, 5).map((pause) => (
+                    {orderScopedPauses.slice(0, 5).map((pause) => (
                       <div
                         key={pause.pause_id}
                         className="rounded-xl border border-orange-100 bg-[#FDFAF1] p-3"
@@ -728,7 +734,7 @@ export default function ManageSubscriptionPage() {
                               {pause.start_date} to {pause.end_date}
                             </p>
                             <p className="mt-0.5 text-xs text-gray-600">
-                              {pause.meal_type ? pause.meal_type : "All meals"}
+                              {pause.order_id ? `Plan #${pause.order_id}` : "Subscription"}
                               {pause.reason ? `, ${pause.reason}` : ""}
                             </p>
                           </div>
@@ -742,9 +748,7 @@ export default function ManageSubscriptionPage() {
                               Resume
                             </button>
                           ) : (
-                            <span className="text-xs font-semibold text-gray-400">
-                              Ended
-                            </span>
+                            <span className="text-xs font-semibold text-gray-400">Ended</span>
                           )}
                         </div>
                       </div>

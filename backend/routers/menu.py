@@ -71,6 +71,7 @@ class SubscriptionPausePayload(BaseModel):
     """Payload for creating or updating a customer subscription pause window."""
 
     customer_id: int
+    order_id: Optional[int] = None
     start_date: str
     end_date: str
     meal_type: Optional[str] = None
@@ -1008,9 +1009,7 @@ def _validate_subscription_groups_for_daily_menu(cursor, menu_id: int) -> None:
                     "sources": sources,
                     "item_count": item_count,
                     "default_count": default_count,
-                    "message": (
-                        f"Add one {menu['bld_type']} Daily Menu item for this item group."
-                    ),
+                    "message": (f"Add one {menu['bld_type']} Daily Menu item for this item group."),
                 }
             )
         elif item_count > 1 and default_count != 1:
@@ -1125,6 +1124,7 @@ def _ensure_subscription_pause_table(cursor) -> None:
         CREATE TABLE IF NOT EXISTS subscription_pause_windows (
             pause_id INT NOT NULL AUTO_INCREMENT,
             customer_id INT NOT NULL,
+            order_id INT NULL,
             city_code VARCHAR(3) NOT NULL,
             meal_type VARCHAR(20) NULL,
             start_date DATE NOT NULL,
@@ -1136,12 +1136,25 @@ def _ensure_subscription_pause_table(cursor) -> None:
             PRIMARY KEY (pause_id),
             KEY idx_subscription_pause_city_dates (city_code, start_date, end_date),
             KEY idx_subscription_pause_customer (customer_id),
+            KEY idx_subscription_pause_order (order_id),
             CONSTRAINT fk_subscription_pause_customer
                 FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
                 ON DELETE CASCADE
         )
         """
     )
+    cursor.execute("SHOW COLUMNS FROM subscription_pause_windows LIKE 'order_id'")
+    if cursor.fetchone() is None:
+        cursor.execute(
+            "ALTER TABLE subscription_pause_windows ADD COLUMN order_id INT NULL AFTER customer_id"
+        )
+    cursor.execute(
+        "SHOW INDEX FROM subscription_pause_windows WHERE Key_name = 'idx_subscription_pause_order'"
+    )
+    if cursor.fetchone() is None:
+        cursor.execute(
+            "CREATE INDEX idx_subscription_pause_order ON subscription_pause_windows (order_id)"
+        )
 
 
 @router.get("/api/subscription-pauses")
@@ -1179,6 +1192,7 @@ def list_subscription_pauses(
             SELECT
                 spw.pause_id,
                 spw.customer_id,
+                spw.order_id,
                 c.name AS customer_name,
                 c.primary_mobile AS customer_phone,
                 spw.city_code,
@@ -1230,7 +1244,6 @@ def create_subscription_pause(payload: SubscriptionPausePayload) -> Dict[str, An
     try:
         _ensure_subscription_pause_table(cursor)
         city_code = normalize_city_code(payload.city_code or DEFAULT_CITY)
-        meal_type = normalize_meal_type(payload.meal_type) if payload.meal_type else None
         cursor.execute(
             """
             SELECT c.customer_id
@@ -1245,18 +1258,34 @@ def create_subscription_pause(payload: SubscriptionPausePayload) -> Dict[str, An
         )
         if not cursor.fetchone():
             raise HTTPException(status_code=400, detail="Customer not found in selected city")
+        if payload.order_id is None:
+            raise HTTPException(status_code=400, detail="Subscription order is required")
+        cursor.execute(
+            """
+            SELECT order_id
+              FROM orders
+             WHERE order_id = %s
+               AND customer_id = %s
+               AND LOWER(COALESCE(order_type, 'one_time')) = 'subscription'
+               AND LOWER(COALESCE(status, '')) NOT IN ('cancelled', 'rejected')
+             LIMIT 1
+            """,
+            (payload.order_id, payload.customer_id),
+        )
+        if not cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Subscription order not found")
         if payload.end_date < payload.start_date:
             raise HTTPException(status_code=400, detail="end_date must be on or after start_date")
         cursor.execute(
             """
             INSERT INTO subscription_pause_windows
-                (customer_id, city_code, meal_type, start_date, end_date, reason, is_active)
-            VALUES (%s, %s, %s, %s, %s, %s, 1)
+                (customer_id, order_id, city_code, meal_type, start_date, end_date, reason, is_active)
+            VALUES (%s, %s, %s, NULL, %s, %s, %s, 1)
             """,
             (
                 payload.customer_id,
+                payload.order_id,
                 city_code,
-                meal_type,
                 payload.start_date,
                 payload.end_date,
                 payload.reason,
@@ -1297,9 +1326,23 @@ def update_subscription_pause(pause_id: int, payload: SubscriptionPausePayload) 
     try:
         _ensure_subscription_pause_table(cursor)
         city_code = normalize_city_code(payload.city_code or DEFAULT_CITY)
-        meal_type = normalize_meal_type(payload.meal_type) if payload.meal_type else None
         if payload.end_date < payload.start_date:
             raise HTTPException(status_code=400, detail="end_date must be on or after start_date")
+        if payload.order_id is None:
+            raise HTTPException(status_code=400, detail="Subscription order is required")
+        cursor.execute(
+            """
+            SELECT order_id
+              FROM orders
+             WHERE order_id = %s
+               AND customer_id = %s
+               AND LOWER(COALESCE(order_type, 'one_time')) = 'subscription'
+             LIMIT 1
+            """,
+            (payload.order_id, payload.customer_id),
+        )
+        if not cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Subscription order not found")
         cursor.execute(
             "SELECT pause_id FROM subscription_pause_windows WHERE pause_id = %s", (pause_id,)
         )
@@ -1309,8 +1352,9 @@ def update_subscription_pause(pause_id: int, payload: SubscriptionPausePayload) 
             """
             UPDATE subscription_pause_windows
                SET customer_id = %s,
+                   order_id = %s,
                    city_code = %s,
-                   meal_type = %s,
+                   meal_type = NULL,
                    start_date = %s,
                    end_date = %s,
                    reason = %s
@@ -1318,8 +1362,8 @@ def update_subscription_pause(pause_id: int, payload: SubscriptionPausePayload) 
             """,
             (
                 payload.customer_id,
+                payload.order_id,
                 city_code,
-                meal_type,
                 payload.start_date,
                 payload.end_date,
                 payload.reason,

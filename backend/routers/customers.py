@@ -138,6 +138,7 @@ def _ensure_subscription_pause_table(cursor) -> None:
         CREATE TABLE IF NOT EXISTS subscription_pause_windows (
             pause_id INT NOT NULL AUTO_INCREMENT,
             customer_id INT NOT NULL,
+            order_id INT NULL,
             city_code VARCHAR(3) NOT NULL,
             meal_type VARCHAR(20) NULL,
             start_date DATE NOT NULL,
@@ -149,12 +150,25 @@ def _ensure_subscription_pause_table(cursor) -> None:
             PRIMARY KEY (pause_id),
             KEY idx_subscription_pause_city_dates (city_code, start_date, end_date),
             KEY idx_subscription_pause_customer (customer_id),
+            KEY idx_subscription_pause_order (order_id),
             CONSTRAINT fk_subscription_pause_customer_from_customers
                 FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
                 ON DELETE CASCADE
         )
         """
     )
+    cursor.execute("SHOW COLUMNS FROM subscription_pause_windows LIKE 'order_id'")
+    if cursor.fetchone() is None:
+        cursor.execute(
+            "ALTER TABLE subscription_pause_windows ADD COLUMN order_id INT NULL AFTER customer_id"
+        )
+    cursor.execute(
+        "SHOW INDEX FROM subscription_pause_windows WHERE Key_name = 'idx_subscription_pause_order'"
+    )
+    if cursor.fetchone() is None:
+        cursor.execute(
+            "CREATE INDEX idx_subscription_pause_order ON subscription_pause_windows (order_id)"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -650,10 +664,13 @@ def list_customer_orders(customer_id: int, limit: int = Query(50, ge=1, le=200))
                    oi.quantity,
                    oi.price,
                    oi.meal_type,
-                   COALESCE(i.name, co.combo_name) AS item_name
+                   COALESCE(i.name, co.combo_name, ct_mi.name, ct_i.name) AS item_name
               FROM order_items oi
               LEFT JOIN items i ON oi.item_id = i.item_id
               LEFT JOIN combos co ON oi.combo_id = co.combo_id
+              LEFT JOIN menu_items mi ON oi.menu_item_id = mi.menu_item_id
+              LEFT JOIN component_types ct_mi ON mi.component_type_id = ct_mi.component_type_id
+              LEFT JOIN component_types ct_i ON i.component_type_id = ct_i.component_type_id
              WHERE oi.order_id IN ({placeholders})
              ORDER BY oi.order_id ASC, oi.order_item_id ASC
             """,
@@ -744,10 +761,7 @@ def get_subscription_today(
                   AND spw.city_code = %s
                   AND spw.is_active = 1
                   AND %s BETWEEN spw.start_date AND spw.end_date
-                  AND (
-                        spw.meal_type IS NULL
-                        OR LOWER(spw.meal_type) = LOWER(COALESCE(oi.meal_type, ''))
-                  )
+                  AND spw.order_id = o.order_id
             WHERE o.customer_id = %s
               AND o.order_type  = 'subscription'
               AND o.status NOT IN ('cancelled', 'rejected')
