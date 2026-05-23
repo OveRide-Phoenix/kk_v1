@@ -1,36 +1,103 @@
-prettThis is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# kk_v1
 
-## Getting Started
+Short, focused README template for the kk_v1 project.
 
-First, run the development server:
+## Overview
+Kuteera Kitchen v1 is a full‑stack app for daily menu setup, kitchen production planning, and order tracking. It serves small kitchens/cloud kitchens that need a clean workflow from menu → production → orders.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Features
+- Daily menu creation & publish (Breakfast/Lunch/Dinner)
+- Kitchen production planning with category-wise tracking
+- Orders management and basic analytics
+
+## Project structure
+Replace or adapt to match the actual repository contents.
+```
+kk_v1/
+├── README.md
+├── frontend/        # Next.js (TypeScript)
+├── backend/         # FastAPI (Python)
+├── docs/            # design docs, architecture, usage notes
+├── scripts/         # helper scripts (build, dev, etc.)
+├── .gitignore
+├── LICENSE
+└── docker-compose.yml (optional)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Requirements
+- Node >= 18
+- Python >= 3.10
+- MySQL >= 8 (local or Docker)
+- Docker (optional)
+- pnpm (optional; or use npm/yarn)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Setup / Install
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Frontend (Next.js)
+```bash
+cd frontend
+pnpm i                       # or: npm install / yarn
+cp .env.example .env.local   # set NEXT_PUBLIC_API_BASE=http://localhost:8000/api
+pnpm dev                     # or: npm run dev
+```
 
-## Learn More
+### Backend (FastAPI, venv)
+```bash
+cd backend
+python -m venv .venv
+# macOS/Linux:
+source .venv/bin/activate
+# Windows PowerShell:
+# .venv\Scripts\Activate.ps1
 
-To learn more about Next.js, take a look at the following resources:
+pip install -r requirements.txt
+cp .env.example .env         # fill DB_*, CORS_ORIGINS
+uvicorn app.main:app --reload --port 8000
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Database (MySQL quickstart)
+```sql
+CREATE DATABASE kuteera CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'kk_user'@'%' IDENTIFIED BY 'kk_password';
+GRANT ALL PRIVILEGES ON kuteera.* TO 'kk_user'@'%';
+FLUSH PRIVILEGES;
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Running
+Local dev (two terminals):
 
-## Deploy on Vercel
+```bash
+# Terminal 1 - backend
+cd backend
+source .venv/bin/activate
+uvicorn app.main:app --reload --port 8000
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+# Terminal 2 - frontend
+cd frontend
+pnpm dev   # or npm run dev
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Open:
+- Frontend: http://localhost:3000
+- API Docs: http://localhost:8000/docs
+
+## Tests
+```bash
+# frontend
+pnpm test           # or npm test
+
+# backend
+pytest -q
+```
+
+## Contributing
+- Create a feature branch from `develop`
+- Keep changes scoped to a single concern
+- Open an MR with description, test notes, and screenshots where relevant
+
+## License
+MIT (or update to your preferred license) — ensure a LICENSE file exists.
+
+## Notes
+- Update environment variables (frontend `.env.local`, backend `.env`) as needed.
+- Keep data fetching, filtering, and UI rendering separate. Maintain existing structure, naming, and formatting.

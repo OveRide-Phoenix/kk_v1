@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Home Dashboard - Kuteera Kitchen</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&amp;family=Playfair+Display:wght@700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary-brown": "#8D4925",
+                        "secondary-green": "#1b4332",
+                        "cream-bg": "#fdfaf1"
+                    },
+                    fontFamily: {
+                        "sans": ["Outfit", "sans-serif"],
+                        "serif": ["Playfair Display", "serif"]
+                    },
+                    borderRadius: {
+                        "card": "16px",
+                    },
+                },
+            },
+        }
+    </script>
+<style type="text/tailwindcss">
+        @layer base {
+            body {
+                @apply bg-cream-bg text-primary-brown font-sans;
+            }
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .card-shadow {
+            box-shadow: 0 4px 12px -1px rgba(141, 73, 37, 0.08);
+        }
+    </style>
+<style>
+        body {
+            min-height: max(884px, 100dvh);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="antialiased">
+<div class="relative flex min-h-screen w-full flex-col max-w-md mx-auto bg-cream-bg overflow-x-hidden pb-24">
+<header class="flex items-center justify-between px-6 pt-10 pb-4">
+<div class="flex items-center gap-3">
+<div class="size-14 rounded-full border-2 border-primary-brown/20 p-1 bg-white shadow-sm overflow-hidden">
+<img alt="User profile" class="rounded-full size-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDccVNl2ZqBCvRCOluGpesTw9EefyUTPtXadajdOtxFoEcRAQRiDvQyiS0TOxzg9q2eR1uCdCZmEWd6HcjAQXfe2W1SCC9upwdmAsNmlbyGfTr9ChnQDax_Y3wDWZI496JCOTK_Gl06VWgbiVr9Bt5mYp1gM1OzZiiR4buNapTT9TFM0M4rWOwzF5K5fEoAiV-_1cRnn83propnsHdts0Px4UDgx702-kX8KFVnh_WEoYAprZiYj4XdfloaSDGX8N6CgiCu886dUOk"/>
+</div>
+<div>
+<p class="text-[10px] text-primary-brown/60 font-bold uppercase tracking-widest">Namaste</p>
+<h1 class="text-xl font-serif font-bold text-primary-brown leading-tight">Good Morning, Shashank</h1>
+</div>
+</div>
+<button class="flex items-center justify-center size-12 bg-white rounded-full shadow-sm text-primary-brown border border-primary-brown/5">
+<span class="material-symbols-outlined text-[24px]">notifications</span>
+</button>
+</header>
+<div class="px-6 py-2">
+<div class="bg-white rounded-card p-4 flex items-center justify-between card-shadow border border-primary-brown/5">
+<div class="flex items-center gap-3">
+<div class="bg-primary-brown/5 text-primary-brown p-2.5 rounded-xl">
+<span class="material-symbols-outlined">account_balance_wallet</span>
+</div>
+<div>
+<p class="text-[11px] text-primary-brown/60 font-semibold">Wallet Balance</p>
+<p class="text-lg font-bold text-primary-brown">₹450.00</p>
+</div>
+</div>
+<button class="bg-primary-brown text-white px-5 py-2 rounded-xl text-xs font-bold shadow-sm active:scale-95 transition-transform">
+                    Top Up
+                </button>
+</div>
+</div>
+<div class="px-6 py-4">
+<div class="relative overflow-hidden bg-primary-brown rounded-card p-6 text-white shadow-lg shadow-primary-brown/20">
+<div class="relative z-10">
+<div class="flex justify-between items-start">
+<div>
+<p class="text-white/70 text-[11px] font-bold uppercase tracking-widest">Subscription Status</p>
+<h2 class="text-2xl font-serif font-bold mt-1">Monthly Veg Plan</h2>
+</div>
+<span class="bg-secondary-green px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border border-white/10">Active</span>
+</div>
+<div class="mt-8 flex items-end justify-between">
+<div>
+<p class="text-[10px] text-white/70 uppercase font-bold tracking-wider">Next Delivery</p>
+<div class="flex items-center gap-2 mt-1">
+<span class="material-symbols-outlined text-lg opacity-90">schedule</span>
+<p class="text-xl font-bold leading-none">Today, 12:30 PM</p>
+</div>
+</div>
+<button class="bg-white text-primary-brown px-5 py-2.5 rounded-xl text-xs font-bold shadow-md active:scale-95 transition-transform">
+                            Manage Plan
+                        </button>
+</div>
+</div>
+<div class="absolute -right-12 -top-12 size-40 bg-white/5 rounded-full blur-2xl"></div>
+<div class="absolute -left-6 -bottom-6 size-24 bg-black/10 rounded-full blur-xl"></div>
+<span class="material-symbols-outlined absolute -right-4 bottom-4 text-white/5 text-9xl select-none pointer-events-none">potted_plant</span>
+</div>
+</div>
+<div class="px-6 py-2">
+<div class="grid grid-cols-3 gap-3">
+<button class="flex flex-col items-center gap-2.5 p-4 bg-white rounded-card card-shadow border border-primary-brown/5 active:bg-cream-bg transition-colors">
+<div class="bg-primary-brown/5 text-primary-brown p-2.5 rounded-full">
+<span class="material-symbols-outlined text-[24px]">pause_circle</span>
+</div>
+<span class="text-[11px] font-bold text-primary-brown">Pause</span>
+</button>
+<button class="flex flex-col items-center gap-2.5 p-4 bg-white rounded-card card-shadow border border-primary-brown/5 active:bg-cream-bg transition-colors">
+<div class="bg-secondary-green/10 text-secondary-green p-2.5 rounded-full">
+<span class="material-symbols-outlined text-[24px]">restaurant_menu</span>
+</div>
+<span class="text-[11px] font-bold text-primary-brown">Change</span>
+</button>
+<button class="flex flex-col items-center gap-2.5 p-4 bg-white rounded-card card-shadow border border-primary-brown/5 active:bg-cream-bg transition-colors">
+<div class="bg-primary-brown/5 text-primary-brown p-2.5 rounded-full">
+<span class="material-symbols-outlined text-[24px]">calendar_month</span>
+</div>
+<span class="text-[11px] font-bold text-primary-brown">View Menu</span>
+</button>
+</div>
+</div>
+<div class="py-6">
+<div class="px-6 flex justify-between items-end mb-4">
+<div>
+<h2 class="text-xl font-serif font-bold text-primary-brown">Today's Menu</h2>
+<p class="text-[11px] text-primary-brown/60 font-medium">Freshly prepared at our kitchen</p>
+</div>
+<a class="text-secondary-green text-xs font-bold uppercase tracking-wider" href="#">View Weekly</a>
+</div>
+<div class="grid grid-cols-2 gap-4 px-6">
+<div class="bg-white rounded-card card-shadow overflow-hidden border border-primary-brown/5">
+<div class="h-28 bg-cover bg-center" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCFrfqXqlP1wq06kHfAVB8a4_LinKYagX_z6NxbfHH8S54y7uOb3bfDdEwe_MmVO1WRGV-1MnWYJvJJxxiBQ9el1H4L8hWJm-1LhrdMPuyARJJbSw8OJNP_eTCApreJb7jHjO3PUpzawHTPMFhrBCULYaUInA6bpkzbuchh34Zcf1XcVEgnWtFaqfZAMWdgAts3aslct0NW-v01kF6RwbHd7_sYiBOFHtLoRn4SbeWZYNw46fsNdjY-6xWM4Z5ar1xFUfgqgNFW5S4')"></div>
+<div class="p-3">
+<div class="flex items-center gap-1 mb-1">
+<span class="material-symbols-outlined text-secondary-green text-xs">eco</span>
+<p class="text-[9px] font-bold text-secondary-green uppercase tracking-widest">Breakfast</p>
+</div>
+<h3 class="text-[13px] font-bold text-primary-brown leading-tight">Idli Sambar</h3>
+</div>
+</div>
+<div class="bg-white rounded-card card-shadow overflow-hidden border border-primary-brown/5">
+<div class="h-28 bg-cover bg-center" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDTuJ2rdiRMKnLV3BP18L89YfbGEDItcYlrdW1CPZerH-o7J21-SeISNC38feesG771a-rJQ9qSXLtF9PnizM_egbHeU7ffRu8D3atpV3izmyx4zp2rR3kv8NWZtSTkT-Fqbff2op4mgxN8lvTGC7ew8w0Sl8S-sKG-JCf6Qs6NAw2u2TrG7NzaDQCEu-h1FGWVLgiR8VaCRzYKwSa2fzRDXLawknso15eTn0CmFg_3vOwWEl7hslxkBpHczVsDc7LgthkIOXxN9oA')"></div>
+<div class="p-3">
+<div class="flex items-center gap-1 mb-1">
+<span class="material-symbols-outlined text-secondary-green text-xs">eco</span>
+<p class="text-[9px] font-bold text-secondary-green uppercase tracking-widest">Lunch</p>
+</div>
+<h3 class="text-[13px] font-bold text-primary-brown leading-tight">Rice &amp; Dal</h3>
+</div>
+</div>
+</div>
+</div>
+<div class="px-6 py-2">
+<h2 class="text-xl font-serif font-bold text-primary-brown mb-4">Festive Add-ons</h2>
+<div class="grid grid-cols-2 gap-4">
+<div class="bg-white rounded-card card-shadow p-3 border border-primary-brown/5 relative overflow-hidden">
+<div class="z-10 relative">
+<p class="text-[9px] font-bold text-secondary-green uppercase tracking-widest">New</p>
+<h3 class="font-bold text-sm text-primary-brown mt-1">Ladoo Box</h3>
+<p class="text-[10px] text-primary-brown/60 mt-0.5">₹120</p>
+<button class="mt-3 w-full bg-primary-brown text-white text-[10px] font-bold py-2.5 rounded-lg active:scale-95 transition-transform">Add</button>
+</div>
+<span class="material-symbols-outlined absolute -right-2 -bottom-2 text-primary-brown/5 text-5xl">bakery_dining</span>
+</div>
+<div class="bg-white rounded-card card-shadow p-3 border border-primary-brown/5 relative overflow-hidden">
+<div class="z-10 relative">
+<p class="text-[9px] font-bold text-secondary-green uppercase tracking-widest">Special</p>
+<h3 class="font-bold text-sm text-primary-brown mt-1">Mysore Pak</h3>
+<p class="text-[10px] text-primary-brown/60 mt-0.5">₹150</p>
+<button class="mt-3 w-full bg-primary-brown text-white text-[10px] font-bold py-2.5 rounded-lg active:scale-95 transition-transform">Add</button>
+</div>
+<span class="material-symbols-outlined absolute -right-2 -bottom-2 text-primary-brown/5 text-5xl">cake</span>
+</div>
+</div>
+</div>
+<nav class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 backdrop-blur-xl border-t border-primary-brown/5 px-8 pt-4 pb-8 flex justify-between items-center z-50">
+<a class="flex flex-col items-center gap-1.5 text-primary-brown" href="#">
+<span class="material-symbols-outlined fill-1">home</span>
+<span class="text-[10px] font-bold tracking-tight">Home</span>
+</a>
+<a class="flex flex-col items-center gap-1.5 text-primary-brown/40" href="#">
+<span class="material-symbols-outlined">receipt_long</span>
+<span class="text-[10px] font-semibold tracking-tight">Orders</span>
+</a>
+<a class="flex flex-col items-center gap-1.5 text-primary-brown/40" href="#">
+<span class="material-symbols-outlined">calendar_today</span>
+<span class="text-[10px] font-semibold tracking-tight">Plan</span>
+</a>
+<a class="flex flex-col items-center gap-1.5 text-primary-brown/40" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="text-[10px] font-semibold tracking-tight">Profile</span>
+</a>
+</nav>
+</div>
+
+</body></html>

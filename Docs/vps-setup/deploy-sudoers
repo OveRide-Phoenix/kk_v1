@@ -1,0 +1,10 @@
+# Kuteera Kitchen — sudoers snippet for the deploy user
+# Place at /etc/sudoers.d/kk-deploy (mode 0440)
+#   sudo visudo -f /etc/sudoers.d/kk-deploy
+# Then paste the lines below.
+
+deploy ALL=(ALL) NOPASSWD: /bin/systemctl restart kk-backend-dev
+deploy ALL=(ALL) NOPASSWD: /bin/systemctl restart kk-backend-prod
+deploy ALL=(ALL) NOPASSWD: /bin/systemctl restart kk-frontend-dev
+deploy ALL=(ALL) NOPASSWD: /bin/systemctl restart kk-frontend-prod
+deploy ALL=(ALL) NOPASSWD: /bin/systemctl reload nginx

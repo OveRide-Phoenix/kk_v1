@@ -1,24 +1,24 @@
-"use client"
+"use client";
 
-import { useRef } from "react"
-import { Button } from "@/components/ui/button"
-import { ChevronLeft, ChevronRight, Quote } from "lucide-react"
+import { useRef } from "react";
+import { Button } from "@/components/ui/button";
+import { ChevronLeft, ChevronRight, Quote } from "lucide-react";
 
 export default function CultureSection() {
-  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const scroll = (direction: "left" | "right") => {
     if (scrollContainerRef.current) {
-      const { current } = scrollContainerRef
-      const scrollAmount = 300
+      const { current } = scrollContainerRef;
+      const scrollAmount = 300;
 
       if (direction === "left") {
-        current.scrollBy({ left: -scrollAmount, behavior: "smooth" })
+        current.scrollBy({ left: -scrollAmount, behavior: "smooth" });
       } else {
-        current.scrollBy({ left: scrollAmount, behavior: "smooth" })
+        current.scrollBy({ left: scrollAmount, behavior: "smooth" });
       }
     }
-  }
+  };
 
   return (
     <section id="about" className="py-16">
@@ -26,8 +26,8 @@ export default function CultureSection() {
         <div className="text-center mb-12">
           <h2 className="text-3xl font-serif font-bold mb-4">Our Culture</h2>
           <p className="text-foreground/70 max-w-2xl mx-auto">
-            We take pride in our traditional cooking methods and use only the freshest ingredients to create authentic
-            home-cooked meals.
+            We take pride in our traditional cooking methods and use only the freshest ingredients
+            to create authentic home-cooked meals.
           </p>
         </div>
 
@@ -45,7 +45,11 @@ export default function CultureSection() {
 
           <div ref={scrollContainerRef} className="flex overflow-x-auto gap-4 py-4 scrollbar-hide">
             {[1, 2, 3, 4, 5, 6].map((item) => (
-              <div key={item} className="flex-none w-64 md:w-80 aspect-[4/3] rounded-lg overflow-hidden">
+              <div
+                key={item}
+                className="flex-none w-64 md:w-80 aspect-[4/3] rounded-lg overflow-hidden"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={`/placeholder.svg?height=300&width=400&text=Kitchen+Image+${item}`}
                   alt={`Kitchen culture ${item}`}
@@ -73,12 +77,13 @@ export default function CultureSection() {
               <Quote className="h-12 w-12 text-primary" />
             </div>
             <blockquote className="text-lg md:text-xl text-center mb-6">
-              "Kuteera Kitchen brings the authentic taste of home to my doorstep. Their meals remind me of my
-              grandmother's cooking - full of flavor, made with love, and always fresh. I've been a loyal customer for
-              over a year now!"
+              "Kuteera Kitchen brings the authentic taste of home to my doorstep. Their meals remind
+              me of my grandmother's cooking - full of flavor, made with love, and always fresh.
+              I've been a loyal customer for over a year now!"
             </blockquote>
             <div className="flex items-center justify-center">
               <div className="w-12 h-12 rounded-full overflow-hidden mr-4">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src="/placeholder.svg?height=100&width=100&text=Avatar"
                   alt="Customer"
@@ -94,6 +99,5 @@ export default function CultureSection() {
         </div>
       </div>
     </section>
-  )
+  );
 }
-

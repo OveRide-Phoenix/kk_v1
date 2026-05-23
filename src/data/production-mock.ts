@@ -8,6 +8,8 @@ export interface ProductionItem {
 }
 
 export interface PublishedMenuItem {
+  item_id?: number;
+  menu_item_id?: number;
   date: string;
   item_name: string;
   unit: string;

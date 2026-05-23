@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Daily Menu Explorer | Kuteera Kitchen</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,typography,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#8d4925",
+                        "background-light": "#fdfaf1",
+                        "background-dark": "#1a1614",
+                        secondary: "#114232",
+                    },
+                    fontFamily: {
+                        display: ["Playfair Display", "serif"],
+                        sans: ["Plus Jakarta Sans", "sans-serif"],
+                    },
+                    borderRadius: {
+                        DEFAULT: "1rem",
+                        "xl": "1.5rem",
+                    },
+                },
+            },
+        };
+    </script>
+<style type="text/tailwindcss">
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        .font-display {
+            font-family: 'Playfair Display', serif;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #8d492544;
+            border-radius: 10px;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-gray-900 dark:text-gray-100 min-h-screen">
+<header class="sticky top-0 z-50 bg-white/90 dark:bg-background-dark/90 backdrop-blur-md border-b border-orange-100 dark:border-gray-800">
+<div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-white shadow-md shadow-primary/20">
+<span class="material-symbols-outlined">restaurant</span>
+</div>
+<span class="text-xl font-bold font-display text-primary">Kuteera Kitchen</span>
+</div>
+<nav class="hidden md:flex items-center gap-8">
+<a class="text-gray-600 dark:text-gray-400 hover:text-primary font-medium transition-colors" href="#">Home</a>
+<a class="text-primary font-bold border-b-2 border-primary pb-1" href="#">Order</a>
+<a class="text-gray-600 dark:text-gray-400 hover:text-primary font-medium transition-colors" href="#">Subscription</a>
+<a class="relative text-gray-600 dark:text-gray-400 hover:text-primary transition-colors flex items-center" href="#">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-gray-900"></span>
+<span class="ml-1 hidden lg:inline font-medium">Notifications</span>
+</a>
+<a class="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-primary transition-colors" href="#">
+<div class="w-8 h-8 rounded-full bg-orange-100 dark:bg-gray-800 flex items-center justify-center border border-orange-200 dark:border-gray-700">
+<span class="material-symbols-outlined text-primary text-xl">person</span>
+</div>
+<span class="font-medium">Profile</span>
+</a>
+</nav>
+</div>
+</header>
+<main class="max-w-7xl mx-auto px-6 py-10">
+<div class="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+<div>
+<h1 class="text-4xl md:text-5xl font-display text-primary mb-2">Daily Menu Explorer</h1>
+<p class="text-gray-600 dark:text-gray-400 max-w-xl text-lg">Freshly prepared authentic South-Indian meals delivered to your doorstep. Choose your favorites for the day.</p>
+</div>
+<div class="flex items-center gap-3 bg-white dark:bg-gray-800 p-1.5 rounded-full shadow-sm border border-orange-50 dark:border-gray-700">
+<button class="px-6 py-2.5 rounded-full bg-primary text-white font-semibold transition-all shadow-md shadow-primary/20">Breakfast</button>
+<button class="px-6 py-2.5 rounded-full text-gray-500 dark:text-gray-400 hover:bg-orange-50 dark:hover:bg-gray-700 font-semibold transition-all">Lunch</button>
+<button class="px-6 py-2.5 rounded-full text-gray-500 dark:text-gray-400 hover:bg-orange-50 dark:hover:bg-gray-700 font-semibold transition-all">Dinner</button>
+</div>
+</div>
+<div class="flex flex-wrap items-center justify-between mb-8 pb-6 border-b border-orange-100 dark:border-gray-800 gap-4">
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-orange-100 dark:border-gray-700 rounded-full text-sm font-medium">
+<span class="material-symbols-outlined text-secondary text-sm">leaf_spark</span>
+<span>100% Vegetarian</span>
+</div>
+<div class="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-orange-100 dark:border-gray-700 rounded-full text-sm font-medium">
+<span class="material-symbols-outlined text-primary text-sm">schedule</span>
+<span>Delivers by 8:30 AM</span>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<span class="text-sm text-gray-500">View:</span>
+<button class="p-2 bg-white dark:bg-gray-800 border border-orange-100 dark:border-gray-700 rounded-lg text-primary">
+<span class="material-symbols-outlined">grid_view</span>
+</button>
+<button class="p-2 text-gray-400 hover:bg-white dark:hover:bg-gray-800 rounded-lg transition-colors">
+<span class="material-symbols-outlined">view_list</span>
+</button>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+<div class="group bg-white dark:bg-gray-800 rounded-xl overflow-hidden border border-orange-50 dark:border-gray-700 shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+<div class="relative h-56 overflow-hidden">
+<img alt="Masala Dosa with Chutney" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAzhY4-y6RfV1eZAxZtmqIZf-bRVzEMfcwrt6N78rGppT8Fa0dRbwOYMj4HCdYRvjSLiM9XzdObqbUPdZ7WSCoIBuLSxzRpDNXiqw6WH1f3LObIZPeUIu7h7ifbPX3lzWtObDuK-6eoa0NlPxpYfEr1PWvT5Els1-6NbVYVq13r3gZFa-yJoe4wPWGQl67sMrQLczuk5BFfxP1B-ZvrU5jEygD4kQdw9WT0fN5rCY4gZuboBKP2Hy9pCwc0leAUKI0qXSuM5FzDsMnD"/>
+<div class="absolute top-4 left-4 bg-white/90 dark:bg-gray-900/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest text-secondary flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span> Most Popular
+                </div>
+</div>
+<div class="p-6">
+<div class="flex justify-between items-start mb-2">
+<h3 class="text-xl font-bold font-display group-hover:text-primary transition-colors">Masala Dosa</h3>
+<div class="flex items-center gap-1 text-orange-400">
+<span class="material-symbols-outlined text-sm">star</span>
+<span class="text-xs font-bold text-gray-600 dark:text-gray-300">4.9</span>
+</div>
+</div>
+<p class="text-sm text-gray-500 dark:text-gray-400 mb-4 line-clamp-2">Crispy golden crepe filled with spiced potato mash, served with coconut chutney and tangy sambar.</p>
+<div class="flex items-center gap-4 mb-6">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-sm">local_fire_department</span>
+<span class="text-xs font-medium text-gray-600 dark:text-gray-400">320 kcal</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-sm">fiber_manual_record</span>
+<span class="text-xs font-medium text-gray-600 dark:text-gray-400">High Protein</span>
+</div>
+</div>
+<div class="flex items-center justify-between pt-4 border-t border-orange-50 dark:border-gray-700">
+<span class="text-xl font-bold text-primary">₹85</span>
+<button class="bg-primary hover:bg-primary/90 text-white px-8 py-2.5 rounded-full font-bold transition-all shadow-md shadow-primary/20 flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">add</span> Add
+                    </button>
+</div>
+</div>
+</div>
+<div class="group bg-white dark:bg-gray-800 rounded-xl overflow-hidden border border-orange-50 dark:border-gray-700 shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+<div class="relative h-56 overflow-hidden">
+<img alt="Traditional Pongal" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA6zzeqvb02FmlwywWh76bIyEbaf7Bm_Vk150NjT4RoFiNFrUSLDrgRThsAIX2SNoCF21LaaHIZSm8T9r92Nl6HquUPgoH3MPNjMBsAXqKhd9s04EuVpNneH3nFXyUqJgqHS9DG0_Na9qY4rYtwXXlL3Yes9Z5YP2wrgyCaZAQ-1_r4IdEFSxck1iz8xWwy9hmAcDqsC-4m8eh5NQJh_IRLzY-zrHmzbgTTxIC42R0F3ORHKlCzRhJwlAAS9dTFhbaXnkecEnmXMmD5"/>
+<div class="absolute top-4 left-4 bg-white/90 dark:bg-gray-900/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest text-primary flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px]">eco</span> Chef's Special
+                </div>
+</div>
+<div class="p-6">
+<div class="flex justify-between items-start mb-2">
+<h3 class="text-xl font-bold font-display group-hover:text-primary transition-colors">Ven Pongal</h3>
+<div class="flex items-center gap-1 text-orange-400">
+<span class="material-symbols-outlined text-sm">star</span>
+<span class="text-xs font-bold text-gray-600 dark:text-gray-300">4.7</span>
+</div>
+</div>
+<p class="text-sm text-gray-500 dark:text-gray-400 mb-4 line-clamp-2">Classic South Indian comfort food made with rice and moong dal, tempered with black pepper and ginger.</p>
+<div class="flex items-center gap-4 mb-6">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-sm">local_fire_department</span>
+<span class="text-xs font-medium text-gray-600 dark:text-gray-400">280 kcal</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-sm">fiber_manual_record</span>
+<span class="text-xs font-medium text-gray-600 dark:text-gray-400">Light</span>
+</div>
+</div>
+<div class="flex items-center justify-between pt-4 border-t border-orange-50 dark:border-gray-700">
+<span class="text-xl font-bold text-primary">₹75</span>
+<button class="bg-primary hover:bg-primary/90 text-white px-8 py-2.5 rounded-full font-bold transition-all shadow-md shadow-primary/20 flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">add</span> Add
+                    </button>
+</div>
+</div>
+</div>
+<div class="group bg-white dark:bg-gray-800 rounded-xl overflow-hidden border border-orange-50 dark:border-gray-700 shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+<div class="relative h-56 overflow-hidden">
+<img alt="Bisi Bele Bath" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDUHygy18MGNc2iVitlESKvzOB3lrCvJ-6_cuKi_OOLFmy6ObmESOVKjcD8rC37DQB54mkNZ0DscxZwJRHiS9jrhRJbiAJq7SFx4Og9cZ_WceE-fVDdhMw-ygHmHMEfrOP0YStQIB48Uh00ofuNsXiyn1xwYJE8s9H-xBqkvJUCZwVDswD__3heAsxl1XMLRs9MCMj1F9_USiATqd8CxDbpEoborZr_mn_rEfOHMd9-FVrIl75QIJ0EMKxesdIjIlPZxPeYFA48xxfA"/>
+</div>
+<div class="p-6">
+<div class="flex justify-between items-start mb-2">
+<h3 class="text-xl font-bold font-display group-hover:text-primary transition-colors">Bisi Bele Bath</h3>
+<div class="flex items-center gap-1 text-orange-400">
+<span class="material-symbols-outlined text-sm">star</span>
+<span class="text-xs font-bold text-gray-600 dark:text-gray-300">4.8</span>
+</div>
+</div>
+<p class="text-sm text-gray-500 dark:text-gray-400 mb-4 line-clamp-2">Wholesome one-pot meal from Karnataka featuring rice, lentils, vegetables and special aromatic spice blend.</p>
+<div class="flex items-center gap-4 mb-6">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-sm">local_fire_department</span>
+<span class="text-xs font-medium text-gray-600 dark:text-gray-400">350 kcal</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-sm">fiber_manual_record</span>
+<span class="text-xs font-medium text-gray-600 dark:text-gray-400">Filling</span>
+</div>
+</div>
+<div class="flex items-center justify-between pt-4 border-t border-orange-50 dark:border-gray-700">
+<span class="text-xl font-bold text-primary">₹95</span>
+<button class="bg-primary hover:bg-primary/90 text-white px-8 py-2.5 rounded-full font-bold transition-all shadow-md shadow-primary/20 flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">add</span> Add
+                    </button>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-20">
+<div class="flex items-center justify-between mb-8">
+<h2 class="text-3xl font-display text-primary">Festive Add-ons</h2>
+<a class="text-sm font-bold text-secondary flex items-center gap-1 hover:underline" href="#">
+                View All <span class="material-symbols-outlined text-sm">chevron_right</span>
+</a>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+<div class="bg-white dark:bg-gray-800 p-6 rounded-xl border border-orange-50 dark:border-gray-700 relative overflow-hidden group">
+<div class="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity">
+<span class="material-symbols-outlined text-8xl text-primary">card_giftcard</span>
+</div>
+<span class="text-[10px] font-bold text-primary tracking-widest uppercase mb-1 block">NEW ARRIVAL</span>
+<h4 class="text-lg font-bold mb-1">Ladoo Box</h4>
+<p class="text-primary font-bold mb-4">₹120</p>
+<button class="w-full py-2 bg-primary text-white rounded-lg font-bold text-sm hover:bg-primary/90 transition-all">Add to Cart</button>
+</div>
+<div class="bg-white dark:bg-gray-800 p-6 rounded-xl border border-orange-50 dark:border-gray-700 relative overflow-hidden group">
+<div class="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity">
+<span class="material-symbols-outlined text-8xl text-primary">celebration</span>
+</div>
+<span class="text-[10px] font-bold text-primary tracking-widest uppercase mb-1 block">SPECIAL</span>
+<h4 class="text-lg font-bold mb-1">Mysore Pak</h4>
+<p class="text-primary font-bold mb-4">₹150</p>
+<button class="w-full py-2 bg-primary text-white rounded-lg font-bold text-sm hover:bg-primary/90 transition-all">Add to Cart</button>
+</div>
+<div class="bg-white dark:bg-gray-800 p-6 rounded-xl border border-orange-50 dark:border-gray-700 relative overflow-hidden group">
+<div class="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity">
+<span class="material-symbols-outlined text-8xl text-primary">coffee</span>
+</div>
+<span class="text-[10px] font-bold text-primary tracking-widest uppercase mb-1 block">BEVERAGE</span>
+<h4 class="text-lg font-bold mb-1">Filter Coffee</h4>
+<p class="text-primary font-bold mb-4">₹45</p>
+<button class="w-full py-2 bg-primary text-white rounded-lg font-bold text-sm hover:bg-primary/90 transition-all">Add to Cart</button>
+</div>
+<div class="bg-white dark:bg-gray-800 p-6 rounded-xl border border-orange-50 dark:border-gray-700 relative overflow-hidden group">
+<div class="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity">
+<span class="material-symbols-outlined text-8xl text-primary">bakery_dining</span>
+</div>
+<span class="text-[10px] font-bold text-primary tracking-widest uppercase mb-1 block">SIDES</span>
+<h4 class="text-lg font-bold mb-1">Meddu Vada</h4>
+<p class="text-primary font-bold mb-4">₹40</p>
+<button class="w-full py-2 bg-primary text-white rounded-lg font-bold text-sm hover:bg-primary/90 transition-all">Add to Cart</button>
+</div>
+</div>
+</div>
+</main>
+<footer class="bg-background-light dark:bg-background-dark border-t border-orange-100 dark:border-gray-800 pt-16 pb-12 mt-20 transition-colors">
+<div class="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-12 gap-12">
+<div class="col-span-1 md:col-span-4">
+<div class="flex items-center gap-3 mb-6">
+<div class="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-white shadow-md">
+<span class="material-symbols-outlined text-xl text-white">restaurant</span>
+</div>
+<span class="text-2xl font-bold font-display text-primary">Kuteera Kitchen</span>
+</div>
+<p class="text-base text-gray-600 dark:text-gray-400 leading-relaxed mb-8">Bringing the authentic taste of South Indian kitchens to your home, one meal at a time. Healthy, fresh, and soulful.</p>
+<div class="flex flex-wrap gap-4 items-center">
+<div class="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-gray-800 border border-orange-100 dark:border-gray-700 rounded-lg shadow-sm">
+<span class="material-symbols-outlined text-secondary text-xl">verified_user</span>
+<div>
+<p class="text-[10px] font-bold text-gray-400 uppercase leading-none mb-0.5">Safety Assured</p>
+<p class="text-xs font-bold text-gray-700 dark:text-gray-200">Hygienic Kitchen</p>
+</div>
+</div>
+<div class="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-gray-800 border border-orange-100 dark:border-gray-700 rounded-lg shadow-sm">
+<span class="material-symbols-outlined text-primary text-xl">workspace_premium</span>
+<div>
+<p class="text-[10px] font-bold text-gray-400 uppercase leading-none mb-0.5">Certified by</p>
+<p class="text-xs font-bold text-gray-700 dark:text-gray-200 uppercase">FSSAI</p>
+</div>
+</div>
+</div>
+</div>
+<div class="col-span-1 md:col-span-2">
+<h5 class="font-bold text-gray-900 dark:text-white mb-6 uppercase tracking-wider text-sm">Quick Links</h5>
+<ul class="space-y-4 text-sm text-gray-600 dark:text-gray-400">
+<li><a class="hover:text-primary transition-colors flex items-center gap-2" href="#"><span class="w-1.5 h-1.5 rounded-full bg-orange-200"></span> How it Works</a></li>
+<li><a class="hover:text-primary transition-colors flex items-center gap-2" href="#"><span class="w-1.5 h-1.5 rounded-full bg-orange-200"></span> Pricing Plans</a></li>
+<li><a class="hover:text-primary transition-colors flex items-center gap-2" href="#"><span class="w-1.5 h-1.5 rounded-full bg-orange-200"></span> Daily Menu</a></li>
+<li><a class="hover:text-primary transition-colors flex items-center gap-2" href="#"><span class="w-1.5 h-1.5 rounded-full bg-orange-200"></span> Corporate Gifting</a></li>
+</ul>
+</div>
+<div class="col-span-1 md:col-span-2">
+<h5 class="font-bold text-gray-900 dark:text-white mb-6 uppercase tracking-wider text-sm">Support</h5>
+<ul class="space-y-4 text-sm text-gray-600 dark:text-gray-400">
+<li><a class="hover:text-primary transition-colors" href="#">Help Center</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Contact Us</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Privacy Policy</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Terms of Service</a></li>
+</ul>
+</div>
+<div class="col-span-1 md:col-span-4">
+<h5 class="font-bold text-gray-900 dark:text-white mb-6 uppercase tracking-wider text-sm">Download Our App</h5>
+<p class="text-sm text-gray-500 dark:text-gray-400 mb-6">Order faster and track your subscription on the go.</p>
+<div class="flex flex-col sm:flex-row gap-4">
+<button class="flex items-center gap-3 px-5 py-2.5 bg-gray-900 dark:bg-black text-white rounded-xl hover:bg-gray-800 transition-all shadow-lg border border-gray-700">
+<span class="material-symbols-outlined text-2xl">smartphone</span>
+<div class="text-left">
+<p class="text-[9px] uppercase font-bold leading-none text-gray-400">Download on</p>
+<p class="text-sm font-bold leading-tight">App Store</p>
+</div>
+</button>
+<button class="flex items-center gap-3 px-5 py-2.5 bg-gray-900 dark:bg-black text-white rounded-xl hover:bg-gray-800 transition-all shadow-lg border border-gray-700">
+<span class="material-symbols-outlined text-2xl">shop</span>
+<div class="text-left">
+<p class="text-[9px] uppercase font-bold leading-none text-gray-400">Get it on</p>
+<p class="text-sm font-bold leading-tight">Google Play</p>
+</div>
+</button>
+</div>
+</div>
+</div>
+<div class="max-w-7xl mx-auto px-6 pt-12 mt-16 border-t border-orange-100 dark:border-gray-800 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-gray-500 font-medium">
+<p>© 2024 Kuteera Kitchen Services. All rights reserved.</p>
+<div class="flex gap-6">
+<a class="hover:text-primary transition-colors" href="#">Facebook</a>
+<a class="hover:text-primary transition-colors" href="#">Instagram</a>
+<a class="hover:text-primary transition-colors" href="#">Twitter</a>
+</div>
+</div>
+</footer>
+<div class="fixed bottom-6 right-6 md:right-10 md:bottom-10 z-50">
+<button class="bg-secondary text-white px-6 py-4 rounded-full shadow-2xl flex items-center gap-3 hover:scale-105 transition-transform active:scale-95 border-2 border-white/20 backdrop-blur-sm">
+<span class="material-symbols-outlined">shopping_basket</span>
+<span class="font-bold">2 Items • ₹145</span>
+</button>
+</div>
+
+</body></html>

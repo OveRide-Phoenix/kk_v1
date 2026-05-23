@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Add-ons Store | Kuteera Kitchen</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "cream": "#fdfaf1",
+                        "cream-dark": "#F3EDE7",
+                        "dark-green": "#1b4332",
+                        "bright-brown": "#8D4925",
+                        "dark-brown": "#4A3728"
+                    },
+                    fontFamily: {
+                        "display": ["Work Sans", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "ios": "16px"
+                    },
+                },
+            },
+        }
+    </script>
+<style type="text/tailwindcss">
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .filled-icon {
+            font-variation-settings: 'FILL' 1;
+        }
+        body {
+            font-family: 'Work Sans', sans-serif;
+            background-color: #fdfaf1;
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+        body {
+            min-height: max(884px, 100dvh);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-cream text-bright-brown antialiased font-display">
+<div class="relative flex min-h-screen w-full flex-col max-w-[430px] mx-auto shadow-2xl bg-cream overflow-x-hidden">
+<header class="sticky top-0 z-50 flex items-center bg-bright-brown px-4 py-5 justify-between shadow-sm">
+<div class="flex items-center gap-3">
+<button class="flex items-center justify-center size-10 rounded-full hover:bg-white/10 transition-colors">
+<span class="material-symbols-outlined text-cream">arrow_back_ios_new</span>
+</button>
+<h1 class="text-xl font-bold text-cream tracking-tight">Add-ons</h1>
+</div>
+<div class="relative">
+<button class="flex items-center justify-center size-10 rounded-full bg-cream text-bright-brown">
+<span class="material-symbols-outlined">shopping_cart</span>
+</button>
+<span class="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-dark-green text-[10px] font-bold text-cream ring-2 ring-bright-brown">2</span>
+</div>
+</header>
+<div class="flex gap-2 px-4 py-4 overflow-x-auto no-scrollbar scroll-smooth">
+<button class="flex h-8 shrink-0 items-center justify-center rounded-full bg-bright-brown px-5 text-cream text-xs font-bold transition-all">
+                All
+            </button>
+<button class="flex h-8 shrink-0 items-center justify-center rounded-full bg-cream-dark/50 px-5 text-bright-brown text-xs font-semibold">
+                Sweets
+            </button>
+<button class="flex h-8 shrink-0 items-center justify-center rounded-full bg-cream-dark/50 px-5 text-bright-brown text-xs font-semibold">
+                Festival Specials
+            </button>
+<button class="flex h-8 shrink-0 items-center justify-center rounded-full bg-cream-dark/50 px-5 text-bright-brown text-xs font-semibold">
+                Extra Sabzi
+            </button>
+</div>
+<div class="px-4 mb-2">
+<div class="rounded-ios bg-dark-green/10 border border-dark-green/20 p-3 flex items-center gap-3">
+<span class="material-symbols-outlined text-dark-green">eco</span>
+<p class="text-[11px] text-dark-green font-medium">Authentic South-Indian extras made with organic ingredients and zero preservatives.</p>
+</div>
+</div>
+<main class="grid grid-cols-2 gap-3 p-4 mb-32">
+<div class="group flex flex-col gap-2 relative bg-white rounded-ios p-2 border border-cream-dark shadow-sm">
+<div class="relative w-full aspect-square overflow-hidden rounded-[12px] bg-cream-dark">
+<div class="w-full h-full bg-center bg-no-repeat bg-cover transition-transform group-hover:scale-105" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuC0l8afMx0Mxp8ERcCoLS9kxDtXaCHXeJ0hs-Eghp9y23OPFzWT6hdaezGQsoRfIHmG-ypSpKDEXMNhI4I89fdsK46NsfznoAlmMNaca2x7fZ4Z7kp4IOzeh49140Cc40sRvVYm4AqUeHbfDO8JBfouH4hJEGrrBqEucHXrqF5AdR2p5WwAOn-Bx1s0pMAKugxM1EvoOkGaO3tRtPcu0hFjo5hwRXKmsUP74PMc8RwtBFqVD9lUdxdNVYeoqOk08Fj6SVRPfrip5mM");'></div>
+<button class="absolute bottom-1.5 right-1.5 flex size-8 items-center justify-center rounded-full bg-bright-brown text-cream shadow-md active:scale-95 transition-all">
+<span class="material-symbols-outlined text-lg font-bold">add</span>
+</button>
+</div>
+<div class="px-0.5">
+<h3 class="text-bright-brown text-[13px] font-bold leading-tight line-clamp-1">Ghee Mysore Pak</h3>
+<div class="flex items-center justify-between mt-1">
+<span class="bg-dark-green px-2 py-0.5 rounded-full text-cream text-[10px] font-bold">₹45</span>
+<span class="text-[9px] uppercase tracking-wider text-bright-brown/60 font-bold">2 Pcs</span>
+</div>
+</div>
+</div>
+<div class="group flex flex-col gap-2 relative bg-white rounded-ios p-2 border border-cream-dark shadow-sm">
+<div class="relative w-full aspect-square overflow-hidden rounded-[12px] bg-cream-dark">
+<div class="w-full h-full bg-center bg-no-repeat bg-cover transition-transform group-hover:scale-105" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDXuB0duuf7qHA5mqAZIDIXqmTi8fwqigtQPxNvgO0bCaIne4-dmpeqeE64V0160Z1DZjDU_hqScIv50WWhPlN2VHMReYbXYVbUBhuWO2oC_Jsnsf2jidlVy8BFl5msaVIDAQBkrul-s8cd3syc7ackKCsLvAyAhhMIUHsU_v7ihWidA_BkTMKiO6nY7WwTIkenPbYrXBg9D5xXRpEUNmFvN_bZqBhiqDTWMdcf1q13r4by9XDcySOKXDIC5-Zt9xsJmlQ1claNxN8");'></div>
+<button class="absolute bottom-1.5 right-1.5 flex size-8 items-center justify-center rounded-full bg-bright-brown text-cream shadow-md active:scale-95 transition-all">
+<span class="material-symbols-outlined text-lg font-bold">add</span>
+</button>
+</div>
+<div class="px-0.5">
+<h3 class="text-bright-brown text-[13px] font-bold leading-tight line-clamp-1">Paal Payasam</h3>
+<div class="flex items-center justify-between mt-1">
+<span class="bg-dark-green px-2 py-0.5 rounded-full text-cream text-[10px] font-bold">₹60</span>
+<span class="text-[9px] uppercase tracking-wider text-bright-brown/60 font-bold">150ml</span>
+</div>
+</div>
+</div>
+<div class="group flex flex-col gap-2 relative bg-white rounded-ios p-2 border border-cream-dark shadow-sm">
+<div class="relative w-full aspect-square overflow-hidden rounded-[12px] bg-cream-dark">
+<div class="w-full h-full bg-center bg-no-repeat bg-cover transition-transform group-hover:scale-105" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDUqVpT12Qn7c09RRhGE2DOX50LKQ0_I4acxhdzN79deTd20IrTb63yE4IK1ymNF6TZmr-IlMIsvUslJnJx7qi67SgeAycRs9XJt2MicdSET0ZqIiEbg6hmPmz94HMRFeZEXR3lfDXPLA8aqpTBuXt4oCcuJXPz9rewDD6Qj5aDLdmpzFMPoha0D27jPXGisi44tQfV2wvOOgBFBJsemqhD3Zi8vCnohneWNh_qUJs8hFGXGCaxoA6sOWBxnUVlVKgKL4XmWAMSdLE");'></div>
+<button class="absolute bottom-1.5 right-1.5 flex size-8 items-center justify-center rounded-full bg-bright-brown text-cream shadow-md active:scale-95 transition-all">
+<span class="material-symbols-outlined text-lg font-bold">add</span>
+</button>
+</div>
+<div class="px-0.5">
+<h3 class="text-bright-brown text-[13px] font-bold leading-tight line-clamp-1">Besan Laddu</h3>
+<div class="flex items-center justify-between mt-1">
+<span class="bg-dark-green px-2 py-0.5 rounded-full text-cream text-[10px] font-bold">₹40</span>
+<span class="text-[9px] uppercase tracking-wider text-bright-brown/60 font-bold">2 Pcs</span>
+</div>
+</div>
+</div>
+<div class="group flex flex-col gap-2 relative bg-white rounded-ios p-2 border border-dark-green/10 shadow-sm">
+<div class="relative w-full aspect-square overflow-hidden rounded-[12px] bg-cream-dark">
+<div class="w-full h-full bg-center bg-no-repeat bg-cover transition-transform group-hover:scale-105" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDk9ssWJlSQZ9_kCHkz0z5UuDsglSjdG6qCClAm6NO_fyDMkIbMfx3FuLOTAU64fvU06iNj8b_hcxmamBZjp4nWTC8Ba8s50wav025CIOrMvOYhXi5KmIaSnXO6AeAu0P0TNsOLdtPqMLGCAAZ_cJ4Jtzg_kXpY7SQmW5_UEp7znhDE0Q9wr7_xNaZXWFts5nrsual78BtEphiysSmyt8s-oJyIwN10gZjTZesakytReD9q2-VxLaYRkHdg8C1elKWZVXVGwBxiWcY");'></div>
+<div class="absolute top-1 left-1 bg-dark-green text-cream text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">Extra Portions</div>
+<button class="absolute bottom-1.5 right-1.5 flex size-8 items-center justify-center rounded-full bg-bright-brown text-cream shadow-md active:scale-95 transition-all">
+<span class="material-symbols-outlined text-lg font-bold">add</span>
+</button>
+</div>
+<div class="px-0.5">
+<h3 class="text-bright-brown text-[13px] font-bold leading-tight line-clamp-1">Avial Extra</h3>
+<div class="flex items-center justify-between mt-1">
+<span class="bg-dark-green px-2 py-0.5 rounded-full text-cream text-[10px] font-bold">₹55</span>
+<span class="text-[9px] uppercase tracking-wider text-bright-brown/60 font-bold">1 Bowl</span>
+</div>
+</div>
+</div>
+<div class="group flex flex-col gap-2 relative bg-white rounded-ios p-2 border border-cream-dark shadow-sm">
+<div class="relative w-full aspect-square overflow-hidden rounded-[12px] bg-cream-dark">
+<div class="w-full h-full bg-center bg-no-repeat bg-cover transition-transform group-hover:scale-105" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuAyVrWCaolvXI3tPVrGzIJy3-UEJ_2G3Kx1bNgBkXiiogNTXqAMPsnomZnNzO7FXNI5x3fZGWdQ7f3aKzJJL3hg6xfnKc1ovli_Q8bXPzm-9dXCQ29e0qwkxOZEFRacSLkOyqK1Zd3ib6oY3YgTkgbBJ7IohWltb5DOJiH6J9oDizE6B5AXx6YglqFq0FyzVQ6iuQNLrjm6Xkxd2q8P1fLpvJbi5Dq5kC-RH6SvX3Z3PP-HwKjjg9apTNFlUjMg_JDi9ar7sLh34mA");'></div>
+<button class="absolute bottom-1.5 right-1.5 flex size-8 items-center justify-center rounded-full bg-bright-brown text-cream shadow-md active:scale-95 transition-all">
+<span class="material-symbols-outlined text-lg font-bold">add</span>
+</button>
+</div>
+<div class="px-0.5">
+<h3 class="text-bright-brown text-[13px] font-bold leading-tight line-clamp-1">Masala Vada</h3>
+<div class="flex items-center justify-between mt-1">
+<span class="bg-dark-green px-2 py-0.5 rounded-full text-cream text-[10px] font-bold">₹35</span>
+<span class="text-[9px] uppercase tracking-wider text-bright-brown/60 font-bold">2 Pcs</span>
+</div>
+</div>
+</div>
+<div class="group flex flex-col gap-2 relative bg-white rounded-ios p-2 border border-cream-dark shadow-sm">
+<div class="relative w-full aspect-square overflow-hidden rounded-[12px] bg-cream-dark">
+<div class="w-full h-full bg-center bg-no-repeat bg-cover transition-transform group-hover:scale-105" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuAhk6doJpxxNyjLAoIjg7rK1ydZU8f6sAMrs1914maSXIloJrPFI_iBWyiIebwPqXwPP_67On3C0kFX0o5zLlxIN9I8Z5YLjV048XZtjIDIXlTBRG8qVOkOhfHt9I_Q2SpvGQgU_clMAuV8XktZHyEXur_4o1I5cYTMkfdcrJ_9MjdyCKKSDPNahh1JmfJvNrP0GzT9SWrjNdQRih3ojwB7foBYXm2wEaFAkqGHHea0i9Vf64-enePALZXP22AqryJeQIUU3HXw1Rk");'></div>
+<button class="absolute bottom-1.5 right-1.5 flex size-8 items-center justify-center rounded-full bg-bright-brown text-cream shadow-md active:scale-95 transition-all">
+<span class="material-symbols-outlined text-lg font-bold">add</span>
+</button>
+</div>
+<div class="px-0.5">
+<h3 class="text-bright-brown text-[13px] font-bold leading-tight line-clamp-1">Holige / Obbattu</h3>
+<div class="flex items-center justify-between mt-1">
+<span class="bg-dark-green px-2 py-0.5 rounded-full text-cream text-[10px] font-bold">₹70</span>
+<span class="text-[9px] uppercase tracking-wider text-bright-brown/60 font-bold">1 Pc</span>
+</div>
+</div>
+</div>
+</main>
+<div class="fixed bottom-[84px] left-1/2 -translate-x-1/2 w-[calc(100%-32px)] max-w-[398px] z-40">
+<div class="flex items-center justify-between rounded-ios bg-bright-brown p-4 shadow-xl border border-white/10">
+<div class="flex flex-col">
+<p class="text-cream/70 text-[10px] font-bold uppercase tracking-widest">Selected Extras</p>
+<p class="text-cream text-base font-bold">₹105 <span class="text-xs font-normal ml-1 opacity-60">(2 items)</span></p>
+</div>
+<button class="flex h-10 items-center justify-center gap-2 rounded-lg bg-dark-green px-5 text-cream text-xs font-bold transition-all hover:bg-dark-green/90 active:scale-95">
+<span>View Cart</span>
+<span class="material-symbols-outlined text-sm">arrow_forward</span>
+</button>
+</div>
+</div>
+<nav class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] flex items-center justify-around bg-cream border-t border-cream-dark py-2 px-6 z-50">
+<a class="flex flex-col items-center gap-1 text-bright-brown/40" href="#">
+<span class="material-symbols-outlined">home</span>
+<span class="text-[10px] font-medium">Home</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-bright-brown" href="#">
+<span class="material-symbols-outlined filled-icon">storefront</span>
+<span class="text-[10px] font-bold">Add-ons</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-bright-brown/40" href="#">
+<span class="material-symbols-outlined">calendar_today</span>
+<span class="text-[10px] font-medium">Plans</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-bright-brown/40" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="text-[10px] font-medium">Profile</span>
+</a>
+</nav>
+<div class="h-6 bg-cream"></div>
+</div>
+
+</body></html>

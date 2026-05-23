@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Final Secure Checkout - Kuteera Kitchen</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        "dark-brown": "#3d2b1f",
+                        "bright-brown": "#8D4925",
+                        "cream": "#fdfaf1",
+                        "dark-green": "#1b4332",
+                    },
+                    fontFamily: {
+                        "display": ["Work Sans", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "ios": "16px",
+                    }
+                },
+            },
+        }
+    </script>
+<style type="text/tailwindcss">
+        @layer base {
+            body {
+                @apply bg-cream text-dark-brown font-display;
+                -webkit-tap-highlight-color: transparent;
+            }
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }input[type="radio"]:checked {
+            background-color: #1b4332;
+            border-color: #1b4332;
+        }
+    </style>
+<style>
+        body {
+            min-height: max(884px, 100dvh);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="min-h-screen">
+<header class="sticky top-0 z-50 bg-cream/90 backdrop-blur-md border-b border-dark-brown/5">
+<div class="flex items-center p-4 justify-between max-w-md mx-auto">
+<button class="text-dark-brown p-2 hover:bg-dark-brown/5 rounded-full transition-colors">
+<span class="material-symbols-outlined block">arrow_back_ios_new</span>
+</button>
+<h1 class="text-dark-brown text-lg font-bold leading-tight tracking-tight flex-1 text-center pr-10 uppercase tracking-widest">Final Secure Checkout</h1>
+</div>
+</header>
+<main class="max-w-md mx-auto pb-48">
+<section class="p-4">
+<div class="flex items-center justify-between mb-3">
+<h2 class="text-bright-brown text-xs font-bold uppercase tracking-widest">Delivery Address</h2>
+<button class="text-dark-green text-xs font-bold uppercase flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">edit</span>
+                    Change
+                </button>
+</div>
+<div class="bg-white border border-dark-brown/5 rounded-ios p-4 shadow-sm flex gap-4 items-start">
+<div class="bg-cream p-2 rounded-lg text-dark-green">
+<span class="material-symbols-outlined fill-1">home</span>
+</div>
+<div class="flex-1">
+<p class="font-bold text-dark-brown">Home</p>
+<p class="text-dark-brown/70 text-sm leading-relaxed mt-1">123, Maple Street, Indiranagar, Bengaluru, 560038</p>
+</div>
+</div>
+</section>
+<section class="py-2">
+<h2 class="px-4 text-bright-brown text-xs font-bold uppercase tracking-widest mb-3">Select Delivery Slot</h2>
+<div class="flex gap-3 px-4 overflow-x-auto hide-scrollbar">
+<button class="flex flex-col min-w-[130px] shrink-0 items-center justify-center gap-1 rounded-ios bg-bright-brown text-cream py-4 px-2 shadow-lg">
+<span class="text-[10px] opacity-70 font-bold uppercase tracking-tighter">LUNCH</span>
+<p class="text-sm font-bold">12:00 - 1:00 PM</p>
+<span class="material-symbols-outlined text-sm text-dark-green fill-1">check_circle</span>
+</button>
+<button class="flex flex-col min-w-[130px] shrink-0 items-center justify-center gap-1 rounded-ios bg-white text-dark-brown py-4 px-2 border border-dark-brown/5 shadow-sm">
+<span class="text-[10px] text-dark-brown/40 font-bold uppercase tracking-tighter">LUNCH</span>
+<p class="text-sm font-bold">1:00 - 2:00 PM</p>
+</button>
+<button class="flex flex-col min-w-[130px] shrink-0 items-center justify-center gap-1 rounded-ios bg-white text-dark-brown py-4 px-2 border border-dark-brown/5 shadow-sm">
+<span class="text-[10px] text-dark-brown/40 font-bold uppercase tracking-tighter">DINNER</span>
+<p class="text-sm font-bold">7:00 - 8:00 PM</p>
+</button>
+</div>
+</section>
+<section class="p-4 mt-2">
+<h2 class="text-bright-brown text-xs font-bold uppercase tracking-widest mb-3">Payment Method</h2>
+<div class="bg-white rounded-ios overflow-hidden border border-dark-brown/5 shadow-sm">
+<label class="flex items-center justify-between p-4 cursor-pointer border-b border-dark-brown/5 active:bg-cream/50">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 flex items-center justify-center bg-cream rounded-xl">
+<span class="material-symbols-outlined text-dark-green">account_balance_wallet</span>
+</div>
+<div>
+<p class="font-bold text-dark-brown">UPI Payments</p>
+<p class="text-[11px] text-dark-brown/50 font-medium">Google Pay, PhonePe, Paytm</p>
+</div>
+</div>
+<input checked="" class="w-5 h-5 text-dark-green border-dark-brown/20 focus:ring-dark-green rounded-full" name="payment" type="radio"/>
+</label>
+<label class="flex items-center justify-between p-4 cursor-pointer border-b border-dark-brown/5 active:bg-cream/50">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 flex items-center justify-center bg-cream rounded-xl">
+<span class="material-symbols-outlined text-dark-green">credit_card</span>
+</div>
+<div>
+<p class="font-bold text-dark-brown">Credit / Debit Card</p>
+<p class="text-[11px] text-dark-brown/50 font-medium">Visa, Mastercard, RuPay</p>
+</div>
+</div>
+<input class="w-5 h-5 text-dark-green border-dark-brown/20 focus:ring-dark-green rounded-full" name="payment" type="radio"/>
+</label>
+<label class="flex items-center justify-between p-4 cursor-pointer active:bg-cream/50">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 flex items-center justify-center bg-cream rounded-xl">
+<span class="material-symbols-outlined text-dark-green">payments</span>
+</div>
+<div>
+<p class="font-bold text-dark-brown">Cash on Delivery</p>
+<p class="text-[11px] text-dark-brown/50 font-medium">Pay at your doorstep</p>
+</div>
+</div>
+<input class="w-5 h-5 text-dark-green border-dark-brown/20 focus:ring-dark-green rounded-full" name="payment" type="radio"/>
+</label>
+</div>
+</section>
+<section class="mx-4 my-6 p-6 bg-dark-green rounded-ios">
+<div class="flex items-center justify-around gap-4 text-center">
+<div class="flex flex-col items-center gap-2">
+<span class="material-symbols-outlined text-cream text-2xl">verified_user</span>
+<span class="text-[9px] font-bold text-cream uppercase tracking-tighter leading-tight">100%<br/>Hygienic</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<span class="material-symbols-outlined text-cream text-2xl">skillet</span>
+<span class="text-[9px] font-bold text-cream uppercase tracking-tighter leading-tight">Homemade<br/>Meals</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<span class="material-symbols-outlined text-cream text-2xl">security</span>
+<span class="text-[9px] font-bold text-cream uppercase tracking-tighter leading-tight">Secure<br/>Payment</span>
+</div>
+</div>
+</section>
+<section class="p-4 mb-4">
+<h2 class="text-bright-brown text-xs font-bold uppercase tracking-widest mb-4">Order Summary</h2>
+<div class="bg-white rounded-ios p-5 border border-dark-brown/5 shadow-sm space-y-4">
+<div class="flex justify-between text-dark-brown/80 text-sm font-medium">
+<span>Healthy South-Indian Plan</span>
+<span class="text-dark-brown font-bold">₹4,999</span>
+</div>
+<div class="flex justify-between text-dark-brown/80 text-sm font-medium">
+<span>Delivery Charges</span>
+<span class="text-dark-green font-bold uppercase text-xs">Free</span>
+</div>
+<div class="flex justify-between text-dark-brown/80 text-sm font-medium">
+<span>Taxes &amp; GST</span>
+<span class="text-dark-brown font-bold">₹250</span>
+</div>
+<div class="pt-4 border-t border-dark-brown/5 flex justify-between items-center">
+<span class="font-bold text-dark-brown uppercase tracking-wider">Total Payable</span>
+<span class="text-xl font-black text-dark-brown">₹5,249</span>
+</div>
+</div>
+</section>
+</main>
+<div class="fixed bottom-0 left-0 right-0 bg-cream/95 backdrop-blur-xl border-t border-dark-brown/5 px-4 pt-4 pb-10 z-50">
+<div class="max-w-md mx-auto">
+<button class="w-full bg-bright-brown text-cream font-bold text-base py-5 rounded-ios flex items-center justify-center gap-3 shadow-xl shadow-bright-brown/20 active:scale-[0.98] transition-all uppercase tracking-widest">
+                Confirm Order
+                <span class="material-symbols-outlined text-xl">arrow_forward</span>
+</button>
+<div class="flex items-center justify-center gap-2 mt-4">
+<span class="material-symbols-outlined text-dark-green text-sm">lock</span>
+<p class="text-center text-[10px] text-dark-brown/40 font-bold uppercase tracking-tighter">
+                    Secure 256-bit SSL encrypted transaction
+                </p>
+</div>
+</div>
+</div>
+
+</body></html>

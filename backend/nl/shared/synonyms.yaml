@@ -1,0 +1,7 @@
+synonyms:
+  orders:
+    aliases: ["bookings"]
+  sales:
+    aliases: ["revenue", "turnover"]
+  buffer:
+    aliases: ["stock"]

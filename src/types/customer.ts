@@ -1,9 +1,11 @@
 export interface Customer {
+  customer_id?: number
   name: string
   referredBy?: string
   primaryMobile: string
   alternativeMobile?: string
   email?: string
+  dateOfBirth?: string
   recipientName: string
   paymentFrequency: "Daily" | "Weekly" | "Monthly"
   
@@ -16,4 +18,7 @@ export interface Customer {
   longitude: number | null
   
   routeAssignment?: string
+  routeId?: number | null
+  routeName?: string | null
+  routeCode?: string | null
 }

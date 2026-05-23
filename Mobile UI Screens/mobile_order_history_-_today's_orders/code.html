@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Mobile Order History - Kuteera Kitchen</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#8d4a25", // Brown
+                        "accent-green": "#1b4332", // Dark Green
+                        "background-light": "#fdfaf1", // Cream
+                        "background-dark": "#1f1713",
+                    },
+                    fontFamily: {
+                        "display": ["Work Sans", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1rem",
+                        "xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Work Sans', sans-serif;
+            background-color: #fdfaf1;
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100">
+<div class="relative flex min-h-screen w-full flex-col max-w-md mx-auto shadow-2xl overflow-x-hidden">
+<!-- Header -->
+<header class="sticky top-0 z-10 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md px-4 pt-6 pb-2">
+<div class="flex items-center justify-between mb-4">
+<button class="p-2 -ml-2 rounded-full hover:bg-primary/10 transition-colors">
+<span class="material-symbols-outlined text-primary">arrow_back_ios_new</span>
+</button>
+<h1 class="text-xl font-bold tracking-tight text-primary">Order History</h1>
+<button class="p-2 -mr-2 rounded-full hover:bg-primary/10 transition-colors">
+<span class="material-symbols-outlined text-primary">help_outline</span>
+</button>
+</div>
+<!-- Filter Chips -->
+<div class="flex items-center gap-2 overflow-x-auto hide-scrollbar pb-2">
+<button class="flex h-10 shrink-0 items-center justify-center rounded-lg bg-primary px-5 text-sm font-semibold text-white shadow-sm">
+                    Today
+                </button>
+<button class="flex h-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 px-5 text-sm font-medium text-primary hover:bg-primary/20 transition-colors">
+                    Last 7 Days
+                </button>
+<button class="flex h-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 px-5 text-sm font-medium text-primary hover:bg-primary/20 transition-colors">
+                    This Month
+                </button>
+<button class="flex h-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 px-5 text-sm font-medium text-primary hover:bg-primary/20 transition-colors">
+                    Custom
+                </button>
+</div>
+<!-- Sort Bar -->
+<div class="flex items-center justify-between py-2 mt-2">
+<span class="text-sm font-semibold text-slate-500 uppercase tracking-wider">Today's Orders</span>
+<button class="flex items-center gap-1 text-sm font-bold text-primary px-3 py-1.5 rounded-lg border border-primary/20 bg-primary/5">
+<span class="material-symbols-outlined text-[20px]">tune</span>
+                    Sort
+                </button>
+</div>
+</header>
+<!-- Order List Content -->
+<main class="flex-1 px-4 py-4 space-y-4">
+<!-- Order Card 1: In Progress -->
+<div class="bg-white dark:bg-slate-800/50 rounded-lg p-4 shadow-sm border border-primary/5">
+<div class="flex justify-between items-start mb-3">
+<div>
+<span class="text-xs font-bold text-primary/60 uppercase tracking-widest">Order ID</span>
+<h3 class="text-lg font-bold text-primary">#KK-9821</h3>
+</div>
+<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-accent-green/10 text-accent-green">
+<span class="w-1.5 h-1.5 rounded-full bg-accent-green mr-1.5 animate-pulse"></span>
+                        In Progress
+                    </span>
+</div>
+<div class="space-y-2 mb-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm">calendar_today</span>
+<p class="text-sm font-medium text-slate-600 dark:text-slate-300">Subscription • Lunch Slot</p>
+</div>
+<div class="flex items-start gap-2">
+<span class="material-symbols-outlined text-primary text-sm mt-0.5">restaurant</span>
+<p class="text-sm font-semibold text-slate-800 dark:text-slate-100">Daily Healthy Thali + 2 extras</p>
+</div>
+<p class="text-xs text-slate-400 pl-7 italic">Estimated delivery by 1:30 PM</p>
+</div>
+<div class="pt-3 border-t border-slate-100 dark:border-slate-700 flex justify-between items-center">
+<div>
+<span class="text-xs text-slate-500">Total Amount</span>
+<p class="text-lg font-bold text-slate-900 dark:text-slate-100">₹450.00</p>
+</div>
+<a class="text-sm font-bold text-primary flex items-center gap-1 group" href="#">
+                        View Details
+                        <span class="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform">arrow_forward</span>
+</a>
+</div>
+</div>
+<!-- Order Card 2: Delivered -->
+<div class="bg-white dark:bg-slate-800/50 rounded-lg p-4 shadow-sm border border-primary/5">
+<div class="flex justify-between items-start mb-3">
+<div>
+<span class="text-xs font-bold text-primary/60 uppercase tracking-widest">Order ID</span>
+<h3 class="text-lg font-bold text-primary">#KK-9784</h3>
+</div>
+<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-accent-green text-white">
+<span class="material-symbols-outlined text-[14px] mr-1">check_circle</span>
+                        Delivered
+                    </span>
+</div>
+<div class="space-y-2 mb-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm">shopping_bag</span>
+<p class="text-sm font-medium text-slate-600 dark:text-slate-300">Add-on • Breakfast</p>
+</div>
+<div class="flex items-start gap-2">
+<span class="material-symbols-outlined text-primary text-sm mt-0.5">flatware</span>
+<p class="text-sm font-semibold text-slate-800 dark:text-slate-100">Organic Fruit Bowl + Almond Milk</p>
+</div>
+<p class="text-xs text-slate-400 pl-7 italic">Delivered at 8:45 AM</p>
+</div>
+<div class="pt-3 border-t border-slate-100 dark:border-slate-700 flex justify-between items-center">
+<div>
+<span class="text-xs text-slate-500">Total Amount</span>
+<p class="text-lg font-bold text-slate-900 dark:text-slate-100">₹225.00</p>
+</div>
+<a class="text-sm font-bold text-primary flex items-center gap-1 group" href="#">
+                        View Details
+                        <span class="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform">arrow_forward</span>
+</a>
+</div>
+</div>
+<!-- Empty State Context (Subtle) -->
+<div class="pt-8 text-center px-8">
+<div class="w-16 h-16 bg-primary/5 rounded-full flex items-center justify-center mx-auto mb-4">
+<span class="material-symbols-outlined text-primary text-3xl">history</span>
+</div>
+<p class="text-sm text-slate-500 italic">Showing all orders placed today. Need help with an order? <a class="text-primary font-bold underline" href="#">Contact Support</a></p>
+</div>
+</main>
+<!-- Bottom Navigation Bar -->
+<nav class="sticky bottom-0 bg-background-light dark:bg-background-dark border-t border-primary/10 px-4 pb-6 pt-3">
+<div class="flex items-center justify-between">
+<a class="flex flex-col items-center gap-1 text-slate-400" href="#">
+<span class="material-symbols-outlined">home</span>
+<span class="text-[10px] font-bold uppercase tracking-wider">Home</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-primary" href="#">
+<span class="material-symbols-outlined fill-1">history</span>
+<span class="text-[10px] font-bold uppercase tracking-wider">Orders</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-slate-400" href="#">
+<span class="material-symbols-outlined">calendar_month</span>
+<span class="text-[10px] font-bold uppercase tracking-wider">Plans</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-slate-400" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="text-[10px] font-bold uppercase tracking-wider">Profile</span>
+</a>
+</div>
+</nav>
+<!-- Overlay for Sheet (Not functional in static HTML but visual) -->
+<div class="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-20 pointer-events-none opacity-0 transition-opacity"></div>
+</div>
+</body></html>

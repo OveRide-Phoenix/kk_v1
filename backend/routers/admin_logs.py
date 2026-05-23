@@ -17,8 +17,7 @@ def get_admin_logs(
     query = (
         "SELECT al.*, cu.name AS admin_name, cu.customer_id "
         "FROM admin_logs al "
-        "LEFT JOIN admin_users au ON au.admin_id = al.admin_id "
-        "LEFT JOIN customers cu ON au.customer_id = cu.customer_id "
+        "LEFT JOIN customers cu ON cu.customer_id = al.admin_id "
         "WHERE 1=1"
     )
     params: dict[str, object] = {}

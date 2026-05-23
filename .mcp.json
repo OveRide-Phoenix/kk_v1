@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "nextjs": {
+      "command": "npx",
+      "args": ["next-devtools-mcp"]
+    },
+    "chrome": {
+      "command": "npx",
+      "args": ["chrome-devtools-mcp"]
+    },
+    "mysql": {
+      "command": "npx",
+      "args": ["-y", "@benborla29/mcp-server-mysql"],
+      "env": {
+        "MYSQL_HOST": "localhost",
+        "MYSQL_USER": "fastapi_user",
+        "MYSQL_PASS": "password",
+        "MYSQL_DB": "kk_v1",
+        "MYSQL_PORT": "3306"
+      }
+    }
+  }
+}

@@ -1,21 +1,3 @@
-export enum ProductType {
-  BREAKFAST = "BREAKFAST",
-  LUNCH = "LUNCH",
-  DINNER = "DINNER",
-  SNACK = "SNACK",
-  CONDIMENTS = "CONDIMENTS",
-  OTHER = "OTHER"
-}
-
-export enum ItemType {
-  BREAKFAST = "Breakfast",
-  LUNCH = "Lunch",
-  DINNER = "Dinner",
-  SNACK = "Snack",
-  CONDIMENTS = "Condiments",
-  OTHER = "Other"
-}
-
 // Item product from items table
 export interface Product {
   isSubItem: boolean // Changed from any
@@ -27,14 +9,21 @@ export interface Product {
   alias?: string
   category_id: number
   category_name: string
-  uom: string
-  weight_factor?: number
-  weight_uom?: string
-  item_type: ItemType | string
+  component_type_id?: number | null
+  component_type_name?: string | null
+  uom_customer: string
+  unit_packing?: number
+  uom_packing?: string
+  bld_ids: number[]
   hsn_code?: string
-  factor?: number
-  quantity_portion?: number
+  uom_production?: string
+  packing_to_production_rate?: number
+  uom?: string
   buffer_percentage?: number
+  max_qty_breakfast?: number
+  max_qty_lunch?: number
+  max_qty_dinner?: number
+  max_qty_condiments?: number
   picture_url?: string
   breakfast_price?: number
   lunch_price?: number
@@ -46,31 +35,88 @@ export interface Product {
   igst?: number
   net_price?: number
   is_combo: boolean
+  is_condiment?: boolean
 }
 
-// Combo product from item_combos table
+// Combo product from combos/combo_items tables
 export interface ComboProduct {
   combo_id: number
-  combo_item_id: number
-  combo_name: string | null
-  included_category_id: number | null
-  included_item_id: number | null
-  quantity: number
+  combo_name: string
+  price: number
+  category_id: number | null
+  category_name?: string | null
+  bld_ids?: number[]
+  includedItems: Array<{
+    kind?: "item" | "type"
+    itemId?: number | null
+    componentTypeId?: number | null
+    componentTypeName?: string | null
+    name?: string | null
+    quantity: number
+  }>
 }
 
-// Addon product from item_add_ons
-export interface AddonProduct {
-  add_on_id: number
-  main_item_name: string
-  add_on_item_name: string
-  is_mandatory: boolean
-  max_quantity: number
+export interface PlatedProduct {
+  plated_item_id: number
+  item_id: number
+  name: string
+  description?: string
+  alias?: string
+  category_id?: number | null
+  category_name?: string | null
+  component_type_id?: number | null
+  component_type_name?: string | null
+  uom_customer: string
+  unit_packing?: number
+  uom_packing?: string | null
+  hsn_code?: string | null
+  uom_production?: string | null
+  packing_to_production_rate?: number | null
+  buffer_percentage?: number | null
+  max_qty_breakfast?: number | null
+  max_qty_lunch?: number | null
+  max_qty_dinner?: number | null
+  max_qty_condiments?: number | null
+  picture_url?: string | null
+  breakfast_price?: number | null
+  lunch_price?: number | null
+  dinner_price?: number | null
+  condiments_price?: number | null
+  festival_price?: number | null
+  cgst?: number | null
+  sgst?: number | null
+  igst?: number | null
+  net_price?: number | null
+  bld_ids?: number[]
+  is_plated: boolean
+  is_condiment?: boolean
+  platedComponents: Array<{
+    kind?: "item" | "type"
+    itemId?: number | null
+    componentTypeId?: number | null
+    componentTypeName?: string | null
+    name?: string | null
+    quantity: number
+    uomCustomer?: string | null
+    unitPacking?: number | null
+    uomPacking?: string | null
+    uomProduction?: string | null
+  }>
 }
 
 // Category product from categories
 export interface CategoryProduct {
   category_id: number
   category_name: string
+}
+
+export interface ComponentTypeProduct {
+  component_type_id: number
+  name: string
+  description?: string | null
+  category_id?: number | null
+  category_name?: string | null
+  is_active?: boolean
 }
 
 // Category base type
@@ -88,14 +134,14 @@ export interface Item {
   description?: string
   alias?: string
   categoryId?: number
-  uom: string
-  weightFactor?: number
-  weightUom?: string
-  itemType: ItemType
+  uomCustomer: string
+  unitPacking?: number
+  uomPacking?: string
   hsnCode?: string
-  factor?: number
-  quantityPortion?: number
+  uomProduction?: string
+  packingToProductionRate?: number
   bufferPercentage?: number
+  maxQtyCondiments?: number
   pictureUrl?: string
   breakfastPrice?: number
   lunchPrice?: number
@@ -123,16 +169,4 @@ export interface Combo {
     quantity: number
     name: string
   }>
-}
-
-// Add-on detailed structure for editing
-export interface Addon {
-  id: number
-  mainItemId: number
-  mainItemName: string
-  addOnItemId: number
-  addOnItemName: string
-  isMandatory: boolean
-  maxQuantity: number
-  price?: number
 }

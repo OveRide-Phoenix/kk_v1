@@ -1,562 +1,566 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { Calendar } from "@/components/ui/calendar"
-import { Switch } from "@/components/ui/switch"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { type Product } from "@/types/product"
-import { format } from "date-fns"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Plus, X, Search } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
+import { useEffect, useMemo, useState } from "react";
+import { Search, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import type { ComboProduct, Product, CategoryProduct } from "@/types/product";
+import { http } from "@/lib/http";
 
-interface ComboFormProps {
-  onSave: (combo: any) => void
-  onCancel: () => void
-  existingItems?: Product[]
+interface ComponentTypeOption {
+  component_type_id: number;
+  name: string;
+  description?: string | null;
+  category_id?: number | null;
+  category_name?: string | null;
 }
 
-export default function ComboForm({ onSave, onCancel, existingItems = [] }: ComboFormProps) {
-  const [formData, setFormData] = useState({
-    // Basic Details
-    name: "",
-    description: "",
-    category: "",
-    image: null as File | null,
-    imagePreview: "",
+export interface ComboFormValues {
+  combo_id?: number;
+  combo_name: string;
+  price: number;
+  category_id: number;
+  bld_ids: number[];
+  items: Array<{ item_id?: number; component_type_id?: number; quantity: number }>;
+}
 
-    // Items & Customization
-    items: [] as { itemId: string; quantity: number; isRemovable: boolean }[],
-    allowPortionSize: false,
-    portionSizes: ["Small", "Medium", "Large"],
-    allowAddons: false,
-    selectedAddons: [] as string[],
+interface ComboFormProps {
+  onSave: (payload: ComboFormValues) => void | Promise<void>;
+  onCancel: () => void;
+  combo?: ComboProduct | null;
+}
 
-    // Pricing & Discounts
-    basePrice: 0,
-    hasDiscount: false,
-    discountType: "flat", // or "percentage"
-    discountValue: 0,
-    discountExpiry: null as Date | null,
-    includeTax: true,
-    gstRate: 5,
+interface SelectedComboItem {
+  kind: "item" | "type";
+  itemId?: number;
+  componentTypeId?: number;
+  name: string;
+  quantity: number;
+}
 
-    // Availability
-    availableDays: {
-      monday: true,
-      tuesday: true,
-      wednesday: true,
-      thursday: true,
-      friday: true,
-      saturday: true,
-      sunday: true,
-    },
-    timeSlots: [{ start: "", end: "", type: "lunch" }],
-    cutoffTime: "",
-    maxOrdersPerDay: 0,
+const MEAL_LABELS: Record<number, string> = {
+  1: "Breakfast",
+  2: "Lunch",
+  3: "Dinner",
+  4: "Condiments",
+};
+const ALL_CATEGORIES_VALUE = "all";
 
-    // Delivery Settings
-    deliveryType: "both", // "delivery", "pickup", "both"
-    includeDeliveryCharges: false,
-    deliveryLocations: [] as string[],
+export default function ComboForm({ onSave, onCancel, combo }: ComboFormProps) {
+  const [availableItems, setAvailableItems] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<CategoryProduct[]>([]);
+  const [componentTypes, setComponentTypes] = useState<ComponentTypeOption[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-    // Inventory
-    requireStockManagement: false,
-    autoDisableOutOfStock: true,
-    restockAlert: true,
-    restockThreshold: 10,
+  const [comboName, setComboName] = useState(combo?.combo_name ?? "");
+  const [categoryId, setCategoryId] = useState<string>(
+    combo?.category_id ? String(combo.category_id) : "",
+  );
+  const [price, setPrice] = useState(combo?.price?.toString() ?? "");
+  const [selectedMeals, setSelectedMeals] = useState<number[]>(combo?.bld_ids ?? []);
+  const [selectedItems, setSelectedItems] = useState<SelectedComboItem[]>(
+    () =>
+      combo?.includedItems?.map((item) => ({
+        kind: item.kind === "type" ? "type" : "item",
+        itemId: item.itemId ?? undefined,
+        componentTypeId: item.componentTypeId ?? undefined,
+        name:
+          item.name ??
+          (item.kind === "type"
+            ? (item.componentTypeName ?? "Item Group")
+            : `Item #${item.itemId}`),
+        quantity: item.quantity ?? 1,
+      })) ?? [],
+  );
+  const [itemSearch, setItemSearch] = useState("");
+  const [typeSearch, setTypeSearch] = useState("");
+  const [typeCategoryFilter, setTypeCategoryFilter] = useState(ALL_CATEGORIES_VALUE);
+  const [formError, setFormError] = useState<string | null>(null);
 
-    // Admin Controls
-    isVisible: true,
-    isPriority: false,
-    status: "draft", // "draft", "published"
-    tags: [] as string[],
-  })
+  useEffect(() => {
+    let isMounted = true;
 
-  const [itemDialogOpen, setItemDialogOpen] = useState(false)
-  const [itemSearchQuery, setItemSearchQuery] = useState("")
+    const loadDependencies = async () => {
+      setIsLoading(true);
+      setLoadError(null);
+      try {
+        const [itemsResponse, categoriesResponse, componentTypesResponse] = await Promise.all([
+          http.get("/api/products/items"),
+          http.get("/api/products/categories"),
+          http.get("/api/products/component-types"),
+        ]);
 
-  // Filter items based on search query
-  const filteredItems = existingItems.filter(item =>
-    item.name.toLowerCase().includes(itemSearchQuery.toLowerCase())
-  )
+        if (!itemsResponse.ok) {
+          throw new Error("Failed to fetch items");
+        }
+        if (!categoriesResponse.ok) {
+          throw new Error("Failed to fetch categories");
+        }
+        if (!componentTypesResponse.ok) {
+          throw new Error("Failed to fetch item groups");
+        }
+        const [itemsData, categoriesData, componentTypesData] = await Promise.all([
+          itemsResponse.json(),
+          categoriesResponse.json(),
+          componentTypesResponse.json(),
+        ]);
 
-  const handleChange = (field: string, value: any) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
-  }
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    onSave(formData)
-  }
-
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      handleChange("image", file)
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        handleChange("imagePreview", reader.result)
+        if (!isMounted) {
+          return;
+        }
+        setAvailableItems(
+          Array.isArray(itemsData) ? itemsData.filter((item) => !item.is_combo) : [],
+        );
+        setCategories(Array.isArray(categoriesData) ? categoriesData : []);
+        setComponentTypes(Array.isArray(componentTypesData) ? componentTypesData : []);
+      } catch (error) {
+        if (isMounted) {
+          setLoadError(
+            error instanceof Error ? error.message : "Failed to load combo dependencies",
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
-      reader.readAsDataURL(file)
+    };
+
+    loadDependencies();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    setComboName(combo?.combo_name ?? "");
+    setCategoryId(combo?.category_id ? String(combo.category_id) : "");
+    setPrice(combo?.price?.toString() ?? "");
+    setSelectedMeals(combo?.bld_ids ?? []);
+    setSelectedItems(
+      combo?.includedItems?.map((item) => ({
+        kind: item.kind === "type" ? "type" : "item",
+        itemId: item.itemId ?? undefined,
+        componentTypeId: item.componentTypeId ?? undefined,
+        name:
+          item.name ??
+          (item.kind === "type"
+            ? (item.componentTypeName ?? "Item Group")
+            : `Item #${item.itemId}`),
+        quantity: item.quantity ?? 1,
+      })) ?? [],
+    );
+    setFormError(null);
+  }, [combo]);
+
+  const itemsMap = useMemo(() => {
+    const map = new Map<number, Product>();
+    availableItems.forEach((item) => {
+      if (typeof item.item_id === "number") {
+        map.set(item.item_id, item);
+      }
+    });
+    return map;
+  }, [availableItems]);
+
+  const filteredItems = useMemo(() => {
+    const query = itemSearch.trim().toLowerCase();
+    return availableItems.filter((item) => {
+      if (!item.name) return false;
+      const matchesSearch = item.name.toLowerCase().includes(query) || !query;
+      const alreadySelected = selectedItems.some(
+        (entry) => entry.kind === "item" && entry.itemId === item.item_id,
+      );
+      return matchesSearch && !alreadySelected;
+    });
+  }, [availableItems, itemSearch, selectedItems]);
+
+  const filteredComponentTypes = useMemo(() => {
+    const query = typeSearch.trim().toLowerCase();
+    return componentTypes.filter((componentType) => {
+      const matchesSearch = componentType.name.toLowerCase().includes(query) || !query;
+      const matchesCategory =
+        typeCategoryFilter === ALL_CATEGORIES_VALUE ||
+        String(componentType.category_id ?? "") === typeCategoryFilter;
+      const alreadySelected = selectedItems.some(
+        (entry) =>
+          entry.kind === "type" && entry.componentTypeId === componentType.component_type_id,
+      );
+      return matchesSearch && matchesCategory && !alreadySelected;
+    });
+  }, [componentTypes, typeSearch, typeCategoryFilter, selectedItems]);
+
+  const resolveItemName = (itemId: number): string => {
+    const item = itemsMap.get(itemId);
+    if (item?.name) {
+      return item.name;
     }
+    return `Item #${itemId}`;
+  };
+
+  const handleQuantityChange = (target: SelectedComboItem, value: string) => {
+    setSelectedItems((prev) =>
+      prev.map((entry) => {
+        const isSameEntry =
+          entry.kind === target.kind &&
+          entry.itemId === target.itemId &&
+          entry.componentTypeId === target.componentTypeId;
+        if (!isSameEntry) return entry;
+        const parsed = Number(value);
+        return {
+          ...entry,
+          quantity: Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 1,
+        };
+      }),
+    );
+  };
+
+  const toggleMeal = (mealId: number) => {
+    setSelectedMeals((prev) => {
+      const next = new Set(prev);
+      if (next.has(mealId)) {
+        next.delete(mealId);
+      } else {
+        next.add(mealId);
+      }
+      return Array.from(next).sort((a, b) => a - b);
+    });
+  };
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmedName = comboName.trim();
+    const parsedCategory = Number(categoryId);
+    const parsedPrice = Number(price);
+
+    if (!trimmedName) {
+      setFormError("Combo name is required.");
+      return;
+    }
+    if (!Number.isInteger(parsedCategory) || parsedCategory <= 0) {
+      setFormError("Please pick a category.");
+      return;
+    }
+    if (!Number.isFinite(parsedPrice) || parsedPrice < 0) {
+      setFormError("Enter a valid price.");
+      return;
+    }
+    if (selectedMeals.length === 0) {
+      setFormError("Select at least one meal.");
+      return;
+    }
+    if (selectedItems.length === 0) {
+      setFormError("Add at least one item to the combo.");
+      return;
+    }
+    setFormError(null);
+
+    onSave({
+      combo_id: combo?.combo_id,
+      combo_name: trimmedName,
+      category_id: parsedCategory,
+      price: parsedPrice,
+      bld_ids: selectedMeals,
+      items: selectedItems.map((item) => ({
+        item_id: item.kind === "item" ? item.itemId : undefined,
+        component_type_id: item.kind === "type" ? item.componentTypeId : undefined,
+        quantity: item.quantity,
+      })),
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="py-10 text-center text-muted-foreground">
+        Loading combo builder…
+        <div className="mt-6">
+          <Button variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="space-y-6">
+        <p className="text-center text-destructive">{loadError}</p>
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={onCancel}>
+            Close
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <Dialog open={true} onOpenChange={() => onCancel()}>
-      <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Create New Combo</DialogTitle>
-        </DialogHeader>
-        
-        <form onSubmit={handleSubmit}>
-          <Tabs defaultValue="basic" className="w-full">
-            <TabsList className="grid w-full grid-cols-4 mb-4">
-              <TabsTrigger value="basic">Basic Details</TabsTrigger>
-              <TabsTrigger value="items">Items</TabsTrigger>
-              <TabsTrigger value="pricing">Pricing</TabsTrigger>
-              <TabsTrigger value="settings">Settings</TabsTrigger>
-            </TabsList>
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="grid gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="combo-name">Combo Name</Label>
+          <Input
+            id="combo-name"
+            value={comboName}
+            onChange={(event) => setComboName(event.target.value)}
+            placeholder="E.g. South Indian Thali"
+            required
+          />
+        </div>
 
-            {/* Basic Details Tab */}
-            <TabsContent value="basic" className="space-y-4">
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="name">Combo Name *</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => handleChange("name", e.target.value)}
-                    required
-                  />
-                </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Category</Label>
+            <Select value={categoryId} onValueChange={setCategoryId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select category" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((category) => (
+                  <SelectItem key={category.category_id} value={String(category.category_id)}>
+                    {category.category_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="combo-price">Price (₹)</Label>
+            <Input
+              id="combo-price"
+              type="number"
+              min="0"
+              step="0.5"
+              value={price}
+              onChange={(event) => setPrice(event.target.value)}
+              placeholder="0.00"
+              required
+            />
+          </div>
+        </div>
 
-                <div className="space-y-2 w-full">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    value={formData.description}
-                    onChange={(e) => handleChange("description", e.target.value)}
-                    rows={3}
-                    className="w-full resize-none"
-                  />
-                </div>
+        <div className="space-y-2">
+          <Label>Meals</Label>
+          <div className="flex flex-wrap gap-4 rounded-md border p-3">
+            {[1, 2, 3].map((mealId) => (
+              <label key={mealId} className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={selectedMeals.includes(mealId)}
+                  onCheckedChange={() => toggleMeal(mealId)}
+                />
+                <span>{MEAL_LABELS[mealId]}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      </div>
 
-                <div>
-                  <Label htmlFor="category">Category *</Label>
-                  <Select value={formData.category} onValueChange={(value) => handleChange("category", value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="breakfast">Breakfast</SelectItem>
-                      <SelectItem value="lunch">Lunch</SelectItem>
-                      <SelectItem value="dinner">Dinner</SelectItem>
-                      <SelectItem value="snacks">Snacks</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="image">Combo Image</Label>
-                  <Input
-                    id="image"
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    className="mt-1"
-                  />
-                  {formData.imagePreview && (
-                    <img
-                      src={formData.imagePreview}
-                      alt="Preview"
-                      className="mt-2 w-32 h-32 object-cover rounded-md"
-                    />
-                  )}
-                </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-3">
+          <div>
+            <Label htmlFor="combo-search">Add Concrete Items</Label>
+            <div className="relative mt-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="combo-search"
+                value={itemSearch}
+                onChange={(event) => setItemSearch(event.target.value)}
+                placeholder="Search items by name"
+                className="pl-9"
+              />
+            </div>
+          </div>
+          <ScrollArea className="max-h-[320px] rounded-md border">
+            {filteredItems.length === 0 ? (
+              <p className="py-10 text-center text-muted-foreground">No items match that search.</p>
+            ) : (
+              <div className="divide-y">
+                {filteredItems.map((item) => (
+                  <button
+                    key={item.item_id}
+                    type="button"
+                    className="w-full text-left px-4 py-3 hover:bg-muted/70"
+                    onClick={() => {
+                      setSelectedItems((prev) => [
+                        ...prev,
+                        { kind: "item", itemId: item.item_id, name: item.name, quantity: 1 },
+                      ]);
+                      setItemSearch("");
+                    }}
+                  >
+                    <p className="font-medium">{item.name}</p>
+                    {item.description && (
+                      <p className="text-xs text-muted-foreground">{item.description}</p>
+                    )}
+                    {Array.isArray(item.bld_ids) && (
+                      <div className="flex flex-wrap gap-1 pt-2">
+                        {item.bld_ids.map((mealId) => (
+                          <Badge key={`${item.item_id}-${mealId}`} variant="outline">
+                            {MEAL_LABELS[mealId] ?? `Meal ${mealId}`}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </button>
+                ))}
               </div>
-            </TabsContent>
+            )}
+          </ScrollArea>
+          <div>
+            <Label htmlFor="combo-type-search">Add Item Groups</Label>
+            <div className="mt-1 grid gap-2 sm:grid-cols-[180px_1fr]">
+              <Select value={typeCategoryFilter} onValueChange={setTypeCategoryFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_CATEGORIES_VALUE}>All Categories</SelectItem>
+                  {categories.map((category) => (
+                    <SelectItem key={category.category_id} value={String(category.category_id)}>
+                      {category.category_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="combo-type-search"
+                value={typeSearch}
+                onChange={(event) => setTypeSearch(event.target.value)}
+                placeholder="Search item groups"
+                className="pl-9"
+              />
+              </div>
+            </div>
+          </div>
+          <ScrollArea className="max-h-[220px] rounded-md border">
+            {filteredComponentTypes.length === 0 ? (
+              <p className="py-10 text-center text-muted-foreground">
+                No item groups match that search.
+              </p>
+            ) : (
+              <div className="divide-y">
+                {filteredComponentTypes.map((componentType) => (
+                  <button
+                    key={componentType.component_type_id}
+                    type="button"
+                    className="w-full text-left px-4 py-3 hover:bg-muted/70"
+                    onClick={() => {
+                      setSelectedItems((prev) => [
+                        ...prev,
+                        {
+                          kind: "type",
+                          componentTypeId: componentType.component_type_id,
+                          name: componentType.name,
+                          quantity: 1,
+                        },
+                      ]);
+                      setTypeSearch("");
+                    }}
+                  >
+                    <p className="font-medium">{componentType.name}</p>
+                    {componentType.category_name ? (
+                      <Badge variant="outline" className="mt-2 text-[10px]">
+                        {componentType.category_name}
+                      </Badge>
+                    ) : null}
+                    <p className="text-xs text-muted-foreground">
+                      {componentType.description ?? "Resolves to the item of the day"}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+        </div>
 
-            {/* Items Tab */}
-            <TabsContent value="items" className="space-y-4">
-              <div className="space-y-4">
-                <div>
-                  <div className="flex justify-between items-center mb-4">
-                    <Label>Selected Items</Label>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => setItemDialogOpen(true)}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label>Selected Items and Groups</Label>
+            {selectedItems.length > 0 && (
+              <span className="text-xs text-muted-foreground">{selectedItems.length} item(s)</span>
+            )}
+          </div>
+          <ScrollArea className="max-h-[320px] rounded-md border">
+            {selectedItems.length === 0 ? (
+              <p className="py-10 text-center text-muted-foreground">No items selected yet.</p>
+            ) : (
+              <div className="divide-y">
+                {selectedItems.map((entry) => (
+                  <div
+                    key={`${entry.kind}-${entry.itemId ?? entry.componentTypeId}`}
+                    className="flex items-center gap-3 px-4 py-3"
+                  >
+                    <div className="flex-1">
+                      <p className="font-medium">
+                        {entry.kind === "item" ? resolveItemName(entry.itemId ?? 0) : entry.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">
+                        {entry.kind === "item"
+                          ? `#${(entry.itemId ?? 0).toString().padStart(3, "0")}`
+                          : `GROUP #${(entry.componentTypeId ?? 0).toString().padStart(3, "0")}`}
+                      </p>
+                    </div>
+                    <div className="w-24">
+                      <Label className="text-xs text-muted-foreground">Qty</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={entry.quantity}
+                        onChange={(event) => handleQuantityChange(entry, event.target.value)}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="text-destructive"
+                      onClick={() =>
+                        setSelectedItems((prev) =>
+                          prev.filter(
+                            (item) =>
+                              !(
+                                item.kind === entry.kind &&
+                                item.itemId === entry.itemId &&
+                                item.componentTypeId === entry.componentTypeId
+                              ),
+                          ),
+                        )
+                      }
                     >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Select Items
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
-
-                  {formData.items.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground border rounded-lg">
-                      No items selected. Click "Select Items" to add items to your combo.
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {formData.items.map((comboItem) => {
-                        const item = existingItems.find(i => i.id === comboItem.itemId)
-                        return (
-                          <div key={comboItem.itemId} className="flex items-center gap-4 p-3 border rounded-lg">
-                            <div className="flex-1">{item?.name}</div>
-                            <Input
-                              type="number"
-                              min="1"
-                              value={comboItem.quantity}
-                              onChange={(e) => {
-                                const newItems = formData.items.map((i) =>
-                                  i.itemId === comboItem.itemId 
-                                    ? { ...i, quantity: parseInt(e.target.value) || 1 } 
-                                    : i
-                                )
-                                handleChange("items", newItems)
-                              }}
-                              className="w-20"
-                            />
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => {
-                                handleChange(
-                                  "items",
-                                  formData.items.filter((i) => i.itemId !== comboItem.itemId)
-                                )
-                              }}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* Item Selection Dialog */}
-                <Dialog open={itemDialogOpen} onOpenChange={setItemDialogOpen}>
-                  <DialogContent className="sm:max-w-[600px]">
-                    <DialogHeader>
-                      <DialogTitle>Select Items for Combo</DialogTitle>
-                      <div className="relative mt-4">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                        <Input
-                          placeholder="Search items by name..."
-                          className="pl-10"
-                          value={itemSearchQuery}
-                          onChange={(e) => setItemSearchQuery(e.target.value)}
-                        />
-                      </div>
-                    </DialogHeader>
-
-                    <ScrollArea className="h-[400px] mt-4">
-                      <div className="space-y-2 pr-4">
-                        {filteredItems.length === 0 ? (
-                          <div className="text-center py-8 text-muted-foreground">
-                            No items found. Try a different search term.
-                          </div>
-                        ) : (
-                          filteredItems.map((item) => (
-                            <div 
-                              key={item.id} 
-                              className="flex items-center gap-4 p-4 hover:bg-accent rounded-lg border"
-                            >
-                              <Checkbox
-                                checked={formData.items.some((i) => i.itemId === item.id)}
-                                onCheckedChange={(checked) => {
-                                  if (checked) {
-                                    handleChange("items", [
-                                      ...formData.items,
-                                      { itemId: item.id, quantity: 1, isRemovable: false }
-                                    ])
-                                  } else {
-                                    handleChange(
-                                      "items",
-                                      formData.items.filter((i) => i.itemId !== item.id)
-                                    )
-                                  }
-                                }}
-                              />
-                              <div className="flex-1">
-                                <div className="font-medium">{item.name}</div>
-                                <div className="text-sm text-muted-foreground">{item.description}</div>
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </ScrollArea>
-
-                    <DialogFooter className="mt-4">
-                      <Button variant="outline" onClick={() => {
-                        setItemDialogOpen(false)
-                        setItemSearchQuery("")
-                      }}>
-                        Cancel
-                      </Button>
-                      <Button onClick={() => {
-                        setItemDialogOpen(false)
-                        setItemSearchQuery("")
-                      }}>
-                        Add Selected Items
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={formData.allowPortionSize}
-                      onCheckedChange={(checked) => handleChange("allowPortionSize", checked)}
-                    />
-                    <Label>Allow Portion Size Selection</Label>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={formData.allowAddons}
-                      onCheckedChange={(checked) => handleChange("allowAddons", checked)}
-                    />
-                    <Label>Allow Extra Add-ons</Label>
-                  </div>
-                </div>
+                ))}
               </div>
-            </TabsContent>
-
-            {/* Pricing Tab */}
-            <TabsContent value="pricing" className="space-y-4">
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="basePrice">Base Price (₹) *</Label>
-                  <Input
-                    id="basePrice"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={formData.basePrice}
-                    onChange={(e) => handleChange("basePrice", parseFloat(e.target.value) || 0)}
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={formData.hasDiscount}
-                      onCheckedChange={(checked) => handleChange("hasDiscount", checked)}
-                    />
-                    <Label>Enable Discount</Label>
-                  </div>
-
-                  {formData.hasDiscount && (
-                    <>
-                      <RadioGroup
-                        value={formData.discountType}
-                        onValueChange={(value) => handleChange("discountType", value)}
-                        className="flex gap-4"
-                      >
-                        <div className="flex items-center gap-2">
-                          <RadioGroupItem value="flat" id="flat" />
-                          <Label htmlFor="flat">Flat Discount</Label>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <RadioGroupItem value="percentage" id="percentage" />
-                          <Label htmlFor="percentage">Percentage Discount</Label>
-                        </div>
-                      </RadioGroup>
-
-                      <div>
-                        <Label htmlFor="discountValue">
-                          Discount Value ({formData.discountType === "flat" ? "₹" : "%"})
-                        </Label>
-                        <Input
-                          id="discountValue"
-                          type="number"
-                          min="0"
-                          max={formData.discountType === "percentage" ? "100" : undefined}
-                          value={formData.discountValue}
-                          onChange={(e) => handleChange("discountValue", parseFloat(e.target.value) || 0)}
-                        />
-                      </div>
-
-                      <div>
-                        <Label>Discount Expiry Date</Label>
-                        <Calendar
-                          mode="single"
-                          selected={formData.discountExpiry || undefined}
-                          onSelect={(date) => handleChange("discountExpiry", date)}
-                          className="rounded-md border mt-1"
-                        />
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={formData.includeTax}
-                      onCheckedChange={(checked) => handleChange("includeTax", checked)}
-                    />
-                    <Label>Include GST</Label>
-                  </div>
-
-                  {formData.includeTax && (
-                    <div>
-                      <Label htmlFor="gstRate">GST Rate (%)</Label>
-                      <Input
-                        id="gstRate"
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={formData.gstRate}
-                        onChange={(e) => handleChange("gstRate", parseFloat(e.target.value) || 0)}
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-            </TabsContent>
-
-            {/* Settings Tab */}
-            <TabsContent value="settings" className="space-y-4">
-              <div className="space-y-4">
-                {/* Availability Settings */}
-                <div className="space-y-2">
-                  <h3 className="text-sm font-medium">Available Days</h3>
-                  {Object.entries(formData.availableDays).map(([day, checked]) => (
-                    <div key={day} className="flex items-center gap-2">
-                      <Checkbox
-                        checked={checked}
-                        onCheckedChange={(value) =>
-                          handleChange("availableDays", { ...formData.availableDays, [day]: value })
-                        }
-                      />
-                      <Label>{day.charAt(0).toUpperCase() + day.slice(1)}</Label>
-                    </div>
-                  ))}
-                </div>
-
-                <div>
-                  <Label htmlFor="maxOrdersPerDay">Maximum Orders per Day</Label>
-                  <Input
-                    id="maxOrdersPerDay"
-                    type="number"
-                    min="0"
-                    value={formData.maxOrdersPerDay}
-                    onChange={(e) => handleChange("maxOrdersPerDay", parseInt(e.target.value) || 0)}
-                  />
-                </div>
-
-                {/* Delivery Settings */}
-                <div>
-                  <Label>Delivery Type</Label>
-                  <RadioGroup
-                    value={formData.deliveryType}
-                    onValueChange={(value) => handleChange("deliveryType", value)}
-                    className="flex gap-4 mt-1"
-                  >
-                    <div className="flex items-center gap-2">
-                      <RadioGroupItem value="delivery" id="delivery" />
-                      <Label htmlFor="delivery">Delivery Only</Label>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <RadioGroupItem value="pickup" id="pickup" />
-                      <Label htmlFor="pickup">Pickup Only</Label>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <RadioGroupItem value="both" id="both" />
-                      <Label htmlFor="both">Both</Label>
-                    </div>
-                  </RadioGroup>
-                </div>
-
-                {/* Inventory Settings */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={formData.requireStockManagement}
-                      onCheckedChange={(checked) => handleChange("requireStockManagement", checked)}
-                    />
-                    <Label>Enable Stock Management</Label>
-                  </div>
-
-                  {formData.requireStockManagement && (
-                    <>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={formData.autoDisableOutOfStock}
-                          onCheckedChange={(checked) => handleChange("autoDisableOutOfStock", checked)}
-                        />
-                        <Label>Auto-disable When Out of Stock</Label>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={formData.restockAlert}
-                          onCheckedChange={(checked) => handleChange("restockAlert", checked)}
-                        />
-                        <Label>Enable Restock Alerts</Label>
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                {/* Admin Controls */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={formData.isVisible}
-                      onCheckedChange={(checked) => handleChange("isVisible", checked)}
-                    />
-                    <Label>Show on Menu</Label>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={formData.isPriority}
-                      onCheckedChange={(checked) => handleChange("isPriority", checked)}
-                    />
-                    <Label>Mark as Priority (Recommended/Bestseller)</Label>
-                  </div>
-                </div>
-              </div>
-            </TabsContent>
-          </Tabs>
-
-          <DialogFooter className="mt-6">
-            <Button type="button" variant="outline" onClick={onCancel}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="default">
-              Save & Preview
-            </Button>
-            {formData.status === "draft" && (
-              <Button
-                type="button"
-                onClick={() => {
-                  handleChange("status", "published")
-                  handleSubmit
-                }}
-              >
-                Publish
-              </Button>
             )}
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  )
-} 
+          </ScrollArea>
+        </div>
+      </div>
+
+      {formError && <p className="text-sm text-destructive">{formError}</p>}
+
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="submit">{combo ? "Update Combo" : "Create Combo"}</Button>
+      </div>
+    </form>
+  );
+}

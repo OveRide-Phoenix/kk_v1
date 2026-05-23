@@ -1,0 +1,22 @@
+[Unit]
+Description=Kuteera Kitchen FastAPI Backend (DEV)
+After=network.target mysql.service
+Wants=mysql.service
+
+[Service]
+Type=simple
+User=deploy
+Group=deploy
+WorkingDirectory=/var/www/kk_v1_dev
+ExecStart=/var/www/kk_v1_dev/backend/venv/bin/uvicorn backend.main:app \
+    --host 127.0.0.1 \
+    --port 8001 \
+    --workers 2
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kk-backend-dev
+
+[Install]
+WantedBy=multi-user.target

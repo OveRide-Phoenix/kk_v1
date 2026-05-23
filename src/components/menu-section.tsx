@@ -1,37 +1,37 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Utensils, ShoppingBag } from "lucide-react"
-import { formatPrice } from "@/lib/utils"
-import { useIntersectionObserver } from "@/hooks/use-intersection-observer"
-import AnimatedSection from "./animated-section"
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Utensils, ShoppingBag } from "lucide-react";
+import { formatPrice } from "@/lib/utils";
+import { useIntersectionObserver } from "@/hooks/use-intersection-observer";
+import AnimatedSection from "./animated-section";
 
 // Menu item interface
 interface MenuItem {
-  id: string
-  name: string
-  description: string
-  price: number
-  image: string
-  tags?: string[]
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  image: string;
+  tags?: string[];
 }
 
 // Menu section props
 interface MenuSectionProps {
-  title: string
-  items: MenuItem[]
-  index: number
+  title: string;
+  items: MenuItem[];
+  index: number;
 }
 
 /**
  * Individual menu section component (Breakfast, Lunch, or Dinner)
  */
-function MenuSection({ title, items, index }: MenuSectionProps) {
+function MenuSection({ title, items }: MenuSectionProps) {
   // Use intersection observer to trigger animations
-  const { ref, isIntersecting } = useIntersectionObserver({ threshold: 0.1 })
+  const { ref, isIntersecting } = useIntersectionObserver({ threshold: 0.1 });
 
   return (
     <div ref={ref as React.RefObject<HTMLDivElement>} className="py-12">
@@ -54,6 +54,7 @@ function MenuSection({ title, items, index }: MenuSectionProps) {
             style={{ animationDelay: `${i * 100 + 200}ms` }}
           >
             <div className="w-24 h-24 flex-shrink-0 overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={item.image || "/placeholder.svg"}
                 alt={item.name}
@@ -69,7 +70,10 @@ function MenuSection({ title, items, index }: MenuSectionProps) {
               {item.tags && (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {item.tags.map((tag) => (
-                    <span key={tag} className="text-xs px-1.5 py-0.5 bg-secondary rounded-full text-muted-foreground">
+                    <span
+                      key={tag}
+                      className="text-xs px-1.5 py-0.5 bg-secondary rounded-full text-muted-foreground"
+                    >
                       {tag}
                     </span>
                   ))}
@@ -87,21 +91,22 @@ function MenuSection({ title, items, index }: MenuSectionProps) {
         </Button>
       </div>
     </div>
-  )
+  );
 }
 
 /**
  * Menu tabs component that displays all menu sections
  */
 export default function MenuSections() {
-  const [activeTab, setActiveTab] = useState("breakfast")
+  const [activeTab, setActiveTab] = useState("breakfast");
 
   // Menu data
   const breakfastItems: MenuItem[] = [
     {
       id: "b1",
       name: "Masala Dosa",
-      description: "Crispy rice crepe filled with spiced potato filling, served with sambar and chutney",
+      description:
+        "Crispy rice crepe filled with spiced potato filling, served with sambar and chutney",
       price: 120,
       image: "/placeholder.svg?height=100&width=100&text=Dosa",
       tags: ["Vegetarian", "Popular"],
@@ -130,7 +135,7 @@ export default function MenuSections() {
       image: "/placeholder.svg?height=100&width=100&text=Upma",
       tags: ["Vegetarian", "Healthy"],
     },
-  ]
+  ];
 
   const lunchItems: MenuItem[] = [
     {
@@ -165,7 +170,7 @@ export default function MenuSections() {
       image: "/placeholder.svg?height=100&width=100&text=CurdRice",
       tags: ["Vegetarian", "Cooling"],
     },
-  ]
+  ];
 
   const dinnerItems: MenuItem[] = [
     {
@@ -186,11 +191,11 @@ export default function MenuSections() {
     },
     {
       id: "d3",
-      name: "Neer Dosa with Chicken Curry",
-      description: "Thin rice crepes served with spicy chicken curry",
+      name: "Neer Dosa with Vegetable Stew",
+      description: "Thin rice crepes served with mildly spiced vegetable stew",
       price: 200,
-      image: "/placeholder.svg?height=100&width=100&text=NeerDosa",
-      tags: ["Non-Vegetarian", "Popular"],
+      image: "/placeholder.svg?height=100&width=100&text=NeerDosaVeg",
+      tags: ["Vegetarian", "Popular"],
     },
     {
       id: "d4",
@@ -200,7 +205,7 @@ export default function MenuSections() {
       image: "/placeholder.svg?height=100&width=100&text=VegKorma",
       tags: ["Vegetarian", "Mild"],
     },
-  ]
+  ];
 
   return (
     <AnimatedSection id="menu" className="py-16 bg-secondary/50" animation="fade-in">
@@ -276,6 +281,5 @@ export default function MenuSections() {
         </div>
       </div>
     </AnimatedSection>
-  )
+  );
 }
-

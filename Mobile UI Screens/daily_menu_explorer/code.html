@@ -1,0 +1,206 @@
+<html lang="en"><head><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head><body class="antialiased font-display">```html
+
+
+
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Daily Menu | Kuteera Kitchen</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "cream-bg": "#fdfaf1",
+                        "primary-brown": "#8D4925",
+                        "dark-green": "#1b4332",
+                        "stone-text": "#4A4A4A",
+                    },
+                    fontFamily: {
+                        "display": ["Work Sans", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "16px": "16px",
+                    }
+                },
+            },
+        }
+    </script>
+<style type="text/tailwindcss">
+        @layer base {
+            body {
+                font-family: 'Work Sans', sans-serif;
+                -webkit-tap-highlight-color: transparent;
+                @apply bg-cream-bg text-stone-text;
+            }
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .ios-shadow {
+            box-shadow: 0 4px 12px rgba(27, 67, 50, 0.06);
+        }
+    </style>
+<style>
+        body {
+            min-height: max(884px, 100dvh);
+        }
+    </style>
+
+
+<div class="relative mx-auto min-h-screen max-w-md bg-cream-bg flex flex-col pb-24">
+<header class="sticky top-0 z-30 bg-cream-bg/95 backdrop-blur-md px-4 pt-4 pb-2">
+<div class="flex items-center justify-between mb-4">
+<button class="p-2 -ml-2 rounded-full active:opacity-60 transition-opacity">
+<span class="material-symbols-outlined text-2xl text-primary-brown">arrow_back_ios</span>
+</button>
+<h1 class="text-lg font-bold tracking-tight text-primary-brown">Daily Menu</h1>
+<button class="p-2 -mr-2 rounded-full active:opacity-60 transition-opacity">
+<span class="material-symbols-outlined text-2xl text-primary-brown">shopping_basket</span>
+</button>
+</div>
+<div class="flex p-1 bg-stone-200/30 rounded-16px mb-4">
+<button class="flex-1 py-2 text-xs font-semibold rounded-[12px] text-stone-500">Breakfast</button>
+<button class="flex-1 py-2 text-xs font-bold rounded-[12px] bg-primary-brown text-cream-bg shadow-sm">Lunch</button>
+<button class="flex-1 py-2 text-xs font-semibold rounded-[12px] text-stone-500">Dinner</button>
+</div>
+<div class="flex gap-2 overflow-x-auto hide-scrollbar pb-2">
+<button class="flex items-center gap-1 px-5 py-1.5 bg-primary-brown text-cream-bg rounded-full text-xs font-semibold whitespace-nowrap">
+                All
+            </button>
+<button class="flex items-center gap-1 px-5 py-1.5 bg-white border border-stone-100 rounded-full text-xs font-semibold text-primary-brown whitespace-nowrap">
+                Veg
+            </button>
+<button class="flex items-center gap-1 px-5 py-1.5 bg-white border border-stone-100 rounded-full text-xs font-semibold text-primary-brown whitespace-nowrap">
+                Non-Veg
+            </button>
+<button class="flex items-center gap-1 px-5 py-1.5 bg-white border border-stone-100 rounded-full text-xs font-semibold text-primary-brown whitespace-nowrap">
+                Jain
+            </button>
+</div>
+</header>
+<main class="px-4 pt-2">
+<div class="grid grid-cols-2 gap-3">
+<div class="bg-white rounded-16px overflow-hidden ios-shadow border border-stone-50 flex flex-col">
+<div class="relative aspect-[4/3] w-full p-1.5">
+<img alt="Masala Dosa" class="w-full h-full object-cover rounded-[12px]" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBR2F6-WAcW08TlzsmbbPyJszDgRz5oFK27dmZKvoVsd0ylELIP6-qO6oqlnL4UU344vowAMr2H2DpS2J8cc-9n7bxywJ_buv1LV0DwiK9CC4gL1c-A_hlC7AmxxkuZqOsSwfGKIA-Ajxw1GkOfHxv38zHMCvLwWj8Z_5jD0t-75AKWlbk2dP8bjt4E3bPSZWtXlMqU77VWPCPODsdj9pq0eTgGG4i4yNKBPfKwkuZXCA9Gwrk04mn2ZifkzEkZL0kDL9XTEgohyLk"/>
+<div class="absolute top-2.5 right-2.5 bg-white/90 backdrop-blur-sm p-0.5 rounded-sm flex items-center justify-center">
+<div class="w-2.5 h-2.5 border border-dark-green flex items-center justify-center">
+<div class="w-1 h-1 rounded-full bg-dark-green"></div>
+</div>
+</div>
+</div>
+<div class="px-3 pb-3 flex flex-col flex-1">
+<div class="mb-1">
+<h3 class="font-bold text-[13px] text-primary-brown leading-tight truncate">Masala Dosa</h3>
+<span class="text-[10px] text-stone-400 font-medium tracking-wide">450 kcal</span>
+</div>
+<div class="mt-auto flex items-center justify-between pt-1">
+<span class="text-sm font-bold text-dark-green">₹180</span>
+<button class="bg-primary-brown text-cream-bg w-7 h-7 rounded-lg flex items-center justify-center transition-transform active:scale-90">
+<span class="material-symbols-outlined text-lg">add</span>
+</button>
+</div>
+</div>
+</div>
+<div class="bg-white rounded-16px overflow-hidden ios-shadow border border-stone-50 flex flex-col">
+<div class="relative aspect-[4/3] w-full p-1.5">
+<img alt="Bisi Bele Bath" class="w-full h-full object-cover rounded-[12px]" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDLW-najeaNt-75q6eoOWPlWsAkur24UDzN2P3MuHPzp97CYs3grDKMRoma1j1NFZ9_7TeOPEyJKoUxMk2Zo5wrmexRZU9Kzj_0foXIdLJY5ScIbT8cNIimB9jq9sTSSYO231Cth4kU6jE8B6hhvbBYN_kqw-E2U1KOju-Oi-eVe8LammNl3Bu6dgWjiYwYGcjAk3JiUdEGLwd3_E9uCG_4XkREJ1-TFbmMRZ8DI8h3_LF9fShxXbOXeSbLUVY5HPEqeNX4D1mHiWY"/>
+<div class="absolute top-2.5 right-2.5 bg-white/90 backdrop-blur-sm p-0.5 rounded-sm flex items-center justify-center">
+<div class="w-2.5 h-2.5 border border-dark-green flex items-center justify-center">
+<div class="w-1 h-1 rounded-full bg-dark-green"></div>
+</div>
+</div>
+</div>
+<div class="px-3 pb-3 flex flex-col flex-1">
+<div class="mb-1">
+<h3 class="font-bold text-[13px] text-primary-brown leading-tight truncate">Millet Bisi Bele</h3>
+<span class="text-[10px] text-stone-400 font-medium tracking-wide">380 kcal</span>
+</div>
+<div class="mt-auto flex items-center justify-between pt-1">
+<span class="text-sm font-bold text-dark-green">₹220</span>
+<button class="bg-primary-brown text-cream-bg w-7 h-7 rounded-lg flex items-center justify-center transition-transform active:scale-90">
+<span class="material-symbols-outlined text-lg">add</span>
+</button>
+</div>
+</div>
+</div>
+<div class="bg-white rounded-16px overflow-hidden ios-shadow border border-stone-50 flex flex-col">
+<div class="relative aspect-[4/3] w-full p-1.5">
+<img alt="Pesarattu" class="w-full h-full object-cover rounded-[12px]" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCcfL_6b7ZyvW244WGyJ14-H-bxokq9N4eMH9L6DA7Kp8qJVMEWD-M-nVaK3c5kSnUl8dBrykS6kKaOgJbGn-i5WOTB2EUshSdhA2Qwksfx8Uba5fLvqqC758XcRwVfEOlfW-AT6JZfD54kPsPg4ntCo6D5Yk-D_JpQdbScL1wr2pz1c_Q4U4tO9OPv80KPDhutlFIX8BMGqdBcBw7bv0uUUsaa3x8_Hxdmc5Wps9x-b7crvE_Ar_lKBw4qHJHtXnAbV5aae-aLc9Q"/>
+<div class="absolute top-2.5 right-2.5 bg-white/90 backdrop-blur-sm p-0.5 rounded-sm flex items-center justify-center">
+<div class="w-2.5 h-2.5 border border-dark-green flex items-center justify-center">
+<div class="w-1 h-1 rounded-full bg-dark-green"></div>
+</div>
+</div>
+</div>
+<div class="px-3 pb-3 flex flex-col flex-1">
+<div class="mb-1">
+<h3 class="font-bold text-[13px] text-primary-brown leading-tight truncate">Protein Pesarattu</h3>
+<span class="text-[10px] text-stone-400 font-medium tracking-wide">520 kcal</span>
+</div>
+<div class="mt-auto flex items-center justify-between pt-1">
+<span class="text-sm font-bold text-dark-green">₹210</span>
+<button class="bg-primary-brown text-cream-bg w-7 h-7 rounded-lg flex items-center justify-center transition-transform active:scale-90">
+<span class="material-symbols-outlined text-lg">add</span>
+</button>
+</div>
+</div>
+</div>
+<div class="bg-white rounded-16px overflow-hidden ios-shadow border border-stone-50 flex flex-col">
+<div class="relative aspect-[4/3] w-full p-1.5">
+<img alt="Idli" class="w-full h-full object-cover rounded-[12px]" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBR2F6-WAcW08TlzsmbbPyJszDgRz5oFK27dmZKvoVsd0ylELIP6-qO6oqlnL4UU344vowAMr2H2DpS2J8cc-9n7bxywJ_buv1LV0DwiK9CC4gL1c-A_hlC7AmxxkuZqOsSwfGKIA-Ajxw1GkOfHxv38zHMCvLwWj8Z_5jD0t-75AKWlbk2dP8bjt4E3bPSZWtXlMqU77VWPCPODsdj9pq0eTgGG4i4yNKBPfKwkuZXCA9Gwrk04mn2ZifkzEkZL0kDL9XTEgohyLk"/>
+<div class="absolute top-2.5 right-2.5 bg-white/90 backdrop-blur-sm p-0.5 rounded-sm flex items-center justify-center">
+<div class="w-2.5 h-2.5 border border-dark-green flex items-center justify-center">
+<div class="w-1 h-1 rounded-full bg-dark-green"></div>
+</div>
+</div>
+</div>
+<div class="px-3 pb-3 flex flex-col flex-1">
+<div class="mb-1">
+<h3 class="font-bold text-[13px] text-primary-brown leading-tight truncate">Steamed Idli</h3>
+<span class="text-[10px] text-stone-400 font-medium tracking-wide">320 kcal</span>
+</div>
+<div class="mt-auto flex items-center justify-between pt-1">
+<span class="text-sm font-bold text-dark-green">₹150</span>
+<button class="bg-primary-brown text-cream-bg w-7 h-7 rounded-lg flex items-center justify-center transition-transform active:scale-90">
+<span class="material-symbols-outlined text-lg">add</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+<nav class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white border-t border-stone-100 px-8 py-3 flex justify-between items-center z-40">
+<a class="flex flex-col items-center gap-1 text-primary-brown" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1">restaurant_menu</span>
+<span class="text-[9px] font-bold uppercase tracking-widest">Menu</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-stone-400" href="#">
+<span class="material-symbols-outlined">calendar_today</span>
+<span class="text-[9px] font-bold uppercase tracking-widest">Plans</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-stone-400" href="#">
+<span class="material-symbols-outlined">receipt_long</span>
+<span class="text-[9px] font-bold uppercase tracking-widest">Orders</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-stone-400" href="#">
+<span class="material-symbols-outlined">account_circle</span>
+<span class="text-[9px] font-bold uppercase tracking-widest">Profile</span>
+</a>
+</nav>
+</div>
+
+</body></html>

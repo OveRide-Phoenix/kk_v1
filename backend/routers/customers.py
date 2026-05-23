@@ -1,0 +1,962 @@
+"""Customers router: addresses, customer CRUD proxies, and order history."""
+
+from __future__ import annotations
+
+from typing import Any, Dict, List, Optional, Tuple
+
+import mysql.connector
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
+
+from datetime import date as date_type
+
+from ..city_config import DEFAULT_CITY, normalize_city_code
+from ..customer.customer_crud import (
+    CustomerUpdate,
+    create_customer,
+    delete_customer,
+    get_all_customers,
+    get_customer_by_id,
+    update_customer,
+)
+from ..db import get_raw_db
+from ..utils.auth_deps import admin_required, get_current_user
+from ..utils.helpers import (
+    ORDER_STATUS_CANCELLED,
+    _format_datetime,
+    _normalize_city_label,
+    _resolve_city_code,
+    _resolve_city_context,
+    normalize_status_for_response,
+    payment_status_label,
+)
+
+router = APIRouter()
+
+
+# ---------------------------------------------------------------------------
+# Pydantic models
+# ---------------------------------------------------------------------------
+
+
+class AddressPayload(BaseModel):
+    """Payload for creating or updating a customer address."""
+
+    address_type: Optional[str] = None
+    house_apartment_no: Optional[str] = None
+    written_address: str
+    city: str
+    city_code: Optional[str] = None
+    pin_code: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    route_id: Optional[int] = None
+    is_default: bool = False
+
+
+class AddressRouteAssignPayload(BaseModel):
+    """Payload for assigning or clearing a delivery route on an address."""
+
+    route_id: Optional[int] = None
+
+
+class SubscriptionOrderUpdatePayload(BaseModel):
+    """Payload for customer subscription order management updates."""
+
+    address_id: Optional[int] = None
+    payment_method: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+
+def _get_db():
+    """Yield a pooled mysql.connector connection and return it on teardown.
+
+    Used as a FastAPI ``Depends`` target so FastAPI automatically closes
+    (i.e. returns to the pool) the connection after each request.
+
+    Yields:
+        A ``mysql.connector.pooling.PooledMySQLConnection`` instance.
+    """
+    db = get_raw_db()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def _resolve_coordinates(
+    cursor, customer_id: int, latitude: Optional[float], longitude: Optional[float]
+) -> Tuple[float, float]:
+    """Resolve lat/lng from payload or fall back to the customer's default address.
+
+    Args:
+        cursor: Database cursor.
+        customer_id: Customer to look up fallback coordinates for.
+        latitude: Payload latitude (may be None).
+        longitude: Payload longitude (may be None).
+
+    Returns:
+        Tuple of (latitude, longitude) as floats.
+    """
+    lat = latitude
+    lng = longitude
+    if lat is not None and lng is not None:
+        return float(lat), float(lng)
+
+    cursor.execute(
+        """
+        SELECT latitude, longitude
+          FROM addresses
+         WHERE customer_id=%s AND is_default=1 AND is_active=1
+         LIMIT 1
+        """,
+        (customer_id,),
+    )
+    fallback = cursor.fetchone()
+    if fallback:
+        fallback_lat = fallback.get("latitude")
+        fallback_lng = fallback.get("longitude")
+        return (
+            float(fallback_lat) if fallback_lat is not None else 0.0,
+            float(fallback_lng) if fallback_lng is not None else 0.0,
+        )
+    return float(lat or 0.0), float(lng or 0.0)
+
+
+def _ensure_subscription_pause_table(cursor) -> None:
+    """Create the subscription pause table if a deployment has not run migrations yet.
+
+    Args:
+        cursor: Active MySQL cursor.
+    """
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS subscription_pause_windows (
+            pause_id INT NOT NULL AUTO_INCREMENT,
+            customer_id INT NOT NULL,
+            order_id INT NULL,
+            city_code VARCHAR(3) NOT NULL,
+            meal_type VARCHAR(20) NULL,
+            start_date DATE NOT NULL,
+            end_date DATE NOT NULL,
+            reason VARCHAR(255) NULL,
+            is_active TINYINT(1) NOT NULL DEFAULT 1,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (pause_id),
+            KEY idx_subscription_pause_city_dates (city_code, start_date, end_date),
+            KEY idx_subscription_pause_customer (customer_id),
+            KEY idx_subscription_pause_order (order_id),
+            CONSTRAINT fk_subscription_pause_customer_from_customers
+                FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
+                ON DELETE CASCADE
+        )
+        """
+    )
+    cursor.execute("SHOW COLUMNS FROM subscription_pause_windows LIKE 'order_id'")
+    if cursor.fetchone() is None:
+        cursor.execute(
+            "ALTER TABLE subscription_pause_windows ADD COLUMN order_id INT NULL AFTER customer_id"
+        )
+    cursor.execute(
+        "SHOW INDEX FROM subscription_pause_windows WHERE Key_name = 'idx_subscription_pause_order'"
+    )
+    if cursor.fetchone() is None:
+        cursor.execute(
+            "CREATE INDEX idx_subscription_pause_order ON subscription_pause_windows (order_id)"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Customer CRUD proxy endpoints (SQLAlchemy-backed via customer_crud)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/create-customer", response_model=dict)
+def add_customer(customer, db=Depends(_get_db)):
+    """Create a new customer record.
+
+    Args:
+        customer: CustomerCreate payload.
+        db: Database connection (injected).
+
+    Returns:
+        Created customer dict.
+    """
+    return create_customer(db, customer)
+
+
+@router.get("/get-customer/{customer_id}", response_model=dict)
+def fetch_customer(customer_id: int, db=Depends(_get_db)):
+    """Fetch a single customer by ID.
+
+    Args:
+        customer_id: Customer ID to look up.
+        db: Database connection (injected).
+
+    Returns:
+        Customer dict.
+    """
+    return get_customer_by_id(db, customer_id)
+
+
+@router.get("/get-all-customers", response_model=dict)
+def fetch_all_customers(
+    city_code: Optional[str] = Query(None, description="Optional city filter"),
+    search: Optional[str] = Query(None, description="Search by name, phone, or email"),
+    limit: int = Query(100, ge=1, le=500, description="Page size"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
+    db=Depends(_get_db),
+):
+    """Return paginated customers, optionally filtered by city and search term.
+
+    Args:
+        city_code: Optional city code filter.
+        search: Optional substring search on name, phone, or email.
+        limit: Page size (max 500).
+        offset: Pagination offset.
+        db: Database connection (injected).
+
+    Returns:
+        Dict with ``customers`` list and ``total`` count.
+    """
+    return get_all_customers(db, city_code, search=search, limit=limit, offset=offset)
+
+
+@router.get("/api/admin/customers", tags=["Admin"])
+def fetch_admin_customers(
+    city_code: Optional[str] = Query(None, description="Override city scope"),
+    search: Optional[str] = Query(None, description="Search by name, phone, or email"),
+    limit: int = Query(100, ge=1, le=500, description="Page size"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
+    user: Dict[str, Any] = Depends(admin_required),
+    db=Depends(_get_db),
+):
+    """Return paginated customers scoped to the admin's active city.
+
+    Args:
+        city_code: Optional city_code override.
+        search: Optional substring search on name, phone, or email.
+        limit: Page size (max 500).
+        offset: Pagination offset.
+        user: Current admin user (injected).
+        db: Database connection (injected).
+
+    Returns:
+        Dict with ``customers`` list and ``total`` count.
+    """
+    resolved_city = _resolve_city_context(city_code, user)
+    return get_all_customers(db, resolved_city, search=search, limit=limit, offset=offset)
+
+
+@router.put("/update-customer/{customer_id}", response_model=dict)
+def modify_customer(customer_id: int, customer: CustomerUpdate, db=Depends(_get_db)):
+    """Update customer fields.
+
+    Args:
+        customer_id: Customer to update.
+        customer: CustomerUpdate payload.
+        db: Database connection (injected).
+
+    Returns:
+        Updated customer dict.
+    """
+    return update_customer(db, customer_id, customer)
+
+
+@router.delete("/delete-customer/{customer_id}", response_model=dict)
+def remove_customer(customer_id: int, db=Depends(_get_db)):
+    """Delete a customer by ID.
+
+    Args:
+        customer_id: Customer to delete.
+        db: Database connection (injected).
+
+    Returns:
+        Deletion result dict.
+    """
+    return delete_customer(db, customer_id)
+
+
+# ---------------------------------------------------------------------------
+# Address endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get("/api/customers/{customer_id}/addresses", tags=["Customers"])
+def get_customer_addresses(customer_id: int):
+    """Return all addresses for a customer, including route info.
+
+    Args:
+        customer_id: Customer to look up.
+
+    Returns:
+        List of address dicts.
+    """
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            SELECT
+                a.address_id,
+                a.address_type,
+                a.house_apartment_no,
+                a.written_address,
+                a.city,
+                a.city_code,
+                a.pin_code,
+                a.is_default,
+                a.latitude,
+                a.longitude,
+                a.route_id,
+                dr.route_code,
+                dr.route_name
+            FROM addresses a
+            LEFT JOIN delivery_routes dr ON dr.route_id = a.route_id
+            WHERE a.customer_id = %s AND a.is_active = 1
+            ORDER BY a.is_default DESC, a.address_id ASC
+            """,
+            (customer_id,),
+        )
+        rows = cursor.fetchall()
+        return [
+            {
+                "address_id": row["address_id"],
+                "address_type": row.get("address_type") or "Address",
+                "house_apartment_no": row.get("house_apartment_no"),
+                "written_address": row.get("written_address") or "",
+                "city": row.get("city") or "",
+                "city_code": row.get("city_code") or DEFAULT_CITY,
+                "pin_code": row.get("pin_code") or "",
+                "is_default": bool(row.get("is_default")),
+                "latitude": (float(row["latitude"]) if row.get("latitude") is not None else None),
+                "longitude": (
+                    float(row["longitude"]) if row.get("longitude") is not None else None
+                ),
+                "route_id": row.get("route_id"),
+                "route_code": row.get("route_code"),
+                "route_name": row.get("route_name"),
+            }
+            for row in rows
+        ]
+    finally:
+        cursor.close()
+        db.close()
+
+
+@router.post("/api/customers/{customer_id}/addresses", tags=["Customers"])
+def create_customer_address(customer_id: int, payload: AddressPayload):
+    """Create a new address for a customer.
+
+    Args:
+        customer_id: Customer to add the address for.
+        payload: Address fields.
+
+    Returns:
+        Dict with address_id and success message.
+    """
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT customer_id FROM customers WHERE customer_id=%s LIMIT 1",
+            (customer_id,),
+        )
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Customer not found")
+
+        normalized_city_code = _resolve_city_code(payload.city, payload.city_code)
+        city_label = _normalize_city_label(payload.city, normalized_city_code)
+        lat, lng = _resolve_coordinates(cursor, customer_id, payload.latitude, payload.longitude)
+
+        if payload.is_default:
+            cursor.execute(
+                "UPDATE addresses SET is_default=0 WHERE customer_id=%s AND is_active=1",
+                (customer_id,),
+            )
+
+        cursor.execute(
+            """
+            INSERT INTO addresses (
+                customer_id,
+                house_apartment_no,
+                written_address,
+                city,
+                city_code,
+                pin_code,
+                latitude,
+                longitude,
+                address_type,
+                route_id,
+                is_default
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                customer_id,
+                payload.house_apartment_no,
+                payload.written_address.strip(),
+                city_label,
+                normalized_city_code,
+                payload.pin_code.strip(),
+                lat,
+                lng,
+                payload.address_type.strip() if payload.address_type else "Address",
+                payload.route_id,
+                1 if payload.is_default else 0,
+            ),
+        )
+        address_id = cursor.lastrowid
+        db.commit()
+
+        return {"address_id": address_id, "message": "Address added successfully"}
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(err)}")
+    finally:
+        cursor.close()
+        db.close()
+
+
+@router.put("/api/customers/{customer_id}/addresses/{address_id}", tags=["Customers"])
+def update_customer_address(customer_id: int, address_id: int, payload: AddressPayload):
+    """Update an existing address for a customer.
+
+    Args:
+        customer_id: Customer who owns the address.
+        address_id: Address to update.
+        payload: New address fields.
+
+    Returns:
+        Dict with success message.
+    """
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT latitude, longitude, route_id FROM addresses WHERE address_id=%s AND customer_id=%s AND is_active=1 LIMIT 1",
+            (address_id, customer_id),
+        )
+        existing = cursor.fetchone()
+        if existing is None:
+            raise HTTPException(status_code=404, detail="Address not found")
+
+        normalized_city_code = _resolve_city_code(payload.city, payload.city_code)
+        city_label = _normalize_city_label(payload.city, normalized_city_code)
+        lat_input = payload.latitude if payload.latitude is not None else existing.get("latitude")
+        lng_input = (
+            payload.longitude if payload.longitude is not None else existing.get("longitude")
+        )
+        lat, lng = _resolve_coordinates(cursor, customer_id, lat_input, lng_input)
+
+        # Soft-deprecate the old address row so order history remains intact
+        cursor.execute(
+            "UPDATE addresses SET is_active=0, is_default=0 WHERE address_id=%s AND customer_id=%s",
+            (address_id, customer_id),
+        )
+
+        # Clear is_default on other active addresses if the new one will be the default
+        if payload.is_default:
+            cursor.execute(
+                "UPDATE addresses SET is_default=0 WHERE customer_id=%s AND is_active=1",
+                (customer_id,),
+            )
+
+        # Preserve route_id from old row if not supplied in payload
+        route_id = payload.route_id if payload.route_id is not None else existing.get("route_id")
+
+        cursor.execute(
+            """
+            INSERT INTO addresses (
+                customer_id, house_apartment_no, written_address, city, city_code,
+                pin_code, latitude, longitude, address_type, route_id, is_default, is_active
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1)
+            """,
+            (
+                customer_id,
+                payload.house_apartment_no,
+                payload.written_address.strip(),
+                city_label,
+                normalized_city_code,
+                payload.pin_code.strip(),
+                lat,
+                lng,
+                payload.address_type.strip() if payload.address_type else "Address",
+                route_id,
+                1 if payload.is_default else 0,
+            ),
+        )
+        new_address_id = cursor.lastrowid
+        db.commit()
+        return {"address_id": new_address_id, "message": "Address updated successfully"}
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(err)}")
+    finally:
+        cursor.close()
+        db.close()
+
+
+@router.patch("/api/customers/{customer_id}/addresses/{address_id}/route", tags=["Customers"])
+def assign_address_route(
+    customer_id: int,
+    address_id: int,
+    payload: AddressRouteAssignPayload,
+    user: Dict[str, Any] = Depends(admin_required),
+):
+    """Assign or clear the delivery route for a specific customer address.
+
+    Args:
+        customer_id: ID of the customer who owns the address.
+        address_id: ID of the address to update.
+        payload: Contains route_id (or null to clear).
+        user: Current admin user (injected).
+
+    Returns:
+        Dict with success message.
+    """
+    db = get_raw_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute(
+            "SELECT address_id FROM addresses WHERE address_id=%s AND customer_id=%s AND is_active=1 LIMIT 1",
+            (address_id, customer_id),
+        )
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Address not found")
+        cursor.execute(
+            "UPDATE addresses SET route_id=%s WHERE address_id=%s AND customer_id=%s",
+            (payload.route_id, address_id, customer_id),
+        )
+        db.commit()
+        return {"message": "Route assigned successfully"}
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(err)}")
+    finally:
+        cursor.close()
+        db.close()
+
+
+@router.post("/api/customers/{customer_id}/addresses/{address_id}/default", tags=["Customers"])
+def set_default_customer_address(customer_id: int, address_id: int):
+    """Mark an address as the default for a customer.
+
+    Args:
+        customer_id: Customer ID.
+        address_id: Address to set as default.
+
+    Returns:
+        Dict with success message.
+    """
+    db = get_raw_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute(
+            "SELECT address_id FROM addresses WHERE address_id=%s AND customer_id=%s AND is_active=1 LIMIT 1",
+            (address_id, customer_id),
+        )
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Address not found")
+
+        cursor.execute(
+            "UPDATE addresses SET is_default=0 WHERE customer_id=%s AND is_active=1",
+            (customer_id,),
+        )
+        cursor.execute(
+            "UPDATE addresses SET is_default=1 WHERE address_id=%s AND customer_id=%s AND is_active=1",
+            (address_id, customer_id),
+        )
+        db.commit()
+        return {"message": "Default address updated"}
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(err)}")
+    finally:
+        cursor.close()
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# Customer order history
+# ---------------------------------------------------------------------------
+
+
+@router.get("/api/customers/{customer_id}/orders", tags=["Customers"])
+def list_customer_orders(customer_id: int, limit: int = Query(50, ge=1, le=200)):
+    """Return a customer's order history with items.
+
+    Args:
+        customer_id: Customer to look up.
+        limit: Maximum number of orders to return.
+
+    Returns:
+        List of order dicts with items.
+    """
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        from mysql.connector import errorcode
+
+        try:
+            cursor.execute(
+                """
+                SELECT o.order_id,
+                       o.created_at,
+                       o.delivery_date,
+                       o.total_price,
+                       o.status,
+                       o.paid,
+                       o.payment_method,
+                       o.order_type,
+                       a.address_type,
+                       a.written_address,
+                       a.city,
+                       a.pin_code
+                  FROM orders o
+                  JOIN addresses a ON o.address_id = a.address_id
+                 WHERE o.customer_id = %s
+                 ORDER BY o.created_at DESC, o.order_id DESC
+                 LIMIT %s
+                """,
+                (customer_id, limit),
+            )
+        except mysql.connector.Error as err:
+            if err.errno == errorcode.ER_BAD_FIELD_ERROR:
+                cursor.execute(
+                    """
+                    SELECT o.order_id,
+                           o.created_at,
+                           NULL AS delivery_date,
+                           o.total_price,
+                           o.status,
+                           o.paid,
+                           o.payment_method,
+                           NULL AS order_type,
+                           a.address_type,
+                           a.written_address,
+                           a.city,
+                           a.pin_code
+                      FROM orders o
+                      JOIN addresses a ON o.address_id = a.address_id
+                     WHERE o.customer_id = %s
+                     ORDER BY o.created_at DESC, o.order_id DESC
+                     LIMIT %s
+                    """,
+                    (customer_id, limit),
+                )
+            else:
+                raise
+        orders = cursor.fetchall()
+        if not orders:
+            return []
+
+        order_ids = [row["order_id"] for row in orders]
+        placeholders = ",".join(["%s"] * len(order_ids))
+
+        cursor.execute(
+            f"""
+            SELECT oi.order_id,
+                   oi.quantity,
+                   oi.price,
+                   oi.meal_type,
+                   COALESCE(i.name, co.combo_name, ct_mi.name, ct_i.name) AS item_name
+              FROM order_items oi
+              LEFT JOIN items i ON oi.item_id = i.item_id
+              LEFT JOIN combos co ON oi.combo_id = co.combo_id
+              LEFT JOIN menu_items mi ON oi.menu_item_id = mi.menu_item_id
+              LEFT JOIN component_types ct_mi ON mi.component_type_id = ct_mi.component_type_id
+              LEFT JOIN component_types ct_i ON i.component_type_id = ct_i.component_type_id
+             WHERE oi.order_id IN ({placeholders})
+             ORDER BY oi.order_id ASC, oi.order_item_id ASC
+            """,
+            order_ids,
+        )
+        item_rows = cursor.fetchall()
+        items_by_order: Dict[int, List[Dict[str, object]]] = {}
+        for row in item_rows:
+            order_id = row["order_id"]
+            items_by_order.setdefault(order_id, []).append(
+                {
+                    "item_name": row.get("item_name") or "Item",
+                    "quantity": int(row.get("quantity") or 0),
+                    "price": float(row.get("price") or 0),
+                    "meal_type": row.get("meal_type"),
+                }
+            )
+
+        result = []
+        for order in orders:
+            order_id = order["order_id"]
+            created = order.get("created_at")
+            delivery_date = order.get("delivery_date")
+            paid_flag = bool(order.get("paid"))
+            result.append(
+                {
+                    "order_id": order_id,
+                    "created_at": created.isoformat() if created else None,
+                    "delivery_date": delivery_date.isoformat() if delivery_date else None,
+                    "total_price": float(order.get("total_price") or 0),
+                    "status": normalize_status_for_response(order.get("status")),
+                    "payment_status": payment_status_label(paid_flag),
+                    "payment_method": order.get("payment_method") or "Cash",
+                    "paid": paid_flag,
+                    "address": {
+                        "label": order.get("address_type") or "Address",
+                        "line": order.get("written_address") or "",
+                        "city": order.get("city") or "",
+                        "pin_code": order.get("pin_code") or "",
+                    },
+                    "items": items_by_order.get(order_id, []),
+                    "order_type": order.get("order_type") or "one_time",
+                }
+            )
+
+        return result
+    finally:
+        cursor.close()
+        db.close()
+
+
+@router.get("/api/customers/{customer_id}/subscription-today", tags=["Customers"])
+def get_subscription_today(
+    customer_id: int,
+    city_code: Optional[str] = Query(None),
+) -> List[Dict[str, Any]]:
+    """Return today's resolved menu items for a customer's active subscriptions.
+
+    Args:
+        customer_id: Customer to look up.
+        city_code: City code; defaults to DEFAULT_CITY.
+
+    Returns:
+        List of dicts with meal_type, group_name, quantity, resolved_item_name,
+        resolved_picture_url, resolved_price, and menu_released flag.
+    """
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    today = date_type.today().isoformat()
+    city = normalize_city_code(city_code or DEFAULT_CITY)
+    try:
+        _ensure_subscription_pause_table(cursor)
+        cursor.execute(
+            """
+            SELECT
+                oi.meal_type,
+                oi.quantity,
+                COALESCE(sub_mi.component_type_id, i_sub.component_type_id) AS component_type_id,
+                COALESCE(ct.name, ct2.name)                                 AS group_name
+            FROM orders o
+            JOIN order_items oi ON oi.order_id = o.order_id
+            LEFT JOIN menu_items sub_mi ON oi.menu_item_id = sub_mi.menu_item_id
+            LEFT JOIN items i_sub     ON oi.item_id = i_sub.item_id
+            LEFT JOIN component_types ct  ON sub_mi.component_type_id = ct.component_type_id
+            LEFT JOIN component_types ct2 ON i_sub.component_type_id  = ct2.component_type_id
+            LEFT JOIN subscription_pause_windows spw
+                   ON spw.customer_id = o.customer_id
+                  AND spw.city_code = %s
+                  AND spw.is_active = 1
+                  AND %s BETWEEN spw.start_date AND spw.end_date
+                  AND spw.order_id = o.order_id
+            WHERE o.customer_id = %s
+              AND o.order_type  = 'subscription'
+              AND o.status NOT IN ('cancelled', 'rejected')
+              AND COALESCE(sub_mi.component_type_id, i_sub.component_type_id) IS NOT NULL
+              AND spw.pause_id IS NULL
+            """,
+            (city, today, customer_id),
+        )
+        sub_rows = cursor.fetchall()
+        if not sub_rows:
+            return []
+
+        ct_ids = list({r["component_type_id"] for r in sub_rows if r["component_type_id"]})
+        if not ct_ids:
+            return []
+
+        placeholders = ",".join(["%s"] * len(ct_ids))
+        cursor.execute(
+            f"""
+            SELECT
+                COALESCE(i.component_type_id, today_mi.component_type_id) AS component_type_id,
+                i.name          AS resolved_item_name,
+                i.picture_url   AS resolved_picture_url,
+                today_mi.rate   AS resolved_price,
+                m.is_released
+            FROM menu m
+            JOIN menu_items today_mi ON today_mi.menu_id = m.menu_id
+            JOIN items i             ON today_mi.item_id = i.item_id
+            WHERE m.date       = %s
+              AND m.menu_type  = 'ONE_DAY'
+              AND m.city_code  = %s
+              AND COALESCE(i.component_type_id, today_mi.component_type_id) IN ({placeholders})
+            """,
+            [today, city] + ct_ids,
+        )
+        resolved: Dict[int, Dict[str, Any]] = {r["component_type_id"]: r for r in cursor.fetchall()}
+
+        seen: set = set()
+        result: List[Dict[str, Any]] = []
+        for row in sub_rows:
+            ct_id = row["component_type_id"]
+            key = (row["meal_type"], ct_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            res = resolved.get(ct_id, {})
+            result.append(
+                {
+                    "meal_type": row["meal_type"],
+                    "group_name": row["group_name"],
+                    "quantity": row["quantity"],
+                    "resolved_item_name": res.get("resolved_item_name"),
+                    "resolved_picture_url": res.get("resolved_picture_url"),
+                    "resolved_price": (
+                        float(res["resolved_price"])
+                        if res.get("resolved_price") is not None
+                        else None
+                    ),
+                    "menu_released": bool(res.get("is_released", False)),
+                }
+            )
+        return result
+    finally:
+        cursor.close()
+        db.close()
+
+
+@router.patch("/api/customers/{customer_id}/subscription-orders/{order_id}", tags=["Customers"])
+def update_customer_subscription_order(
+    customer_id: int,
+    order_id: int,
+    payload: SubscriptionOrderUpdatePayload,
+) -> Dict[str, Any]:
+    """Update editable details for one customer subscription order.
+
+    Args:
+        customer_id: Customer who owns the subscription order.
+        order_id: Subscription order to update.
+        payload: Optional address_id and payment_method fields.
+
+    Returns:
+        Dict with update status and order_id.
+    """
+    if payload.address_id is None and payload.payment_method is None:
+        raise HTTPException(status_code=400, detail="No changes submitted")
+
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            SELECT order_id
+              FROM orders
+             WHERE order_id = %s
+               AND customer_id = %s
+               AND LOWER(COALESCE(order_type, 'one_time')) = 'subscription'
+             LIMIT 1
+            """,
+            (order_id, customer_id),
+        )
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Subscription order not found")
+
+        updates: List[str] = []
+        params: List[Any] = []
+        if payload.address_id is not None:
+            cursor.execute(
+                """
+                SELECT address_id
+                  FROM addresses
+                 WHERE address_id = %s
+                   AND customer_id = %s
+                   AND is_active = 1
+                 LIMIT 1
+                """,
+                (payload.address_id, customer_id),
+            )
+            if cursor.fetchone() is None:
+                raise HTTPException(status_code=400, detail="Address is not available")
+            updates.append("address_id = %s")
+            params.append(payload.address_id)
+
+        if payload.payment_method is not None:
+            normalized_method = payload.payment_method.strip()
+            if normalized_method not in {"UPI", "Card", "Cash"}:
+                raise HTTPException(status_code=400, detail="Invalid payment method")
+            updates.append("payment_method = %s")
+            params.append(normalized_method)
+            updates.append("paid = %s")
+            params.append(1 if normalized_method.lower() in {"upi", "card", "online"} else 0)
+
+        params.append(order_id)
+        cursor.execute(
+            f"UPDATE orders SET {', '.join(updates)} WHERE order_id = %s",
+            tuple(params),
+        )
+        db.commit()
+        return {"status": "updated", "order_id": order_id}
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(err)}")
+    finally:
+        cursor.close()
+        db.close()
+
+
+@router.patch(
+    "/api/customers/{customer_id}/subscription-orders/{order_id}/cancel",
+    tags=["Customers"],
+)
+def cancel_customer_subscription_order(customer_id: int, order_id: int) -> Dict[str, Any]:
+    """Cancel one customer subscription order.
+
+    Args:
+        customer_id: Customer who owns the subscription order.
+        order_id: Subscription order to cancel.
+
+    Returns:
+        Dict with cancellation status and order_id.
+    """
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            SELECT status
+              FROM orders
+             WHERE order_id = %s
+               AND customer_id = %s
+               AND LOWER(COALESCE(order_type, 'one_time')) = 'subscription'
+             LIMIT 1
+            """,
+            (order_id, customer_id),
+        )
+        order = cursor.fetchone()
+        if order is None:
+            raise HTTPException(status_code=404, detail="Subscription order not found")
+        current_status = str(order.get("status") or "").strip().lower()
+        if current_status == ORDER_STATUS_CANCELLED.lower():
+            return {"status": "cancelled", "order_id": order_id}
+        if current_status == "delivered":
+            raise HTTPException(
+                status_code=400,
+                detail="Delivered subscriptions cannot be cancelled",
+            )
+
+        cursor.execute(
+            "UPDATE orders SET status = %s WHERE order_id = %s",
+            (ORDER_STATUS_CANCELLED, order_id),
+        )
+        db.commit()
+        return {"status": "cancelled", "order_id": order_id}
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(err)}")
+    finally:
+        cursor.close()
+        db.close()

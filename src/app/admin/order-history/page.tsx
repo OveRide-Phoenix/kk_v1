@@ -46,12 +46,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { DateRange } from "react-day-picker";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -60,8 +55,6 @@ import {
   Filter,
   RefreshCw,
   Search,
-  ArrowLeft,
-  ArrowRight,
   Loader2,
   Eye,
   CreditCard,
@@ -71,12 +64,20 @@ import {
   Check,
 } from "lucide-react";
 import { http } from "@/lib/http";
+import { normalizeOrderStatusKey, orderStatusLabel, paymentStatusLabel } from "@/lib/order-status";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import { useAuthStore } from "@/store/store";
+import { OrderStatusPill } from "@/components/order-status-pill";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type OrderItem = {
   name: string;
@@ -88,8 +89,12 @@ type OrderItem = {
 type OrderRecord = {
   order_id: number;
   created_at: string | null;
+  delivery_date: string | null;
+  order_type: string;
   status: string;
+  payment_status?: string;
   payment_method: string;
+  paid: boolean;
   total_price: number;
   customer_id: number;
   customer_name: string;
@@ -141,7 +146,9 @@ type InvoiceResponse = {
 type Filters = {
   startDate: Date | null;
   endDate: Date | null;
+  orderType: string;
   status: string;
+  mealType: string;
   customerQuery: string;
   productQuery: string;
 };
@@ -150,11 +157,24 @@ const PAGE_SIZE = 10;
 
 const statusOptions = [
   { label: "All", value: "all" },
-  { label: "Pending", value: "pending" },
-  { label: "In Progress", value: "in progress" },
+  { label: "Confirmed", value: "confirmed" },
+  { label: "Dispatched", value: "dispatched" },
   { label: "Delivered", value: "delivered" },
-  { label: "Completed", value: "completed" },
   { label: "Cancelled", value: "cancelled" },
+];
+
+const mealTypeOptions = [
+  { label: "All meals", value: "all" },
+  { label: "Breakfast", value: "Breakfast" },
+  { label: "Lunch", value: "Lunch" },
+  { label: "Dinner", value: "Dinner" },
+  { label: "Condiments", value: "Condiments" },
+];
+
+const orderTypeTabs = [
+  { label: "All orders", value: "all" },
+  { label: "Normal orders", value: "one_time" },
+  { label: "Subscription orders", value: "subscription" },
 ];
 
 const formatCurrency = (value: number) =>
@@ -174,24 +194,19 @@ const formatDateTime = (value: string | null) => {
   }
 };
 
-const statusBadgeClass = (status: string) => {
-  const normalized = status.toLowerCase();
-  if (normalized === "delivered" || normalized === "completed") {
-    return "bg-emerald-50 text-emerald-700 border border-emerald-200";
-  }
-  if (normalized === "pending") {
-    return "bg-amber-50 text-amber-800 border border-amber-200";
-  }
-  if (normalized === "in progress" || normalized === "processing") {
-    return "bg-blue-50 text-blue-700 border border-blue-200";
-  }
-  if (normalized === "cancelled" || normalized === "canceled") {
-    return "bg-rose-50 text-rose-700 border border-rose-200";
-  }
-  return "bg-slate-50 text-slate-700 border border-slate-200";
-};
+const paymentBadgeClass = (paid: boolean) =>
+  paid
+    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+    : "bg-amber-50 text-amber-900 border border-amber-200";
 
 const formatOrderId = (raw: number) => `ORD-${String(raw).padStart(5, "0")}`;
+
+const orderTypeLabel = (orderType: string) => {
+  const t = orderType.trim().toLowerCase();
+  if (t === "subscription") return "Subscription";
+  if (t === "subscription_daily") return "Subscription (Daily)";
+  return "Normal";
+};
 
 const buildInvoiceHtml = (invoice: InvoiceResponse) => {
   const rows = invoice.items
@@ -202,7 +217,7 @@ const buildInvoiceHtml = (invoice: InvoiceResponse) => {
         <td style="padding:8px;border:1px solid #ddd;text-align:center;">${item.quantity}</td>
         <td style="padding:8px;border:1px solid #ddd;text-align:right;">${formatCurrency(item.price)}</td>
         <td style="padding:8px;border:1px solid #ddd;text-align:right;">${formatCurrency(item.line_total)}</td>
-      </tr>`
+      </tr>`,
     )
     .join("");
 
@@ -283,7 +298,9 @@ const defaultFilters = (): Filters => {
   return {
     startDate: null,
     endDate: null,
+    orderType: "all",
     status: "all",
+    mealType: "all",
     customerQuery: "",
     productQuery: "",
   };
@@ -305,11 +322,13 @@ export default function OrderHistoryPage() {
   const [invoiceData, setInvoiceData] = useState<InvoiceResponse | null>(null);
   const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [invoiceError, setInvoiceError] = useState<string | null>(null);
+  const adminCity = useAuthStore((state) => state.adminCity || state.user?.city_code || "MYS");
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams();
     params.set("limit", String(PAGE_SIZE));
     params.set("offset", String(page * PAGE_SIZE));
+    params.set("city_code", adminCity);
     if (filters.startDate) {
       params.set("start_date", format(filters.startDate, "yyyy-MM-dd"));
     }
@@ -319,6 +338,12 @@ export default function OrderHistoryPage() {
     if (filters.status !== "all") {
       params.set("status", filters.status);
     }
+    if (filters.orderType !== "all") {
+      params.set("order_type", filters.orderType);
+    }
+    if (filters.mealType !== "all") {
+      params.set("meal_type", filters.mealType);
+    }
     if (filters.customerQuery.trim()) {
       params.set("customer", filters.customerQuery.trim());
     }
@@ -326,7 +351,7 @@ export default function OrderHistoryPage() {
       params.set("product", filters.productQuery.trim());
     }
     return params.toString();
-  }, [filters, page]);
+  }, [filters, page, adminCity]);
 
   const statusUpdateOptions = statusOptions.filter((option) => option.value !== "all");
 
@@ -343,7 +368,14 @@ export default function OrderHistoryPage() {
         throw new Error("Failed to load order history");
       }
       const data = (await res.json()) as OrdersApiResponse;
-      setOrders(data.orders);
+      const normalizedOrders = (data.orders ?? []).map((order) => ({
+        ...order,
+        status: orderStatusLabel(order.status),
+        order_type: order.order_type ?? "one_time",
+        payment_status: order.payment_status ?? paymentStatusLabel(Boolean(order.paid)),
+        paid: Boolean(order.paid),
+      }));
+      setOrders(normalizedOrders);
       setTotalOrders(data.total);
     } catch (err) {
       if (err instanceof Error) {
@@ -364,10 +396,7 @@ export default function OrderHistoryPage() {
     fetchOrders();
   }, [fetchOrders]);
 
-  const handleFilterChange = <Key extends keyof Filters>(
-    key: Key,
-    value: Filters[Key],
-  ) => {
+  const handleFilterChange = <Key extends keyof Filters>(key: Key, value: Filters[Key]) => {
     setFilters((prev) => ({
       ...prev,
       [key]: value,
@@ -405,17 +434,20 @@ export default function OrderHistoryPage() {
   };
 
   const handleStatusUpdate = async (orderId: number, nextStatus: string) => {
-    const trimmedStatus = nextStatus.trim();
+    const trimmedStatus = orderStatusLabel(nextStatus);
     if (!trimmedStatus) return;
 
     const targetOrder = orders.find((order) => order.order_id === orderId);
-    if (targetOrder && targetOrder.status.toLowerCase() === trimmedStatus.toLowerCase()) {
+    if (
+      targetOrder &&
+      normalizeOrderStatusKey(targetOrder.status) === normalizeOrderStatusKey(trimmedStatus)
+    ) {
       return;
     }
 
     setUpdatingOrderId(orderId);
     try {
-      const res = await http.post(`/api/admin/orders/${orderId}/status`, {
+      const res = await http.post(`/api/admin/orders/${orderId}/status?city_code=${adminCity}`, {
         status: trimmedStatus,
       });
       if (!res.ok) {
@@ -426,7 +458,7 @@ export default function OrderHistoryPage() {
         throw new Error(message);
       }
       const body = (await res.json()) as { order_id: number; status: string };
-      const updatedStatus = body.status ?? trimmedStatus;
+      const updatedStatus = orderStatusLabel(body.status ?? trimmedStatus);
       setOrders((prev) =>
         prev.map((order) =>
           order.order_id === orderId ? { ...order, status: updatedStatus } : order,
@@ -443,12 +475,44 @@ export default function OrderHistoryPage() {
     }
   };
 
+  const handlePaymentUpdate = async (orderId: number, paid: boolean) => {
+    setUpdatingOrderId(orderId);
+    try {
+      const res = await http.post(`/api/admin/orders/${orderId}/payment?city_code=${adminCity}`, {
+        paid,
+      });
+      if (!res.ok) {
+        throw new Error("Failed to update payment status.");
+      }
+      const body = (await res.json()) as { paid: boolean; payment_status?: string };
+      const nextPaid = Boolean(body.paid);
+      const nextPaymentStatus = body.payment_status ?? paymentStatusLabel(nextPaid);
+      setOrders((prev) =>
+        prev.map((order) =>
+          order.order_id === orderId
+            ? { ...order, paid: nextPaid, payment_status: nextPaymentStatus }
+            : order,
+        ),
+      );
+      setSelectedOrder((prev) =>
+        prev && prev.order_id === orderId
+          ? { ...prev, paid: nextPaid, payment_status: nextPaymentStatus }
+          : prev,
+      );
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unexpected error updating payment.");
+    } finally {
+      setUpdatingOrderId(null);
+    }
+  };
+
   const loadInvoice = async (orderId: number) => {
     setInvoiceLoading(true);
     setInvoiceData(null);
     setInvoiceError(null);
     try {
-      const res = await http.get(`/api/admin/orders/${orderId}/invoice`);
+      const res = await http.get(`/api/admin/orders/${orderId}/invoice?city_code=${adminCity}`);
       if (!res.ok) {
         throw new Error("Unable to load invoice data");
       }
@@ -489,9 +553,42 @@ export default function OrderHistoryPage() {
   const totalPages = Math.ceil(totalOrders / PAGE_SIZE);
   const hasNextPage = page + 1 < totalPages;
   const hasPrevPage = page > 0;
+  const paginationRange = useMemo<(number | "ellipsis")[]>(() => {
+    if (totalPages <= 1) return [];
+    const currentPage = page + 1;
+    const siblings = 1;
+    const firstPage = 1;
+    const lastPage = totalPages;
+    const pages: Array<number | "ellipsis"> = [];
+
+    const startPage = Math.max(currentPage - siblings, firstPage);
+    const endPage = Math.min(currentPage + siblings, lastPage);
+
+    if (startPage > firstPage) {
+      pages.push(firstPage);
+      if (startPage > firstPage + 1) {
+        pages.push("ellipsis");
+      }
+    }
+
+    for (let index = startPage; index <= endPage; index += 1) {
+      pages.push(index);
+    }
+
+    if (endPage < lastPage) {
+      if (endPage < lastPage - 1) {
+        pages.push("ellipsis");
+      }
+      pages.push(lastPage);
+    }
+
+    return pages;
+  }, [page, totalPages]);
 
   const filtersApplied =
     filters.status !== "all" ||
+    filters.orderType !== "all" ||
+    filters.mealType !== "all" ||
     filters.customerQuery.trim().length > 0 ||
     filters.productQuery.trim().length > 0 ||
     filters.startDate !== null ||
@@ -505,7 +602,8 @@ export default function OrderHistoryPage() {
             <div>
               <CardTitle>Order History</CardTitle>
               <CardDescription>
-                Review, filter, and export past customer orders. Generate printable invoices with a single click.
+                Review, filter, and export past customer orders. Generate printable invoices with a
+                single click.
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
@@ -520,6 +618,19 @@ export default function OrderHistoryPage() {
             </div>
           </CardHeader>
           <CardContent>
+            <Tabs
+              value={filters.orderType}
+              onValueChange={(value) => handleFilterChange("orderType", value)}
+              className="mb-5"
+            >
+              <TabsList>
+                {orderTypeTabs.map((tab) => (
+                  <TabsTrigger key={tab.value} value={tab.value}>
+                    {tab.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
             <div className="grid gap-4 lg:grid-cols-4">
               <div className="space-y-2 lg:col-span-2">
                 <span className="block text-sm font-medium text-muted-foreground">Date range</span>
@@ -533,15 +644,11 @@ export default function OrderHistoryPage() {
                       )}
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {dateRange?.from ? (
-                        dateRange.to ? (
-                          `${format(dateRange.from, "dd MMM yyyy")} – ${format(dateRange.to, "dd MMM yyyy")}`
-                        ) : (
-                          format(dateRange.from, "dd MMM yyyy")
-                        )
-                      ) : (
-                        "Select date range"
-                      )}
+                      {dateRange?.from
+                        ? dateRange.to
+                          ? `${format(dateRange.from, "dd MMM yyyy")} – ${format(dateRange.to, "dd MMM yyyy")}`
+                          : format(dateRange.from, "dd MMM yyyy")
+                        : "Select date range"}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
@@ -561,7 +668,9 @@ export default function OrderHistoryPage() {
                 </Popover>
               </div>
               <div className="space-y-2">
-                <span className="block text-sm font-medium text-muted-foreground">Delivery Status</span>
+                <span className="block text-sm font-medium text-muted-foreground">
+                  Delivery Status
+                </span>
                 <Select
                   value={filters.status}
                   onValueChange={(value) => handleFilterChange("status", value)}
@@ -571,6 +680,24 @@ export default function OrderHistoryPage() {
                   </SelectTrigger>
                   <SelectContent>
                     {statusOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <span className="block text-sm font-medium text-muted-foreground">Meal Type</span>
+                <Select
+                  value={filters.mealType}
+                  onValueChange={(value) => handleFilterChange("mealType", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Filter by meal type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {mealTypeOptions.map((option) => (
                       <SelectItem key={option.value} value={option.value}>
                         {option.label}
                       </SelectItem>
@@ -591,7 +718,9 @@ export default function OrderHistoryPage() {
                 </div>
               </div>
               <div className="space-y-2 lg:col-span-2">
-                <span className="block text-sm font-medium text-muted-foreground">Customer / Phone</span>
+                <span className="block text-sm font-medium text-muted-foreground">
+                  Customer / Phone
+                </span>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
@@ -643,136 +772,192 @@ export default function OrderHistoryPage() {
                 )}
                 <TooltipProvider>
                   <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Order</TableHead>
-                      <TableHead>Placed</TableHead>
-                      <TableHead>Customer</TableHead>
-                      <TableHead>Items</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Total</TableHead>
-                      <TableHead className="w-[90px] text-center">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {orders.map((order) => (
-                      <TableRow key={order.order_id}>
-                        <TableCell>
-                          <div className="flex flex-col gap-1">
-                            <span className="font-medium text-foreground">
-                              {formatOrderId(order.order_id)}
-                            </span>
-                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                              {paymentMethodIcon(order.payment_method)}
-                              {normalizePaymentMethod(order.payment_method)}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>{formatDateTime(order.created_at)}</TableCell>
-                        <TableCell>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="font-medium text-foreground">
-                                {order.customer_name}
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>{order.customer_phone ?? "No phone"}</TooltipContent>
-                          </Tooltip>
-                        </TableCell>
-                        <TableCell>{order.item_count} items</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={cn(
-                              "capitalize px-2.5 py-1 text-xs font-medium rounded-full",
-                              statusBadgeClass(order.status),
-                            )}
-                          >
-                            {order.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {formatCurrency(order.total_price)}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleViewOrder(order)}
-                              aria-label={`View order ${formatOrderId(order.order_id)}`}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  aria-label={`Update status for ${formatOrderId(order.order_id)}`}
-                                  disabled={updatingOrderId === order.order_id}
-                                >
-                                  {updatingOrderId === order.order_id ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  )}
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-48">
-                                <DropdownMenuLabel>Update status</DropdownMenuLabel>
-                                {statusUpdateOptions.map((option) => {
-                                  const isActive =
-                                    order.status.toLowerCase() === option.label.toLowerCase();
-                                  return (
-                                    <DropdownMenuItem
-                                      key={option.value}
-                                      disabled={isActive || updatingOrderId === order.order_id}
-                                      onClick={() => handleStatusUpdate(order.order_id, option.label)}
-                                    >
-                                      <span className="flex w-full items-center justify-between">
-                                        {option.label}
-                                        {isActive && <Check className="h-3.5 w-3.5" />}
-                                      </span>
-                                    </DropdownMenuItem>
-                                  );
-                                })}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </TableCell>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Order</TableHead>
+                        <TableHead>Placed</TableHead>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>Items</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Total</TableHead>
+                        <TableHead className="w-[90px] text-center">Actions</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
+                    </TableHeader>
+                    <TableBody>
+                      {orders.map((order) => (
+                        <TableRow key={order.order_id}>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              <span className="font-medium text-foreground">
+                                {formatOrderId(order.order_id)}
+                              </span>
+                              <Badge variant="outline" className="w-fit text-xs">
+                                {orderTypeLabel(order.order_type)}
+                              </Badge>
+                              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                {paymentMethodIcon(order.payment_method)}
+                                {normalizePaymentMethod(order.payment_method)}
+                              </span>
+                              <span
+                                className={cn(
+                                  "text-xs",
+                                  order.paid ? "text-emerald-700" : "text-amber-700 font-medium",
+                                )}
+                              >
+                                {order.payment_status ?? paymentStatusLabel(order.paid)}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div>{formatDateTime(order.created_at)}</div>
+                            {order.delivery_date && (
+                              <div className="text-xs text-muted-foreground">
+                                Delivery: {order.delivery_date}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="font-medium text-foreground">
+                                  {order.customer_name}
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>{order.customer_phone ?? "No phone"}</TooltipContent>
+                            </Tooltip>
+                          </TableCell>
+                          <TableCell>{order.item_count} items</TableCell>
+                          <TableCell>
+                            <OrderStatusPill
+                              status={order.status}
+                              paid={order.paid}
+                              showPaymentForConfirmed
+                            />
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {formatCurrency(order.total_price)}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleViewOrder(order)}
+                                aria-label={`View order ${formatOrderId(order.order_id)}`}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    aria-label={`Update status for ${formatOrderId(order.order_id)}`}
+                                    disabled={updatingOrderId === order.order_id}
+                                  >
+                                    {updatingOrderId === order.order_id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <MoreHorizontal className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-48">
+                                  <DropdownMenuLabel>Update status</DropdownMenuLabel>
+                                  {statusUpdateOptions.map((option) => {
+                                    const isActive =
+                                      normalizeOrderStatusKey(order.status) === option.value;
+                                    return (
+                                      <DropdownMenuItem
+                                        key={option.value}
+                                        disabled={isActive || updatingOrderId === order.order_id}
+                                        onClick={() =>
+                                          handleStatusUpdate(order.order_id, option.label)
+                                        }
+                                      >
+                                        <span className="flex w-full items-center justify-between">
+                                          {option.label}
+                                          {isActive && <Check className="h-3.5 w-3.5" />}
+                                        </span>
+                                      </DropdownMenuItem>
+                                    );
+                                  })}
+                                  <Separator className="my-1" />
+                                  <DropdownMenuLabel>Update payment</DropdownMenuLabel>
+                                  <DropdownMenuItem
+                                    disabled={order.paid || updatingOrderId === order.order_id}
+                                    onClick={() => handlePaymentUpdate(order.order_id, true)}
+                                  >
+                                    Mark payment done
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    disabled={!order.paid || updatingOrderId === order.order_id}
+                                    onClick={() => handlePaymentUpdate(order.order_id, false)}
+                                  >
+                                    Mark payment due
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
                   </Table>
                 </TooltipProvider>
               </div>
             )}
           </CardContent>
           <CardFooter className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground whitespace-nowrap">
               Page {Math.min(page + 1, Math.max(totalPages, 1))} of {Math.max(totalPages, 1)}
             </p>
-            {totalPages > 1 && (
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setPage((prev) => prev - 1)}
-                  disabled={!hasPrevPage}
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setPage((prev) => prev + 1)}
-                  disabled={!hasNextPage}
-                >
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
+            {totalPages > 1 ? (
+              <Pagination>
+                <PaginationContent>
+                  <PaginationPrevious
+                    href="#"
+                    disabled={!hasPrevPage}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      if (hasPrevPage) {
+                        setPage((prev) => prev - 1);
+                      }
+                    }}
+                  />
+                  {paginationRange.map((entry, index) => {
+                    if (entry === "ellipsis") {
+                      return <PaginationEllipsis key={`ellipsis-${index}`} />;
+                    }
+                    return (
+                      <PaginationLink
+                        key={entry}
+                        href="#"
+                        isActive={entry === page + 1}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          if (entry !== page + 1) {
+                            setPage(entry - 1);
+                          }
+                        }}
+                      >
+                        {entry}
+                      </PaginationLink>
+                    );
+                  })}
+                  <PaginationNext
+                    href="#"
+                    disabled={!hasNextPage}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      if (hasNextPage) {
+                        setPage((prev) => prev + 1);
+                      }
+                    }}
+                  />
+                </PaginationContent>
+              </Pagination>
+            ) : null}
           </CardFooter>
         </Card>
       </div>
@@ -798,10 +983,35 @@ export default function OrderHistoryPage() {
                 <div className="space-y-1 text-sm">
                   <p className="font-semibold text-foreground">Placed</p>
                   <p>{formatDateTime(selectedOrder.created_at)}</p>
-                  <p className="font-semibold text-foreground">Status</p>
-                  <Badge className={cn("capitalize", statusBadgeClass(selectedOrder.status))}>
-                    {selectedOrder.status}
+                  {selectedOrder.delivery_date && (
+                    <>
+                      <p className="font-semibold text-foreground">Delivery date</p>
+                      <p>{selectedOrder.delivery_date}</p>
+                    </>
+                  )}
+                  <p className="font-semibold text-foreground">Order type</p>
+                  <Badge variant="outline" className="w-fit">
+                    {orderTypeLabel(selectedOrder.order_type)}
                   </Badge>
+                  <p className="font-semibold text-foreground">Status</p>
+                  <OrderStatusPill
+                    status={selectedOrder.status}
+                    paid={selectedOrder.paid}
+                    showPaymentForConfirmed
+                    className="capitalize"
+                  />
+                  <p className="font-semibold text-foreground">Payment</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-muted-foreground">
+                      {normalizePaymentMethod(selectedOrder.payment_method)}
+                    </p>
+                    <Badge
+                      variant="outline"
+                      className={cn("text-xs", paymentBadgeClass(selectedOrder.paid))}
+                    >
+                      {selectedOrder.payment_status ?? paymentStatusLabel(selectedOrder.paid)}
+                    </Badge>
+                  </div>
                 </div>
               </div>
 
@@ -810,9 +1020,6 @@ export default function OrderHistoryPage() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-semibold text-foreground">Items</h4>
-                  <span className="text-sm text-muted-foreground">
-                    Total: {formatCurrency(selectedOrder.total_price)}
-                  </span>
                 </div>
                 <ScrollArea className="max-h-72 rounded-md border">
                   <Table>
@@ -838,6 +1045,9 @@ export default function OrderHistoryPage() {
                     </TableBody>
                   </Table>
                 </ScrollArea>
+                <div className="flex justify-end text-sm font-semibold text-foreground">
+                  <span>Total: {formatCurrency(selectedOrder.total_price)}</span>
+                </div>
               </div>
 
               <Separator />
@@ -850,12 +1060,17 @@ export default function OrderHistoryPage() {
                 <div className="space-y-2 text-sm">
                   <p className="font-semibold text-foreground">Invoice</p>
                   <p className="text-muted-foreground">
-                    Number: {invoiceData.invoice_number} · Issued: {formatDateTime(invoiceData.issued_at)}
+                    Number: {invoiceData.invoice_number} · Issued:{" "}
+                    {formatDateTime(invoiceData.issued_at)}
                   </p>
                   <p className="text-muted-foreground">
                     Delivery address:{" "}
                     {invoiceData.address.line1
-                      ? [invoiceData.address.line1, invoiceData.address.city, invoiceData.address.pin_code]
+                      ? [
+                          invoiceData.address.line1,
+                          invoiceData.address.city,
+                          invoiceData.address.pin_code,
+                        ]
                           .filter(Boolean)
                           .join(", ")
                       : "—"}

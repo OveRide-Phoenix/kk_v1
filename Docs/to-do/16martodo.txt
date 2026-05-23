@@ -1,0 +1,35 @@
+---- address immutable - so old addresses dont get deleted and stuff, so we need to add an active/deprecated field to addresses table
+
+---- keep effective-date and status fields for item price history and stuff
+
+------------ unassigned route should be handled compulsoryly
+
+
+---- price change even for a single day (if) happens from master ONLY so that it is tracked in item_price_history
+
+---- discounts per product concept - overhead
+
+---- add a delivery price coloumn in orders table
+
+---- In lunch, curry will only be a single- rather, There will only be a single curry in the menu. So the default curry should automatically default to that curry. I said curry too many times.
+usually the default, second one wont be default if second one of the same type is added to the daily menu - so for a specific type of item (curry, gravy, beverage) if there is an item of that type, it will be defualt, if there is more than one then default needs to be picked
+
+------------- generated trip sheet should be stored per day
+------------- trip sheet is also seperate for BLD and CONDIMENTS and split amounts also as bld
+------------- order status types
+
+------------- footer
+
+
+---------- switch to customer view in the admin pages should go to the v2 customer view
+
+---------- in the customer v2 pages, the profile photo shuold be changed to initials for now..
+
+---------- remove unecessary stuff in the cards
+
+---------- make the condiment card look the same as the menu items and give a view all link just like view todays menu for that section as well
+
+---
+mobile:
+---------- put the tab group bldc from order page, and remove order page and replace it with order history (filtered by today)
+

@@ -1,27 +1,31 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { http } from "@/lib/http";
 import { useRouter } from "next/navigation";
 import { format as formatDate } from "date-fns";
 import { ShoppingCart, Minus, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { getSupportedMeals } from "@/config/cities";
 
 type MealType = "breakfast" | "lunch" | "dinner" | "condiments";
 
 interface MenuItem {
   menu_item_id?: number;
-  item_id: number;
+  item_id?: number | null;
+  combo_id?: number | null;
   item_name: string;
   category_id: number | null;
-  planned_qty: number;
+  max_qty: number;
   available_qty: number;
   rate: number;
   is_default: boolean;
   sort_order: number;
   picture_url?: string | null; // ✅ added for thumbnails
+  item_max_qty?: number | null;
 }
 
 interface MenuSectionResponse {
@@ -30,7 +34,6 @@ interface MenuSectionResponse {
   items: MenuItem[];
 }
 
-const MEALS: MealType[] = ["breakfast", "lunch", "dinner", "condiments"];
 const DINNER_CUTOFF_HOUR = 18; // 6 PM local time
 
 type CartContext = {
@@ -38,18 +41,32 @@ type CartContext = {
   confirmedDateISO: string | null;
 };
 
+type CartLine = {
+  meal: MealType;
+  item_id?: number | null;
+  combo_id?: number | null;
+  menu_item_id?: number;
+  item_name: string;
+  qty: number;
+  rate: number;
+};
+
 type CustomerDailyMenuProps = {
   onCartChange?: (cart: CartLine[], context: CartContext) => void;
   refreshSignal?: number;
   resetCartSignal?: number;
+  cityCode?: string;
 };
 
 export default function CustomerDailyMenu({
   onCartChange,
   refreshSignal,
   resetCartSignal,
+  cityCode = "MYS",
 }: CustomerDailyMenuProps = {}) {
   const router = useRouter();
+  const availableMeals = useMemo(() => getSupportedMeals(cityCode), [cityCode]);
+  const availableMealsKey = useMemo(() => availableMeals.join(","), [availableMeals]);
 
   // Date state
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -62,9 +79,7 @@ export default function CustomerDailyMenu({
     dinner: [],
     condiments: [],
   });
-  const [isReleasedByMeal, setIsReleasedByMeal] = useState<
-    Record<MealType, boolean>
-  >({
+  const [isReleasedByMeal, setIsReleasedByMeal] = useState<Record<MealType, boolean>>({
     breakfast: false,
     lunch: false,
     dinner: false,
@@ -73,23 +88,11 @@ export default function CustomerDailyMenu({
   const [loading, setLoading] = useState(false);
 
   // Cart
-  type CartLine = {
-    meal: MealType;
-    item_id: number;
-    menu_item_id?: number;
-    item_name: string;
-    qty: number;
-    rate: number;
-  };
   const [cart, setCart] = useState<CartLine[]>([]);
-  const subtotal = useMemo(
-    () => cart.reduce((sum, l) => sum + l.qty * l.rate, 0),
-    [cart]
-  );
+  const subtotal = useMemo(() => cart.reduce((sum, l) => sum + l.qty * l.rate, 0), [cart]);
 
   // Helpers
-  const startOfDay = (d: Date) =>
-    new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
   const today = () => startOfDay(new Date());
   const tomorrow = () => {
     const d = new Date();
@@ -99,14 +102,19 @@ export default function CustomerDailyMenu({
   const formatISODate = (d: Date) => formatDate(d, "yyyy-MM-dd");
   const inr = (n: number) => `₹${n.toFixed(2)}`;
   const fmtBtnDate = (d: Date) => formatDate(d, "EEE, MMM d"); // e.g., Tue, Oct 8
+  const normalizeQty = (value: unknown): number => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+    return Math.floor(parsed);
+  };
 
   // Default: before 6 PM => today; else tomorrow
   useEffect(() => {
     const now = new Date();
-    const defaultDate =
-      now.getHours() >= DINNER_CUTOFF_HOUR ? tomorrow() : today();
+    const defaultDate = now.getHours() >= DINNER_CUTOFF_HOUR ? tomorrow() : today();
     setSelectedDate(defaultDate);
     setConfirmedDate(defaultDate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Fetch released menus for the confirmed date
@@ -120,28 +128,63 @@ export default function CustomerDailyMenu({
         const date = formatISODate(confirmedDate);
 
         await Promise.all(
-          MEALS.map(async (meal) => {
-            const url = new URL("http://localhost:8000/api/menu");
-            url.searchParams.set("date", date);
-            url.searchParams.set("bld_type", meal);
-            url.searchParams.set("period_type", "one_day");
+          availableMeals.map(async (meal) => {
+            try {
+              const params = new URLSearchParams({
+                bld_type: meal,
+                city_code: cityCode,
+                include_combos: "1",
+              });
+              if (meal === "condiments") {
+                params.set("menu_type", "CONDIMENTS");
+              } else {
+                params.set("date", date);
+                params.set("period_type", "one_day");
+                params.set("menu_type", "ONE_DAY");
+              }
 
-            const res = await fetch(url.toString());
-            if (res.status === 404) {
+              const res = await http.get(`/api/menu?${params}`);
+              if (res.status === 404) {
+                nextItems[meal] = [];
+                nextReleased[meal] = false;
+                return;
+              }
+              if (!res.ok) {
+                console.warn(`Failed to fetch ${meal}`, await res.text());
+                nextItems[meal] = [];
+                nextReleased[meal] = false;
+                return;
+              }
+
+              const data: MenuSectionResponse = await res.json();
+              const releasedFlag = !!data.is_released;
+              nextReleased[meal] = releasedFlag;
+
+              if (!releasedFlag) {
+                nextItems[meal] = [];
+                return;
+              }
+
+              nextItems[meal] = (data.items ?? []).map((it: any) => {
+                const dailyMax = normalizeQty(it.max_qty);
+                const fallbackAvailable =
+                  it.available_qty !== undefined && it.available_qty !== null
+                    ? it.available_qty
+                    : it.max_qty;
+                return {
+                  ...it,
+                  max_qty: dailyMax,
+                  available_qty: normalizeQty(fallbackAvailable),
+                  picture_url: it.picture_url ?? null,
+                  item_max_qty: normalizeQty(it.item_max_qty),
+                };
+              });
+            } catch (mealError) {
+              console.warn(`Failed to fetch ${meal}`, mealError);
               nextItems[meal] = [];
               nextReleased[meal] = false;
-              return;
             }
-            if (!res.ok) throw new Error(`Failed to fetch ${meal}`);
-
-            const data: MenuSectionResponse = await res.json();
-            // ✅ keep picture_url if backend returns it
-            nextItems[meal] = (data.items ?? []).map((it: any) => ({
-              ...it,
-              picture_url: it.picture_url ?? null,
-            }));
-            nextReleased[meal] = data.is_released ?? false;
-          })
+          }),
         );
 
         setItemsByMeal({
@@ -178,7 +221,8 @@ export default function CustomerDailyMenu({
       }
     };
     run();
-  }, [confirmedDate, refreshSignal]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [confirmedDate, refreshSignal, availableMealsKey, cityCode]);
 
   useEffect(() => {
     if (resetCartSignal === undefined) return;
@@ -198,46 +242,48 @@ export default function CustomerDailyMenu({
   }, [cart, confirmedDate, onCartChange]);
 
   // Cart ops
-  const qtyInCart = (meal: MealType, item_id: number) =>
-    cart.find((l) => l.meal === meal && l.item_id === item_id)?.qty ?? 0;
+  const qtyInCart = (meal: MealType, menu_item_id?: number) =>
+    cart.find((l) => l.meal === meal && l.menu_item_id === menu_item_id)?.qty ?? 0;
+
+  const getLimit = (item: MenuItem) => Math.max(0, Number(item.available_qty ?? 0));
 
   const canAdd = (meal: MealType, item: MenuItem) => {
-    const line = cart.find(
-      (l) => l.meal === meal && l.item_id === item.item_id
-    );
+    const limit = getLimit(item);
+    if (limit <= 0) return false;
+    const line = cart.find((l) => l.meal === meal && l.menu_item_id === item.menu_item_id);
     const already = line?.qty ?? 0;
-    return already < item.available_qty;
+    return already < limit;
   };
 
   const addOne = (meal: MealType, item: MenuItem) => {
+    const limit = getLimit(item);
+    if (limit <= 0) return;
     if (!canAdd(meal, item)) return;
     setCart((prev) => {
-      const i = prev.findIndex(
-        (l) => l.meal === meal && l.item_id === item.item_id
-      );
+      const i = prev.findIndex((l) => l.meal === meal && l.menu_item_id === item.menu_item_id);
       if (i === -1)
         return [
           ...prev,
           {
             meal,
             item_id: item.item_id,
+            combo_id: item.combo_id,
             menu_item_id: item.menu_item_id,
             item_name: item.item_name,
-            qty: 1,
+            qty: Math.min(1, limit),
             rate: item.rate,
           },
         ];
       const copy = [...prev];
-      copy[i] = { ...copy[i], qty: copy[i].qty + 1 };
+      const nextQty = Math.min(copy[i].qty + 1, limit);
+      copy[i] = { ...copy[i], qty: nextQty };
       return copy;
     });
   };
 
   const removeOne = (meal: MealType, item: MenuItem) => {
     setCart((prev) => {
-      const i = prev.findIndex(
-        (l) => l.meal === meal && l.item_id === item.item_id
-      );
+      const i = prev.findIndex((l) => l.meal === meal && l.menu_item_id === item.menu_item_id);
       if (i === -1) return prev;
       const copy = [...prev];
       const newQty = copy[i].qty - 1;
@@ -247,8 +293,7 @@ export default function CustomerDailyMenu({
     });
   };
 
-  const todayD = today();
-  const tomorrowD = tomorrow();
+  const orderingLabel = confirmedDate ? formatDate(confirmedDate, "do MMMM") : null;
 
   return (
     <div className="relative w-full max-w-6xl p-4 sm:p-6 pb-40">
@@ -256,8 +301,7 @@ export default function CustomerDailyMenu({
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <Button
           variant={
-            selectedDate &&
-            formatISODate(selectedDate) === formatISODate(today())
+            selectedDate && formatISODate(selectedDate) === formatISODate(today())
               ? "default"
               : "outline"
           }
@@ -272,8 +316,7 @@ export default function CustomerDailyMenu({
 
         <Button
           variant={
-            selectedDate &&
-            formatISODate(selectedDate) === formatISODate(tomorrow())
+            selectedDate && formatISODate(selectedDate) === formatISODate(tomorrow())
               ? "default"
               : "outline"
           }
@@ -289,15 +332,18 @@ export default function CustomerDailyMenu({
         {/* Selected date shown next to the buttons */}
         <span className="text-sm text-muted-foreground">
           Selected Date:&nbsp;
-          <span className="font-medium">
-            {confirmedDate ? formatDate(confirmedDate, "EEE, MMM d") : "—"}
-          </span>
+          <span className="font-medium">{confirmedDate ? fmtBtnDate(confirmedDate) : "—"}</span>
         </span>
+        {orderingLabel && (
+          <span className="text-sm font-semibold text-muted-foreground/80">
+            Ordering for: {orderingLabel}
+          </span>
+        )}
       </div>
 
       {/* Sections */}
       <div className="space-y-8">
-        {MEALS.map((meal) => {
+        {availableMeals.map((meal) => {
           const items = itemsByMeal[meal] ?? [];
           const released = isReleasedByMeal[meal];
           const visibleItems = released ? items : [];
@@ -305,7 +351,9 @@ export default function CustomerDailyMenu({
           return (
             <section key={meal}>
               <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-xl font-semibold capitalize">{meal}</h2>
+                <h2 className="text-xl font-semibold capitalize">
+                  {meal === "condiments" ? "Condiments · Till stocks last" : meal}
+                </h2>
                 {!released && (
                   <Badge variant="outline" className="text-xs">
                     Not released yet
@@ -314,25 +362,23 @@ export default function CustomerDailyMenu({
               </div>
 
               {loading ? (
-                <div className="text-sm text-muted-foreground">
-                  Loading {meal}…
-                </div>
+                <div className="text-sm text-muted-foreground">Loading {meal}…</div>
               ) : visibleItems.length === 0 ? (
                 <div className="text-sm text-muted-foreground">
-                  No items for {meal}.
+                  No items for {meal === "condiments" ? "condiments" : meal}.
                 </div>
               ) : (
                 <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                   {visibleItems.map((it) => {
-                    const qty = qtyInCart(meal, it.item_id);
-                    const soldOut = it.available_qty <= 0;
+                    const qty = qtyInCart(meal, it.menu_item_id);
+                    const limit = getLimit(it);
+                    const soldOut = limit <= 0;
+                    const reachedLimit = limit > 0 && qty >= limit;
                     return (
                       <Card
-                        key={`${meal}-${it.item_id}`}
+                        key={`${meal}-${it.menu_item_id}`}
                         className={
-                          soldOut
-                            ? "overflow-hidden bg-muted/70 border-dashed"
-                            : "overflow-hidden"
+                          soldOut ? "overflow-hidden bg-muted/70 border-dashed" : "overflow-hidden"
                         }
                         aria-disabled={soldOut}
                       >
@@ -358,13 +404,13 @@ export default function CustomerDailyMenu({
                               : "",
                           ].join(" ")}
                         >
-                          {/* Left thumbnail */}
-            <img
-              src={it.picture_url || "/images/menu/idli-sambar.jpg"}
-              alt={it.item_name}
-              className="h-16 w-16 rounded-lg object-cover flex-shrink-0"
-              loading="lazy"
-            />
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={it.picture_url || "/images/menu/idli-sambar.jpg"}
+                            alt={it.item_name}
+                            className="h-16 w-16 rounded-lg object-cover flex-shrink-0"
+                            loading="lazy"
+                          />
 
                           {/* Middle info */}
                           <div className="min-w-0 flex-1 self-start">
@@ -377,10 +423,7 @@ export default function CustomerDailyMenu({
                             <div className="mt-1 text-xs min-h-[1.25rem]">
                               {soldOut ? (
                                 // keep-color => prevents our gray/opacity overrides from muting this
-                                <Badge
-                                  variant="destructive"
-                                  className="keep-color text-xs"
-                                >
+                                <Badge variant="destructive" className="keep-color text-xs">
                                   Sold out
                                 </Badge>
                               ) : (
@@ -411,22 +454,26 @@ export default function CustomerDailyMenu({
                                   <Minus className="h-4 w-4" />
                                 </Button>
 
-                                <div className="min-w-[2.5rem] text-center text-sm">
-                                  {qty}
-                                </div>
+                                <div className="min-w-[2.5rem] text-center text-sm">{qty}</div>
 
                                 <Button
                                   size="icon"
                                   variant="default"
                                   className="h-8 w-8"
                                   onClick={() => addOne(meal, it)}
-                                  disabled={!canAdd(meal, it)}
+                                  disabled={soldOut || reachedLimit}
                                   aria-label="increase"
                                 >
                                   <Plus className="h-4 w-4" />
                                 </Button>
                               </div>
                             )}
+                            {!soldOut && reachedLimit && (
+                              <span className="absolute top-3 right-3 text-xs font-medium text-muted-foreground">
+                                Max {limit}
+                              </span>
+                            )}
+                            {/* remaining indicator removed per request */}
                           </div>
                         </CardContent>
                       </Card>
@@ -447,18 +494,12 @@ export default function CustomerDailyMenu({
             <div className="flex items-center gap-2">
               <ShoppingCart className="h-5 w-5" />
               <div className="text-sm">
-                <span className="font-medium">
-                  {cart.reduce((a, l) => a + l.qty, 0)}
-                </span>{" "}
-                items • <span className="font-semibold">{inr(subtotal)}</span>
+                <span className="font-medium">{cart.reduce((a, l) => a + l.qty, 0)}</span> items •{" "}
+                <span className="font-semibold">{inr(subtotal)}</span>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setCart([])}
-                disabled={cart.length === 0}
-              >
+              <Button variant="outline" onClick={() => setCart([])} disabled={cart.length === 0}>
                 Clear
               </Button>
               <Button onClick={() => router.push("/cart")}>Place Order</Button>

@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Customer Registration - Kuteera Kitchen</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Playfair+Display:wght@700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#8D4925",
+                        "background-light": "#fdfaf1",
+                        "background-dark": "#1a1614",
+                        secondary: "#D97706",
+                    },
+                    fontFamily: {
+                        display: ["Plus Jakarta Sans", "sans-serif"],
+                        serif: ["Playfair Display", "serif"],
+                    },
+                    borderRadius: {
+                        DEFAULT: "16px",
+                    },
+                },
+            },
+        };
+    </script>
+<style>body {
+    font-family: "Plus Jakarta Sans", sans-serif
+    }
+.map-container {
+    aspect-ratio: 16/7;
+    background-image: url(https://lh3.googleusercontent.com/aida-public/AB6AXuDqYm9TrdmL4XrplAYIwVrwyw4Z0XuCGtTw2rwXiyP5-NlzExDaPbDK7Ls0Fth1sUl5XfMI1i-ZhpGDA47EcTo7uR5UPF-crmK2RD6-bp20jKG2wpmMdrepu0xyUxUEnFdX_a7XSY5RYXHaaZQqOx1MIYPWv2mf3ydIlk1B9XO3M_8eZewOYX0rtPcj_7XqB4Yl1Wz9FAhcgmYpYeQbkuz0eEDaihYHnEzrx0z9ygMo_dQSu0N6d0lYRhmpHeEdLVsjOro3tWoub8Bk);
+    background-size: cover;
+    background-position: center
+    }</style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-gray-900 dark:text-gray-100 min-h-screen transition-colors duration-300">
+<header class="border-b border-orange-100 dark:border-gray-800 bg-white dark:bg-black/20 sticky top-0 z-50">
+<div class="max-w-5xl mx-auto px-6 py-4 flex justify-between items-center">
+<div class="flex items-center gap-2">
+<div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center text-white">
+<span class="material-icons-outlined">restaurant</span>
+</div>
+<span class="text-xl font-extrabold font-serif text-primary tracking-tight">Kuteera Kitchen</span>
+</div>
+<nav class="hidden md:flex items-center gap-8 text-sm font-medium">
+<a class="hover:text-primary transition-colors" href="#">Menu</a>
+<a class="hover:text-primary transition-colors" href="#">Subscriptions</a>
+<a class="hover:text-primary transition-colors" href="#">About Us</a>
+<button class="p-2 rounded-full hover:bg-orange-50 dark:hover:bg-gray-800 transition-colors" onclick="document.documentElement.classList.toggle('dark')">
+<span class="material-icons-outlined text-gray-600 dark:text-gray-400">dark_mode</span>
+</button>
+</nav>
+</div>
+</header>
+<main class="max-w-4xl mx-auto px-6 py-12">
+<div class="mb-10">
+<h1 class="text-4xl font-serif font-bold text-gray-900 dark:text-white mb-2">Customer Registration</h1>
+<p class="text-gray-600 dark:text-gray-400">Join our community for healthy, home-cooked South Indian meals delivered to your doorstep.</p>
+</div>
+<div class="bg-white dark:bg-gray-900 border border-orange-100 dark:border-gray-800 rounded-2xl shadow-sm p-8 md:p-12">
+<form action="#" class="space-y-12">
+<section>
+<div class="flex items-center gap-3 mb-6">
+<span class="material-icons-outlined text-primary">person</span>
+<h2 class="text-xl font-bold">Personal Information</h2>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<div class="space-y-2">
+<label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">Customer Name <span class="text-red-500">*</span></label>
+<input class="w-full px-4 py-3 rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:ring-primary focus:border-primary" placeholder="Enter your full name" type="text"/>
+</div>
+<div class="space-y-2">
+<label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">Referred By (Optional)</label>
+<input class="w-full px-4 py-3 rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:ring-primary focus:border-primary" placeholder="Friend or Family name" type="text"/>
+</div>
+<div class="space-y-2">
+<label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">Primary Mobile <span class="text-red-500">*</span></label>
+<div class="flex">
+<span class="inline-flex items-center px-4 rounded-l-xl border border-r-0 border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-700 text-gray-500 font-medium">+91</span>
+<input class="w-full px-4 py-3 rounded-r-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:ring-primary focus:border-primary" placeholder="10 digit mobile number" type="tel"/>
+</div>
+</div>
+<div class="space-y-2">
+<label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">Alternative Mobile (Optional)</label>
+<div class="flex">
+<span class="inline-flex items-center px-4 rounded-l-xl border border-r-0 border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-700 text-gray-500 font-medium">+91</span>
+<input class="w-full px-4 py-3 rounded-r-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:ring-primary focus:border-primary" placeholder="Alternative contact" type="tel"/>
+</div>
+</div>
+</div>
+</section>
+<hr class="border-gray-100 dark:border-gray-800"/>
+<section>
+<div class="flex items-center gap-3 mb-6">
+<span class="material-icons-outlined text-primary">local_shipping</span>
+<h2 class="text-xl font-bold">Delivery Information</h2>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<div class="space-y-2">
+<label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">Deliver To / Food Receiver Name <span class="text-red-500">*</span></label>
+<input class="w-full px-4 py-3 rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:ring-primary focus:border-primary" placeholder="Name of person receiving food" type="text"/>
+</div>
+<div class="space-y-2">
+<label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">Address Type</label>
+<select class="w-full px-4 py-3 rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:ring-primary focus:border-primary">
+<option>Select address type</option>
+<option>Home</option>
+<option>Work / Office</option>
+<option>Other</option>
+</select>
+</div>
+</div>
+</section>
+<hr class="border-gray-100 dark:border-gray-800"/>
+<section>
+<div class="flex items-center gap-3 mb-6">
+<span class="material-icons-outlined text-primary">place</span>
+<h2 class="text-xl font-bold">Address Details</h2>
+</div>
+<div class="space-y-6">
+<div class="space-y-2">
+<label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">House / Apartment Name <span class="text-red-500">*</span></label>
+<input class="w-full px-4 py-3 rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:ring-primary focus:border-primary" placeholder="e.g. Flat 101, Sunshine Apartments" type="text"/>
+</div>
+<div class="space-y-2">
+<label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">Full Address <span class="text-red-500">*</span></label>
+<textarea class="w-full px-4 py-3 rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:ring-primary focus:border-primary" placeholder="Enter complete address details" rows="3"></textarea>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<div class="space-y-2">
+<label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">City <span class="text-red-500">*</span></label>
+<select class="w-full px-4 py-3 rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:ring-primary focus:border-primary">
+<option>Select city</option>
+<option>Bengaluru</option>
+<option>Mysuru</option>
+<option>Mangaluru</option>
+</select>
+</div>
+<div class="space-y-2">
+<label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">Pin Code <span class="text-red-500">*</span></label>
+<input class="w-full px-4 py-3 rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:ring-primary focus:border-primary" placeholder="6 digit code" type="text"/>
+</div>
+</div>
+<div class="space-y-3">
+<label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">Pin Google Maps Location</label>
+<div class="relative">
+<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+<span class="material-icons-outlined text-gray-400">search</span>
+</div>
+<input class="w-full pl-11 pr-4 py-3 rounded-t-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:ring-primary focus:border-primary" placeholder="Search for your location on map..." type="text"/>
+</div>
+<div class="map-container rounded-b-xl relative overflow-hidden ring-1 ring-gray-200 dark:ring-gray-700">
+<div class="absolute inset-0 bg-black/10 flex items-center justify-center">
+<div class="bg-white/95 dark:bg-gray-900/95 p-6 rounded-2xl shadow-xl max-w-xs text-center border border-orange-100 dark:border-gray-700">
+<div class="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+<span class="material-icons-outlined text-primary">map</span>
+</div>
+<h3 class="font-bold mb-2">Google Maps</h3>
+<p class="text-xs text-gray-500 mb-4">Please enable location services or search for your exact building to help our riders.</p>
+<button class="bg-primary text-white px-6 py-2 rounded-lg text-sm font-bold hover:bg-opacity-90 transition-all" type="button">Enable Location</button>
+</div>
+</div>
+<div class="absolute top-4 right-4 space-y-2">
+<div class="bg-white dark:bg-gray-800 p-2 shadow-md rounded-md flex flex-col gap-2">
+<span class="material-icons-outlined text-sm cursor-pointer">add</span>
+<hr class="border-gray-100 dark:border-gray-700"/>
+<span class="material-icons-outlined text-sm cursor-pointer">remove</span>
+</div>
+<div class="bg-white dark:bg-gray-800 p-2 shadow-md rounded-md cursor-pointer">
+<span class="material-icons-outlined text-sm">my_location</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<hr class="border-gray-100 dark:border-gray-800"/>
+<section>
+<div class="flex items-center gap-3 mb-6">
+<span class="material-icons-outlined text-primary">alternate_email</span>
+<h2 class="text-xl font-bold">Email Information</h2>
+</div>
+<div class="space-y-4">
+<div class="space-y-2">
+<label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">Email Address (Optional)</label>
+<input class="w-full px-4 py-3 rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:ring-primary focus:border-primary" placeholder="example@email.com" type="email"/>
+</div>
+<div class="flex items-start gap-2 text-xs text-gray-500 dark:text-gray-400">
+<span class="material-icons-outlined text-[16px] mt-0.5">info</span>
+<p>Payment receipts and subscription updates will be sent to this email address if provided.</p>
+</div>
+</div>
+</section>
+<div class="pt-6 flex flex-col md:flex-row gap-4 items-center">
+<button class="w-full md:w-auto px-10 py-4 bg-primary text-white rounded-xl font-bold text-lg hover:shadow-lg hover:shadow-primary/20 transition-all transform hover:-translate-y-0.5 active:translate-y-0" type="submit">
+                        Register Account
+                    </button>
+<button class="w-full md:w-auto px-10 py-4 border-2 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 rounded-xl font-bold text-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-all" type="button">
+                        Cancel
+                    </button>
+<p class="md:ml-auto text-xs text-gray-400 max-w-[200px] text-center md:text-right">
+                        By registering, you agree to our Terms of Service and Privacy Policy.
+                    </p>
+</div>
+</form>
+</div>
+<footer class="mt-16 text-center space-y-4 pb-12">
+<div class="flex justify-center items-center gap-6 grayscale opacity-50">
+<div class="flex items-center gap-1">
+<span class="material-icons-outlined text-lg">verified_user</span>
+<span class="text-xs font-bold uppercase tracking-widest">Secure Payment</span>
+</div>
+<div class="flex items-center gap-1">
+<span class="material-icons-outlined text-lg">eco</span>
+<span class="text-xs font-bold uppercase tracking-widest">Fresh &amp; Organic</span>
+</div>
+</div>
+<p class="text-sm text-gray-500">© 2024 Kuteera Kitchen. All rights reserved.</p>
+</footer>
+</main>
+
+</body></html>

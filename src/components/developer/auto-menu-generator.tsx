@@ -4,9 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { format, isToday, isTomorrow } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import {
   Table,
   TableBody,
@@ -36,23 +34,14 @@ type AutoMenuResponse = {
 
 const MEAL_ORDER = ["Breakfast", "Lunch", "Dinner"] as const;
 
-const DEFAULT_PLANNED = {
-  Breakfast: 50,
-  Lunch: 80,
-  Dinner: 60,
-};
-
 export function AutoMenuGenerator() {
   const { toast: pushToast } = useToast();
-  const isAdmin = useAuthStore((state) => state.isAdmin);
+  const hasDeveloperAccess = useAuthStore((state) => state.hasRole("developer"));
   const [hydrated, setHydrated] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     return today;
-  });
-  const [plannedQty, setPlannedQty] = useState<Record<string, number>>({
-    ...DEFAULT_PLANNED,
   });
   const [loading, setLoading] = useState(false);
   const [clearLoading, setClearLoading] = useState(false);
@@ -73,7 +62,7 @@ export function AutoMenuGenerator() {
     return null;
   }
 
-  if (!isAdmin) {
+  if (!hasDeveloperAccess) {
     return (
       <div className="space-y-6">
         <Card>
@@ -81,7 +70,7 @@ export function AutoMenuGenerator() {
             <CardTitle>Developer Access Required</CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
-            You must be an administrator to run the one-click menu setup tool.
+            You need the developer role to run the one-click menu setup tool.
           </CardContent>
         </Card>
       </div>
@@ -92,13 +81,9 @@ export function AutoMenuGenerator() {
     setLoading(true);
     setResult(null);
     try {
-      const payload = {
+      const response = await http.post("/api/dev/daily-menu/auto", {
         date: formattedDate,
-        breakfast_planned_qty: plannedQty.Breakfast ?? 0,
-        lunch_planned_qty: plannedQty.Lunch ?? 0,
-        dinner_planned_qty: plannedQty.Dinner ?? 0,
-      };
-      const response = await http.post("/api/dev/daily-menu/auto", payload);
+      });
       const body = await response.json();
       if (!response.ok) {
         const detail =
@@ -139,7 +124,6 @@ export function AutoMenuGenerator() {
             : "Failed to clear menus for the selected date.";
         throw new Error(detail);
       }
-      setPlannedQty({ ...DEFAULT_PLANNED });
       setResult(body as AutoMenuResponse);
       pushToast({
         title: "Menus cleared",
@@ -164,7 +148,7 @@ export function AutoMenuGenerator() {
           <CardTitle>One-Click Daily Menu Setup</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label className="text-sm font-medium text-muted-foreground">
                 Menu date
@@ -207,30 +191,13 @@ export function AutoMenuGenerator() {
                 </div>
               </div>
             </div>
-            <div className="grid gap-2 md:grid-cols-3">
-              {MEAL_ORDER.map((meal) => (
-                <div key={meal} className="space-y-2">
-                  <Label className="text-sm font-medium text-muted-foreground">
-                    {meal} planned qty
-                  </Label>
-                  <Input
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    value={plannedQty[meal]}
-                    onChange={(event) => {
-                      const nextValue = Number.parseInt(event.target.value, 10);
-                      setPlannedQty((prev) => ({
-                        ...prev,
-                        [meal]: Number.isNaN(nextValue) ? 0 : nextValue,
-                      }));
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
+            <p className="text-sm text-muted-foreground">
+              Quantities are pulled automatically from each item&apos;s catalog
+              meal-specific max (e.g.
+              <code className="mx-1 rounded bg-muted px-1 py-0.5 text-xs">max_qty_breakfast</code>
+              ) so you no longer need to provide manual caps here.
+            </p>
           </div>
-          <Separator />
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <p className="text-sm text-muted-foreground">
               Generates menus for Breakfast, Lunch, and Dinner using catalog

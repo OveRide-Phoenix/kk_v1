@@ -1,0 +1,1045 @@
+"""Orders router: customer order creation, quote, and admin order management."""
+
+from __future__ import annotations
+
+import csv
+import io
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+import mysql.connector
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
+
+from ..db import get_raw_db
+from ..utils.auth_deps import admin_required
+from ..utils.helpers import (
+    ORDER_STATUS_CONFIRMED,
+    _format_datetime,
+    _parse_optional_date,
+    _resolve_city_context,
+    normalize_meal_type,
+    normalize_status_for_response,
+    normalize_order_status,
+    payment_status_label,
+)
+
+router = APIRouter()
+
+
+# ---------------------------------------------------------------------------
+# Pydantic models
+# ---------------------------------------------------------------------------
+
+
+class OrderItemPayload(BaseModel):
+    """Payload for a single item line in an order."""
+
+    item_id: Optional[int] = None
+    combo_id: Optional[int] = None
+    quantity: int
+    price: float
+    menu_item_id: Optional[int] = None
+    meal_type: Optional[str] = None
+
+
+class CreateOrderPayload(BaseModel):
+    """Payload for creating a new customer order."""
+
+    customer_id: int
+    address_id: Optional[int] = None
+    payment_method: str
+    items: List[OrderItemPayload]
+    delivery_date: Optional[str] = None
+    order_type: Optional[str] = None
+    discount_code: Optional[str] = None
+    coupon_codes: Optional[List[str]] = None
+
+    def effective_discount_code(self) -> Optional[str]:
+        """Return the submitted discount code, including legacy coupon payloads.
+
+        Returns:
+            Normalized discount code string or None.
+        """
+        if self.discount_code:
+            return self.discount_code
+        if self.coupon_codes:
+            return self.coupon_codes[0]
+        return None
+
+
+class OrderQuotePayload(BaseModel):
+    """Payload for getting a price quote before placing an order."""
+
+    items: List[OrderItemPayload]
+    discount_code: Optional[str] = None
+    coupon_codes: Optional[List[str]] = None
+
+    def effective_discount_code(self) -> Optional[str]:
+        """Return the submitted discount code, including legacy coupon payloads.
+
+        Returns:
+            Normalized discount code string or None.
+        """
+        if self.discount_code:
+            return self.discount_code
+        if self.coupon_codes:
+            return self.coupon_codes[0]
+        return None
+
+
+class OrderStatusUpdate(BaseModel):
+    """Payload for updating an order's status."""
+
+    status: str = Field(..., min_length=1, max_length=50)
+
+
+class OrderPaymentUpdate(BaseModel):
+    """Payload for updating an order's payment state."""
+
+    paid: bool
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+
+def _load_discount_code(cursor, code_str: Optional[str]) -> Optional[Dict[str, Any]]:
+    """Validate a discount code and return it with its conditions.
+
+    Args:
+        cursor: DB cursor.
+        code_str: The code string the customer entered.
+
+    Returns:
+        Dict with code row + 'conditions' list, or None if no code provided.
+
+    Raises:
+        HTTPException 400 if code is invalid, expired, inactive, or exhausted.
+    """
+    if not code_str:
+        return None
+    normalized = code_str.strip().upper()
+    if not normalized:
+        return None
+
+    cursor.execute(
+        "SELECT * FROM discount_codes "
+        "WHERE code = %s AND is_active = 1 "
+        "AND from_date <= CURDATE() AND (to_date IS NULL OR to_date >= CURDATE())",
+        (normalized,),
+    )
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid or expired discount code: {normalized}"
+        )
+
+    if row["max_uses"] is not None and row["use_count"] >= row["max_uses"]:
+        raise HTTPException(
+            status_code=400, detail=f"Discount code {normalized} has reached its usage limit"
+        )
+
+    cursor.execute(
+        "SELECT * FROM discount_code_conditions WHERE code_id = %s",
+        (row["code_id"],),
+    )
+    row["conditions"] = cursor.fetchall() or []
+    return row
+
+
+def _item_matches_code(
+    cursor,
+    item: "OrderItemPayload",
+    code: Dict[str, Any],
+) -> bool:
+    """Check whether an order item qualifies for the discount code.
+
+    A code with no conditions applies to all items (global).
+    Otherwise any single matching condition fires the discount (OR logic).
+
+    Args:
+        cursor: DB cursor.
+        item: The order item being evaluated.
+        code: Discount code dict with nested conditions list.
+
+    Returns:
+        True if the discount should apply to this item.
+    """
+    conditions = code.get("conditions") or []
+    if not conditions:
+        return True  # no conditions = global
+
+    item_id = item.item_id
+    meal_type = (item.meal_type or "").lower()
+
+    # Lazy-fetch category_id only if a category condition exists
+    category_id: Optional[int] = None
+    needs_category = any(c["dimension"] == "category" for c in conditions)
+    if needs_category and item_id is not None:
+        cursor.execute("SELECT category_id FROM items WHERE item_id = %s LIMIT 1", (item_id,))
+        r = cursor.fetchone()
+        category_id = r["category_id"] if r else None
+
+    for cond in conditions:
+        dim = cond["dimension"]
+        if dim == "global":
+            return True
+        if dim == "item" and item_id is not None and cond["entity_id"] == item_id:
+            return True
+        if dim == "category" and category_id is not None and cond["entity_id"] == category_id:
+            return True
+        if dim == "meal_type" and meal_type and (cond["entity_label"] or "").lower() == meal_type:
+            return True
+    return False
+
+
+def _load_tax_amounts(cursor, discounted_subtotal: float) -> tuple[float, float]:
+    """Load CGST and SGST tax percentages and compute tax amounts.
+
+    Args:
+        cursor: DB cursor.
+        discounted_subtotal: Subtotal after discount applied.
+
+    Returns:
+        Tuple of (cgst_amount, sgst_amount).
+    """
+    cursor.execute(
+        """
+        SELECT constant_code, constant_value
+          FROM constants
+         WHERE constant_type = 'tax'
+           AND is_active = 1
+        """
+    )
+    cgst_percent = 0.0
+    sgst_percent = 0.0
+    for row in cursor.fetchall() or []:
+        if isinstance(row, dict):
+            code = row.get("constant_code")
+            value = row.get("constant_value")
+        else:
+            code, value = row
+        normalized = str(code or "").strip().upper()
+        percent = float(value or 0)
+        if normalized == "CGST":
+            cgst_percent += percent
+        elif normalized == "SGST":
+            sgst_percent += percent
+    cgst_amount = (discounted_subtotal * cgst_percent) / 100.0
+    sgst_amount = (discounted_subtotal * sgst_percent) / 100.0
+    return cgst_amount, sgst_amount
+
+
+def _resolve_original_price(cursor, item: "OrderItemPayload") -> float:
+    """Resolve the full (undiscounted) unit price for an order item from menu_items.rate.
+
+    Args:
+        cursor: DB cursor.
+        item: Order item payload.
+
+    Returns:
+        Full unit price (never discounted — menus always carry undiscounted rates).
+    """
+    if item.menu_item_id is not None:
+        cursor.execute(
+            "SELECT rate FROM menu_items WHERE menu_item_id = %s",
+            (item.menu_item_id,),
+        )
+        row = cursor.fetchone()
+        if row:
+            if isinstance(row, dict):
+                return float(row["rate"])
+            return float(row[0])
+    return item.price
+
+
+def _compute_order_totals(
+    cursor, items: List[OrderItemPayload], discount_code: Optional[str]
+) -> Dict[str, Any]:
+    """Compute order totals with per-item discount code resolution.
+
+    Discounts are applied per item: only items matching the code's conditions
+    get the discount. Items that don't match pay full price.
+
+    Args:
+        cursor: DB cursor.
+        items: List of order item payloads.
+        discount_code: Optional discount code string entered by the customer.
+
+    Returns:
+        Dict with subtotal, discount, cgst, sgst, total_price, discount_code,
+        resolved_prices, original_prices, and applied_discount_pcts per item.
+    """
+    for index, item in enumerate(items):
+        has_item = item.item_id is not None
+        has_combo = item.combo_id is not None
+        # Item-group subscription lines carry only menu_item_id (no resolved item/combo yet)
+        is_group_line = not has_item and not has_combo and item.menu_item_id is not None
+        if not is_group_line and has_item == has_combo:
+            raise HTTPException(
+                status_code=400,
+                detail=f"items[{index}] must include exactly one of item_id or combo_id",
+            )
+
+    code = _load_discount_code(cursor, discount_code)
+    original_prices = [_resolve_original_price(cursor, item) for item in items]
+
+    resolved_prices: List[float] = []
+    applied_pcts: List[Optional[float]] = []
+    for original, item in zip(original_prices, items):
+        if code and _item_matches_code(cursor, item, code):
+            pct = float(code["discount_pct"])
+            resolved_prices.append(round(original * (1 - pct / 100), 2))
+            applied_pcts.append(pct)
+        else:
+            resolved_prices.append(original)
+            applied_pcts.append(None)
+
+    subtotal = sum(p * item.quantity for p, item in zip(original_prices, items))
+    discounted_subtotal = sum(p * item.quantity for p, item in zip(resolved_prices, items))
+    discount_amount = round(subtotal - discounted_subtotal, 2)
+
+    cgst_amount, sgst_amount = _load_tax_amounts(cursor, discounted_subtotal)
+    delivery_charge = 0.0
+    total_price = discounted_subtotal + cgst_amount + sgst_amount + delivery_charge
+    return {
+        "subtotal": round(subtotal, 2),
+        "discount": round(discount_amount, 2),
+        "cgst": round(cgst_amount, 2),
+        "sgst": round(sgst_amount, 2),
+        "delivery_charge": round(delivery_charge, 2),
+        "total_price": round(total_price, 2),
+        "discount_code": code["code"] if code else None,
+        "discount_code_id": code["code_id"] if code else None,
+        "resolved_prices": resolved_prices,
+        "original_prices": original_prices,
+        "applied_discount_pcts": applied_pcts,
+    }
+
+
+def _apply_order_filters(
+    base_where: List[str],
+    params: List,
+    status: Optional[str],
+    customer: Optional[str],
+    product: Optional[str],
+    meal_type: Optional[str],
+) -> None:
+    """Append WHERE clause fragments for admin order history filters.
+
+    Args:
+        base_where: Mutable list of WHERE clause strings to append to.
+        params: Mutable list of query params to append to.
+        status: Status string to filter by (or None for all).
+        customer: Customer name/phone substring to filter by.
+        product: Product name substring to filter by.
+        meal_type: Meal type string to filter by.
+    """
+    if status:
+        normalized = status.strip().lower()
+        if normalized and normalized != "all":
+            base_where.append("LOWER(REPLACE(COALESCE(o.status, ''), ' (Payment Due)', '')) = %s")
+            params.append(normalized)
+    if customer:
+        term = f"%{customer.strip()}%"
+        base_where.append("(c.name LIKE %s OR c.primary_mobile LIKE %s)")
+        params.extend([term, term])
+    if product:
+        term = f"%{product.strip()}%"
+        base_where.append("i.name LIKE %s")
+        params.append(term)
+    if meal_type:
+        normalized_meal = (meal_type or "").strip().lower()
+        if normalized_meal and normalized_meal != "all":
+            try:
+                canonical_meal = normalize_meal_type(meal_type)
+            except ValueError:
+                canonical_meal = meal_type.strip()
+            base_where.append("LOWER(COALESCE(oi.meal_type, '')) = %s")
+            params.append(canonical_meal.lower())
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.post("/api/orders/quote")
+def quote_order(payload: OrderQuotePayload) -> Dict[str, Any]:
+    """Return a price quote for a set of items without placing an order.
+
+    Args:
+        payload: Items and optional discount code to quote.
+
+    Returns:
+        Dict with subtotal, discount, cgst, sgst, total_price, discount_code, and per-item breakdown.
+    """
+    if not payload.items:
+        raise HTTPException(status_code=400, detail="Order must include at least one item")
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        totals = _compute_order_totals(cursor, payload.items, payload.effective_discount_code())
+        return totals
+    except mysql.connector.Error as err:
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@router.post("/api/orders/create")
+def create_order(payload: CreateOrderPayload) -> Dict[str, Any]:
+    """Place a new customer order.
+
+    Validates the customer's address, computes totals (with coupon and taxes),
+    inserts order and order_items, and decrements menu_item available_qty.
+
+    Args:
+        payload: Order creation payload with customer_id, address_id, items, etc.
+
+    Returns:
+        Dict with order_id, totals, coupon_codes, and status.
+    """
+    if not payload.items:
+        raise HTTPException(status_code=400, detail="Order must include at least one item")
+
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        address_id = payload.address_id if payload.address_id is not None else 0
+        cursor.execute(
+            "SELECT address_id FROM addresses WHERE address_id=%s AND customer_id=%s AND is_active=1 LIMIT 1",
+            (address_id, payload.customer_id),
+        )
+        if cursor.fetchone() is None:
+            cursor.execute(
+                "SELECT address_id FROM addresses WHERE customer_id=%s AND is_default=1 AND is_active=1 LIMIT 1",
+                (payload.customer_id,),
+            )
+            fallback = cursor.fetchone()
+            if fallback is None:
+                raise HTTPException(status_code=400, detail="No valid address found for customer")
+            address_id = fallback["address_id"]
+
+        totals = _compute_order_totals(cursor, payload.items, payload.effective_discount_code())
+
+        normalized_method = (payload.payment_method or "").strip()
+        paid_flag = 1 if normalized_method.lower() in {"upi", "card", "online"} else 0
+        initial_status = ORDER_STATUS_CONFIRMED
+        stored_status = initial_status
+
+        cursor.execute(
+            """
+            INSERT INTO orders (customer_id, address_id, total_price, payment_method, delivery_date,
+                                status, order_type, paid, discount, discount_code, cgst, sgst, delivery_charge)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                payload.customer_id,
+                address_id,
+                float(totals["total_price"]),
+                payload.payment_method,
+                payload.delivery_date,
+                stored_status,
+                payload.order_type or "one_time",
+                paid_flag,
+                float(totals["discount"]),
+                totals["discount_code"],
+                float(totals["cgst"]),
+                float(totals["sgst"]),
+                float(totals["delivery_charge"]),
+            ),
+        )
+        order_id = cursor.lastrowid
+
+        resolved_prices = totals["resolved_prices"]
+        original_prices = totals["original_prices"]
+        applied_pcts = totals["applied_discount_pcts"]
+        cursor.executemany(
+            """
+            INSERT INTO order_items
+                (order_id, item_id, combo_id, menu_item_id, meal_type, quantity,
+                 price, original_price, applied_discount_pct)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            [
+                (
+                    order_id,
+                    item.item_id,
+                    item.combo_id,
+                    item.menu_item_id,
+                    item.meal_type,
+                    item.quantity,
+                    resolved_prices[i],
+                    original_prices[i],
+                    applied_pcts[i],
+                )
+                for i, item in enumerate(payload.items)
+            ],
+        )
+
+        # Increment code use_count if a discount code was applied
+        if totals["discount_code_id"]:
+            cursor.execute(
+                "UPDATE discount_codes SET use_count = use_count + 1 WHERE code_id = %s",
+                (totals["discount_code_id"],),
+            )
+
+        for item in payload.items:
+            if item.menu_item_id is not None:
+                cursor.execute(
+                    "UPDATE menu_items SET available_qty = GREATEST(available_qty - %s, 0) WHERE menu_item_id = %s",
+                    (item.quantity, item.menu_item_id),
+                )
+
+        db.commit()
+
+        return {
+            "message": "Order placed successfully",
+            "order_id": order_id,
+            "total_price": float(totals["total_price"]),
+            "subtotal": float(totals["subtotal"]),
+            "discount": float(totals["discount"]),
+            "discount_code": totals["discount_code"],
+            "cgst": float(totals["cgst"]),
+            "sgst": float(totals["sgst"]),
+            "delivery_charge": float(totals["delivery_charge"]),
+            "status": initial_status,
+        }
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@router.get("/api/admin/orders/history")
+def admin_order_history(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    status: Optional[str] = None,
+    customer: Optional[str] = None,
+    product: Optional[str] = None,
+    meal_type: Optional[str] = None,
+    order_type: Optional[str] = None,
+    city_code: Optional[str] = Query(None, alias="city_code"),
+    limit: int = Query(10, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    export: Optional[str] = None,
+    user: Dict[str, Any] = Depends(admin_required),
+):
+    """Return paginated order history for admin, with optional CSV export.
+
+    Args:
+        start_date: Filter orders placed on or after this date (YYYY-MM-DD).
+        end_date: Filter orders placed on or before this date (YYYY-MM-DD).
+        status: Filter by order status string.
+        customer: Filter by customer name or phone substring.
+        product: Filter by product name substring.
+        meal_type: Filter by meal type (Breakfast/Lunch/Dinner/Condiments).
+        order_type: Filter by order type (one_time or subscription).
+        city_code: City to filter orders for.
+        limit: Page size (max 200).
+        offset: Pagination offset.
+        export: When set to "csv", returns a CSV file download.
+        user: Current admin user (injected).
+
+    Returns:
+        Dict with orders list and total count, or CSV response when export="csv".
+    """
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    _streaming = False
+    try:
+        resolved_city = _resolve_city_context(city_code, user)
+        where_clauses: List[str] = []
+        params: List = []
+
+        start_date_obj = _parse_optional_date(start_date)
+        end_date_obj = _parse_optional_date(end_date)
+        if start_date_obj and end_date_obj and start_date_obj > end_date_obj:
+            start_date_obj, end_date_obj = end_date_obj, start_date_obj
+
+        if start_date_obj:
+            where_clauses.append("o.created_at >= %s")
+            params.append(datetime.combine(start_date_obj, datetime.min.time()))
+        if end_date_obj:
+            where_clauses.append("o.created_at <= %s")
+            params.append(datetime.combine(end_date_obj, datetime.max.time()))
+
+        where_clauses.append("a.city_code = %s")
+        params.append(resolved_city)
+        _apply_order_filters(where_clauses, params, status, customer, product, meal_type)
+        normalized_order_type = (order_type or "").strip().lower()
+        if normalized_order_type and normalized_order_type != "all":
+            if normalized_order_type == "subscription":
+                where_clauses.append(
+                    "LOWER(COALESCE(o.order_type, 'one_time')) IN ('subscription', 'subscription_daily')"
+                )
+            elif normalized_order_type in {"one_time", "normal"}:
+                where_clauses.append(
+                    "LOWER(COALESCE(o.order_type, 'one_time')) NOT IN ('subscription', 'subscription_daily')"
+                )
+            else:
+                raise HTTPException(status_code=400, detail="Invalid order_type filter")
+        where_sql = " AND ".join(where_clauses)
+        where_fragment = f"WHERE {where_sql}" if where_sql else ""
+
+        count_query = f"""
+            SELECT COUNT(DISTINCT o.order_id) AS total
+              FROM orders o
+              JOIN customers c ON o.customer_id = c.customer_id
+              LEFT JOIN addresses a ON o.address_id = a.address_id
+              LEFT JOIN order_items oi ON o.order_id = oi.order_id
+              LEFT JOIN items i ON oi.item_id = i.item_id
+              LEFT JOIN combos co ON oi.combo_id = co.combo_id
+             {where_fragment}
+        """
+        cursor.execute(count_query, tuple(params))
+        total_row = cursor.fetchone() or {"total": 0}
+        total_orders = int(total_row.get("total") or 0)
+
+        data_query = f"""
+            SELECT
+                o.order_id,
+                o.created_at,
+                o.delivery_date,
+                o.total_price,
+                o.status,
+                o.paid,
+                o.payment_method,
+                COALESCE(o.order_type, 'one_time') AS order_type,
+                o.customer_id,
+                c.name AS customer_name,
+                c.primary_mobile,
+                c.email,
+                o.address_id,
+                a.written_address,
+                a.city,
+                a.pin_code,
+                COALESCE(SUM(oi.quantity), 0) AS item_count
+            FROM orders o
+            JOIN customers c ON o.customer_id = c.customer_id
+            LEFT JOIN addresses a ON o.address_id = a.address_id
+            LEFT JOIN order_items oi ON o.order_id = oi.order_id
+            LEFT JOIN items i ON oi.item_id = i.item_id
+            LEFT JOIN combos co ON oi.combo_id = co.combo_id
+            {where_fragment}
+            GROUP BY
+                o.order_id,
+                o.created_at,
+                o.delivery_date,
+                o.total_price,
+                o.status,
+                o.paid,
+                o.payment_method,
+                COALESCE(o.order_type, 'one_time'),
+                o.customer_id,
+                c.name,
+                c.primary_mobile,
+                c.email,
+                o.address_id,
+                a.written_address,
+                a.city,
+                a.pin_code
+            ORDER BY o.created_at DESC, o.order_id DESC
+        """
+
+        if export == "csv":
+            # Stream the CSV to avoid loading all rows into memory.
+            # Close the count cursor and open a new one for the streaming query.
+            cursor.close()
+            stream_cursor = db.cursor(dictionary=True)
+            stream_query = f"""
+                SELECT
+                    o.order_id,
+                    o.created_at,
+                    o.delivery_date,
+                    o.total_price,
+                    o.status,
+                    o.paid,
+                    o.payment_method,
+                    COALESCE(o.order_type, 'one_time') AS order_type,
+                    c.name AS customer_name,
+                    c.primary_mobile,
+                    COALESCE(i.name, co.combo_name) AS item_name,
+                    COALESCE(oi.quantity, 0) AS quantity,
+                    COALESCE(oi.price, 0.0) AS price,
+                    COALESCE(oi.quantity, 0) * COALESCE(oi.price, 0.0) AS line_total
+                FROM orders o
+                JOIN customers c ON o.customer_id = c.customer_id
+                LEFT JOIN addresses a ON o.address_id = a.address_id
+                LEFT JOIN order_items oi ON o.order_id = oi.order_id
+                LEFT JOIN items i ON oi.item_id = i.item_id
+                LEFT JOIN combos co ON oi.combo_id = co.combo_id
+                {where_fragment}
+                ORDER BY o.created_at DESC, o.order_id DESC,
+                         COALESCE(i.name, co.combo_name) ASC
+            """
+
+            def _generate_csv():
+                """Yield CSV rows in chunks, then close the cursor and connection."""
+                try:
+                    stream_cursor.execute(stream_query, tuple(params))
+                    buf = io.StringIO()
+                    writer = csv.writer(buf)
+                    writer.writerow(
+                        [
+                            "Order ID",
+                            "Placed At",
+                            "Delivery Date",
+                            "Customer",
+                            "Phone",
+                            "Status",
+                            "Payment Method",
+                            "Payment Status",
+                            "Order Type",
+                            "Item",
+                            "Quantity",
+                            "Price",
+                            "Line Total",
+                            "Order Total",
+                        ]
+                    )
+                    yield buf.getvalue()
+                    buf.seek(0)
+                    buf.truncate()
+                    while True:
+                        rows = stream_cursor.fetchmany(200)
+                        if not rows:
+                            break
+                        for row in rows:
+                            paid_flag = bool(row.get("paid"))
+                            writer.writerow(
+                                [
+                                    row["order_id"],
+                                    (
+                                        row["created_at"].strftime("%Y-%m-%d %H:%M:%S")
+                                        if row.get("created_at")
+                                        else ""
+                                    ),
+                                    (
+                                        row["delivery_date"].isoformat()
+                                        if row.get("delivery_date")
+                                        else ""
+                                    ),
+                                    row.get("customer_name") or "",
+                                    row.get("primary_mobile") or "",
+                                    normalize_status_for_response(row.get("status")),
+                                    row.get("payment_method") or "",
+                                    payment_status_label(paid_flag),
+                                    row.get("order_type") or "one_time",
+                                    row.get("item_name") or "",
+                                    int(row.get("quantity") or 0),
+                                    float(row.get("price") or 0),
+                                    float(row.get("line_total") or 0),
+                                    float(row.get("total_price") or 0),
+                                ]
+                            )
+                            yield buf.getvalue()
+                            buf.seek(0)
+                            buf.truncate()
+                finally:
+                    stream_cursor.close()
+                    db.close()
+
+            # Signal the outer finally not to close db — the generator handles cleanup.
+            _streaming = True
+            return StreamingResponse(
+                _generate_csv(),
+                media_type="text/csv",
+                headers={
+                    "Content-Disposition": "attachment; filename=order-history.csv",
+                },
+            )
+
+        data_query += " LIMIT %s OFFSET %s"
+        data_params = list(params) + [limit, offset]
+        cursor.execute(data_query, tuple(data_params))
+        orders = cursor.fetchall() or []
+
+        order_ids = [row["order_id"] for row in orders]
+        items_by_order: Dict[int, List[Dict[str, object]]] = {}
+        if order_ids:
+            placeholders = ",".join(["%s"] * len(order_ids))
+            cursor.execute(
+                f"""
+                SELECT
+                    oi.order_id,
+                    oi.quantity,
+                    oi.price,
+                    COALESCE(i.name, co.combo_name) AS item_name
+                FROM order_items oi
+                LEFT JOIN items i ON oi.item_id = i.item_id
+                LEFT JOIN combos co ON oi.combo_id = co.combo_id
+                WHERE oi.order_id IN ({placeholders})
+                ORDER BY oi.order_id ASC, COALESCE(i.name, co.combo_name) ASC
+                """,
+                tuple(order_ids),
+            )
+            for row in cursor.fetchall():
+                order_id = row["order_id"]
+                items_by_order.setdefault(order_id, []).append(
+                    {
+                        "name": row.get("item_name") or "Item",
+                        "quantity": int(row.get("quantity") or 0),
+                        "price": float(row.get("price") or 0),
+                        "line_total": float(row.get("quantity") or 0)
+                        * float(row.get("price") or 0),
+                    }
+                )
+
+        result = []
+        for record in orders:
+            paid_flag = bool(record.get("paid"))
+            normalized_status = normalize_status_for_response(record.get("status"))
+            order_id = record["order_id"]
+            result.append(
+                {
+                    "order_id": order_id,
+                    "created_at": _format_datetime(record.get("created_at")),
+                    "delivery_date": (
+                        record["delivery_date"].isoformat() if record.get("delivery_date") else None
+                    ),
+                    "status": normalized_status,
+                    "payment_status": payment_status_label(paid_flag),
+                    "payment_method": record.get("payment_method") or "Unknown",
+                    "order_type": record.get("order_type") or "one_time",
+                    "paid": paid_flag,
+                    "total_price": float(record.get("total_price") or 0),
+                    "customer_id": int(record.get("customer_id") or 0),
+                    "customer_name": record.get("customer_name") or "Customer",
+                    "customer_phone": record.get("primary_mobile"),
+                    "customer_email": record.get("email"),
+                    "address": {
+                        "address_id": record.get("address_id"),
+                        "line1": record.get("written_address"),
+                        "city": record.get("city"),
+                        "pin_code": record.get("pin_code"),
+                    },
+                    "item_count": int(record.get("item_count") or 0),
+                    "items": items_by_order.get(order_id, []),
+                }
+            )
+
+        return {"orders": result, "total": total_orders}
+    finally:
+        if not _streaming:
+            cursor.close()
+            db.close()
+
+
+@router.post("/api/admin/orders/{order_id}/status")
+def admin_update_order_status(
+    order_id: int,
+    payload: OrderStatusUpdate,
+    user: Dict[str, Any] = Depends(admin_required),
+) -> Dict[str, Any]:
+    """Update the status of a specific order.
+
+    Args:
+        order_id: ID of the order to update.
+        payload: New status string.
+        user: Current admin user (injected).
+
+    Returns:
+        Dict with order_id and new status.
+    """
+    db = get_raw_db()
+    cursor = db.cursor()
+    try:
+        target_city = _resolve_city_context(None, user)
+        cursor.execute(
+            """
+            SELECT o.paid
+              FROM orders o
+              JOIN addresses a ON o.address_id = a.address_id
+             WHERE o.order_id = %s
+               AND a.city_code = %s
+            """,
+            (order_id, target_city),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Order not found")
+        new_status = normalize_order_status(payload.status)
+        cursor.execute(
+            "UPDATE orders SET status = %s WHERE order_id = %s",
+            (new_status, order_id),
+        )
+        if cursor.rowcount == 0:
+            db.rollback()
+            raise HTTPException(status_code=404, detail="Order not found")
+        db.commit()
+        return {"order_id": order_id, "status": new_status}
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update order status: {err.msg}")
+    finally:
+        cursor.close()
+        db.close()
+
+
+@router.post("/api/admin/orders/{order_id}/payment")
+def admin_update_order_payment(
+    order_id: int,
+    payload: OrderPaymentUpdate,
+    user: Dict[str, Any] = Depends(admin_required),
+) -> Dict[str, Any]:
+    """Update the payment state of a specific order.
+
+    Args:
+        order_id: ID of the order to update.
+        payload: New paid / unpaid state.
+        user: Current admin user (injected).
+
+    Returns:
+        Dict with order_id, paid, and payment_status.
+    """
+    db = get_raw_db()
+    cursor = db.cursor()
+    try:
+        target_city = _resolve_city_context(None, user)
+        cursor.execute(
+            """
+            UPDATE orders o
+            JOIN addresses a ON o.address_id = a.address_id
+               SET o.paid = %s
+             WHERE o.order_id = %s
+               AND a.city_code = %s
+            """,
+            (int(payload.paid), order_id, target_city),
+        )
+        if cursor.rowcount == 0:
+            db.rollback()
+            raise HTTPException(status_code=404, detail="Order not found")
+        db.commit()
+        return {
+            "order_id": order_id,
+            "paid": bool(payload.paid),
+            "payment_status": payment_status_label(payload.paid),
+        }
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update order payment: {err.msg}")
+    finally:
+        cursor.close()
+        db.close()
+
+
+@router.get("/api/admin/orders/{order_id}/invoice")
+def admin_order_invoice(
+    order_id: int,
+    city_code: Optional[str] = Query(None, alias="city_code"),
+    user: Dict[str, Any] = Depends(admin_required),
+) -> Dict[str, Any]:
+    """Return invoice data for a specific order.
+
+    Args:
+        order_id: ID of the order to invoice.
+        city_code: City to scope the lookup.
+        user: Current admin user (injected).
+
+    Returns:
+        Dict with invoice_number, order details, customer, address, and line items.
+    """
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        target_city = _resolve_city_context(city_code, user)
+        cursor.execute(
+            """
+            SELECT
+                o.order_id,
+                o.created_at,
+                o.total_price,
+                o.status,
+                o.payment_method,
+                c.customer_id,
+                c.name AS customer_name,
+                c.primary_mobile,
+                c.email,
+                a.address_id,
+                a.written_address,
+                a.city,
+                a.pin_code,
+                a.city_code
+            FROM orders o
+            JOIN customers c ON o.customer_id = c.customer_id
+            LEFT JOIN addresses a ON o.address_id = a.address_id
+            WHERE o.order_id = %s
+              AND (a.city_code = %s OR a.city_code IS NULL)
+            """,
+            (order_id, target_city),
+        )
+        order_row = cursor.fetchone()
+        if not order_row:
+            raise HTTPException(status_code=404, detail="Order not found")
+
+        cursor.execute(
+            """
+            SELECT
+                oi.quantity,
+                oi.price,
+                COALESCE(i.name, co.combo_name) AS item_name
+            FROM order_items oi
+            LEFT JOIN items i ON oi.item_id = i.item_id
+            LEFT JOIN combos co ON oi.combo_id = co.combo_id
+            WHERE oi.order_id = %s
+            ORDER BY COALESCE(i.name, co.combo_name) ASC
+            """,
+            (order_id,),
+        )
+        item_rows = cursor.fetchall() or []
+
+        items: List[Dict[str, object]] = []
+        subtotal = 0.0
+        for row in item_rows:
+            quantity = int(row.get("quantity") or 0)
+            price = float(row.get("price") or 0)
+            line_total = quantity * price
+            subtotal += line_total
+            items.append(
+                {
+                    "name": row.get("item_name") or "Item",
+                    "quantity": quantity,
+                    "price": price,
+                    "line_total": line_total,
+                }
+            )
+
+        return {
+            "invoice_number": f"INV-{order_id:05d}",
+            "issued_at": _format_datetime(datetime.now()),
+            "due_date": None,
+            "order": {
+                "order_id": order_id,
+                "created_at": _format_datetime(order_row.get("created_at")),
+                "status": normalize_status_for_response(order_row.get("status")),
+                "total_price": float(order_row.get("total_price") or 0),
+                "payment_method": order_row.get("payment_method") or "Unknown",
+            },
+            "customer": {
+                "customer_id": int(order_row.get("customer_id") or 0),
+                "name": order_row.get("customer_name") or "Customer",
+                "phone": order_row.get("primary_mobile"),
+                "email": order_row.get("email"),
+            },
+            "address": {
+                "address_id": order_row.get("address_id"),
+                "line1": order_row.get("written_address"),
+                "city": order_row.get("city"),
+                "pin_code": order_row.get("pin_code"),
+            },
+            "items": items,
+            "subtotal": subtotal,
+            "total": float(order_row.get("total_price") or subtotal),
+        }
+    finally:
+        cursor.close()
+        db.close()

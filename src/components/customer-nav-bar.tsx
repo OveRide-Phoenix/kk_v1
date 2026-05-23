@@ -1,66 +1,110 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import Link from "next/link"
-import { useRouter, usePathname } from "next/navigation"
-import { LogOut, Crown } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { useAuthStore } from "@/store/store"
+import { useEffect, useMemo, useState, type ComponentProps } from "react";
+import Link from "next/link";
+import { useRouter, usePathname } from "next/navigation";
+import { Crown, LogOut, User } from "lucide-react";
+import { useHydrateAuthUser } from "@/hooks/useHydrateAuthUser";
+import { Button } from "@/components/ui/button";
+import { useAuthStore } from "@/store/store";
 
-export default function CustomerNavBar() {
-  const [isScrolled, setIsScrolled] = useState(false)
-  const user = useAuthStore((state) => state.user)
-  const setUser = useAuthStore((state) => state.setUser)
-  const setAdmin = useAuthStore((state) => state.setAdmin)
-  const logout = useAuthStore((state) => state.logout)
-  const isAdmin = useAuthStore((state) => state.isAdmin)
-  const router = useRouter()
-  const pathname = usePathname()
+type ButtonVariant = ComponentProps<typeof Button>["variant"];
+
+type CustomerNavBarProps = {
+  unauthLinks?: Array<{
+    href: string;
+    label: string;
+    variant?: ButtonVariant;
+  }>;
+};
+
+export default function CustomerNavBar({ unauthLinks }: CustomerNavBarProps = {}) {
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
+  const router = useRouter();
+  const pathname = usePathname();
+  const userRecord = user as Record<string, unknown> | null;
 
   const navLinkClass = (href: string, options?: { disabled?: boolean }) => {
-    const disabled = options?.disabled
-    let isActive = false
-    const normalize = (value: string) => (value.length > 1 ? value.replace(/\/+$/, "") : value)
+    const disabled = options?.disabled;
+    let isActive = false;
+    const normalize = (value: string) => (value.length > 1 ? value.replace(/\/+$/, "") : value);
     if (href === "/customer/home") {
-      const homeVariants = ["/customer", "/customer/", "/customer/home"]
-      isActive = homeVariants.includes(pathname)
+      const homeVariants = ["/customer", "/customer/", "/customer/home"];
+      isActive = homeVariants.includes(pathname);
     } else {
-      const current = normalize(pathname)
-      const target = normalize(href)
-      isActive = current === target || current.startsWith(`${target}/`)
+      const current = normalize(pathname);
+      const target = normalize(href);
+      isActive = current === target || current.startsWith(`${target}/`);
     }
 
-    const base = "relative px-3 py-2 text-sm font-medium transition-all duration-200"
+    const base = "relative px-3 py-2 text-sm font-medium transition-all duration-200";
     if (disabled) {
-      return `${base} text-[#8d6e63] opacity-60 cursor-not-allowed`
+      return `${base} text-[#8d6e63] opacity-60 cursor-not-allowed`;
     }
-    return `${base} ${isActive ? "text-primary" : "text-[#463028] hover:text-primary"}`
-  }
+    return `${base} ${isActive ? "text-primary" : "text-[#463028] hover:text-primary"}`;
+  };
 
   useEffect(() => {
-    const handleScroll = () => setIsScrolled(window.scrollY > 50)
-    window.addEventListener("scroll", handleScroll)
-    return () => window.removeEventListener("scroll", handleScroll)
-  }, [])
+    const handleScroll = () => setIsScrolled(window.scrollY > 50);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   useEffect(() => {
-    if (user) return
-    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null
-    if (!token) return
-    ;(async () => {
-      try {
-        const meResponse = await fetch("/api/backend/auth/me", {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (!meResponse.ok) return
-        const me = await meResponse.json()
-        setUser(me)
-        setAdmin(Boolean(me?.role === "admin" || me?.is_admin))
-      } catch (error) {
-        console.error("Failed to fetch user context", error)
+    setHydrated(true);
+  }, []);
+
+  useHydrateAuthUser({ enabled: hydrated });
+
+  const derivedRoleCodes = useMemo(() => {
+    const codes = new Set<string>();
+
+    const addCodes = (source: unknown) => {
+      if (!source) return;
+      if (Array.isArray(source)) {
+        for (const entry of source) {
+          if (typeof entry === "string") {
+            const trimmed = entry.trim();
+            if (trimmed) {
+              codes.add(trimmed.toLowerCase());
+            }
+          } else if (entry && typeof entry === "object" && "code" in entry) {
+            const value = (entry as { code?: unknown }).code;
+            if (typeof value === "string") {
+              const trimmed = value.trim();
+              if (trimmed) {
+                codes.add(trimmed.toLowerCase());
+              }
+            }
+          }
+        }
       }
-    })()
-  }, [user, setUser, setAdmin])
+    };
+
+    addCodes(userRecord?.["role_codes"]);
+    addCodes(userRecord?.["roleCodes"]);
+    addCodes(userRecord?.["role_details"]);
+    addCodes(userRecord?.["roleDetails"]);
+
+    return codes;
+  }, [userRecord]);
+
+  const isAdmin = Boolean(
+    hydrated && user && (derivedRoleCodes.has("admin") || Boolean(userRecord?.["is_admin"])),
+  );
+
+  const hasUser = hydrated && Boolean(user);
+  const displayName =
+    (typeof user?.name === "string" && user.name.trim()) ||
+    (typeof user?.phone === "string" && user.phone.trim()) ||
+    "Customer";
+
+  if (pathname?.startsWith("/customer-v2")) {
+    return null;
+  }
 
   return (
     <nav
@@ -79,7 +123,9 @@ export default function CustomerNavBar() {
 
           <div className="hidden md:flex items-center gap-6">
             <div className="relative group">
-              <Link href="/customer/home" className={navLinkClass("/customer/home")}>Home</Link>
+              <Link href="/customer/home" className={navLinkClass("/customer/home")}>
+                Home
+              </Link>
             </div>
             <div className="relative group">
               <Link href="/customer/new-order" className={navLinkClass("/customer/new-order")}>
@@ -87,37 +133,55 @@ export default function CustomerNavBar() {
               </Link>
             </div>
             <div className="relative group">
-              <span className={navLinkClass("/customer/subscription", { disabled: true })}>Subscription</span>
+              <span className={navLinkClass("/customer/subscription", { disabled: true })}>
+                Subscription
+              </span>
             </div>
             <div className="pl-6 text-sm text-[#463028]">
-              {user ? (
+              {hasUser ? (
                 <div className="flex items-center gap-2">
                   {isAdmin && <Crown className="h-4 w-4 text-amber-500" />}
-                  <Link href="/customer/account" className="font-medium text-primary hover:underline">
-                    {user.name || user.phone || "Customer"}
+                  <Link
+                    href="/customer/account"
+                    className="inline-flex items-center gap-1.5 font-medium text-primary hover:underline"
+                  >
+                    <User className="h-4 w-4 text-[#463028]" aria-hidden="true" />
+                    <span>{displayName}</span>
                   </Link>
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => {
-                      logout()
-                      localStorage.removeItem("access_token")
-                      localStorage.removeItem("refresh_token")
-                      router.push("/")
+                      logout();
+                      router.push("/");
                     }}
                   >
                     <LogOut className="h-4 w-4" />
                   </Button>
                 </div>
               ) : (
-                <Link href="/login" className="text-sm font-medium text-primary">
-                  Sign in
-                </Link>
+                <div className="flex items-center gap-2">
+                  {(unauthLinks?.length
+                    ? unauthLinks
+                    : [
+                        { href: "/register", label: "Register" },
+                        {
+                          href: "/login-v2",
+                          label: "Sign in",
+                          variant: "outline" as ButtonVariant,
+                        },
+                      ]
+                  ).map(({ href, label, variant }) => (
+                    <Button key={href} asChild variant={variant ?? "default"} size="sm">
+                      <Link href={href}>{label}</Link>
+                    </Button>
+                  ))}
+                </div>
               )}
             </div>
           </div>
         </div>
       </div>
     </nav>
-  )
+  );
 }

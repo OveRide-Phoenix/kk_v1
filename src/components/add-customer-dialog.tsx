@@ -1,17 +1,36 @@
-"use client"
+"use client";
 
-import { useState, useCallback, useMemo } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
-import GoogleMapPicker from "@/components/gmap/GoogleMapPicker"
+import { useState, useCallback, useMemo } from "react";
+import { http } from "@/lib/http";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import GoogleMapPicker from "@/components/gmap/GoogleMapPicker";
+
+const CITY_OPTIONS = [
+  { label: "Mysore", code: "MYS" },
+  { label: "Bangalore", code: "BLR" },
+];
+
+const resolveCityCode = (value: string) => {
+  const match = CITY_OPTIONS.find(
+    (option) => option.label.toLowerCase() === value.trim().toLowerCase(),
+  );
+  return match ? match.code : "MYS";
+};
 
 interface AddCustomerDialogProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
 export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps) {
@@ -26,60 +45,65 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
     houseApartmentNo: "",
     writtenAddress: "",
     city: "",
+    cityCode: "",
     pinCode: "",
     latitude: null as number | null,
     longitude: null as number | null,
     addressType: "",
     routeAssignment: "",
     isDefault: true,
-  })
+  });
 
-  const [addressType, setAddressType] = useState("")
-  const [otherAddressName, setOtherAddressName] = useState("")
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [errorMessage, setErrorMessage] = useState("")
+  const [addressType, setAddressType] = useState("");
+  const [otherAddressName, setOtherAddressName] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-      const { name, value } = e.target
+      const { name, value } = e.target;
       setFormData((prev) => {
         if (name === "primaryMobile" || name === "alternativeMobile") {
-          let newValue = value.startsWith("+91 ") ? value.slice(4) : value
+          let newValue = value.startsWith("+91 ") ? value.slice(4) : value;
           if (newValue.startsWith("+91")) {
-            newValue = newValue.slice(3)
+            newValue = newValue.slice(3);
           }
-          newValue = newValue.replace(/\D/g, "").slice(0, 10)
-          return { ...prev, [name]: newValue }
+          newValue = newValue.replace(/\D/g, "").slice(0, 10);
+          return { ...prev, [name]: newValue };
         }
 
         if (name === "pinCode") {
-          const newValue = value.replace(/\D/g, "").slice(0, 6)
-          return { ...prev, [name]: newValue }
+          const newValue = value.replace(/\D/g, "").slice(0, 6);
+          return { ...prev, [name]: newValue };
         }
 
         if (name === "email") {
-          return { ...prev, [name]: value.toLowerCase() }
+          return { ...prev, [name]: value.toLowerCase() };
         }
 
-        return { ...prev, [name]: value }
-      })
+        return { ...prev, [name]: value };
+      });
     },
-    []
-  )
+    [],
+  );
 
   const handleSelectChange = (name: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [name]: value }))
-  }
+    if (name === "city") {
+      setFormData((prev) => ({ ...prev, city: value, cityCode: resolveCityCode(value) }));
+      return;
+    }
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
   const handleLocationSelect = (lat: number, lng: number) => {
-    setFormData((prev) => ({ ...prev, latitude: lat, longitude: lng }))
-  }
+    setFormData((prev) => ({ ...prev, latitude: lat, longitude: lng }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (isSubmitting) return
-    setIsSubmitting(true)
-    setErrorMessage("")
+    e.preventDefault();
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    setErrorMessage("");
 
     const formattedData = {
       referred_by: formData.referredBy || null,
@@ -91,42 +115,37 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
       house: formData.houseApartmentNo || null,
       full_address: formData.writtenAddress,
       city: formData.city,
+      city_code: formData.cityCode || resolveCityCode(formData.city),
       pin_code: formData.pinCode,
       email: formData.email || null,
       latitude: formData.latitude !== null ? parseFloat(String(formData.latitude)) : 0,
       longitude: formData.longitude !== null ? parseFloat(String(formData.longitude)) : 0,
-    }
+    };
 
     try {
-      const response = await fetch("http://localhost:8000/api/register", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(formattedData),
-      })
+      const response = await http.post("/api/register", formattedData as Record<string, unknown>);
 
-      const data = await response.json()
-      setIsSubmitting(false)
+      const data = await response.json();
+      setIsSubmitting(false);
 
       if (response.ok) {
-        onOpenChange(false)
+        onOpenChange(false);
       } else {
         if (data.detail?.includes("Duplicate entry")) {
-          setErrorMessage("This phone number is already registered.")
+          setErrorMessage("This phone number is already registered.");
         } else {
-          setErrorMessage(data.detail || "Something went wrong. Please try again.")
+          setErrorMessage(data.detail || "Something went wrong. Please try again.");
         }
       }
-    } catch (error) {
-      setIsSubmitting(false)
-      setErrorMessage("Failed to send request. Please check your connection.")
+    } catch {
+      setIsSubmitting(false);
+      setErrorMessage("Failed to send request. Please check your connection.");
     }
-  }
+  };
   const MemoizedGoogleMap = useMemo(
     () => <GoogleMapPicker onLocationSelect={handleLocationSelect} />,
-    []
-);
+    [],
+  );
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -215,8 +234,8 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
                 <Select
                   value={addressType}
                   onValueChange={(value) => {
-                    setAddressType(value)
-                    handleSelectChange("addressType", value)
+                    setAddressType(value);
+                    handleSelectChange("addressType", value);
                   }}
                 >
                   <SelectTrigger id="addressType">
@@ -236,7 +255,6 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
           <div className="space-y-4">
             <h3 className="text-lg font-medium border-b pb-2">Address Details</h3>
 
-
             {/* Rest of the address fields */}
             <div className="grid grid-cols-1 gap-4">
               <div className="space-y-2">
@@ -253,27 +271,27 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
               </div>
 
               <div className="space-y-2">
-              <Label htmlFor="writtenAddress">
-                Address <span className="text-destructive">*</span>
-              </Label>
-              <Textarea
-                id="writtenAddress"
-                name="writtenAddress"
-                value={formData.writtenAddress}
-                onChange={handleChange}
-                required
-                className="min-h-[100px] w-full"
-              />
-            </div>
-              
+                <Label htmlFor="writtenAddress">
+                  Address <span className="text-destructive">*</span>
+                </Label>
+                <Textarea
+                  id="writtenAddress"
+                  name="writtenAddress"
+                  value={formData.writtenAddress}
+                  onChange={handleChange}
+                  required
+                  className="min-h-[100px] w-full"
+                />
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="addressType">Address Type</Label>
                   <Select
                     value={addressType}
                     onValueChange={(value) => {
-                      setAddressType(value)
-                      handleSelectChange("addressType", value)
+                      setAddressType(value);
+                      handleSelectChange("addressType", value);
                     }}
                   >
                     <SelectTrigger id="addressType">
@@ -315,7 +333,11 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
                       <SelectValue placeholder="Select city" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Bangalore">Bangalore</SelectItem>
+                      {CITY_OPTIONS.map((option) => (
+                        <SelectItem key={option.code} value={option.label}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -332,20 +354,18 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
                     required
                   />
                 </div>
-
-                
               </div>
 
               {/* Google Maps Location */}
-            <div className="space-y-4">
-            <Label>Google Maps Location</Label>
-            {MemoizedGoogleMap}
-            {formData.latitude && formData.longitude && (
-            <p className="text-sm text-muted-foreground">
-            Selected Location: {formData.latitude}, {formData.longitude}
-            </p>
-            )}
-            </div>
+              <div className="space-y-4">
+                <Label>Google Maps Location</Label>
+                {MemoizedGoogleMap}
+                {formData.latitude && formData.longitude && (
+                  <p className="text-sm text-muted-foreground">
+                    Selected Location: {formData.latitude}, {formData.longitude}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 
@@ -372,9 +392,7 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
             </div>
           </div>
 
-          {errorMessage && (
-            <div className="text-destructive text-sm">{errorMessage}</div>
-          )}
+          {errorMessage && <div className="text-destructive text-sm">{errorMessage}</div>}
 
           <div className="flex justify-end space-x-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
@@ -387,5 +405,5 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
         </form>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

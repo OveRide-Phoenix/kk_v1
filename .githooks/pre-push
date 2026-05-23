@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Run local checks before pushing.
+
+set -euo pipefail
+
+if [ "${SKIP_HOOKS:-}" = "1" ]; then
+  echo "Pre-push hooks skipped (SKIP_HOOKS=1)"
+  exit 0
+fi
+
+.githooks/run-local-checks

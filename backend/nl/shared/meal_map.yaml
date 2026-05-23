@@ -1,0 +1,9 @@
+meals:
+  Breakfast:
+    aliases: ["breakfast", "bfast", "bf", "morning"]
+  Lunch:
+    aliases: ["lunch", "lnch", "midday"]
+  Dinner:
+    aliases: ["dinner", "dnr", "evening"]
+  Condiments:
+    aliases: ["condiment", "condiments", "sides"]

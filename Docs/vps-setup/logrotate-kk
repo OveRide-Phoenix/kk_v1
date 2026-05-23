@@ -1,0 +1,19 @@
+# Kuteera Kitchen — logrotate config
+# Place at /etc/logrotate.d/kk
+
+/var/log/nginx/kk-dev-access.log
+/var/log/nginx/kk-dev-error.log
+/var/log/nginx/kk-prod-access.log
+/var/log/nginx/kk-prod-error.log
+{
+    daily
+    rotate 14
+    compress
+    delaycompress
+    missingok
+    notifempty
+    sharedscripts
+    postrotate
+        nginx -s reopen
+    endscript
+}

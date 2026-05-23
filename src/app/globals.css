@@ -32,7 +32,7 @@
     --muted: 36 30% 90%;
     --muted-foreground: 27 30% 35%;
 
-    --accent: 35 80% 45%;  /* Changed from 43 100% 52% to a more muted gold */
+    --accent: 35 80% 45%; /* Changed from 43 100% 52% to a more muted gold */
     --accent-foreground: 27 50% 16%;
 
     --destructive: 0 85% 60%;
@@ -126,11 +126,29 @@
 
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    font-feature-settings:
+      "rlig" 1,
+      "calt" 1;
+    overflow-x: hidden;
+    overscroll-behavior-y: auto;
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     @apply font-serif;
+  }
+}
+
+@media (pointer: coarse) {
+  html,
+  body {
+    height: auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 }
 
@@ -202,8 +220,12 @@
 
 /* Animation keyframes */
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slideUp {
@@ -262,4 +284,135 @@
 .hover\:hover-lift:hover {
   transform: translateY(-4px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* ── KK Date Range Picker ──────────────────────────────────────────── */
+.kk-rdp {
+  --rdp-cell-size: 38px;
+}
+.kk-rdp .rdp-months {
+  display: flex;
+  gap: 1.5rem;
+}
+.kk-rdp .rdp-month {
+  min-width: 0;
+}
+.kk-rdp .rdp-caption {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 0.25rem 0 0.75rem;
+}
+.kk-rdp .rdp-caption_label {
+  font-weight: 700;
+  font-size: 0.875rem;
+  color: #8d4925;
+  letter-spacing: -0.01em;
+}
+.kk-rdp .rdp-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.kk-rdp .rdp-nav_button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #8d4925;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+.kk-rdp .rdp-nav_button:hover {
+  background-color: rgba(141, 73, 37, 0.1);
+}
+.kk-rdp .rdp-nav_button_previous {
+  position: absolute;
+  left: 0;
+}
+.kk-rdp .rdp-nav_button_next {
+  position: absolute;
+  right: 0;
+}
+.kk-rdp .rdp-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.kk-rdp .rdp-head_cell {
+  color: #9ca3af;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-align: center;
+  padding-bottom: 0.5rem;
+  width: var(--rdp-cell-size);
+}
+.kk-rdp .rdp-cell {
+  padding: 0;
+  text-align: center;
+  width: var(--rdp-cell-size);
+  height: var(--rdp-cell-size);
+}
+.kk-rdp .rdp-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--rdp-cell-size);
+  height: var(--rdp-cell-size);
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: #374151;
+  background: transparent;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+  font-weight: 400;
+}
+.kk-rdp .rdp-button:not(.rdp-day_selected):not(.rdp-day_disabled):not(.rdp-day_outside):hover {
+  background-color: rgba(141, 73, 37, 0.1);
+  color: #8d4925;
+}
+.kk-rdp .rdp-day_today:not(.rdp-day_selected) {
+  font-weight: 800;
+  color: #8d4925;
+}
+.kk-rdp .rdp-day_outside {
+  opacity: 0.3;
+}
+.kk-rdp .rdp-day_disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+/* Range bar — full-bleed background on the TD */
+.kk-rdp td.rdp-cell:has(.rdp-day_range_middle) {
+  background-color: rgba(141, 73, 37, 0.08);
+}
+.kk-rdp td.rdp-cell:has(.rdp-day_range_start:not(.rdp-day_range_end)) {
+  background: linear-gradient(to right, transparent 50%, rgba(141, 73, 37, 0.08) 50%);
+}
+.kk-rdp td.rdp-cell:has(.rdp-day_range_end:not(.rdp-day_range_start)) {
+  background: linear-gradient(to left, transparent 50%, rgba(141, 73, 37, 0.08) 50%);
+}
+/* Selected endpoints */
+.kk-rdp .rdp-day_range_start,
+.kk-rdp .rdp-day_range_end {
+  background-color: #8d4925 !important;
+  color: #fff !important;
+  border-radius: 50%;
+  font-weight: 600;
+}
+/* Middle range days */
+.kk-rdp .rdp-day_range_middle {
+  background-color: transparent !important;
+  color: #5a2d0e;
+  font-weight: 500;
+  border-radius: 0;
 }
