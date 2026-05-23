@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import os
 import warnings
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
 
 try:
     from dotenv import load_dotenv
@@ -53,8 +53,8 @@ def _parse_db_url(url: str) -> dict:
     return {
         "host": parsed.hostname or "localhost",
         "port": parsed.port or 3306,
-        "user": parsed.username or "fastapi_user",
-        "password": parsed.password or "password",
+        "user": unquote(parsed.username or "fastapi_user"),
+        "password": unquote(parsed.password or "password"),
         "database": (parsed.path or "/kk_v1").lstrip("/") or "kk_v1",
     }
 
