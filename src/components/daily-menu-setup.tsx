@@ -1579,12 +1579,7 @@ export function DailyMenuSetup() {
       </Dialog>
 
       {/* Subscription resolution dialog */}
-      <Dialog
-        open={resolveDialog.open}
-        onOpenChange={(open) =>
-          !resolveDialog.loading && setResolveDialog((prev) => ({ ...prev, open }))
-        }
-      >
+      <Dialog open={resolveDialog.open} onOpenChange={() => {}}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
