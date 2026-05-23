@@ -8,6 +8,7 @@ stages:
   - test
   - security
   - sonarqube
+  - deploy
 
 variables:
   GENERATED_EXCLUDED_PATHS: ".next, .next/**, out, out/**, build, build/**, coverage, coverage/**, node_modules, node_modules/**"
@@ -146,3 +147,118 @@ sonarqube:
     - sonar-scanner -Dsonar.token="$SONAR_TOKEN"
   # sonar.qualitygate.wait=true in sonar-project.properties already gates on quality
   allow_failure: false
+
+# ─── Deploy ────────────────────────────────────────────────────────────────────
+# Required GitLab CI/CD variables (Settings → CI/CD → Variables):
+#
+#   DEV_VPS_HOST             IP or hostname of the DEV VPS
+#   DEV_VPS_USER             SSH user on the DEV VPS (e.g. deploy)
+#   DEV_VPS_SSH_PRIVATE_KEY  Private key for SSH access to DEV VPS (type: File)
+#   DEV_DEPLOY_PATH          Absolute path on VPS, e.g. /var/www/kk_v1_dev
+#   DEV_DOMAIN               DEV domain, e.g. dev.kuteera.com
+#   DEV_FRONTEND_ENV         Full contents of the DEV frontend .env file
+#   DEV_BACKEND_ENV          Full contents of the DEV backend/.env file
+#
+#   PROD_VPS_HOST            IP or hostname of the PROD VPS
+#   PROD_VPS_USER            SSH user on the PROD VPS
+#   PROD_VPS_SSH_PRIVATE_KEY Private key for SSH access to PROD VPS (type: File)
+#   PROD_DEPLOY_PATH         Absolute path on VPS, e.g. /var/www/kk_v1_prod
+#   PROD_DOMAIN              PROD domain, e.g. kuteera.com
+#   PROD_FRONTEND_ENV        Full contents of the PROD frontend .env file
+#   PROD_BACKEND_ENV         Full contents of the PROD backend/.env file
+#
+# VPS prerequisites (set up once manually):
+#   - Node.js 20 installed via NodeSource (npm available system-wide)
+#   - Python 3.12 with venv at <DEPLOY_PATH>/backend/venv/
+#   - Passwordless sudo for the deploy user scoped to:
+#       systemctl restart kk-backend-dev / kk-frontend-dev
+#       systemctl restart kk-backend-prod / kk-frontend-prod
+#       systemctl reload nginx
+#   - Git repo cloned at DEPLOY_PATH and remote set to this GitLab repo
+#   - Nginx configured for DEV and PROD virtual hosts
+
+.deploy_ssh_setup: &deploy_ssh_setup
+  before_script:
+    - apt-get update -qq && apt-get install -qq openssh-client curl
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh && chmod 700 ~/.ssh
+    - ssh-keyscan "$VPS_HOST" >> ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+
+deploy_dev:
+  stage: deploy
+  image: ubuntu:24.04
+  variables:
+    VPS_HOST: $DEV_VPS_HOST
+    SSH_PRIVATE_KEY: $DEV_VPS_SSH_PRIVATE_KEY
+  <<: *deploy_ssh_setup
+  script:
+    # Write env files and copy to VPS
+    - printf '%s' "$DEV_FRONTEND_ENV" > /tmp/frontend.env
+    - printf '%s' "$DEV_BACKEND_ENV" > /tmp/backend.env
+    - scp /tmp/frontend.env "$DEV_VPS_USER@$DEV_VPS_HOST:$DEV_DEPLOY_PATH/.env"
+    - scp /tmp/backend.env "$DEV_VPS_USER@$DEV_VPS_HOST:$DEV_DEPLOY_PATH/backend/.env"
+    # Pull, build, restart
+    - |
+      ssh "$DEV_VPS_USER@$DEV_VPS_HOST" "
+        set -e
+        cd $DEV_DEPLOY_PATH
+        git fetch origin
+        git checkout -f develop
+        git reset --hard origin/develop
+        npm ci --prefer-offline
+        npm run build
+        backend/venv/bin/pip install -q -r backend/requirements.txt
+        sudo systemctl restart kk-backend-dev
+        sudo systemctl restart kk-frontend-dev
+        sudo systemctl reload nginx
+      "
+    # Post-deploy health check
+    - sleep 15
+    - curl --fail -s "https://$DEV_DOMAIN/api/backend/health"
+    - curl --fail -s "https://$DEV_DOMAIN"
+  environment:
+    name: dev
+    url: https://$DEV_DOMAIN
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+
+deploy_prod:
+  stage: deploy
+  image: ubuntu:24.04
+  variables:
+    VPS_HOST: $PROD_VPS_HOST
+    SSH_PRIVATE_KEY: $PROD_VPS_SSH_PRIVATE_KEY
+  <<: *deploy_ssh_setup
+  script:
+    # Write env files and copy to VPS
+    - printf '%s' "$PROD_FRONTEND_ENV" > /tmp/frontend.env
+    - printf '%s' "$PROD_BACKEND_ENV" > /tmp/backend.env
+    - scp /tmp/frontend.env "$PROD_VPS_USER@$PROD_VPS_HOST:$PROD_DEPLOY_PATH/.env"
+    - scp /tmp/backend.env "$PROD_VPS_USER@$PROD_VPS_HOST:$PROD_DEPLOY_PATH/backend/.env"
+    # Pull, build, restart
+    - |
+      ssh "$PROD_VPS_USER@$PROD_VPS_HOST" "
+        set -e
+        cd $PROD_DEPLOY_PATH
+        git fetch origin
+        git checkout -f main
+        git reset --hard origin/main
+        npm ci --prefer-offline
+        npm run build
+        backend/venv/bin/pip install -q -r backend/requirements.txt
+        sudo systemctl restart kk-backend-prod
+        sudo systemctl restart kk-frontend-prod
+        sudo systemctl reload nginx
+      "
+    # Post-deploy health check
+    - sleep 15
+    - curl --fail -s "https://$PROD_DOMAIN/api/backend/health"
+    - curl --fail -s "https://$PROD_DOMAIN"
+  environment:
+    name: prod
+    url: https://$PROD_DOMAIN
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual

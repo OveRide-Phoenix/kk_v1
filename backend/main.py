@@ -12,6 +12,7 @@ from typing import AsyncGenerator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from . import config
 from .routers import admin_logs, nl_router, reports
@@ -86,3 +87,31 @@ app.include_router(production_router)
 app.include_router(logistics_router)
 app.include_router(dashboard_router)
 app.include_router(developer_router)
+
+
+@app.get("/health", tags=["ops"])
+async def health() -> JSONResponse:
+    """Health check endpoint.
+
+    Returns 200 OK when the backend process is running and can reach the
+    database. Used by the GitLab CI/CD post-deploy check and uptime monitors.
+
+    Returns:
+        JSON with status and version fields.
+    """
+    try:
+        db = get_raw_db()
+        try:
+            cursor = db.cursor()
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+            cursor.close()
+            db_ok = True
+        finally:
+            db.close()
+    except Exception:
+        db_ok = False
+
+    status = "ok" if db_ok else "degraded"
+    code = 200 if db_ok else 503
+    return JSONResponse({"status": status, "version": app.version}, status_code=code)
