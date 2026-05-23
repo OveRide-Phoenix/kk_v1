@@ -20,6 +20,7 @@ import {
   Truck,
   BookOpenText,
   Tag,
+  Salad,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
@@ -38,6 +39,7 @@ interface SidebarProps {
 const primaryNavigationItems = [
   { name: "Dashboard", icon: Home, href: "/admin", id: "dashboard" },
   { name: "Product Management", icon: Package, href: "/admin/productmgmt", id: "productmgmt" },
+  { name: "Condiments", icon: Salad, href: "/admin/condiments", id: "condiments" },
   { name: "Customer Management", icon: Users, href: "/admin/customermgmt", id: "customermgmt" },
   { name: "Daily Menu Setup", icon: Calendar, href: "/admin/dailymenusetup", id: "dailymenusetup" },
   {

@@ -64,6 +64,7 @@ class ItemCreatePayload(BaseModel):
     description: Optional[str] = None
     alias: Optional[str] = None
     category_id: Optional[int] = None
+    condiment_type_id: Optional[int] = None
     component_type_id: Optional[int] = None
     unit_packing: Optional[float] = None
     uom_packing: Optional[str] = None
@@ -95,6 +96,7 @@ class ItemUpdatePayload(BaseModel):
     description: Optional[str] = None
     alias: Optional[str] = None
     category_id: Optional[int] = None
+    condiment_type_id: Optional[int] = None
     component_type_id: Optional[int] = None
     uom_customer: Optional[str] = None
     unit_packing: Optional[float] = None
@@ -233,6 +235,22 @@ class CategoryUpdatePayload(BaseModel):
     category_name: str = Field(..., min_length=1, max_length=100)
 
 
+class CondimentTypeCreatePayload(BaseModel):
+    """Payload for creating a new condiment type."""
+
+    name: str = Field(..., min_length=1, max_length=100)
+    description: Optional[str] = None
+    sort_order: int = 0
+
+
+class CondimentTypeUpdatePayload(BaseModel):
+    """Payload for updating an existing condiment type."""
+
+    name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    description: Optional[str] = None
+    sort_order: Optional[int] = None
+
+
 class ComponentTypeCreatePayload(BaseModel):
     """Payload for creating a new item group."""
 
@@ -267,15 +285,20 @@ def get_all_items(
         description="When true, includes plated items in the items response",
         alias="include_plated",
     ),
+    condiment_type_id: Optional[int] = Query(
+        None,
+        description="Filter condiment items by condiment_type_id",
+    ),
 ) -> List[Dict[str, Any]]:
     """Return all product items, with optional filters for condiments and plated items.
 
     Args:
         only_condiments: When true, returns only condiment items.
         include_plated: When true, includes plated items in the response.
+        condiment_type_id: When set, returns only items of this condiment type.
 
     Returns:
-        List of item dicts with bld_ids, is_condiment, and is_plated flags.
+        List of item dicts with bld_ids, is_condiment, is_plated, and condiment_type fields.
     """
     db = get_raw_db()
     cursor = db.cursor(dictionary=True)
@@ -329,6 +352,8 @@ def get_all_items(
         else:
             max_columns_sql.append("NULL AS max_qty_condiments")
 
+        has_condiment_type = "condiment_type_id" in available_columns
+
         select_columns = [
             "i.item_id",
             "i.name",
@@ -359,7 +384,23 @@ def get_all_items(
             "i.net_price",
         ]
 
+        if has_condiment_type:
+            select_columns += [
+                "i.condiment_type_id",
+                "cdt.name AS condiment_type_name",
+            ]
+        else:
+            select_columns += [
+                "NULL AS condiment_type_id",
+                "NULL AS condiment_type_name",
+            ]
+
         select_sql = ",\n                    ".join(select_columns)
+        join_condiment_type = (
+            "LEFT JOIN condiment_types cdt ON i.condiment_type_id = cdt.condiment_type_id"
+            if has_condiment_type
+            else ""
+        )
         cursor.execute(
             f"""
                 SELECT
@@ -367,6 +408,7 @@ def get_all_items(
                 FROM items i
                 LEFT JOIN categories c ON i.category_id = c.category_id
                 LEFT JOIN component_types ct ON i.component_type_id = ct.component_type_id
+                {join_condiment_type}
             """
         )
         records = cursor.fetchall()
@@ -379,6 +421,8 @@ def get_all_items(
             if row.get("is_plated") and not include_plated:
                 continue
             if only_condiments and not row["is_condiment"]:
+                continue
+            if condiment_type_id is not None and row.get("condiment_type_id") != condiment_type_id:
                 continue
             normalized_records.append(row)
         return normalized_records
@@ -2184,6 +2228,229 @@ def delete_discount_code(
         cursor.execute("DELETE FROM discount_codes WHERE code_id = %s", (code_id,))
         db.commit()
         return {"status": "deleted", "code_id": code_id}
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# Condiment Types (KUT-51)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/api/products/condiment-types")
+def get_all_condiment_types() -> List[Dict[str, Any]]:
+    """Return all condiment types ordered by sort_order then name.
+
+    Returns:
+        List of condiment type dicts with condiment_type_id, name, description,
+        sort_order, and item_count.
+    """
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            SELECT
+                cdt.condiment_type_id,
+                cdt.name,
+                cdt.description,
+                cdt.sort_order,
+                COUNT(i.item_id) AS item_count
+              FROM condiment_types cdt
+              LEFT JOIN items i ON i.condiment_type_id = cdt.condiment_type_id
+             GROUP BY cdt.condiment_type_id, cdt.name, cdt.description, cdt.sort_order
+             ORDER BY cdt.sort_order ASC, cdt.name ASC
+            """
+        )
+        return cursor.fetchall() or []
+    except mysql.connector.Error as err:
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@router.post("/api/products/condiment-types")
+def create_condiment_type(
+    payload: CondimentTypeCreatePayload,
+    user: Dict[str, Any] = Depends(admin_required),
+) -> Dict[str, Any]:
+    """Create a new condiment type.
+
+    Args:
+        payload: Payload with name, optional description, and sort_order.
+        user: Current admin user (injected).
+
+    Returns:
+        Dict with condiment_type_id, name, description, and sort_order.
+    """
+    db = get_raw_db()
+    cursor = db.cursor()
+    try:
+        normalized_name = payload.name.strip()
+        if not normalized_name:
+            raise HTTPException(status_code=400, detail="name is required")
+
+        cursor.execute(
+            "INSERT INTO condiment_types (name, description, sort_order) VALUES (%s, %s, %s)",
+            (normalized_name, payload.description, payload.sort_order),
+        )
+        condiment_type_id = cursor.lastrowid
+        db.commit()
+
+        log_admin_action(
+            db,
+            admin_id=user.get("admin_id") if isinstance(user, dict) else None,
+            action_type="ADD",
+            entity_type="CONDIMENT_TYPE",
+            entity_id=condiment_type_id,
+            description=f"Created condiment type: {normalized_name}",
+        )
+
+        return {
+            "condiment_type_id": condiment_type_id,
+            "name": normalized_name,
+            "description": payload.description,
+            "sort_order": payload.sort_order,
+            "item_count": 0,
+        }
+    except mysql.connector.Error as err:
+        db.rollback()
+        if err.errno == errorcode.ER_DUP_ENTRY:
+            raise HTTPException(
+                status_code=400, detail="A condiment type with that name already exists"
+            )
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@router.patch("/api/products/condiment-types/{condiment_type_id}")
+def update_condiment_type(
+    condiment_type_id: int,
+    payload: CondimentTypeUpdatePayload,
+    user: Dict[str, Any] = Depends(admin_required),
+) -> Dict[str, Any]:
+    """Update an existing condiment type.
+
+    Args:
+        condiment_type_id: ID of the condiment type to update.
+        payload: Fields to update (all optional).
+        user: Current admin user (injected).
+
+    Returns:
+        Updated condiment type dict.
+    """
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT condiment_type_id, name, description, sort_order FROM condiment_types WHERE condiment_type_id = %s",
+            (condiment_type_id,),
+        )
+        existing = cursor.fetchone()
+        if not existing:
+            raise HTTPException(status_code=404, detail="Condiment type not found")
+
+        updates: Dict[str, Any] = {}
+        if payload.name is not None:
+            normalized_name = payload.name.strip()
+            if not normalized_name:
+                raise HTTPException(status_code=400, detail="name cannot be empty")
+            updates["name"] = normalized_name
+        if payload.description is not None:
+            updates["description"] = payload.description
+        if payload.sort_order is not None:
+            updates["sort_order"] = payload.sort_order
+
+        if not updates:
+            return dict(existing)
+
+        set_clause = ", ".join(f"{col} = %s" for col in updates)
+        cursor.execute(
+            f"UPDATE condiment_types SET {set_clause} WHERE condiment_type_id = %s",
+            (*updates.values(), condiment_type_id),
+        )
+        db.commit()
+
+        log_admin_action(
+            db,
+            admin_id=user.get("admin_id") if isinstance(user, dict) else None,
+            action_type="UPDATE",
+            entity_type="CONDIMENT_TYPE",
+            entity_id=condiment_type_id,
+            description=f"Updated condiment type {condiment_type_id}",
+        )
+
+        return {**existing, **updates}
+    except mysql.connector.Error as err:
+        db.rollback()
+        if err.errno == errorcode.ER_DUP_ENTRY:
+            raise HTTPException(
+                status_code=400, detail="A condiment type with that name already exists"
+            )
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
+@router.delete("/api/products/condiment-types/{condiment_type_id}")
+def delete_condiment_type(
+    condiment_type_id: int,
+    user: Dict[str, Any] = Depends(admin_required),
+) -> Dict[str, Any]:
+    """Delete a condiment type. Fails if any items are assigned to it.
+
+    Args:
+        condiment_type_id: ID of the condiment type to delete.
+        user: Current admin user (injected).
+
+    Returns:
+        Dict with status and condiment_type_id.
+    """
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT 1 FROM condiment_types WHERE condiment_type_id = %s",
+            (condiment_type_id,),
+        )
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Condiment type not found")
+
+        cursor.execute(
+            "SELECT COUNT(*) AS cnt FROM items WHERE condiment_type_id = %s",
+            (condiment_type_id,),
+        )
+        row = cursor.fetchone() or {}
+        if int(row.get("cnt") or 0) > 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot delete a condiment type that has items assigned to it",
+            )
+
+        cursor.execute(
+            "DELETE FROM condiment_types WHERE condiment_type_id = %s",
+            (condiment_type_id,),
+        )
+        db.commit()
+
+        log_admin_action(
+            db,
+            admin_id=user.get("admin_id") if isinstance(user, dict) else None,
+            action_type="DELETE",
+            entity_type="CONDIMENT_TYPE",
+            entity_id=condiment_type_id,
+            description=f"Deleted condiment type {condiment_type_id}",
+        )
+
+        return {"status": "deleted", "condiment_type_id": condiment_type_id}
     except mysql.connector.Error as err:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(err))

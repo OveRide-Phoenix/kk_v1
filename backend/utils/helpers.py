@@ -1058,6 +1058,7 @@ def _normalize_item_payload_data(data: Dict[str, Any]) -> Dict[str, Any]:
     }
     int_fields = {
         "category_id",
+        "condiment_type_id",
         "component_type_id",
         "max_qty_breakfast",
         "max_qty_lunch",
@@ -1138,6 +1139,7 @@ def _item_column_field_map(available_columns: Set[str]) -> Dict[str, str]:
         "description": "description",
         "alias": "alias",
         "category_id": "category_id",
+        "condiment_type_id": "condiment_type_id",
         "component_type_id": "component_type_id",
         "uom_customer": "uom_customer",
         "unit_packing": "unit_packing",
