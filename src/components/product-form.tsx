@@ -43,6 +43,7 @@ interface ProductFormProps {
   onSave: (product: Product) => Promise<void> | void;
   onCancel: () => void;
   formScope?: ProductFormScope;
+  initialCondimentTypeId?: number;
 }
 
 const normalizeMaxField = (value: unknown): number => {
@@ -120,9 +121,16 @@ export default function ProductForm({
   onSave,
   onCancel,
   formScope = "items",
+  initialCondimentTypeId,
 }: ProductFormProps) {
   const isEditing = !!product;
-  const [formData, setFormData] = useState<any>(() => createInitialFormData(product, formScope));
+  const [formData, setFormData] = useState<any>(() => {
+    const initial: any = createInitialFormData(product, formScope);
+    if (!product && initialCondimentTypeId) {
+      initial.condiment_type_id = initialCondimentTypeId;
+    }
+    return initial;
+  });
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const previousMealsRef = useRef<number[]>([]);

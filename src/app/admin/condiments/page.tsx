@@ -251,7 +251,9 @@ export default function CondimentsPage() {
               }}
             >
               <Plus className="mr-2 h-4 w-4" />
-              Add Condiment
+              {selectedTypeId !== null
+                ? `Add ${condimentTypes.find((t) => t.condiment_type_id === selectedTypeId)?.name ?? "Condiment"}`
+                : "Add Condiment"}
             </Button>
           </div>
         </div>
@@ -331,7 +333,9 @@ export default function CondimentsPage() {
                     }}
                   >
                     <Plus className="mr-2 h-4 w-4" />
-                    Add first item
+                    {selectedTypeId !== null
+                      ? `Add first ${condimentTypes.find((t) => t.condiment_type_id === selectedTypeId)?.name ?? "item"}`
+                      : "Add first item"}
                   </Button>
                 )}
               </div>
@@ -475,6 +479,7 @@ export default function CondimentsPage() {
           <ProductForm
             product={selectedItem}
             formScope="condiments"
+            initialCondimentTypeId={selectedItem ? undefined : (selectedTypeId ?? undefined)}
             onSave={handleSaveItem}
             onCancel={() => {
               setItemFormOpen(false);
