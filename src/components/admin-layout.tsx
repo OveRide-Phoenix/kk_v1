@@ -121,7 +121,7 @@ export function AdminLayout({ children, activePage, onNavigateAttempt }: AdminLa
           menu_item_id: number;
           item_name: string;
           available_qty: number;
-          final_qty: number;
+          max_qty: number;
         }[];
         items.forEach((item) => {
           const id = `low-stock-${item.menu_item_id}`;
@@ -131,7 +131,7 @@ export function AdminLayout({ children, activePage, onNavigateAttempt }: AdminLa
             title: isSoldOut ? `${item.item_name} — Sold Out` : `${item.item_name} — Low Stock`,
             message: isSoldOut
               ? "No units remaining on today's menu."
-              : `Only ${item.available_qty} of ${item.final_qty} units left.`,
+              : `Only ${item.available_qty} of ${item.max_qty} units left.`,
             severity: isSoldOut ? "error" : "warning",
             href: "/admin/dailymenusetup",
           });
@@ -579,19 +579,16 @@ export function AdminLayout({ children, activePage, onNavigateAttempt }: AdminLa
                 </Button>
                 <Popover open={notificationsOpen} onOpenChange={setNotificationsOpen}>
                   <PopoverTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="relative"
-                      aria-label="View notifications"
-                    >
-                      <Bell className="h-5 w-5" />
-                      {unreadNotifications > 0 && (
-                        <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-60" />
-                          <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-400 shadow-[0_0_6px_2px_rgba(251,191,36,0.5)]" />
-                        </span>
-                      )}
+                    <Button variant="ghost" size="icon" aria-label="View notifications">
+                      <span className="relative">
+                        <Bell className="h-5 w-5" />
+                        {unreadNotifications > 0 && (
+                          <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-60" />
+                            <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-400 shadow-[0_0_6px_2px_rgba(251,191,36,0.5)]" />
+                          </span>
+                        )}
+                      </span>
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-80 p-0" align="end">

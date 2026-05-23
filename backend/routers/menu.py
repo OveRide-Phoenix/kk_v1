@@ -517,7 +517,7 @@ def get_low_stock_alerts(
                 mi.menu_item_id,
                 COALESCE(i.name, c.combo_name) AS item_name,
                 mi.available_qty,
-                CAST(mi.final_qty AS UNSIGNED) AS final_qty,
+                mi.max_qty,
                 mi.menu_id
             FROM menu_items mi
             JOIN menu m ON m.menu_id = mi.menu_id
@@ -527,8 +527,8 @@ def get_low_stock_alerts(
               AND m.date = CURDATE()
               AND m.is_released = 1
               AND m.menu_type = 'ONE_DAY'
-              AND mi.final_qty > 0
-              AND mi.available_qty <= mi.final_qty * 0.20
+              AND mi.max_qty > 0
+              AND mi.available_qty <= mi.max_qty * 0.20
             ORDER BY mi.available_qty ASC
             """,
             (resolved_city,),
