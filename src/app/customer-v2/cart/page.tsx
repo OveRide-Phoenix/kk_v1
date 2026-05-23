@@ -25,7 +25,7 @@ type CartLine = {
 };
 
 type CartContext = {
-  order_date: string;
+  delivery_date: string;
   address_id: number;
   order_type?: string;
 };
@@ -334,7 +334,7 @@ export default function CustomerV2CartPage() {
       customer_id: user.customer_id,
       address_id: selectedAddress.address_id,
       payment_method: paymentMethod,
-      order_date: cartContext?.order_date,
+      delivery_date: cartContext?.delivery_date,
       order_type: cartContext?.order_type ?? "one_time",
       discount_code: appliedCoupons[0],
       items: cartItems.map((item) => ({
@@ -377,12 +377,12 @@ export default function CustomerV2CartPage() {
     localStorage.setItem(
       CART_CONTEXT_KEY,
       JSON.stringify({
-        order_date: cartContext?.order_date ?? formatDate(new Date(), "yyyy-MM-dd"),
+        delivery_date: cartContext?.delivery_date ?? formatDate(new Date(), "yyyy-MM-dd"),
         address_id: selectedAddress?.address_id ?? 0,
         order_type: cartContext?.order_type ?? "one_time",
       }),
     );
-  }, [cartItems, cartContext?.order_date, cartContext?.order_type, selectedAddress?.address_id]);
+  }, [cartItems, cartContext?.delivery_date, cartContext?.order_type, selectedAddress?.address_id]);
 
   const handleContinueShopping = () => {
     sessionStorage.setItem(CART_KEEP_KEY, "1");

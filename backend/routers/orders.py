@@ -51,7 +51,7 @@ class CreateOrderPayload(BaseModel):
     address_id: Optional[int] = None
     payment_method: str
     items: List[OrderItemPayload]
-    order_date: Optional[str] = None
+    delivery_date: Optional[str] = None
     order_type: Optional[str] = None
     discount_code: Optional[str] = None
     coupon_codes: Optional[List[str]] = None
@@ -434,7 +434,7 @@ def create_order(payload: CreateOrderPayload) -> Dict[str, Any]:
 
         cursor.execute(
             """
-            INSERT INTO orders (customer_id, address_id, total_price, payment_method, order_date,
+            INSERT INTO orders (customer_id, address_id, total_price, payment_method, delivery_date,
                                 status, order_type, paid, discount, discount_code, cgst, sgst, delivery_charge)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
@@ -443,7 +443,7 @@ def create_order(payload: CreateOrderPayload) -> Dict[str, Any]:
                 address_id,
                 float(totals["total_price"]),
                 payload.payment_method,
-                payload.order_date,
+                payload.delivery_date,
                 stored_status,
                 payload.order_type or "one_time",
                 paid_flag,
@@ -578,9 +578,13 @@ def admin_order_history(
         normalized_order_type = (order_type or "").strip().lower()
         if normalized_order_type and normalized_order_type != "all":
             if normalized_order_type == "subscription":
-                where_clauses.append("LOWER(COALESCE(o.order_type, 'one_time')) = 'subscription'")
+                where_clauses.append(
+                    "LOWER(COALESCE(o.order_type, 'one_time')) IN ('subscription', 'subscription_daily')"
+                )
             elif normalized_order_type in {"one_time", "normal"}:
-                where_clauses.append("LOWER(COALESCE(o.order_type, 'one_time')) <> 'subscription'")
+                where_clauses.append(
+                    "LOWER(COALESCE(o.order_type, 'one_time')) NOT IN ('subscription', 'subscription_daily')"
+                )
             else:
                 raise HTTPException(status_code=400, detail="Invalid order_type filter")
         where_sql = " AND ".join(where_clauses)
@@ -604,6 +608,7 @@ def admin_order_history(
             SELECT
                 o.order_id,
                 o.created_at,
+                o.delivery_date,
                 o.total_price,
                 o.status,
                 o.paid,
@@ -628,6 +633,7 @@ def admin_order_history(
             GROUP BY
                 o.order_id,
                 o.created_at,
+                o.delivery_date,
                 o.total_price,
                 o.status,
                 o.paid,
@@ -653,6 +659,7 @@ def admin_order_history(
                 SELECT
                     o.order_id,
                     o.created_at,
+                    o.delivery_date,
                     o.total_price,
                     o.status,
                     o.paid,
@@ -685,6 +692,7 @@ def admin_order_history(
                         [
                             "Order ID",
                             "Placed At",
+                            "Delivery Date",
                             "Customer",
                             "Phone",
                             "Status",
@@ -713,6 +721,11 @@ def admin_order_history(
                                     (
                                         row["created_at"].strftime("%Y-%m-%d %H:%M:%S")
                                         if row.get("created_at")
+                                        else ""
+                                    ),
+                                    (
+                                        row["delivery_date"].isoformat()
+                                        if row.get("delivery_date")
                                         else ""
                                     ),
                                     row.get("customer_name") or "",
@@ -790,6 +803,9 @@ def admin_order_history(
                 {
                     "order_id": order_id,
                     "created_at": _format_datetime(record.get("created_at")),
+                    "delivery_date": (
+                        record["delivery_date"].isoformat() if record.get("delivery_date") else None
+                    ),
                     "status": normalized_status,
                     "payment_status": payment_status_label(paid_flag),
                     "payment_method": record.get("payment_method") or "Unknown",

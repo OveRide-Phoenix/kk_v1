@@ -72,7 +72,7 @@ type CartLine = {
 };
 
 type CartContext = {
-  order_date: string;
+  delivery_date: string;
   address_id: number;
   order_type?: string;
 };
@@ -426,7 +426,7 @@ export default function NewOrderPage() {
     localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartSelection));
     const selectedAddress = addresses.find((address) => address.address_id === selectedAddressId);
     const context: CartContext = {
-      order_date: orderDate,
+      delivery_date: orderDate,
       address_id: selectedAddress?.address_id ?? addresses[0].address_id,
       order_type: storedContextRef.current?.order_type ?? "one_time",
     };

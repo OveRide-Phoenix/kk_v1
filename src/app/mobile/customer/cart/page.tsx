@@ -45,7 +45,7 @@ type CartLine = {
 };
 
 type CartContext = {
-  order_date: string;
+  delivery_date: string;
   address_id: number;
   order_type?: string;
 };
@@ -313,7 +313,7 @@ export default function MobileCartPage() {
       customer_id: user.customer_id,
       address_id: selectedAddress.address_id,
       payment_method: paymentMethod,
-      order_date: cartContext?.order_date,
+      delivery_date: cartContext?.delivery_date,
       order_type: cartContext?.order_type ?? "one_time",
       discount_code: appliedCoupons[0],
       items: cartItems.map((item) => ({
@@ -358,7 +358,7 @@ export default function MobileCartPage() {
   useEffect(() => {
     if (!cartItems.length || !selectedAddress) return;
     const context: CartContext = {
-      order_date: cartContext?.order_date ?? formatDate(new Date(), "yyyy-MM-dd"),
+      delivery_date: cartContext?.delivery_date ?? formatDate(new Date(), "yyyy-MM-dd"),
       address_id: selectedAddress.address_id,
       order_type: cartContext?.order_type ?? "one_time",
     };
@@ -566,7 +566,7 @@ export default function MobileCartPage() {
           <div className="space-y-3">
             <div className="flex justify-between text-sm text-[#3D2B1F]/80">
               <span>Delivery date</span>
-              <span>{cartContext?.order_date ?? formatDate(new Date(), "yyyy-MM-dd")}</span>
+              <span>{cartContext?.delivery_date ?? formatDate(new Date(), "yyyy-MM-dd")}</span>
             </div>
             <div className="flex justify-between text-sm text-[#3D2B1F]/80">
               <span>Items ({totals.totalQuantity})</span>

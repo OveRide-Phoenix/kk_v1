@@ -1294,7 +1294,7 @@ def resolve_subscriptions_for_menu(
               JOIN addresses a ON a.address_id = o.address_id
               JOIN order_items oi ON oi.order_id = o.order_id
              WHERE o.order_type = 'subscription_daily'
-               AND o.order_date = %s
+               AND o.delivery_date = %s
                AND LOWER(oi.meal_type) = %s
                AND a.city_code = %s
             """,
@@ -1319,7 +1319,7 @@ def resolve_subscriptions_for_menu(
                   JOIN addresses a ON a.address_id = o.address_id
                   JOIN order_items oi ON oi.order_id = o.order_id
                  WHERE o.order_type = 'subscription_daily'
-                   AND o.order_date = %s
+                   AND o.delivery_date = %s
                    AND LOWER(oi.meal_type) = %s
                    AND a.city_code = %s
                 """,
@@ -1441,7 +1441,7 @@ def resolve_subscriptions_for_menu(
                 """
                 INSERT INTO orders
                     (customer_id, address_id, total_price, status, payment_method,
-                     order_date, order_type, discount, cgst, sgst, delivery_charge)
+                     delivery_date, order_type, discount, cgst, sgst, delivery_charge)
                 VALUES (%s, %s, %s, 'Confirmed', %s, %s, 'subscription_daily', 0, 0, 0, 0)
                 """,
                 (

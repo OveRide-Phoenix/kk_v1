@@ -310,9 +310,10 @@ def _fetch_order_quantities_by_menu_item(
         FROM orders o
         JOIN order_items oi ON oi.order_id = o.order_id
         JOIN addresses a ON o.address_id = a.address_id
-        WHERE COALESCE(o.order_date, DATE(o.created_at)) = %s
+        WHERE COALESCE(o.delivery_date, DATE(o.created_at)) = %s
           AND a.city_code = %s
           AND oi.menu_item_id IS NOT NULL
+          AND COALESCE(o.order_type, '') != 'subscription'
           AND LOWER(REPLACE(COALESCE(o.status, ''), ' (Payment Due)', '')) NOT IN (
             'cancelled',
             'cancelled by customer',
@@ -1378,8 +1379,9 @@ def get_production_orders_summary(
                 FROM orders o
                 JOIN order_items oi ON oi.order_id = o.order_id
                 JOIN addresses a ON o.address_id = a.address_id
-                WHERE COALESCE(o.order_date, DATE(o.created_at)) = %s
+                WHERE COALESCE(o.delivery_date, DATE(o.created_at)) = %s
                   AND a.city_code = %s
+                  AND COALESCE(o.order_type, '') != 'subscription'
                   AND LOWER(REPLACE(COALESCE(o.status, ''), ' (Payment Due)', '')) NOT IN (
                     'cancelled',
                     'cancelled by customer',

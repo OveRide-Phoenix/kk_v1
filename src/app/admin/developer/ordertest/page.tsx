@@ -434,7 +434,7 @@ function SubscriptionCustomerPreview({
         customer_id: customerId,
         address_id: addressId,
         payment_method: "Cash",
-        order_date: dateISO,
+        delivery_date: dateISO,
         order_type: "subscription",
         items: selectedSubscriptionLines.map(({ line, quantity }) => ({
           item_id: line.item_id ?? null,
@@ -681,7 +681,7 @@ export default function OrderTestPage() {
       customer_id: TEST_CUSTOMER_ID,
       address_id: addressId,
       payment_method: "Cash",
-      order_date: cartContext.confirmedDateISO ?? format(new Date(), "yyyy-MM-dd"),
+      delivery_date: cartContext.confirmedDateISO ?? format(new Date(), "yyyy-MM-dd"),
       items: cartSelection.map((item) => ({
         item_id: item.item_id ?? null,
         combo_id: item.combo_id ?? null,

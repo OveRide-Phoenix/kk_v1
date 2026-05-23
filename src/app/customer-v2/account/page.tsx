@@ -105,7 +105,7 @@ type OrderItem = {
 type OrderSummary = {
   order_id: number;
   created_at: string | null;
-  order_date?: string | null;
+  delivery_date?: string | null;
   total_price: number;
   status: string;
   payment_status?: string;
@@ -120,7 +120,7 @@ type OrderSummary = {
   items: OrderItem[];
 };
 
-const orderStartValue = (order: OrderSummary) => order.order_date ?? order.created_at;
+const orderStartValue = (order: OrderSummary) => order.delivery_date ?? order.created_at;
 
 type AddressFormState = {
   address_type: string;

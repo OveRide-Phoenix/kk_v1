@@ -893,19 +893,13 @@ export function DailyMenuSetup() {
       setIsReleasedByMeal((prev) => ({ ...prev, [meal]: !unrelease }));
 
       if (!unrelease) {
-        // After a release, offer subscription resolution
-        const menuId = menuIdByMeal[meal];
-        // Pre-check: find out if already resolved so the dialog shows the right text immediately
-        const checkRes = await http.post(`/api/menu/${menuId}/resolve-subscriptions`, {
-          force: false,
-        });
-        const checkData = await checkRes.json();
+        // After a release, open dialog so admin can choose whether to resolve subscriptions
         setResolveDialog({
           open: true,
           meal,
-          menuId,
-          alreadyResolved: Boolean(checkData.already_resolved),
-          existingCount: Number(checkData.existing_count ?? 0),
+          menuId: menuIdByMeal[meal],
+          alreadyResolved: false,
+          existingCount: 0,
           loading: false,
           result: null,
         });
@@ -933,10 +927,19 @@ export function DailyMenuSetup() {
         setResolveDialog((prev) => ({ ...prev, loading: false }));
         return;
       }
+      if (data.already_resolved) {
+        // Show warning state so admin can choose to re-resolve
+        setResolveDialog((prev) => ({
+          ...prev,
+          loading: false,
+          alreadyResolved: true,
+          existingCount: Number(data.existing_count ?? 0),
+        }));
+        return;
+      }
       setResolveDialog((prev) => ({
         ...prev,
         loading: false,
-        alreadyResolved: false,
         result: { orders_created: data.orders_created, items_resolved: data.items_resolved },
       }));
     } catch {

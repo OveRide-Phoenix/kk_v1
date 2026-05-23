@@ -345,7 +345,7 @@ export default function CustomerV2OrderPage() {
     localStorage.setItem(
       CART_CONTEXT_KEY,
       JSON.stringify({
-        order_date: todayISO,
+        delivery_date: todayISO,
         address_id: 0,
         order_type: "one_time",
       }),

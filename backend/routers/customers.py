@@ -607,7 +607,7 @@ def list_customer_orders(customer_id: int, limit: int = Query(50, ge=1, le=200))
                 """
                 SELECT o.order_id,
                        o.created_at,
-                       o.order_date,
+                       o.delivery_date,
                        o.total_price,
                        o.status,
                        o.paid,
@@ -631,7 +631,7 @@ def list_customer_orders(customer_id: int, limit: int = Query(50, ge=1, le=200))
                     """
                     SELECT o.order_id,
                            o.created_at,
-                           NULL AS order_date,
+                           NULL AS delivery_date,
                            o.total_price,
                            o.status,
                            o.paid,
@@ -693,13 +693,13 @@ def list_customer_orders(customer_id: int, limit: int = Query(50, ge=1, le=200))
         for order in orders:
             order_id = order["order_id"]
             created = order.get("created_at")
-            order_date = order.get("order_date")
+            delivery_date = order.get("delivery_date")
             paid_flag = bool(order.get("paid"))
             result.append(
                 {
                     "order_id": order_id,
                     "created_at": created.isoformat() if created else None,
-                    "order_date": order_date.isoformat() if order_date else None,
+                    "delivery_date": delivery_date.isoformat() if delivery_date else None,
                     "total_price": float(order.get("total_price") or 0),
                     "status": normalize_status_for_response(order.get("status")),
                     "payment_status": payment_status_label(paid_flag),

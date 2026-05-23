@@ -376,7 +376,7 @@ def get_unassigned_route_customers(
             FROM orders o
             JOIN customers c ON o.customer_id = c.customer_id
             JOIN addresses a ON o.address_id = a.address_id
-            WHERE COALESCE(o.order_date, DATE(o.created_at)) = %s
+            WHERE COALESCE(o.delivery_date, DATE(o.created_at)) = %s
               AND a.city_code = %s
               AND o.status NOT IN ('Cancelled', 'Delivered')
               AND a.route_id IS NULL
@@ -508,7 +508,7 @@ def mark_trip_sheet_orders_delivered(
             SELECT o.order_id, o.status
               FROM orders o
               JOIN addresses a ON o.address_id = a.address_id
-             WHERE COALESCE(o.order_date, DATE(o.created_at)) = %s
+             WHERE COALESCE(o.delivery_date, DATE(o.created_at)) = %s
                AND a.city_code = %s
                {meal_filter_sql}
             """,
@@ -696,7 +696,7 @@ def generate_trip_sheet_report(
             JOIN customers c ON o.customer_id = c.customer_id
             JOIN addresses a ON o.address_id = a.address_id
             LEFT JOIN delivery_routes dr ON dr.route_id = a.route_id
-           WHERE COALESCE(o.order_date, DATE(o.created_at)) = %s
+           WHERE COALESCE(o.delivery_date, DATE(o.created_at)) = %s
              AND a.city_code = %s
              {meal_filter_sql}
            ORDER BY COALESCE(dr.sort_order, 9999), COALESCE(dr.route_name, ''), c.name
