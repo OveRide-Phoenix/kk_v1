@@ -1225,6 +1225,276 @@ def unrelease_menu(menu_id: int) -> Dict[str, Any]:
         db.close()
 
 
+class ResolveSubscriptionsPayload(BaseModel):
+    """Payload for resolving subscription items against today's released menu."""
+
+    force: bool = False
+
+
+@router.post("/api/menu/{menu_id}/resolve-subscriptions")
+def resolve_subscriptions_for_menu(
+    menu_id: int,
+    payload: ResolveSubscriptionsPayload,
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user),
+) -> Dict[str, Any]:
+    """Resolve active subscription orders against today's released daily menu.
+
+    For each active subscriber (non-paused, non-cancelled) whose subscription
+    covers this menu's meal type and city, creates a subscription_daily order
+    with concrete item_ids and rates resolved from the menu. Decrements
+    available_qty on the matched menu_items.
+
+    If subscription_daily orders already exist for this date/meal/city and
+    force=False, returns {already_resolved: true, existing_count: N} without
+    making changes. If force=True, deletes those orders (restoring available_qty)
+    and recreates them.
+
+    Args:
+        menu_id: The released daily menu to resolve against.
+        payload: Contains force flag.
+        user: Optional authenticated user (injected).
+
+    Returns:
+        Dict with already_resolved, existing_count, orders_created, items_resolved.
+    """
+    db = get_raw_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        _ensure_subscription_pause_table(cursor)
+
+        # 1. Fetch menu metadata
+        cursor.execute(
+            """
+            SELECT m.menu_id, m.date, m.city_code, m.is_released, b.bld_type
+              FROM menu m
+              JOIN bld b ON b.bld_id = m.bld_id
+             WHERE m.menu_id = %s
+            """,
+            (menu_id,),
+        )
+        menu = cursor.fetchone()
+        if not menu:
+            raise HTTPException(status_code=404, detail="Menu not found")
+        if not menu["is_released"]:
+            raise HTTPException(
+                status_code=400, detail="Menu must be released before resolving subscriptions"
+            )
+
+        menu_date = (
+            menu["date"].isoformat() if hasattr(menu["date"], "isoformat") else str(menu["date"])
+        )
+        city_code = menu["city_code"]
+        bld_type = menu["bld_type"].lower()  # 'breakfast' | 'lunch' | 'dinner'
+
+        # 2. Check for existing subscription_daily orders for this date/meal/city
+        cursor.execute(
+            """
+            SELECT COUNT(DISTINCT o.order_id) AS cnt
+              FROM orders o
+              JOIN addresses a ON a.address_id = o.address_id
+              JOIN order_items oi ON oi.order_id = o.order_id
+             WHERE o.order_type = 'subscription_daily'
+               AND o.order_date = %s
+               AND LOWER(oi.meal_type) = %s
+               AND a.city_code = %s
+            """,
+            (menu_date, bld_type, city_code),
+        )
+        existing_count = int((cursor.fetchone() or {}).get("cnt", 0))
+
+        if existing_count > 0 and not payload.force:
+            return {
+                "already_resolved": True,
+                "existing_count": existing_count,
+                "orders_created": 0,
+                "items_resolved": 0,
+            }
+
+        # 3. If force: restore available_qty and delete existing subscription_daily orders
+        if existing_count > 0 and payload.force:
+            cursor.execute(
+                """
+                SELECT DISTINCT o.order_id
+                  FROM orders o
+                  JOIN addresses a ON a.address_id = o.address_id
+                  JOIN order_items oi ON oi.order_id = o.order_id
+                 WHERE o.order_type = 'subscription_daily'
+                   AND o.order_date = %s
+                   AND LOWER(oi.meal_type) = %s
+                   AND a.city_code = %s
+                """,
+                (menu_date, bld_type, city_code),
+            )
+            old_order_ids = [r["order_id"] for r in cursor.fetchall()]
+            if old_order_ids:
+                fmt = ",".join(["%s"] * len(old_order_ids))
+                # Restore available_qty
+                cursor.execute(
+                    f"""
+                    UPDATE menu_items mi
+                      JOIN order_items oi ON oi.menu_item_id = mi.menu_item_id
+                     SET mi.available_qty = mi.available_qty + oi.quantity
+                    WHERE oi.order_id IN ({fmt})
+                      AND oi.menu_item_id IS NOT NULL
+                    """,
+                    tuple(old_order_ids),
+                )
+                cursor.execute(
+                    f"DELETE FROM order_items WHERE order_id IN ({fmt})", tuple(old_order_ids)
+                )
+                cursor.execute(
+                    f"DELETE FROM orders WHERE order_id IN ({fmt})", tuple(old_order_ids)
+                )
+
+        # 4. Build component_type_id → (menu_item_id, item_id, rate) map from today's menu
+        cursor.execute(
+            """
+            SELECT
+                COALESCE(i.component_type_id, mi.component_type_id) AS component_type_id,
+                mi.menu_item_id,
+                mi.item_id,
+                mi.rate
+              FROM menu_items mi
+              JOIN items i ON mi.item_id = i.item_id
+             WHERE mi.menu_id = %s
+               AND COALESCE(i.component_type_id, mi.component_type_id) IS NOT NULL
+            """,
+            (menu_id,),
+        )
+        ct_map: Dict[int, Dict[str, Any]] = {
+            r["component_type_id"]: r for r in cursor.fetchall() if r["component_type_id"]
+        }
+
+        # 5. Find active subscription orders for this meal type and city
+        cursor.execute(
+            """
+            SELECT DISTINCT o.order_id, o.customer_id, o.address_id, o.payment_method
+              FROM orders o
+              JOIN addresses a ON a.address_id = o.address_id
+              JOIN order_items oi ON oi.order_id = o.order_id
+              LEFT JOIN menu_items sub_mi ON oi.menu_item_id = sub_mi.menu_item_id
+              LEFT JOIN items i_sub ON oi.item_id = i_sub.item_id
+              LEFT JOIN subscription_pause_windows spw
+                     ON spw.customer_id = o.customer_id
+                    AND spw.city_code = %s
+                    AND spw.is_active = 1
+                    AND %s BETWEEN spw.start_date AND spw.end_date
+                    AND spw.order_id = o.order_id
+             WHERE o.order_type = 'subscription'
+               AND o.status NOT IN ('cancelled', 'rejected')
+               AND LOWER(oi.meal_type) = %s
+               AND a.city_code = %s
+               AND spw.pause_id IS NULL
+               AND COALESCE(sub_mi.component_type_id, i_sub.component_type_id) IS NOT NULL
+            """,
+            (city_code, menu_date, bld_type, city_code),
+        )
+        sub_orders = cursor.fetchall() or []
+
+        orders_created = 0
+        items_resolved = 0
+
+        for sub in sub_orders:
+            # Get this subscription's items for this meal type
+            cursor.execute(
+                """
+                SELECT
+                    oi.quantity,
+                    oi.meal_type,
+                    COALESCE(sub_mi.component_type_id, i_sub.component_type_id) AS component_type_id
+                  FROM order_items oi
+                  LEFT JOIN menu_items sub_mi ON oi.menu_item_id = sub_mi.menu_item_id
+                  LEFT JOIN items i_sub ON oi.item_id = i_sub.item_id
+                 WHERE oi.order_id = %s
+                   AND LOWER(oi.meal_type) = %s
+                   AND COALESCE(sub_mi.component_type_id, i_sub.component_type_id) IS NOT NULL
+                """,
+                (sub["order_id"], bld_type),
+            )
+            sub_items = cursor.fetchall() or []
+
+            # Resolve each item against today's menu
+            resolved_lines: List[Dict[str, Any]] = []
+            for si in sub_items:
+                ct_id = si["component_type_id"]
+                if ct_id not in ct_map:
+                    continue
+                resolved = ct_map[ct_id]
+                resolved_lines.append(
+                    {
+                        "menu_item_id": resolved["menu_item_id"],
+                        "item_id": resolved["item_id"],
+                        "rate": float(resolved["rate"]),
+                        "quantity": si["quantity"],
+                        "meal_type": si["meal_type"],
+                    }
+                )
+
+            if not resolved_lines:
+                continue
+
+            # Calculate total
+            total_price = sum(line["rate"] * line["quantity"] for line in resolved_lines)
+
+            # Insert the subscription_daily order
+            cursor.execute(
+                """
+                INSERT INTO orders
+                    (customer_id, address_id, total_price, status, payment_method,
+                     order_date, order_type, discount, cgst, sgst, delivery_charge)
+                VALUES (%s, %s, %s, 'Confirmed', %s, %s, 'subscription_daily', 0, 0, 0, 0)
+                """,
+                (
+                    sub["customer_id"],
+                    sub["address_id"],
+                    total_price,
+                    sub["payment_method"],
+                    menu_date,
+                ),
+            )
+            new_order_id = cursor.lastrowid
+
+            for line in resolved_lines:
+                cursor.execute(
+                    """
+                    INSERT INTO order_items
+                        (order_id, item_id, menu_item_id, meal_type, quantity, price)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        new_order_id,
+                        line["item_id"],
+                        line["menu_item_id"],
+                        line["meal_type"],
+                        line["quantity"],
+                        line["rate"],
+                    ),
+                )
+                # Decrement available_qty
+                cursor.execute(
+                    "UPDATE menu_items SET available_qty = GREATEST(available_qty - %s, 0) WHERE menu_item_id = %s",
+                    (line["quantity"], line["menu_item_id"]),
+                )
+                items_resolved += 1
+
+            orders_created += 1
+
+        db.commit()
+        return {
+            "already_resolved": False,
+            "existing_count": 0,
+            "orders_created": orders_created,
+            "items_resolved": items_resolved,
+        }
+
+    except mysql.connector.Error as err:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        cursor.close()
+        db.close()
+
+
 def _ensure_subscription_pause_table(cursor) -> None:
     """Create the subscription pause table if the deployment has not run migrations yet.
 

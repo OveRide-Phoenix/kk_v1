@@ -191,6 +191,25 @@ export function DailyMenuSetup() {
   const [menuValidationDialog, setMenuValidationDialog] =
     useState<MenuValidationDialogState | null>(null);
 
+  type ResolveDialogState = {
+    open: boolean;
+    meal: MealSection | null;
+    menuId: number | null;
+    alreadyResolved: boolean;
+    existingCount: number;
+    loading: boolean;
+    result: { orders_created: number; items_resolved: number } | null;
+  };
+  const [resolveDialog, setResolveDialog] = useState<ResolveDialogState>({
+    open: false,
+    meal: null,
+    menuId: null,
+    alreadyResolved: false,
+    existingCount: 0,
+    loading: false,
+    result: null,
+  });
+
   // Calendar state
   const [draftDate, setDraftDate] = useState<Date | null>(() => {
     const today = new Date();
@@ -872,10 +891,56 @@ export function DailyMenuSetup() {
       }
       await res.json();
       setIsReleasedByMeal((prev) => ({ ...prev, [meal]: !unrelease }));
+
+      if (!unrelease) {
+        // After a release, offer subscription resolution
+        const menuId = menuIdByMeal[meal];
+        // Pre-check: find out if already resolved so the dialog shows the right text immediately
+        const checkRes = await http.post(`/api/menu/${menuId}/resolve-subscriptions`, {
+          force: false,
+        });
+        const checkData = await checkRes.json();
+        setResolveDialog({
+          open: true,
+          meal,
+          menuId,
+          alreadyResolved: Boolean(checkData.already_resolved),
+          existingCount: Number(checkData.existing_count ?? 0),
+          loading: false,
+          result: null,
+        });
+      }
     } catch (err) {
       console.error(err);
     } finally {
       setTogglingRelease(false);
+    }
+  };
+
+  const handleResolveSubscriptions = async (force: boolean) => {
+    const { menuId, meal } = resolveDialog;
+    if (!menuId || !meal) return;
+    setResolveDialog((prev) => ({ ...prev, loading: true }));
+    try {
+      const res = await http.post(`/api/menu/${menuId}/resolve-subscriptions`, { force });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({
+          title: "Could not resolve subscriptions",
+          description: data?.detail ?? "Unknown error",
+          variant: "destructive",
+        });
+        setResolveDialog((prev) => ({ ...prev, loading: false }));
+        return;
+      }
+      setResolveDialog((prev) => ({
+        ...prev,
+        loading: false,
+        alreadyResolved: false,
+        result: { orders_created: data.orders_created, items_resolved: data.items_resolved },
+      }));
+    } catch {
+      setResolveDialog((prev) => ({ ...prev, loading: false }));
     }
   };
 
@@ -1509,6 +1574,88 @@ export function DailyMenuSetup() {
             <Button variant="destructive" onClick={discardChangesAndNavigate}>
               Leave without saving
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Subscription resolution dialog */}
+      <Dialog
+        open={resolveDialog.open}
+        onOpenChange={(open) =>
+          !resolveDialog.loading && setResolveDialog((prev) => ({ ...prev, open }))
+        }
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {resolveDialog.result
+                ? "Subscriptions resolved"
+                : resolveDialog.alreadyResolved
+                  ? "Already resolved — re-resolve?"
+                  : `Resolve subscriptions for ${resolveDialog.meal ?? "this menu"}`}
+            </DialogTitle>
+            <DialogDescription>
+              {resolveDialog.result ? (
+                <>
+                  Created <strong>{resolveDialog.result.orders_created}</strong> subscription_daily
+                  order{resolveDialog.result.orders_created !== 1 ? "s" : ""} with{" "}
+                  <strong>{resolveDialog.result.items_resolved}</strong> resolved item
+                  {resolveDialog.result.items_resolved !== 1 ? "s" : ""}.
+                </>
+              ) : resolveDialog.alreadyResolved ? (
+                <>
+                  You already resolved subscriptions for this menu —{" "}
+                  <strong>{resolveDialog.existingCount}</strong> order
+                  {resolveDialog.existingCount !== 1 ? "s" : ""} exist. Re-resolving will delete
+                  those orders and recreate them from scratch.
+                </>
+              ) : (
+                <>
+                  Create today&apos;s subscription orders by resolving each active subscriber&apos;s
+                  items against this menu. This will decrement available stock accordingly.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            {resolveDialog.result ? (
+              <Button onClick={() => setResolveDialog((prev) => ({ ...prev, open: false }))}>
+                Done
+              </Button>
+            ) : resolveDialog.alreadyResolved ? (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setResolveDialog((prev) => ({ ...prev, open: false }))}
+                  disabled={resolveDialog.loading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => handleResolveSubscriptions(true)}
+                  disabled={resolveDialog.loading}
+                >
+                  {resolveDialog.loading ? "Re-resolving…" : "Re-resolve"}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setResolveDialog((prev) => ({ ...prev, open: false }))}
+                  disabled={resolveDialog.loading}
+                >
+                  Skip for now
+                </Button>
+                <Button
+                  onClick={() => handleResolveSubscriptions(false)}
+                  disabled={resolveDialog.loading}
+                >
+                  {resolveDialog.loading ? "Resolving…" : "Resolve"}
+                </Button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
