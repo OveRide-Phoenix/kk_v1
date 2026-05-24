@@ -1,10 +1,21 @@
 # ─── CI/CD Pipeline ────────────────────────────────────────────────────────────
 # Runs entirely on the self-hosted VPS shell runner (no Docker, no shared minutes).
 # Stages run in order; jobs within a stage run in parallel.
+#
+# Pipeline triggers:
+#   - MR open/update  → lint only (no deploy)
+#   - Push to develop → lint + deploy to dev (auto)
+#   - Push to main    → lint + deploy to prod (manual)
+#   - Feature branch push with no MR → no pipeline
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "develop"
+    - if: $CI_COMMIT_BRANCH == "main"
 
 stages:
   - lint
-  - build
   - deploy
 
 # ─── Cache ─────────────────────────────────────────────────────────────────────
@@ -20,21 +31,13 @@ stages:
 
 # ─── Lint ──────────────────────────────────────────────────────────────────────
 
-eslint:
+js_lint:
   stage: lint
   <<: *npm_cache
   before_script:
     - npm ci --prefer-offline
   script:
     - npm run lint
-  allow_failure: false
-
-typescript:
-  stage: lint
-  <<: *npm_cache
-  before_script:
-    - npm ci --prefer-offline
-  script:
     - npx tsc --noEmit
   allow_failure: false
 
@@ -42,17 +45,6 @@ black:
   stage: lint
   script:
     - black --check --line-length 100 backend/
-  allow_failure: false
-
-# ─── Build ─────────────────────────────────────────────────────────────────────
-
-nextjs_build:
-  stage: build
-  <<: *npm_cache
-  before_script:
-    - npm ci --prefer-offline
-  script:
-    - npm run build
   allow_failure: false
 
 # ─── Deploy ────────────────────────────────────────────────────────────────────
@@ -66,9 +58,11 @@ deploy_dev:
     - printf '%s' "$DEV_FRONTEND_ENV" > /var/www/kk_v1_dev/.env
     - printf '%s' "$DEV_BACKEND_ENV" > /var/www/kk_v1_dev/backend/.env
     - cd /var/www/kk_v1_dev
+    - git remote set-url origin "https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.com/kuteera-kitchen/kk_v1.git"
     - git fetch origin
     - git checkout -f develop
     - git reset --hard origin/develop
+    - git remote set-url origin "git@gitlab.com:kuteera-kitchen/kk_v1.git"
     - npm ci --prefer-offline
     - npm run build
     - backend/venv/bin/pip install -q -r requirements.txt
@@ -90,9 +84,11 @@ deploy_prod:
     - printf '%s' "$PROD_FRONTEND_ENV" > /var/www/kk_v1_prod/.env
     - printf '%s' "$PROD_BACKEND_ENV" > /var/www/kk_v1_prod/backend/.env
     - cd /var/www/kk_v1_prod
+    - git remote set-url origin "https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.com/kuteera-kitchen/kk_v1.git"
     - git fetch origin
     - git checkout -f main
     - git reset --hard origin/main
+    - git remote set-url origin "git@gitlab.com:kuteera-kitchen/kk_v1.git"
     - npm ci --prefer-offline
     - npm run build
     - backend/venv/bin/pip install -q -r requirements.txt

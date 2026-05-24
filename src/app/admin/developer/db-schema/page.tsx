@@ -34,6 +34,12 @@ type DevSchemaResponse = {
   tables: DevSchemaTable[];
 };
 
+type TableDataResponse = {
+  columns: string[];
+  rows: unknown[][];
+  total: number;
+};
+
 function DBSchemaContent() {
   const { toast } = useToast();
   const hasDeveloperAccess = useAuthStore((state) => state.hasRole("developer"));
@@ -41,6 +47,9 @@ function DBSchemaContent() {
   const [data, setData] = useState<DevSchemaResponse | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [sqlVisible, setSqlVisible] = useState<Record<string, boolean>>({});
+  const [dataVisible, setDataVisible] = useState<Record<string, boolean>>({});
+  const [tableData, setTableData] = useState<Record<string, TableDataResponse>>({});
+  const [dataLoading, setDataLoading] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
@@ -87,6 +96,12 @@ function DBSchemaContent() {
           return acc;
         }, {}),
       );
+      setDataVisible(
+        schemaPayload.tables.reduce<Record<string, boolean>>((acc, table) => {
+          acc[table.name] = false;
+          return acc;
+        }, {}),
+      );
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Unexpected error");
     } finally {
@@ -94,15 +109,39 @@ function DBSchemaContent() {
     }
   }, []);
 
-  useEffect(() => {
-    if (!isHydrated) {
-      return;
-    }
+  const loadTableData = useCallback(
+    async (tableName: string) => {
+      if (tableData[tableName]) return;
+      setDataLoading((prev) => ({ ...prev, [tableName]: true }));
+      try {
+        const response = await http.get(
+          `/api/dev/db-table-data?table=${encodeURIComponent(tableName)}&limit=200`,
+        );
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload?.detail ?? "Failed to load table data");
+        }
+        setTableData((prev) => ({ ...prev, [tableName]: payload as TableDataResponse }));
+      } catch (error) {
+        toast({
+          title: "Failed to load data",
+          description: error instanceof Error ? error.message : "Unexpected error",
+          variant: "destructive",
+        });
+      } finally {
+        setDataLoading((prev) => ({ ...prev, [tableName]: false }));
+      }
+    },
+    [tableData, toast],
+  );
 
+  useEffect(() => {
+    if (!isHydrated) return;
     if (!hasDeveloperAccess) {
       setData(null);
       setExpanded({});
       setSqlVisible({});
+      setDataVisible({});
       setErrorMessage("Developer role required to view the database schema.");
       return;
     }
@@ -113,14 +152,13 @@ function DBSchemaContent() {
   const filteredTables = useMemo(() => {
     if (!data) return [];
     const query = searchTerm.trim().toLowerCase();
-    if (query.length === 0) {
-      return data.tables;
-    }
+    if (query.length === 0) return data.tables;
     return data.tables.filter((entry) => entry.name.toLowerCase().includes(query));
   }, [data, searchTerm]);
 
   const handleRefresh = useCallback(() => {
     if (!hasDeveloperAccess) return;
+    setTableData({});
     void loadSchema();
   }, [hasDeveloperAccess, loadSchema]);
 
@@ -136,10 +174,7 @@ function DBSchemaContent() {
       }
       try {
         await navigator.clipboard.writeText(`${table.ddl.trimEnd()}\n`);
-        toast({
-          title: "Copied",
-          description: `${table.name} DDL copied to clipboard.`,
-        });
+        toast({ title: "Copied", description: `${table.name} DDL copied to clipboard.` });
       } catch (error) {
         toast({
           title: "Copy failed",
@@ -152,9 +187,7 @@ function DBSchemaContent() {
   );
 
   const handleCopyAll = useCallback(async () => {
-    if (!filteredTables.length) {
-      return;
-    }
+    if (!filteredTables.length) return;
     if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
       toast({
         title: "Clipboard unavailable",
@@ -183,26 +216,26 @@ function DBSchemaContent() {
   }, [filteredTables, toast]);
 
   const toggleTable = useCallback((name: string) => {
-    setExpanded((prev) => ({
-      ...prev,
-      [name]: !(prev[name] ?? false),
-    }));
+    setExpanded((prev) => ({ ...prev, [name]: !(prev[name] ?? false) }));
   }, []);
 
   const toggleSql = useCallback((name: string, next: boolean) => {
-    setSqlVisible((prev) => ({
-      ...prev,
-      [name]: next,
-    }));
+    setSqlVisible((prev) => ({ ...prev, [name]: next }));
   }, []);
+
+  const toggleData = useCallback(
+    (name: string, next: boolean) => {
+      setDataVisible((prev) => ({ ...prev, [name]: next }));
+      if (next) void loadTableData(name);
+    },
+    [loadTableData],
+  );
 
   const activeSchema = data?.schema ?? "";
   const generatedAt = useMemo(() => {
     if (!data?.generated_at) return null;
     const date = new Date(data.generated_at);
-    if (Number.isNaN(date.getTime())) {
-      return data.generated_at;
-    }
+    if (Number.isNaN(date.getTime())) return data.generated_at;
     return date.toLocaleString();
   }, [data]);
 
@@ -232,8 +265,7 @@ function DBSchemaContent() {
               Read-only access to table and view definitions for developers.
             </CardDescription>
             <p className="text-xs text-muted-foreground">
-              Active schema:{" "}
-              <span className="font-medium text-foreground">{activeSchema || activeSchema}</span>
+              Active schema: <span className="font-medium text-foreground">{activeSchema}</span>
               {generatedAt ? ` · Generated ${generatedAt}` : null}
             </p>
           </div>
@@ -241,7 +273,7 @@ function DBSchemaContent() {
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
               Showing all tables and views for{" "}
-              <span className="font-medium text-foreground">{activeSchema || activeSchema}</span>
+              <span className="font-medium text-foreground">{activeSchema}</span>
             </div>
 
             <div className="flex items-center gap-2">
@@ -289,6 +321,9 @@ function DBSchemaContent() {
             {filteredTables.map((table) => {
               const isOpen = expanded[table.name] ?? false;
               const sqlEnabled = sqlVisible[table.name] ?? false;
+              const dataEnabled = dataVisible[table.name] ?? false;
+              const isDataLoading = dataLoading[table.name] ?? false;
+              const rowData = tableData[table.name];
               const columns = table.columns ?? [];
               return (
                 <div key={table.name} className="rounded-lg border border-border bg-card/60">
@@ -335,26 +370,40 @@ function DBSchemaContent() {
                   {isOpen && (
                     <div
                       id={`ddl-${table.name}`}
-                      className="border-t border-border bg-muted/20 px-4 py-3"
+                      className="border-t border-border bg-muted/20 px-4 py-3 min-w-0 overflow-hidden"
                     >
-                      <div className="space-y-4">
+                      <div className="space-y-4 min-w-0">
                         <div className="flex items-center justify-between gap-3">
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <Table className="h-4 w-4" />
                             <span>{columns.length} columns</span>
                           </div>
-                          <label
-                            className="flex items-center gap-2 text-sm text-muted-foreground"
+                          <div
+                            className="flex items-center gap-4"
                             onClick={(event) => event.stopPropagation()}
                             onKeyDown={(event) => event.stopPropagation()}
                           >
-                            <Switch
-                              id={`sql-toggle-${table.name}`}
-                              checked={sqlEnabled}
-                              onCheckedChange={(checked) => toggleSql(table.name, Boolean(checked))}
-                            />
-                            Show SQL
-                          </label>
+                            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Switch
+                                id={`data-toggle-${table.name}`}
+                                checked={dataEnabled}
+                                onCheckedChange={(checked) =>
+                                  toggleData(table.name, Boolean(checked))
+                                }
+                              />
+                              Show Data
+                            </label>
+                            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Switch
+                                id={`sql-toggle-${table.name}`}
+                                checked={sqlEnabled}
+                                onCheckedChange={(checked) =>
+                                  toggleSql(table.name, Boolean(checked))
+                                }
+                              />
+                              Show SQL
+                            </label>
+                          </div>
                         </div>
 
                         <div className="overflow-x-auto">
@@ -421,6 +470,74 @@ function DBSchemaContent() {
                             </tbody>
                           </table>
                         </div>
+
+                        {dataEnabled && (
+                          <div className="space-y-2">
+                            <p className="text-xs font-medium text-muted-foreground">
+                              Table Data
+                              {rowData ? ` · ${rowData.total} rows` : ""}
+                              {rowData && rowData.total === 200 ? " (limit 200)" : ""}
+                            </p>
+                            {isDataLoading ? (
+                              <p className="text-xs text-muted-foreground">Loading data…</p>
+                            ) : rowData ? (
+                              <div
+                                className="max-h-96 overflow-x-auto overflow-y-auto rounded-md border border-border"
+                                style={{ scrollbarWidth: "thin" }}
+                              >
+                                <table
+                                  className="border-collapse text-left text-xs"
+                                  style={{ minWidth: "max-content", width: "100%" }}
+                                >
+                                  <thead className="sticky top-0 bg-muted/90">
+                                    <tr>
+                                      {rowData.columns.map((col) => (
+                                        <th
+                                          key={col}
+                                          className="border-b border-border px-3 py-2 font-semibold font-mono whitespace-nowrap"
+                                        >
+                                          {col}
+                                        </th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {rowData.rows.length === 0 ? (
+                                      <tr>
+                                        <td
+                                          colSpan={rowData.columns.length}
+                                          className="px-3 py-4 text-center text-muted-foreground"
+                                        >
+                                          No rows.
+                                        </td>
+                                      </tr>
+                                    ) : (
+                                      rowData.rows.map((row, ri) => (
+                                        <tr key={ri} className="odd:bg-background even:bg-muted/40">
+                                          {row.map((cell, ci) => (
+                                            <td
+                                              key={ci}
+                                              className="border-b border-border px-3 py-1.5 font-mono whitespace-nowrap max-w-[300px] truncate"
+                                              title={cell == null ? "NULL" : String(cell)}
+                                            >
+                                              {cell == null ? (
+                                                <span className="text-muted-foreground italic">
+                                                  NULL
+                                                </span>
+                                              ) : (
+                                                String(cell)
+                                              )}
+                                            </td>
+                                          ))}
+                                        </tr>
+                                      ))
+                                    )}
+                                  </tbody>
+                                </table>
+                              </div>
+                            ) : null}
+                          </div>
+                        )}
 
                         {sqlEnabled && (
                           <div className="max-h-80 overflow-auto rounded-md border border-border bg-background/80 p-4">
