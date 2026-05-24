@@ -330,7 +330,7 @@ export default function VpsMonitorPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await http.get("/api/backend/api/dev/vps/metrics");
+      const res = await http.get("/api/dev/vps/metrics");
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       const payload = await readJsonResponse<VpsData>(res);
       setData(payload);
