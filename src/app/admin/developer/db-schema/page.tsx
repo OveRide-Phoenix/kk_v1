@@ -370,9 +370,9 @@ function DBSchemaContent() {
                   {isOpen && (
                     <div
                       id={`ddl-${table.name}`}
-                      className="border-t border-border bg-muted/20 px-4 py-3"
+                      className="border-t border-border bg-muted/20 px-4 py-3 min-w-0 overflow-hidden"
                     >
-                      <div className="space-y-4">
+                      <div className="space-y-4 min-w-0">
                         <div className="flex items-center justify-between gap-3">
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <Table className="h-4 w-4" />
@@ -481,8 +481,14 @@ function DBSchemaContent() {
                             {isDataLoading ? (
                               <p className="text-xs text-muted-foreground">Loading data…</p>
                             ) : rowData ? (
-                              <div className="max-h-96 overflow-auto rounded-md border border-border">
-                                <table className="w-full min-w-max border-collapse text-left text-xs">
+                              <div
+                                className="max-h-96 overflow-x-auto overflow-y-auto rounded-md border border-border"
+                                style={{ scrollbarWidth: "thin" }}
+                              >
+                                <table
+                                  className="border-collapse text-left text-xs"
+                                  style={{ minWidth: "max-content", width: "100%" }}
+                                >
                                   <thead className="sticky top-0 bg-muted/90">
                                     <tr>
                                       {rowData.columns.map((col) => (
