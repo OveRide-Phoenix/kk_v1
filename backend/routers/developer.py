@@ -753,16 +753,235 @@ def seed_orders_for_testing(
 # VPS Monitor — Hostinger API + PTY terminal
 # ---------------------------------------------------------------------------
 
+import mimetypes as _mimetypes
 import subprocess as _subprocess
 
 import psutil as _psutil
 
-# SSH config — set VPS_SSH_HOST in backend/.env to collect metrics from the remote VPS.
-# Leave unset on the VPS itself so it reads local psutil directly.
+# SSH config — set VPS_SSH_HOST in backend/.env to proxy to the remote VPS.
+# Leave unset on the VPS itself so all operations run locally.
 _VPS_SSH_HOST: str = os.getenv("VPS_SSH_HOST", "")
 _VPS_SSH_USER: str = os.getenv("VPS_SSH_USER", "root")
 _VPS_SSH_KEY_PATH: str = os.getenv("VPS_SSH_KEY_PATH", "")
 _VPS_PYTHON_PATH: str = os.getenv("VPS_PYTHON_PATH", "python3")
+
+
+def _ssh_base_cmd() -> List[str]:
+    """Return the base SSH command with auth flags.
+
+    Returns:
+        List of SSH command parts up to (not including) the remote command.
+    """
+    cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5"]
+    if _VPS_SSH_KEY_PATH:
+        cmd += ["-i", os.path.expanduser(_VPS_SSH_KEY_PATH)]
+    cmd.append(f"{_VPS_SSH_USER}@{_VPS_SSH_HOST}")
+    return cmd
+
+
+# ---------------------------------------------------------------------------
+# File Explorer
+# ---------------------------------------------------------------------------
+
+_FS_ROOT: str = os.getenv("VPS_FS_ROOT", "/var/www")
+_FS_MAX_FILE_BYTES: int = 2 * 1024 * 1024  # 2 MB read limit
+
+
+class _FileEntry(BaseModel):
+    name: str
+    path: str
+    is_dir: bool
+    size: Optional[int] = None
+    modified: Optional[float] = None
+
+
+class _FileWriteBody(BaseModel):
+    path: str
+    content: str
+
+
+def _validated_abs(raw: str) -> str:
+    """Return the absolute VPS path for raw, rejecting traversal attempts.
+
+    Args:
+        raw: Client-supplied relative path (leading / is fine).
+
+    Returns:
+        Absolute path string (not necessarily on this machine).
+
+    Raises:
+        HTTPException: If the path would escape VPS_FS_ROOT.
+    """
+    root = _FS_ROOT.rstrip("/")
+    joined = root + "/" + raw.lstrip("/")
+    # Collapse ./ and ../ without touching the filesystem
+    parts: List[str] = []
+    for part in joined.split("/"):
+        if part == "..":
+            if parts:
+                parts.pop()
+        elif part and part != ".":
+            parts.append(part)
+    resolved = "/" + "/".join(parts)
+    if not resolved.startswith(root):
+        raise HTTPException(status_code=400, detail="Path outside allowed root")
+    return resolved
+
+
+def _fs_list(abs_path: str) -> List[Dict[str, Any]]:
+    """List a directory, using SSH when VPS_SSH_HOST is set."""
+    if _VPS_SSH_HOST:
+        # Pass script via stdin to avoid shell-quoting issues with single quotes in code.
+        script = (
+            f"import os,json; p={abs_path!r}\n"
+            "rows=[]\n"
+            "for n in sorted(os.listdir(p)):\n"
+            "    fp=os.path.join(p,n)\n"
+            "    s=os.stat(fp)\n"
+            "    rows.append({'name':n,'is_dir':os.path.isdir(fp),"
+            "'size':None if os.path.isdir(fp) else s.st_size,'modified':s.st_mtime})\n"
+            "print(json.dumps(rows))\n"
+        )
+        result = _subprocess.run(
+            _ssh_base_cmd() + [_VPS_PYTHON_PATH],
+            input=script,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            raise HTTPException(status_code=500, detail=result.stderr.strip() or "SSH list failed")
+        return _json.loads(result.stdout)
+    # Local
+    if not os.path.isdir(abs_path):
+        raise HTTPException(status_code=404, detail="Directory not found")
+    rows = []
+    for name in sorted(os.listdir(abs_path)):
+        full = os.path.join(abs_path, name)
+        try:
+            s = os.stat(full)
+            rows.append(
+                {
+                    "name": name,
+                    "is_dir": os.path.isdir(full),
+                    "size": None if os.path.isdir(full) else s.st_size,
+                    "modified": s.st_mtime,
+                }
+            )
+        except OSError:
+            continue
+    return rows
+
+
+def _fs_read(abs_path: str) -> str:
+    """Read a file, using SSH when VPS_SSH_HOST is set."""
+    if _VPS_SSH_HOST:
+        result = _subprocess.run(
+            _ssh_base_cmd() + ["cat", abs_path],
+            capture_output=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            raise HTTPException(
+                status_code=500, detail=result.stderr.decode().strip() or "SSH read failed"
+            )
+        return result.stdout.decode(errors="replace")
+    if not os.path.isfile(abs_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    if os.path.getsize(abs_path) > _FS_MAX_FILE_BYTES:
+        raise HTTPException(status_code=413, detail="File too large (> 2 MB)")
+    with open(abs_path, "r", encoding="utf-8", errors="replace") as fh:
+        return fh.read()
+
+
+def _fs_write(abs_path: str, content: str) -> None:
+    """Write a file, using SSH when VPS_SSH_HOST is set."""
+    if _VPS_SSH_HOST:
+        result = _subprocess.run(
+            _ssh_base_cmd() + ["tee", abs_path],
+            input=content.encode(),
+            capture_output=True,
+            timeout=15,
+        )
+        if result.returncode != 0:
+            raise HTTPException(
+                status_code=500, detail=result.stderr.decode().strip() or "SSH write failed"
+            )
+        return
+    os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+    with open(abs_path, "w", encoding="utf-8") as fh:
+        fh.write(content)
+
+
+@router.get("/api/dev/files")
+def list_files(
+    path: str = Query(default=""),
+    user: Any = Depends(developer_required),
+) -> List[_FileEntry]:
+    """List directory contents under VPS_FS_ROOT (local or via SSH).
+
+    Args:
+        path: Relative path from root to list. Empty = root.
+        user: Current developer user (injected).
+
+    Returns:
+        Sorted list of file/directory entries.
+    """
+    abs_path = _validated_abs(path)
+    rows = _fs_list(abs_path)
+    root = _FS_ROOT.rstrip("/")
+    entries = []
+    for r in sorted(rows, key=lambda x: (not x["is_dir"], x["name"].lower())):
+        full_path = abs_path.rstrip("/") + "/" + r["name"]
+        rel = full_path[len(root) :]
+        if not rel.startswith("/"):
+            rel = "/" + rel
+        entries.append(
+            _FileEntry(
+                name=r["name"], path=rel, is_dir=r["is_dir"], size=r["size"], modified=r["modified"]
+            )
+        )
+    return entries
+
+
+@router.get("/api/dev/files/read")
+def read_file(
+    path: str = Query(...),
+    user: Any = Depends(developer_required),
+) -> Dict[str, Any]:
+    """Read a text file from the VPS filesystem (local or via SSH).
+
+    Args:
+        path: Relative path from VPS_FS_ROOT.
+        user: Current developer user (injected).
+
+    Returns:
+        Dict with ``path``, ``content``, and ``mime`` keys.
+    """
+    abs_path = _validated_abs(path)
+    content = _fs_read(abs_path)
+    mime, _ = _mimetypes.guess_type(abs_path)
+    return {"path": path, "content": content, "mime": mime or "text/plain"}
+
+
+@router.post("/api/dev/files/write")
+def write_file(
+    body: _FileWriteBody,
+    user: Any = Depends(developer_required),
+) -> Dict[str, str]:
+    """Write content to a file on the VPS filesystem (local or via SSH).
+
+    Args:
+        body: ``path`` and ``content`` to write.
+        user: Current developer user (injected).
+
+    Returns:
+        Dict with ``status`` key.
+    """
+    abs_path = _validated_abs(body.path)
+    _fs_write(abs_path, body.content)
+    return {"status": "ok"}
+
 
 # Optional plan-limit overrides to match the Hostinger panel (e.g. VPS_PLAN_DISK_GB=10).
 _VPS_PLAN_DISK_MB: int = int(os.getenv("VPS_PLAN_DISK_GB", "0")) * 1024

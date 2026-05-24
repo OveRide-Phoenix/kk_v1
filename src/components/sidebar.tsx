@@ -70,6 +70,7 @@ const developerNavigationItems = [
   { name: "API Docs", icon: BookOpenText, href: "/admin/developer/api-docs", id: "dev-api-docs" },
   { name: "DB Schema", icon: Database, href: "/admin/developer/db-schema", id: "dbschema" },
   { name: "VPS Monitor", icon: Monitor, href: "/admin/developer/vps", id: "dev-vps" },
+  { name: "File Explorer", icon: FileText, href: "/admin/developer/files", id: "dev-files" },
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({

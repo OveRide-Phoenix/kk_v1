@@ -19,7 +19,6 @@ import {
   X,
 } from "lucide-react";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
-import { http, readJsonResponse } from "@/lib/http";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
