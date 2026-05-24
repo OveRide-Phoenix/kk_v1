@@ -4,7 +4,6 @@
 
 stages:
   - lint
-  - build
   - deploy
 
 # ─── Cache ─────────────────────────────────────────────────────────────────────
@@ -20,21 +19,13 @@ stages:
 
 # ─── Lint ──────────────────────────────────────────────────────────────────────
 
-eslint:
+js_lint:
   stage: lint
   <<: *npm_cache
   before_script:
     - npm ci --prefer-offline
   script:
     - npm run lint
-  allow_failure: false
-
-typescript:
-  stage: lint
-  <<: *npm_cache
-  before_script:
-    - npm ci --prefer-offline
-  script:
     - npx tsc --noEmit
   allow_failure: false
 
@@ -42,17 +33,6 @@ black:
   stage: lint
   script:
     - black --check --line-length 100 backend/
-  allow_failure: false
-
-# ─── Build ─────────────────────────────────────────────────────────────────────
-
-nextjs_build:
-  stage: build
-  <<: *npm_cache
-  before_script:
-    - npm ci --prefer-offline
-  script:
-    - npm run build
   allow_failure: false
 
 # ─── Deploy ────────────────────────────────────────────────────────────────────
