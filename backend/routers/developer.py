@@ -11,8 +11,8 @@ import random
 import re
 import struct
 import termios
-import urllib.error
-import urllib.request
+import socket as _socket
+import time as _time
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -753,76 +753,83 @@ def seed_orders_for_testing(
 # VPS Monitor — Hostinger API + PTY terminal
 # ---------------------------------------------------------------------------
 
-_HOSTINGER_API_BASE = "https://api.hostinger.com"
-_HOSTINGER_TOKEN: str = os.getenv("HOSTINGER_API_TOKEN", "")
-_HOSTINGER_VM_ID: str = os.getenv("HOSTINGER_VM_ID", "")
+import psutil as _psutil
 
-
-def _hostinger_get(path: str) -> Dict[str, Any]:
-    """Make an authenticated GET request to the Hostinger API.
-
-    Args:
-        path: API path, e.g. ``/api/vps/v1/virtual-machines``.
-
-    Returns:
-        Parsed JSON response body.
-    """
-    url = f"{_HOSTINGER_API_BASE}{path}"
-    req = urllib.request.Request(
-        url,
-        headers={
-            "Authorization": f"Bearer {_HOSTINGER_TOKEN}",
-            "Accept": "application/json",
-        },
+# Rolling history buffer — keyed by metric name → {unix_ts_str: value}
+_VPS_HISTORY: Dict[str, Dict[str, float]] = {
+    k: {}
+    for k in (
+        "cpu_usage",
+        "ram_usage",
+        "disk_space",
+        "incoming_traffic",
+        "outgoing_traffic",
+        "uptime",
     )
-    try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            return _json.loads(resp.read())
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode(errors="replace")
-        raise HTTPException(status_code=exc.code, detail=f"Hostinger API: {body}") from exc
-    except urllib.error.URLError as exc:
-        raise HTTPException(status_code=502, detail=f"Hostinger API unreachable: {exc}") from exc
+}
+_VPS_HISTORY_MAX = 30
 
 
-def _resolve_vm_id() -> str:
-    """Return the configured VM ID or discover it from the API.
-
-    Returns:
-        VM ID as a string.
-    """
-    if _HOSTINGER_VM_ID:
-        return _HOSTINGER_VM_ID
-    data = _hostinger_get("/api/vps/v1/virtual-machines")
-    vms = data.get("data", [])
-    if not vms:
-        raise HTTPException(status_code=404, detail="No VPS instances found in Hostinger account")
-    return str(vms[0]["id"])
+def _append_vps_snapshot() -> None:
+    """Collect one metrics snapshot and append it to the rolling history buffer."""
+    now = str(int(_time.time()))
+    mem = _psutil.virtual_memory()
+    disk = _psutil.disk_usage("/")
+    net = _psutil.net_io_counters()
+    snapshot = {
+        "cpu_usage": _psutil.cpu_percent(interval=0.1),
+        "ram_usage": float(mem.used),
+        "disk_space": float(disk.used),
+        "incoming_traffic": float(net.bytes_recv),
+        "outgoing_traffic": float(net.bytes_sent),
+        "uptime": _time.time() - _psutil.boot_time(),
+    }
+    for key, value in snapshot.items():
+        _VPS_HISTORY[key][now] = value
+        if len(_VPS_HISTORY[key]) > _VPS_HISTORY_MAX:
+            del _VPS_HISTORY[key][min(_VPS_HISTORY[key])]
 
 
 @router.get("/api/dev/vps/metrics")
 def get_vps_metrics(user: Any = Depends(developer_required)) -> Dict[str, Any]:
-    """Return VPS performance metrics and VM info from the Hostinger API.
+    """Return VPS performance metrics read directly from the local system.
 
-    Fetches CPU, RAM, disk, and traffic time-series alongside plan limits
-    so the frontend can compute percentages and render sparklines.
+    Collects CPU, RAM, disk, network I/O, and uptime via psutil and appends
+    the reading to a 30-point rolling history so the frontend can render
+    sparklines.
 
     Args:
         user: Current developer user (injected).
 
     Returns:
-        Dict with ``vm_info`` and ``metrics`` keys.
+        Dict with ``vm_id``, ``vm_info``, and ``metrics`` keys.
     """
-    if not _HOSTINGER_TOKEN:
-        raise HTTPException(
-            status_code=503, detail="HOSTINGER_API_TOKEN not configured in backend/.env"
-        )
-    vm_id = _resolve_vm_id()
-    metrics = _hostinger_get(f"/api/vps/v1/virtual-machines/{vm_id}/metrics")
-    info_data = _hostinger_get("/api/vps/v1/virtual-machines")
-    vms = info_data.get("data", [])
-    vm_info = next((v for v in vms if str(v.get("id")) == str(vm_id)), {})
-    return {"vm_id": vm_id, "metrics": metrics, "vm_info": vm_info}
+    _append_vps_snapshot()
+    mem = _psutil.virtual_memory()
+    disk = _psutil.disk_usage("/")
+    hostname = _socket.gethostname()
+    cpu_count = _psutil.cpu_count(logical=True) or 1
+    return {
+        "vm_id": hostname,
+        "vm_info": {
+            "id": 0,
+            "hostname": hostname,
+            "state": "running",
+            "plan": "VPS",
+            "cpus": cpu_count,
+            "memory": mem.total // (1024 * 1024),
+            "disk": disk.total // (1024 * 1024),
+            "bandwidth": 0,
+        },
+        "metrics": {
+            "cpu_usage": {"unit": "%", "usage": dict(_VPS_HISTORY["cpu_usage"])},
+            "ram_usage": {"unit": "%", "usage": dict(_VPS_HISTORY["ram_usage"])},
+            "disk_space": {"unit": "%", "usage": dict(_VPS_HISTORY["disk_space"])},
+            "incoming_traffic": {"unit": "bytes", "usage": dict(_VPS_HISTORY["incoming_traffic"])},
+            "outgoing_traffic": {"unit": "bytes", "usage": dict(_VPS_HISTORY["outgoing_traffic"])},
+            "uptime": {"unit": "s", "usage": dict(_VPS_HISTORY["uptime"])},
+        },
+    }
 
 
 def _set_pty_size(fd: int, rows: int, cols: int) -> None:
