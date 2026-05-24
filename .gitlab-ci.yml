@@ -1,6 +1,18 @@
 # ─── CI/CD Pipeline ────────────────────────────────────────────────────────────
 # Runs entirely on the self-hosted VPS shell runner (no Docker, no shared minutes).
 # Stages run in order; jobs within a stage run in parallel.
+#
+# Pipeline triggers:
+#   - MR open/update  → lint only (no deploy)
+#   - Push to develop → lint + deploy to dev (auto)
+#   - Push to main    → lint + deploy to prod (manual)
+#   - Feature branch push with no MR → no pipeline
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "develop"
+    - if: $CI_COMMIT_BRANCH == "main"
 
 stages:
   - lint
