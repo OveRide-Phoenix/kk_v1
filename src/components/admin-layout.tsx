@@ -501,6 +501,8 @@ export function AdminLayout({ children, activePage, onNavigateAttempt }: AdminLa
         return "Developer · Order Test";
       case "dbschema":
         return "Developer · DB Schema";
+      case "dev-vps":
+        return "Developer · VPS Monitor";
       case "dev-auto-menu":
         return "Developer · Auto Menu";
       case "dev-api-docs":

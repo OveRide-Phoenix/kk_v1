@@ -21,6 +21,7 @@ import {
   BookOpenText,
   Tag,
   Salad,
+  Monitor,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
@@ -68,6 +69,7 @@ const developerNavigationItems = [
   { name: "Place Order", icon: Code2, href: "/admin/developer/ordertest", id: "ordertest" },
   { name: "API Docs", icon: BookOpenText, href: "/admin/developer/api-docs", id: "dev-api-docs" },
   { name: "DB Schema", icon: Database, href: "/admin/developer/db-schema", id: "dbschema" },
+  { name: "VPS Monitor", icon: Monitor, href: "/admin/developer/vps", id: "dev-vps" },
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({

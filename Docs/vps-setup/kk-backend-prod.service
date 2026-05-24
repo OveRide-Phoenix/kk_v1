@@ -17,6 +17,7 @@ RestartSec=5
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=kk-backend-prod
+Environment=API_ROOT_PATH=/api/backend
 
 [Install]
 WantedBy=multi-user.target

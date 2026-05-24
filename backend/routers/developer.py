@@ -1,14 +1,23 @@
-"""Developer tools router: schema introspection, menu seeding, order seeding."""
+"""Developer tools router: schema introspection, menu seeding, order seeding, VPS monitor."""
 
 from __future__ import annotations
 
+import asyncio
+import fcntl
+import json as _json
+import os
+import pty
 import random
 import re
+import struct
+import termios
+import urllib.error
+import urllib.request
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 import mysql.connector
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
 from ..city_config import DEFAULT_CITY, normalize_city_code
@@ -738,3 +747,202 @@ def seed_orders_for_testing(
     finally:
         cursor.close()
         db.close()
+
+
+# ---------------------------------------------------------------------------
+# VPS Monitor — Hostinger API + PTY terminal
+# ---------------------------------------------------------------------------
+
+_HOSTINGER_API_BASE = "https://api.hostinger.com"
+_HOSTINGER_TOKEN: str = os.getenv("HOSTINGER_API_TOKEN", "")
+_HOSTINGER_VM_ID: str = os.getenv("HOSTINGER_VM_ID", "")
+
+
+def _hostinger_get(path: str) -> Dict[str, Any]:
+    """Make an authenticated GET request to the Hostinger API.
+
+    Args:
+        path: API path, e.g. ``/api/vps/v1/virtual-machines``.
+
+    Returns:
+        Parsed JSON response body.
+    """
+    url = f"{_HOSTINGER_API_BASE}{path}"
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Authorization": f"Bearer {_HOSTINGER_TOKEN}",
+            "Accept": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return _json.loads(resp.read())
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode(errors="replace")
+        raise HTTPException(status_code=exc.code, detail=f"Hostinger API: {body}") from exc
+    except urllib.error.URLError as exc:
+        raise HTTPException(status_code=502, detail=f"Hostinger API unreachable: {exc}") from exc
+
+
+def _resolve_vm_id() -> str:
+    """Return the configured VM ID or discover it from the API.
+
+    Returns:
+        VM ID as a string.
+    """
+    if _HOSTINGER_VM_ID:
+        return _HOSTINGER_VM_ID
+    data = _hostinger_get("/api/vps/v1/virtual-machines")
+    vms = data.get("data", [])
+    if not vms:
+        raise HTTPException(status_code=404, detail="No VPS instances found in Hostinger account")
+    return str(vms[0]["id"])
+
+
+@router.get("/api/dev/vps/metrics")
+def get_vps_metrics(user: Any = Depends(developer_required)) -> Dict[str, Any]:
+    """Return VPS performance metrics and VM info from the Hostinger API.
+
+    Fetches CPU, RAM, disk, and traffic time-series alongside plan limits
+    so the frontend can compute percentages and render sparklines.
+
+    Args:
+        user: Current developer user (injected).
+
+    Returns:
+        Dict with ``vm_info`` and ``metrics`` keys.
+    """
+    if not _HOSTINGER_TOKEN:
+        raise HTTPException(
+            status_code=503, detail="HOSTINGER_API_TOKEN not configured in backend/.env"
+        )
+    vm_id = _resolve_vm_id()
+    metrics = _hostinger_get(f"/api/vps/v1/virtual-machines/{vm_id}/metrics")
+    info_data = _hostinger_get("/api/vps/v1/virtual-machines")
+    vms = info_data.get("data", [])
+    vm_info = next((v for v in vms if str(v.get("id")) == str(vm_id)), {})
+    return {"vm_id": vm_id, "metrics": metrics, "vm_info": vm_info}
+
+
+def _set_pty_size(fd: int, rows: int, cols: int) -> None:
+    """Resize the PTY window to the given dimensions.
+
+    Args:
+        fd: Master PTY file descriptor.
+        rows: Terminal row count.
+        cols: Terminal column count.
+    """
+    try:
+        winsize = struct.pack("HHHH", rows, cols, 0, 0)
+        fcntl.ioctl(fd, termios.TIOCSWINSZ, winsize)
+    except OSError:
+        pass
+
+
+@router.websocket("/api/dev/vps/terminal")
+async def vps_terminal_ws(websocket: WebSocket, token: str = Query(...)) -> None:
+    """WebSocket endpoint that provides a live PTY bash session.
+
+    Accepts a JWT access token as a query parameter (required because the
+    standard Authorization header cannot be set for WebSocket upgrades from
+    the browser). Verifies the developer role, then spawns /bin/bash with a
+    PTY and bridges data between the socket and the pseudo-terminal.
+
+    Binary frames from the client are written directly to the PTY master.
+    Text frames are parsed as JSON control messages; ``{"type":"resize",
+    "cols":N,"rows":M}`` triggers a TIOCSWINSZ ioctl on the master fd.
+
+    Args:
+        websocket: FastAPI WebSocket connection.
+        token: JWT access token passed as a query parameter.
+    """
+    from ..utils.auth_deps import decode_token, _user_has_role, DEVELOPER_ROLE_CODE
+
+    try:
+        payload = decode_token(token)
+        if payload.get("type") != "access":
+            raise ValueError("wrong token type")
+        user_sub = payload["sub"]
+        if not _user_has_role(user_sub, DEVELOPER_ROLE_CODE):
+            raise ValueError("developer role required")
+    except Exception:
+        await websocket.close(code=4003)
+        return
+
+    await websocket.accept()
+
+    master_fd, slave_fd = pty.openpty()
+    _set_pty_size(master_fd, 24, 80)
+
+    env = dict(os.environ)
+    env["TERM"] = "xterm-256color"
+
+    def _preexec() -> None:
+        os.setsid()
+        try:
+            fcntl.ioctl(slave_fd, termios.TIOCSCTTY, 0)
+        except OSError:
+            pass
+
+    proc = await asyncio.create_subprocess_exec(
+        "/bin/bash",
+        "--login",
+        stdin=slave_fd,
+        stdout=slave_fd,
+        stderr=slave_fd,
+        preexec_fn=_preexec,
+        env=env,
+        pass_fds=(slave_fd,),
+    )
+    os.close(slave_fd)
+
+    loop = asyncio.get_event_loop()
+
+    async def _pty_to_ws() -> None:
+        while True:
+            try:
+                data = await loop.run_in_executor(None, lambda: os.read(master_fd, 4096))
+                if not data:
+                    break
+                await websocket.send_bytes(data)
+            except (OSError, WebSocketDisconnect, RuntimeError):
+                break
+
+    reader = asyncio.create_task(_pty_to_ws())
+
+    try:
+        while True:
+            msg = await websocket.receive()
+            if msg.get("type") == "websocket.disconnect":
+                break
+            raw_bytes = msg.get("bytes")
+            raw_text = msg.get("text")
+            if raw_bytes:
+                await loop.run_in_executor(None, os.write, master_fd, raw_bytes)
+            elif raw_text:
+                try:
+                    ctrl = _json.loads(raw_text)
+                    if ctrl.get("type") == "resize":
+                        _set_pty_size(
+                            master_fd,
+                            int(ctrl.get("rows", 24)),
+                            int(ctrl.get("cols", 80)),
+                        )
+                except _json.JSONDecodeError:
+                    await loop.run_in_executor(
+                        None, os.write, master_fd, raw_text.encode("utf-8", errors="replace")
+                    )
+    except (WebSocketDisconnect, Exception):
+        pass
+    finally:
+        reader.cancel()
+        try:
+            proc.terminate()
+            await asyncio.wait_for(proc.wait(), timeout=3)
+        except Exception:
+            pass
+        try:
+            os.close(master_fd)
+        except OSError:
+            pass

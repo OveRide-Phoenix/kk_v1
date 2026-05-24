@@ -60,6 +60,7 @@ app = FastAPI(
     description="Backend API for the Kuteera Kitchen meal prep and delivery platform.",
     version="1.0.0",
     lifespan=_lifespan,
+    root_path=config.API_ROOT_PATH,
 )
 
 app.add_middleware(
