@@ -297,6 +297,45 @@ def get_dev_db_schema(
         db.close()
 
 
+TABLE_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_]+$")
+
+
+@router.get("/api/dev/db-table-data")
+def get_table_data(
+    table: str = Query(...),
+    limit: int = Query(200, ge=1, le=1000),
+    user: Any = Depends(developer_required),
+) -> Dict[str, Any]:
+    """Return up to `limit` rows from the given table for developer inspection.
+
+    Args:
+        table: Table name to query.
+        limit: Maximum number of rows to return (1–1000, default 200).
+        user: Current developer user (injected).
+
+    Returns:
+        Dict with columns list and rows list.
+    """
+    if not TABLE_NAME_PATTERN.fullmatch(table):
+        raise HTTPException(status_code=400, detail="Invalid table name")
+    db = get_raw_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute(f"SELECT * FROM `{DATABASE_NAME}`.`{table}` LIMIT %s", (limit,))
+        columns = [desc[0] for desc in cursor.description] if cursor.description else []
+        rows = [list(row) for row in cursor.fetchall()]
+        return {"columns": columns, "rows": rows, "total": len(rows)}
+    except mysql.connector.Error as exc:
+        raise HTTPException(status_code=500, detail=f"Query failed: {exc.msg}") from exc
+    finally:
+        cursor.close()
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        db.close()
+
+
 @router.post("/api/dev/daily-menu/auto")
 def auto_generate_daily_menu(
     payload: AutoMenuRequest, _: Dict[str, Any] = Depends(developer_required)
