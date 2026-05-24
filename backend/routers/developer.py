@@ -1,14 +1,23 @@
-"""Developer tools router: schema introspection, menu seeding, order seeding."""
+"""Developer tools router: schema introspection, menu seeding, order seeding, VPS monitor."""
 
 from __future__ import annotations
 
+import asyncio
+import fcntl
+import json as _json
+import os
+import pty
 import random
 import re
+import struct
+import termios
+import socket as _socket
+import time as _time
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 import mysql.connector
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
 from ..city_config import DEFAULT_CITY, normalize_city_code
@@ -738,3 +747,563 @@ def seed_orders_for_testing(
     finally:
         cursor.close()
         db.close()
+
+
+# ---------------------------------------------------------------------------
+# VPS Monitor — Hostinger API + PTY terminal
+# ---------------------------------------------------------------------------
+
+import mimetypes as _mimetypes
+import subprocess as _subprocess
+
+import psutil as _psutil
+
+# SSH config — set VPS_SSH_HOST in backend/.env to proxy to the remote VPS.
+# Leave unset on the VPS itself so all operations run locally.
+_VPS_SSH_HOST: str = os.getenv("VPS_SSH_HOST", "")
+_VPS_SSH_USER: str = os.getenv("VPS_SSH_USER", "root")
+_VPS_SSH_KEY_PATH: str = os.getenv("VPS_SSH_KEY_PATH", "")
+_VPS_PYTHON_PATH: str = os.getenv("VPS_PYTHON_PATH", "python3")
+
+
+def _ssh_base_cmd() -> List[str]:
+    """Return the base SSH command with auth flags.
+
+    Returns:
+        List of SSH command parts up to (not including) the remote command.
+    """
+    cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5"]
+    if _VPS_SSH_KEY_PATH:
+        cmd += ["-i", os.path.expanduser(_VPS_SSH_KEY_PATH)]
+    cmd.append(f"{_VPS_SSH_USER}@{_VPS_SSH_HOST}")
+    return cmd
+
+
+# ---------------------------------------------------------------------------
+# File Explorer
+# ---------------------------------------------------------------------------
+
+_FS_ROOT: str = os.getenv("VPS_FS_ROOT", "/var/www")
+_FS_MAX_FILE_BYTES: int = 2 * 1024 * 1024  # 2 MB read limit
+
+
+class _FileEntry(BaseModel):
+    name: str
+    path: str
+    is_dir: bool
+    size: Optional[int] = None
+    modified: Optional[float] = None
+
+
+class _FileWriteBody(BaseModel):
+    path: str
+    content: str
+
+
+def _validated_abs(raw: str) -> str:
+    """Return the absolute VPS path for raw, rejecting traversal attempts.
+
+    Args:
+        raw: Client-supplied relative path (leading / is fine).
+
+    Returns:
+        Absolute path string (not necessarily on this machine).
+
+    Raises:
+        HTTPException: If the path would escape VPS_FS_ROOT.
+    """
+    root = _FS_ROOT.rstrip("/")
+    joined = root + "/" + raw.lstrip("/")
+    # Collapse ./ and ../ without touching the filesystem
+    parts: List[str] = []
+    for part in joined.split("/"):
+        if part == "..":
+            if parts:
+                parts.pop()
+        elif part and part != ".":
+            parts.append(part)
+    resolved = "/" + "/".join(parts)
+    if not resolved.startswith(root):
+        raise HTTPException(status_code=400, detail="Path outside allowed root")
+    return resolved
+
+
+def _fs_list(abs_path: str) -> List[Dict[str, Any]]:
+    """List a directory, using SSH when VPS_SSH_HOST is set."""
+    if _VPS_SSH_HOST:
+        # Pass script via stdin to avoid shell-quoting issues with single quotes in code.
+        script = (
+            f"import os,json; p={abs_path!r}\n"
+            "rows=[]\n"
+            "for n in sorted(os.listdir(p)):\n"
+            "    fp=os.path.join(p,n)\n"
+            "    s=os.stat(fp)\n"
+            "    rows.append({'name':n,'is_dir':os.path.isdir(fp),"
+            "'size':None if os.path.isdir(fp) else s.st_size,'modified':s.st_mtime})\n"
+            "print(json.dumps(rows))\n"
+        )
+        result = _subprocess.run(
+            _ssh_base_cmd() + [_VPS_PYTHON_PATH],
+            input=script,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            raise HTTPException(status_code=500, detail=result.stderr.strip() or "SSH list failed")
+        return _json.loads(result.stdout)
+    # Local
+    if not os.path.isdir(abs_path):
+        raise HTTPException(status_code=404, detail="Directory not found")
+    rows = []
+    for name in sorted(os.listdir(abs_path)):
+        full = os.path.join(abs_path, name)
+        try:
+            s = os.stat(full)
+            rows.append(
+                {
+                    "name": name,
+                    "is_dir": os.path.isdir(full),
+                    "size": None if os.path.isdir(full) else s.st_size,
+                    "modified": s.st_mtime,
+                }
+            )
+        except OSError:
+            continue
+    return rows
+
+
+def _fs_read(abs_path: str) -> str:
+    """Read a file, using SSH when VPS_SSH_HOST is set."""
+    if _VPS_SSH_HOST:
+        result = _subprocess.run(
+            _ssh_base_cmd() + ["cat", abs_path],
+            capture_output=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            raise HTTPException(
+                status_code=500, detail=result.stderr.decode().strip() or "SSH read failed"
+            )
+        return result.stdout.decode(errors="replace")
+    if not os.path.isfile(abs_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    if os.path.getsize(abs_path) > _FS_MAX_FILE_BYTES:
+        raise HTTPException(status_code=413, detail="File too large (> 2 MB)")
+    with open(abs_path, "r", encoding="utf-8", errors="replace") as fh:
+        return fh.read()
+
+
+def _fs_write(abs_path: str, content: str) -> None:
+    """Write a file, using SSH when VPS_SSH_HOST is set."""
+    if _VPS_SSH_HOST:
+        result = _subprocess.run(
+            _ssh_base_cmd() + ["tee", abs_path],
+            input=content.encode(),
+            capture_output=True,
+            timeout=15,
+        )
+        if result.returncode != 0:
+            raise HTTPException(
+                status_code=500, detail=result.stderr.decode().strip() or "SSH write failed"
+            )
+        return
+    os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+    with open(abs_path, "w", encoding="utf-8") as fh:
+        fh.write(content)
+
+
+@router.get("/api/dev/files")
+def list_files(
+    path: str = Query(default=""),
+    user: Any = Depends(developer_required),
+) -> List[_FileEntry]:
+    """List directory contents under VPS_FS_ROOT (local or via SSH).
+
+    Args:
+        path: Relative path from root to list. Empty = root.
+        user: Current developer user (injected).
+
+    Returns:
+        Sorted list of file/directory entries.
+    """
+    abs_path = _validated_abs(path)
+    rows = _fs_list(abs_path)
+    root = _FS_ROOT.rstrip("/")
+    entries = []
+    for r in sorted(rows, key=lambda x: (not x["is_dir"], x["name"].lower())):
+        full_path = abs_path.rstrip("/") + "/" + r["name"]
+        rel = full_path[len(root) :]
+        if not rel.startswith("/"):
+            rel = "/" + rel
+        entries.append(
+            _FileEntry(
+                name=r["name"], path=rel, is_dir=r["is_dir"], size=r["size"], modified=r["modified"]
+            )
+        )
+    return entries
+
+
+@router.get("/api/dev/files/read")
+def read_file(
+    path: str = Query(...),
+    user: Any = Depends(developer_required),
+) -> Dict[str, Any]:
+    """Read a text file from the VPS filesystem (local or via SSH).
+
+    Args:
+        path: Relative path from VPS_FS_ROOT.
+        user: Current developer user (injected).
+
+    Returns:
+        Dict with ``path``, ``content``, and ``mime`` keys.
+    """
+    abs_path = _validated_abs(path)
+    content = _fs_read(abs_path)
+    mime, _ = _mimetypes.guess_type(abs_path)
+    return {"path": path, "content": content, "mime": mime or "text/plain"}
+
+
+@router.post("/api/dev/files/write")
+def write_file(
+    body: _FileWriteBody,
+    user: Any = Depends(developer_required),
+) -> Dict[str, str]:
+    """Write content to a file on the VPS filesystem (local or via SSH).
+
+    Args:
+        body: ``path`` and ``content`` to write.
+        user: Current developer user (injected).
+
+    Returns:
+        Dict with ``status`` key.
+    """
+    abs_path = _validated_abs(body.path)
+    _fs_write(abs_path, body.content)
+    return {"status": "ok"}
+
+
+# Optional plan-limit overrides to match the Hostinger panel (e.g. VPS_PLAN_DISK_GB=10).
+_VPS_PLAN_DISK_MB: int = int(os.getenv("VPS_PLAN_DISK_GB", "0")) * 1024
+_VPS_PLAN_RAM_MB: int = int(os.getenv("VPS_PLAN_RAM_GB", "0")) * 1024
+
+# Rolling history buffer — keyed by metric name → {unix_ts_str: value}
+_VPS_HISTORY: Dict[str, Dict[str, float]] = {
+    k: {}
+    for k in (
+        "cpu_usage",
+        "ram_usage",
+        "disk_space",
+        "incoming_traffic",
+        "outgoing_traffic",
+        "uptime",
+    )
+}
+_VPS_HISTORY_MAX = 30
+
+_REMOTE_PSUTIL_SCRIPT = (
+    "import psutil,json,time,socket;"
+    "m=psutil.virtual_memory();"
+    'd=psutil.disk_usage("/");'
+    "n=psutil.net_io_counters();"
+    'print(json.dumps({"cpu":psutil.cpu_percent(interval=0.1),'
+    '"ram_used":m.used,"ram_total":m.total,'
+    '"disk_used":d.used,"disk_total":d.total,'
+    '"net_recv":n.bytes_recv,"net_sent":n.bytes_sent,'
+    '"uptime":time.time()-psutil.boot_time(),'
+    '"hostname":socket.gethostname(),'
+    '"cpus":psutil.cpu_count(logical=True) or 1}))'
+)
+
+
+def _remote_snapshot() -> Optional[Dict[str, Any]]:
+    """Collect metrics from the VPS via SSH subprocess.
+
+    Uses the system ssh binary so existing key/agent auth just works.
+    Returns None if VPS_SSH_HOST is unset or the command fails.
+
+    Returns:
+        Parsed metrics dict, or None on failure.
+    """
+    if not _VPS_SSH_HOST:
+        return None
+    ssh_cmd = [
+        "ssh",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "ConnectTimeout=5",
+    ]
+    if _VPS_SSH_KEY_PATH:
+        ssh_cmd += ["-i", os.path.expanduser(_VPS_SSH_KEY_PATH)]
+    remote_cmd = f"{_VPS_PYTHON_PATH} -c '{_REMOTE_PSUTIL_SCRIPT}'"
+    ssh_cmd += [f"{_VPS_SSH_USER}@{_VPS_SSH_HOST}", remote_cmd]
+    try:
+        result = _subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=10)
+        if result.returncode == 0 and result.stdout.strip():
+            return _json.loads(result.stdout)
+    except Exception:
+        pass
+    return None
+
+
+def _local_snapshot() -> Dict[str, Any]:
+    """Collect metrics from the local machine via psutil."""
+    mem = _psutil.virtual_memory()
+    disk = _psutil.disk_usage("/")
+    net = _psutil.net_io_counters()
+    return {
+        "cpu": _psutil.cpu_percent(interval=0.1),
+        "ram_used": float(mem.used),
+        "ram_total": float(mem.total),
+        "disk_used": float(disk.used),
+        "disk_total": float(disk.total),
+        "net_recv": float(net.bytes_recv),
+        "net_sent": float(net.bytes_sent),
+        "uptime": _time.time() - _psutil.boot_time(),
+        "hostname": _socket.gethostname(),
+        "cpus": _psutil.cpu_count(logical=True) or 1,
+    }
+
+
+def _record_snapshot(snap: Dict[str, Any]) -> None:
+    """Append a metrics snapshot to the rolling history buffer."""
+    now = str(int(_time.time()))
+    mapping = {
+        "cpu_usage": snap["cpu"],
+        "ram_usage": snap["ram_used"],
+        "disk_space": snap["disk_used"],
+        "incoming_traffic": snap["net_recv"],
+        "outgoing_traffic": snap["net_sent"],
+        "uptime": snap["uptime"],
+    }
+    for key, value in mapping.items():
+        _VPS_HISTORY[key][now] = value
+        if len(_VPS_HISTORY[key]) > _VPS_HISTORY_MAX:
+            del _VPS_HISTORY[key][min(_VPS_HISTORY[key])]
+
+
+@router.get("/api/dev/vps/metrics")
+def get_vps_metrics(user: Any = Depends(developer_required)) -> Dict[str, Any]:
+    """Return VPS performance metrics.
+
+    When VPS_SSH_HOST is set in backend/.env the metrics are collected from
+    the remote VPS over SSH (used for local development). Otherwise metrics
+    are read from the local machine via psutil (used when the backend itself
+    runs on the VPS).  A 30-point rolling history is maintained so the
+    frontend can render sparklines.
+
+    Args:
+        user: Current developer user (injected).
+
+    Returns:
+        Dict with ``vm_id``, ``vm_info``, and ``metrics`` keys.
+    """
+    snap = _remote_snapshot() or _local_snapshot()
+    _record_snapshot(snap)
+    return _build_metrics_payload(snap)
+
+
+def _build_metrics_payload(snap: Dict[str, Any]) -> Dict[str, Any]:
+    """Build the metrics response dict from a snapshot.
+
+    Args:
+        snap: Raw metrics snapshot from _local_snapshot or _remote_snapshot.
+
+    Returns:
+        Dict suitable for the VPS metrics API/WebSocket response.
+    """
+    disk_total_mb = _VPS_PLAN_DISK_MB or int(snap["disk_total"]) // (1024 * 1024)
+    ram_total_mb = _VPS_PLAN_RAM_MB or int(snap["ram_total"]) // (1024 * 1024)
+    return {
+        "vm_id": snap["hostname"],
+        "vm_info": {
+            "id": 0,
+            "hostname": snap["hostname"],
+            "state": "running",
+            "plan": "VPS",
+            "cpus": snap["cpus"],
+            "memory": ram_total_mb,
+            "disk": disk_total_mb,
+            "bandwidth": 0,
+        },
+        "metrics": {
+            "cpu_usage": {"unit": "%", "usage": dict(_VPS_HISTORY["cpu_usage"])},
+            "ram_usage": {"unit": "bytes", "usage": dict(_VPS_HISTORY["ram_usage"])},
+            "disk_space": {"unit": "bytes", "usage": dict(_VPS_HISTORY["disk_space"])},
+            "incoming_traffic": {"unit": "bytes", "usage": dict(_VPS_HISTORY["incoming_traffic"])},
+            "outgoing_traffic": {"unit": "bytes", "usage": dict(_VPS_HISTORY["outgoing_traffic"])},
+            "uptime": {"unit": "s", "usage": dict(_VPS_HISTORY["uptime"])},
+        },
+    }
+
+
+@router.websocket("/api/dev/vps/metrics/stream")
+async def vps_metrics_stream(websocket: WebSocket, token: str = Query(...)) -> None:
+    """Stream live VPS metrics over WebSocket, pushing a snapshot every few seconds.
+
+    Collects metrics via SSH (if VPS_SSH_HOST is configured) or local psutil,
+    appends to the rolling history, and pushes the full payload to the client.
+    Uses asyncio.to_thread so the blocking SSH subprocess does not stall the
+    event loop.
+
+    Args:
+        websocket: FastAPI WebSocket connection.
+        token: JWT access token passed as a query parameter.
+    """
+    from ..utils.auth_deps import decode_token, _user_has_role, DEVELOPER_ROLE_CODE
+
+    try:
+        payload = decode_token(token)
+        if payload.get("type") != "access":
+            raise ValueError("wrong token type")
+        if not _user_has_role(payload["sub"], DEVELOPER_ROLE_CODE):
+            raise ValueError("developer role required")
+    except Exception:
+        await websocket.close(code=4003)
+        return
+
+    await websocket.accept()
+    interval = 3 if _VPS_SSH_HOST else 2
+
+    try:
+        while True:
+            snap = (await asyncio.to_thread(_remote_snapshot)) or _local_snapshot()
+            _record_snapshot(snap)
+            await websocket.send_json(_build_metrics_payload(snap))
+            await asyncio.sleep(interval)
+    except (WebSocketDisconnect, Exception):
+        pass
+
+
+def _set_pty_size(fd: int, rows: int, cols: int) -> None:
+    """Resize the PTY window to the given dimensions.
+
+    Args:
+        fd: Master PTY file descriptor.
+        rows: Terminal row count.
+        cols: Terminal column count.
+    """
+    try:
+        winsize = struct.pack("HHHH", rows, cols, 0, 0)
+        fcntl.ioctl(fd, termios.TIOCSWINSZ, winsize)
+    except OSError:
+        pass
+
+
+@router.websocket("/api/dev/vps/terminal")
+async def vps_terminal_ws(websocket: WebSocket, token: str = Query(...)) -> None:
+    """WebSocket endpoint that provides a live PTY bash session.
+
+    Accepts a JWT access token as a query parameter (required because the
+    standard Authorization header cannot be set for WebSocket upgrades from
+    the browser). Verifies the developer role, then spawns /bin/bash with a
+    PTY and bridges data between the socket and the pseudo-terminal.
+
+    Binary frames from the client are written directly to the PTY master.
+    Text frames are parsed as JSON control messages; ``{"type":"resize",
+    "cols":N,"rows":M}`` triggers a TIOCSWINSZ ioctl on the master fd.
+
+    Args:
+        websocket: FastAPI WebSocket connection.
+        token: JWT access token passed as a query parameter.
+    """
+    from ..utils.auth_deps import decode_token, _user_has_role, DEVELOPER_ROLE_CODE
+
+    try:
+        payload = decode_token(token)
+        if payload.get("type") != "access":
+            raise ValueError("wrong token type")
+        user_sub = payload["sub"]
+        if not _user_has_role(user_sub, DEVELOPER_ROLE_CODE):
+            raise ValueError("developer role required")
+    except Exception:
+        await websocket.close(code=4003)
+        return
+
+    await websocket.accept()
+
+    master_fd, slave_fd = pty.openpty()
+    _set_pty_size(master_fd, 24, 80)
+
+    env = dict(os.environ)
+    env["TERM"] = "xterm-256color"
+
+    def _preexec() -> None:
+        os.setsid()
+        try:
+            fcntl.ioctl(slave_fd, termios.TIOCSCTTY, 0)
+        except OSError:
+            pass
+
+    if _VPS_SSH_HOST:
+        ssh_args = ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ServerAliveInterval=30"]
+        if _VPS_SSH_KEY_PATH:
+            ssh_args += ["-i", os.path.expanduser(_VPS_SSH_KEY_PATH)]
+        ssh_args.append(f"{_VPS_SSH_USER}@{_VPS_SSH_HOST}")
+        cmd = ssh_args
+    else:
+        cmd = ["/bin/bash", "--login"]
+
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdin=slave_fd,
+        stdout=slave_fd,
+        stderr=slave_fd,
+        preexec_fn=_preexec,
+        env=env,
+        pass_fds=(slave_fd,),
+    )
+    os.close(slave_fd)
+
+    loop = asyncio.get_event_loop()
+
+    async def _pty_to_ws() -> None:
+        while True:
+            try:
+                data = await loop.run_in_executor(None, lambda: os.read(master_fd, 4096))
+                if not data:
+                    break
+                await websocket.send_bytes(data)
+            except (OSError, WebSocketDisconnect, RuntimeError):
+                break
+
+    reader = asyncio.create_task(_pty_to_ws())
+
+    try:
+        while True:
+            msg = await websocket.receive()
+            if msg.get("type") == "websocket.disconnect":
+                break
+            raw_bytes = msg.get("bytes")
+            raw_text = msg.get("text")
+            if raw_bytes:
+                await loop.run_in_executor(None, os.write, master_fd, raw_bytes)
+            elif raw_text:
+                try:
+                    ctrl = _json.loads(raw_text)
+                    if ctrl.get("type") == "resize":
+                        _set_pty_size(
+                            master_fd,
+                            int(ctrl.get("rows", 24)),
+                            int(ctrl.get("cols", 80)),
+                        )
+                except _json.JSONDecodeError:
+                    await loop.run_in_executor(
+                        None, os.write, master_fd, raw_text.encode("utf-8", errors="replace")
+                    )
+    except (WebSocketDisconnect, Exception):
+        pass
+    finally:
+        reader.cancel()
+        try:
+            proc.terminate()
+            await asyncio.wait_for(proc.wait(), timeout=3)
+        except Exception:
+            pass
+        try:
+            os.close(master_fd)
+        except OSError:
+            pass

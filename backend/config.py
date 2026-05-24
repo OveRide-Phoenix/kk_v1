@@ -69,6 +69,7 @@ REFRESH_TOKEN_TTL_SEC = _refresh_token_ttl()
 COOKIE_SECURE = (_clean(os.getenv("COOKIE_SECURE", "false")) or "").lower() == "true"
 COOKIE_SAMESITE = _clean(os.getenv("COOKIE_SAMESITE", "Lax")) or "Lax"
 COOKIE_DOMAIN = _clean(os.getenv("BACKEND_DOMAIN")) or None
+API_ROOT_PATH = _clean(os.getenv("API_ROOT_PATH", "")) or ""
 
 _DEV_ORIGINS = ["http://127.0.0.1:3000", "http://localhost:3000", "http://127.0.0.1:8000"]
 
