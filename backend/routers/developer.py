@@ -753,7 +753,20 @@ def seed_orders_for_testing(
 # VPS Monitor — Hostinger API + PTY terminal
 # ---------------------------------------------------------------------------
 
+import subprocess as _subprocess
+
 import psutil as _psutil
+
+# SSH config — set VPS_SSH_HOST in backend/.env to collect metrics from the remote VPS.
+# Leave unset on the VPS itself so it reads local psutil directly.
+_VPS_SSH_HOST: str = os.getenv("VPS_SSH_HOST", "")
+_VPS_SSH_USER: str = os.getenv("VPS_SSH_USER", "root")
+_VPS_SSH_KEY_PATH: str = os.getenv("VPS_SSH_KEY_PATH", "")
+_VPS_PYTHON_PATH: str = os.getenv("VPS_PYTHON_PATH", "python3")
+
+# Optional plan-limit overrides to match the Hostinger panel (e.g. VPS_PLAN_DISK_GB=10).
+_VPS_PLAN_DISK_MB: int = int(os.getenv("VPS_PLAN_DISK_GB", "0")) * 1024
+_VPS_PLAN_RAM_MB: int = int(os.getenv("VPS_PLAN_RAM_GB", "0")) * 1024
 
 # Rolling history buffer — keyed by metric name → {unix_ts_str: value}
 _VPS_HISTORY: Dict[str, Dict[str, float]] = {
@@ -769,22 +782,85 @@ _VPS_HISTORY: Dict[str, Dict[str, float]] = {
 }
 _VPS_HISTORY_MAX = 30
 
+_REMOTE_PSUTIL_SCRIPT = (
+    "import psutil,json,time,socket;"
+    "m=psutil.virtual_memory();"
+    'd=psutil.disk_usage("/");'
+    "n=psutil.net_io_counters();"
+    'print(json.dumps({"cpu":psutil.cpu_percent(interval=0.1),'
+    '"ram_used":m.used,"ram_total":m.total,'
+    '"disk_used":d.used,"disk_total":d.total,'
+    '"net_recv":n.bytes_recv,"net_sent":n.bytes_sent,'
+    '"uptime":time.time()-psutil.boot_time(),'
+    '"hostname":socket.gethostname(),'
+    '"cpus":psutil.cpu_count(logical=True) or 1}))'
+)
 
-def _append_vps_snapshot() -> None:
-    """Collect one metrics snapshot and append it to the rolling history buffer."""
-    now = str(int(_time.time()))
+
+def _remote_snapshot() -> Optional[Dict[str, Any]]:
+    """Collect metrics from the VPS via SSH subprocess.
+
+    Uses the system ssh binary so existing key/agent auth just works.
+    Returns None if VPS_SSH_HOST is unset or the command fails.
+
+    Returns:
+        Parsed metrics dict, or None on failure.
+    """
+    if not _VPS_SSH_HOST:
+        return None
+    ssh_cmd = [
+        "ssh",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "ConnectTimeout=5",
+    ]
+    if _VPS_SSH_KEY_PATH:
+        ssh_cmd += ["-i", os.path.expanduser(_VPS_SSH_KEY_PATH)]
+    remote_cmd = f"{_VPS_PYTHON_PATH} -c '{_REMOTE_PSUTIL_SCRIPT}'"
+    ssh_cmd += [f"{_VPS_SSH_USER}@{_VPS_SSH_HOST}", remote_cmd]
+    try:
+        result = _subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=10)
+        if result.returncode == 0 and result.stdout.strip():
+            return _json.loads(result.stdout)
+    except Exception:
+        pass
+    return None
+
+
+def _local_snapshot() -> Dict[str, Any]:
+    """Collect metrics from the local machine via psutil."""
     mem = _psutil.virtual_memory()
     disk = _psutil.disk_usage("/")
     net = _psutil.net_io_counters()
-    snapshot = {
-        "cpu_usage": _psutil.cpu_percent(interval=0.1),
-        "ram_usage": float(mem.used),
-        "disk_space": float(disk.used),
-        "incoming_traffic": float(net.bytes_recv),
-        "outgoing_traffic": float(net.bytes_sent),
+    return {
+        "cpu": _psutil.cpu_percent(interval=0.1),
+        "ram_used": float(mem.used),
+        "ram_total": float(mem.total),
+        "disk_used": float(disk.used),
+        "disk_total": float(disk.total),
+        "net_recv": float(net.bytes_recv),
+        "net_sent": float(net.bytes_sent),
         "uptime": _time.time() - _psutil.boot_time(),
+        "hostname": _socket.gethostname(),
+        "cpus": _psutil.cpu_count(logical=True) or 1,
     }
-    for key, value in snapshot.items():
+
+
+def _record_snapshot(snap: Dict[str, Any]) -> None:
+    """Append a metrics snapshot to the rolling history buffer."""
+    now = str(int(_time.time()))
+    mapping = {
+        "cpu_usage": snap["cpu"],
+        "ram_usage": snap["ram_used"],
+        "disk_space": snap["disk_used"],
+        "incoming_traffic": snap["net_recv"],
+        "outgoing_traffic": snap["net_sent"],
+        "uptime": snap["uptime"],
+    }
+    for key, value in mapping.items():
         _VPS_HISTORY[key][now] = value
         if len(_VPS_HISTORY[key]) > _VPS_HISTORY_MAX:
             del _VPS_HISTORY[key][min(_VPS_HISTORY[key])]
@@ -792,11 +868,13 @@ def _append_vps_snapshot() -> None:
 
 @router.get("/api/dev/vps/metrics")
 def get_vps_metrics(user: Any = Depends(developer_required)) -> Dict[str, Any]:
-    """Return VPS performance metrics read directly from the local system.
+    """Return VPS performance metrics.
 
-    Collects CPU, RAM, disk, network I/O, and uptime via psutil and appends
-    the reading to a 30-point rolling history so the frontend can render
-    sparklines.
+    When VPS_SSH_HOST is set in backend/.env the metrics are collected from
+    the remote VPS over SSH (used for local development). Otherwise metrics
+    are read from the local machine via psutil (used when the backend itself
+    runs on the VPS).  A 30-point rolling history is maintained so the
+    frontend can render sparklines.
 
     Args:
         user: Current developer user (injected).
@@ -804,32 +882,81 @@ def get_vps_metrics(user: Any = Depends(developer_required)) -> Dict[str, Any]:
     Returns:
         Dict with ``vm_id``, ``vm_info``, and ``metrics`` keys.
     """
-    _append_vps_snapshot()
-    mem = _psutil.virtual_memory()
-    disk = _psutil.disk_usage("/")
-    hostname = _socket.gethostname()
-    cpu_count = _psutil.cpu_count(logical=True) or 1
+    snap = _remote_snapshot() or _local_snapshot()
+    _record_snapshot(snap)
+    return _build_metrics_payload(snap)
+
+
+def _build_metrics_payload(snap: Dict[str, Any]) -> Dict[str, Any]:
+    """Build the metrics response dict from a snapshot.
+
+    Args:
+        snap: Raw metrics snapshot from _local_snapshot or _remote_snapshot.
+
+    Returns:
+        Dict suitable for the VPS metrics API/WebSocket response.
+    """
+    disk_total_mb = _VPS_PLAN_DISK_MB or int(snap["disk_total"]) // (1024 * 1024)
+    ram_total_mb = _VPS_PLAN_RAM_MB or int(snap["ram_total"]) // (1024 * 1024)
     return {
-        "vm_id": hostname,
+        "vm_id": snap["hostname"],
         "vm_info": {
             "id": 0,
-            "hostname": hostname,
+            "hostname": snap["hostname"],
             "state": "running",
             "plan": "VPS",
-            "cpus": cpu_count,
-            "memory": mem.total // (1024 * 1024),
-            "disk": disk.total // (1024 * 1024),
+            "cpus": snap["cpus"],
+            "memory": ram_total_mb,
+            "disk": disk_total_mb,
             "bandwidth": 0,
         },
         "metrics": {
             "cpu_usage": {"unit": "%", "usage": dict(_VPS_HISTORY["cpu_usage"])},
-            "ram_usage": {"unit": "%", "usage": dict(_VPS_HISTORY["ram_usage"])},
-            "disk_space": {"unit": "%", "usage": dict(_VPS_HISTORY["disk_space"])},
+            "ram_usage": {"unit": "bytes", "usage": dict(_VPS_HISTORY["ram_usage"])},
+            "disk_space": {"unit": "bytes", "usage": dict(_VPS_HISTORY["disk_space"])},
             "incoming_traffic": {"unit": "bytes", "usage": dict(_VPS_HISTORY["incoming_traffic"])},
             "outgoing_traffic": {"unit": "bytes", "usage": dict(_VPS_HISTORY["outgoing_traffic"])},
             "uptime": {"unit": "s", "usage": dict(_VPS_HISTORY["uptime"])},
         },
     }
+
+
+@router.websocket("/api/dev/vps/metrics/stream")
+async def vps_metrics_stream(websocket: WebSocket, token: str = Query(...)) -> None:
+    """Stream live VPS metrics over WebSocket, pushing a snapshot every few seconds.
+
+    Collects metrics via SSH (if VPS_SSH_HOST is configured) or local psutil,
+    appends to the rolling history, and pushes the full payload to the client.
+    Uses asyncio.to_thread so the blocking SSH subprocess does not stall the
+    event loop.
+
+    Args:
+        websocket: FastAPI WebSocket connection.
+        token: JWT access token passed as a query parameter.
+    """
+    from ..utils.auth_deps import decode_token, _user_has_role, DEVELOPER_ROLE_CODE
+
+    try:
+        payload = decode_token(token)
+        if payload.get("type") != "access":
+            raise ValueError("wrong token type")
+        if not _user_has_role(payload["sub"], DEVELOPER_ROLE_CODE):
+            raise ValueError("developer role required")
+    except Exception:
+        await websocket.close(code=4003)
+        return
+
+    await websocket.accept()
+    interval = 3 if _VPS_SSH_HOST else 2
+
+    try:
+        while True:
+            snap = (await asyncio.to_thread(_remote_snapshot)) or _local_snapshot()
+            _record_snapshot(snap)
+            await websocket.send_json(_build_metrics_payload(snap))
+            await asyncio.sleep(interval)
+    except (WebSocketDisconnect, Exception):
+        pass
 
 
 def _set_pty_size(fd: int, rows: int, cols: int) -> None:
@@ -892,9 +1019,17 @@ async def vps_terminal_ws(websocket: WebSocket, token: str = Query(...)) -> None
         except OSError:
             pass
 
+    if _VPS_SSH_HOST:
+        ssh_args = ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ServerAliveInterval=30"]
+        if _VPS_SSH_KEY_PATH:
+            ssh_args += ["-i", os.path.expanduser(_VPS_SSH_KEY_PATH)]
+        ssh_args.append(f"{_VPS_SSH_USER}@{_VPS_SSH_HOST}")
+        cmd = ssh_args
+    else:
+        cmd = ["/bin/bash", "--login"]
+
     proc = await asyncio.create_subprocess_exec(
-        "/bin/bash",
-        "--login",
+        *cmd,
         stdin=slave_fd,
         stdout=slave_fd,
         stderr=slave_fd,

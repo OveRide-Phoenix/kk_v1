@@ -13,7 +13,6 @@ import {
   HardDrive,
   ArrowDownToLine,
   ArrowUpFromLine,
-  Gauge,
   Circle,
   Loader2,
   AlertCircle,
@@ -57,17 +56,37 @@ interface VpsData {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function sortedPoints(usage: Record<string, number> | undefined): { v: number }[] {
+function sortedEntries(usage: Record<string, number> | undefined): [number, number][] {
   if (!usage) return [];
   return Object.entries(usage)
-    .sort(([a], [b]) => Number(a) - Number(b))
-    .map(([, v]) => ({ v }));
+    .map(([k, v]) => [Number(k), v] as [number, number])
+    .sort(([a], [b]) => a - b);
+}
+
+function sortedPoints(usage: Record<string, number> | undefined): { v: number }[] {
+  return sortedEntries(usage).map(([, v]) => ({ v }));
 }
 
 function lastValue(usage: Record<string, number> | undefined): number {
-  if (!usage) return 0;
-  const entries = Object.entries(usage).sort(([a], [b]) => Number(a) - Number(b));
-  return entries.length ? entries[entries.length - 1][1] : 0;
+  const e = sortedEntries(usage);
+  return e.length ? e[e.length - 1][1] : 0;
+}
+
+// Convert cumulative counter history → per-second rate points
+function ratePoints(usage: Record<string, number> | undefined): { v: number }[] {
+  const e = sortedEntries(usage);
+  const rates: { v: number }[] = [];
+  for (let i = 1; i < e.length; i++) {
+    const dt = e[i][0] - e[i - 1][0];
+    const dv = e[i][1] - e[i - 1][1];
+    if (dt > 0) rates.push({ v: Math.max(0, dv / dt) });
+  }
+  return rates;
+}
+
+function lastRate(usage: Record<string, number> | undefined): number {
+  const pts = ratePoints(usage);
+  return pts.length ? pts[pts.length - 1].v : 0;
 }
 
 function fmtBytes(bytes: number, decimals = 1): string {
@@ -326,27 +345,50 @@ export default function VpsMonitorPage() {
     }
   }, []);
 
-  const fetchMetrics = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await http.get("/api/dev/vps/metrics");
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-      const payload = await readJsonResponse<VpsData>(res);
-      setData(payload);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to fetch VPS metrics";
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const metricsWsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    void fetchMetrics();
-    const id = setInterval(() => void fetchMetrics(), 30_000);
-    return () => clearInterval(id);
-  }, [fetchMetrics]);
+    if (!token) return;
+    let ws: WebSocket;
+    let reconnectTimer: ReturnType<typeof setTimeout>;
+
+    const connect = () => {
+      ws = new WebSocket(getWsUrl("/api/dev/vps/metrics/stream", token));
+      metricsWsRef.current = ws;
+
+      ws.onopen = () => {
+        setError(null);
+        setLoading(false);
+      };
+
+      ws.onmessage = (evt) => {
+        try {
+          setData(JSON.parse(evt.data) as VpsData);
+          setLoading(false);
+        } catch {
+          // ignore malformed frame
+        }
+      };
+
+      ws.onerror = () => setError("Metrics stream disconnected");
+
+      ws.onclose = () => {
+        reconnectTimer = setTimeout(connect, 3000);
+      };
+    };
+
+    connect();
+
+    return () => {
+      ws?.close();
+      clearTimeout(reconnectTimer);
+    };
+  }, [token]);
+
+  const fetchMetrics = useCallback(() => {
+    // Manual refresh: close and reopen the stream
+    metricsWsRef.current?.close();
+  }, []);
 
   // ── Derived values ──────────────────────────────────────────────────────────
 
@@ -367,15 +409,11 @@ export default function VpsMonitorPage() {
   const diskTotalBytes = (vm?.disk ?? 0) * 1024 * 1024;
   const diskPct = diskTotalBytes > 0 ? (diskLast / diskTotalBytes) * 100 : 0;
 
-  const inPoints = sortedPoints(m?.incoming_traffic?.usage);
-  const inLast = lastValue(m?.incoming_traffic?.usage);
+  const inRatePoints = ratePoints(m?.incoming_traffic?.usage);
+  const inRate = lastRate(m?.incoming_traffic?.usage);
 
-  const outPoints = sortedPoints(m?.outgoing_traffic?.usage);
-  const outLast = lastValue(m?.outgoing_traffic?.usage);
-
-  const bwTotalBytes = vm?.bandwidth ?? 0;
-  const bwUsed = inLast + outLast;
-  const bwPct = bwTotalBytes > 0 ? (bwUsed / bwTotalBytes) * 100 : 0;
+  const outRatePoints = ratePoints(m?.outgoing_traffic?.usage);
+  const outRate = lastRate(m?.outgoing_traffic?.usage);
 
   const stateColor =
     vm?.state === "running"
@@ -459,28 +497,19 @@ export default function VpsMonitorPage() {
             />
             <MetricCard
               icon={ArrowDownToLine}
-              label="Incoming traffic"
-              primary={loading ? "—" : fmtBytes(inLast)}
+              label="Inbound rate"
+              primary={loading ? "—" : `${fmtBytes(inRate, 2)}/s`}
               variant="spark"
-              points={inPoints.map(({ v }) => ({ v: v / 1024 }))}
+              points={inRatePoints}
               sparkColor="#ef4444"
             />
             <MetricCard
               icon={ArrowUpFromLine}
-              label="Outgoing traffic"
-              primary={loading ? "—" : fmtBytes(outLast)}
+              label="Outbound rate"
+              primary={loading ? "—" : `${fmtBytes(outRate, 2)}/s`}
               variant="spark"
-              points={outPoints.map(({ v }) => ({ v: v / 1024 }))}
+              points={outRatePoints}
               sparkColor="#6366f1"
-            />
-            <MetricCard
-              icon={Gauge}
-              label="Bandwidth"
-              primary={loading ? "—" : fmtBytes(bwUsed)}
-              secondary={loading ? undefined : fmtBytes(bwTotalBytes)}
-              variant="ring"
-              pct={bwPct}
-              ringColor="#6366f1"
             />
           </div>
         )}
